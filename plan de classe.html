@@ -3482,6 +3482,23 @@ function aeshIndices(room) {
   return out;
 }
 
+// Une AESH n'est physiquement en salle que quand un de ses élèves accompagnés a cours.
+// Filtre "Tous" (0) : toutes présentes. Filtre G1/G2/G3 : présente ssi au moins un
+// élève lié appartient à ce groupe (cas mixte 2 élèves un dans chaque groupe → présente
+// dans les deux filtres). Si aucun élève lié, l'AESH n'a aucune raison d'être là en
+// session de groupe → absente du filtre groupe.
+function _aeshPresentForFilter(cls, idx, filter) {
+  if (filter === 0) return true;
+  const room = activeRoomData(cls);
+  if (!room) return false;
+  const sids = (room.aeshLinks && room.aeshLinks[idx]) || [];
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (stu && stu.groupe === filter) return true;
+  }
+  return false;
+}
+
 // Renvoie les places adjacentes à une AESH placée à `key`, triées par PRIORITÉ
 // décroissante (les n° représentent des « groupes de priorité » — l'algorithme
 // consomme STRICTEMENT le groupe 1 avant de passer au 2, etc.).
@@ -10417,20 +10434,26 @@ function renderTeacherGrid() {
     }
     if (ulisOut > 0)  parts.push(`${ulisOut} ULIS hors classe`);
     if (upe2aOut > 0) parts.push(`${upe2aOut} UPE2A hors classe`);
-    // Compteur AESH (Phase 1+2) : N AESH placée(s) sur M configurées + nb d'absentes en mode appel/post-appel
+    // Compteur AESH (Phase 1+2+4) : N AESH placée(s) sur M configurées + nb d'absentes en mode appel/post-appel.
+    // Filtre groupe (Phase 4) : on ne compte que les AESH présentes pour le filtre actif
+    // (une AESH dont aucun élève accompagné n'est dans le groupe filtré n'est pas en salle).
     {
       const _room = activeRoomData(cls);
-      const _aeshTotal  = (_room && _room.aeshCount) || 0;
-      if (_aeshTotal > 0) {
-        const _aeshSeated = Object.keys(_room.aeshSeating || {}).filter(k => parseInt(k,10) < _aeshTotal && _room.aeshSeating[k]).length;
-        parts.push(`🧑‍🏫 ${_aeshSeated}/${_aeshTotal} AESH placée${_aeshTotal>1?'s':''}`);
-        // Compte les AESH absentes (mode appel ou post-appel actif)
-        if (isAppelContext) {
-          let _aeshAbs = 0;
-          for (let i = 0; i < _aeshTotal; i++) {
-            if (_aeshIsAbsent(cls, cls.activeRoom, i)) _aeshAbs++;
+      const _aeshCount  = (_room && _room.aeshCount) || 0;
+      if (_aeshCount > 0) {
+        const _aeshPresent = [];
+        for (let i = 0; i < _aeshCount; i++) {
+          if (_aeshPresentForFilter(cls, i, groupFilter)) _aeshPresent.push(i);
+        }
+        const _aeshTotal  = _aeshPresent.length;
+        if (_aeshTotal > 0) {
+          const _aeshSeated = _aeshPresent.filter(i => _room.aeshSeating?.[i]).length;
+          parts.push(`🧑‍🏫 ${_aeshSeated}/${_aeshTotal} AESH placée${_aeshTotal>1?'s':''}`);
+          // Compte les AESH absentes (mode appel ou post-appel actif) parmi les présentes pour le filtre
+          if (isAppelContext) {
+            const _aeshAbs = _aeshPresent.filter(i => _aeshIsAbsent(cls, cls.activeRoom, i)).length;
+            if (_aeshAbs > 0) parts.push(`🚫 ${_aeshAbs} AESH absente${_aeshAbs>1?'s':''}`);
           }
-          if (_aeshAbs > 0) parts.push(`🚫 ${_aeshAbs} AESH absente${_aeshAbs>1?'s':''}`);
         }
       }
     }
@@ -10567,8 +10590,10 @@ function buildCell(cls, row, col) {
     return cell;
   }
 
-  // AESH placée à cette case (Phase 1+2) : cellule dédiée rose, sans tablette,
-  // pas de filtre groupe, pas de badges élève. Drag&drop pour déplacer.
+  // AESH placée à cette case (Phase 1+2+4) : cellule dédiée rose, sans tablette,
+  // pas de badges élève. Drag&drop pour déplacer. Filtre groupe (Phase 4) : si l'AESH
+  // n'accompagne aucun élève du groupe filtré, elle n'est physiquement pas là → ghost
+  // (cellule fantôme, sans interaction grâce à .ghost { pointer-events:none }).
   // En mode appel : clic = bascule absente/présente. En post-appel : visuel hachuré lecture seule.
   if (aeshIdxHere >= 0) {
     const _room = activeRoomData(cls);
@@ -10577,23 +10602,29 @@ function buildCell(cls, row, col) {
     const _links = (_room && _room.aeshLinks?.[aeshIdxHere]) || [];
     const _linkedNames = _links.map(s => S.eleves[s]).filter(Boolean)
       .map(s => `${s.prenom} ${s.nom}`).join(', ') || 'aucun';
+    const _aeshGhost = !_aeshPresentForFilter(cls, aeshIdxHere, groupFilter);
     const _isAeshAbs = _aeshIsAbsent(cls, cls.activeRoom, aeshIdxHere);
     cell.classList.add('aesh');
-    if (_isAeshAbs) cell.classList.add('absent'); // réutilise le style hachuré gris
-    cell.draggable = !_appelMode; // pas de drag en mode appel
+    if (_aeshGhost) cell.classList.add('ghost');
+    if (_isAeshAbs && !_aeshGhost) cell.classList.add('absent'); // réutilise le style hachuré gris
+    cell.draggable = !_appelMode && !_aeshGhost; // pas de drag en mode appel ni si fantôme
     cell.dataset.aeshIdx = String(aeshIdxHere);
 
     if (_appelMode) {
-      // Mode appel : clic = toggle, pas de drag
-      cell.style.cursor = 'pointer';
+      // Mode appel : clic = toggle, pas de drag. Si ghost, pointer-events:none neutralise le clic.
+      if (!_aeshGhost) cell.style.cursor = 'pointer';
       cell.innerHTML = `
         <span class="cpos">N°${seatLabel(row, col, cls.configuration.cols||10)}</span>
         <span class="aesh-ico">🧑‍🏫</span>
         <span class="aesh-lbl">${_escAttr(_lbl)}</span>
-        ${_isAeshAbs ? '<div style="font-size:1.3em;margin-top:2px">🚫</div>' : ''}
+        ${_isAeshAbs && !_aeshGhost ? '<div style="font-size:1.3em;margin-top:2px">🚫</div>' : ''}
       `;
-      cell.title = `${_lbl} — ${_isAeshAbs ? 'absente' : 'présente'}\nClic = bascule présence`;
-      cell.addEventListener('click', () => toggleAeshAbsence(cls, cls.activeRoom, aeshIdxHere));
+      if (_aeshGhost) {
+        cell.title = `${_lbl} — pas en salle pour G${groupFilter} (n'accompagne aucun élève de ce groupe)`;
+      } else {
+        cell.title = `${_lbl} — ${_isAeshAbs ? 'absente' : 'présente'}\nClic = bascule présence`;
+        cell.addEventListener('click', () => toggleAeshAbsence(cls, cls.activeRoom, aeshIdxHere));
+      }
       return cell;
     }
 
@@ -10601,11 +10632,15 @@ function buildCell(cls, row, col) {
       <span class="cpos">N°${seatLabel(row, col, cls.configuration.cols||10)}</span>
       <span class="aesh-ico">🧑‍🏫</span>
       <span class="aesh-lbl">${_escAttr(_lbl)}</span>
-      ${_isAeshAbs ? '<div style="font-size:1.3em;margin-top:2px">🚫</div>' : ''}
+      ${_isAeshAbs && !_aeshGhost ? '<div style="font-size:1.3em;margin-top:2px">🚫</div>' : ''}
     `;
     let _absSuffix = '';
-    if (_isAeshAbs && _isPostAppelForCls(cls)) _absSuffix = `\n🚫 Absente (appel ${_appelSavedSlot.label})`;
-    cell.title = `${_lbl} (sans tablette) — accompagne : ${_linkedNames}${_absSuffix}\nGlisser pour déplacer · Configuration dans Config Salle → mode AESH`;
+    if (_isAeshAbs && !_aeshGhost && _isPostAppelForCls(cls)) _absSuffix = `\n🚫 Absente (appel ${_appelSavedSlot.label})`;
+    if (_aeshGhost) {
+      cell.title = `${_lbl} — pas en salle pour G${groupFilter} (n'accompagne aucun élève de ce groupe)`;
+    } else {
+      cell.title = `${_lbl} (sans tablette) — accompagne : ${_linkedNames}${_absSuffix}\nGlisser pour déplacer · Configuration dans Config Salle → mode AESH`;
+    }
     // Drop : si on lâche une autre AESH ici, on échange. Si on lâche un élève (placé
     // ou non placé, simple ou en lot), on refuse explicitement avec un toast.
     // Important : ne PAS définir dropEffect='none' dans dragover, car cela empêche
@@ -11645,11 +11680,18 @@ function renderStudentView() {
       if (nt) {
         cell.classList.add('nt');
       } else if (aeshIdxHere >= 0) {
-        // AESH affichée en vue élève (label seul, pas d'icône de liaison)
+        // AESH affichée en vue élève (label seul, pas d'icône de liaison).
+        // Phase 4 : si l'AESH n'accompagne aucun élève du groupe filtré, elle n'est
+        // pas en salle → cellule vide (em) au lieu de la marquer en rose.
         const _room = activeRoomData(cls);
         const _total = (_room && _room.aeshCount) || 0;
-        cell.classList.add('aesh');
-        cell.innerHTML = `<div class="svname" style="color:#880e4f">${_escAttr(aeshLabel(aeshIdxHere, _total))}</div>`;
+        if (!_aeshPresentForFilter(cls, aeshIdxHere, groupFilter)) {
+          cell.classList.add('em');
+          if (gcls2) cell.classList.add(gcls2);
+        } else {
+          cell.classList.add('aesh');
+          cell.innerHTML = `<div class="svname" style="color:#880e4f">${_escAttr(aeshLabel(aeshIdxHere, _total))}</div>`;
+        }
       } else if (stu) {
         const ghost = (groupFilter !== 0 && stu.groupe !== groupFilter)
                    || (_tagFilter.size > 0 && !studentHasAllTags(stu, _tagFilter));
@@ -18515,9 +18557,11 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
         const ipad  = ipadGet(cls, key, groupFilter);
         const seatG = (cls.groupes || {})[key] || 0;
         const aeshIdxHere = _aeshAtKeyMap[key];
+        // Phase 4 : AESH non présente pour le filtre groupe actif → cellule vide à l'impression
+        const _aeshPrintGhost = (typeof aeshIdxHere === 'number') && !_aeshPresentForFilter(cls, aeshIdxHere, groupFilter);
         let cl = 'pcell' + aisleCls, inner = '';
         if (nt) { cl += ' nt'; }
-        else if (typeof aeshIdxHere === 'number') {
+        else if (typeof aeshIdxHere === 'number' && !_aeshPrintGhost) {
           cl += ' aesh';
           inner = `<div style="font-size:1.4em">🧑‍🏫</div><div style="font-weight:700;color:#880e4f">${_escAttr(aeshLabel(aeshIdxHere, _aeshTotal))}</div>`;
         }
@@ -18552,9 +18596,11 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
         const sid = cls.seating[key];
         const stu = sid ? S.eleves[sid] : null;
         const aeshIdxHere = _aeshAtKeyMap[key];
+        // Phase 4 : AESH non présente pour le filtre groupe actif → cellule vide à l'impression
+        const _aeshPrintGhost = (typeof aeshIdxHere === 'number') && !_aeshPresentForFilter(cls, aeshIdxHere, groupFilter);
         let cl = 'pcell' + aisleCls, inner = '';
         if (nt) { cl += ' nt'; }
-        else if (typeof aeshIdxHere === 'number') {
+        else if (typeof aeshIdxHere === 'number' && !_aeshPrintGhost) {
           cl += ' aesh';
           inner = `<div class="pn" style="color:#880e4f">${_escAttr(aeshLabel(aeshIdxHere, _aeshTotal))}</div>`;
         }

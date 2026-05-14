@@ -251,7 +251,32 @@ Une AESH est un slot **anonyme** (pas de nom) configuré par couple **(classe, s
 - N=1 → `AESH`
 - N≥2 → `AESH1`, `AESH2`…
 
-Stockage : `cls.rooms[salleId] = { ..., aeshCount, aeshSeating: {idx:'r,c'}, aeshLinks: {idx:[sid,...]} }`. Migration auto dans `postLoadHook()` + `activeRoomData()`. Helpers : `aeshLabel(idx, total)`, `aeshAtKey(cls, key)`, `aeshHelpingSid(cls, sid)`, `aeshIndices(room)`.
+Stockage : `cls.rooms[salleId] = { ..., aeshCount, aeshSeating: {idx:'r,c'}, aeshLinks: {idx:[sid,...]} }`. Migration auto dans `postLoadHook()` + `activeRoomData()`. Helpers : `aeshLabel(idx, total)`, `aeshAtKey(cls, key)`, `aeshHelpingSid(cls, sid)`, `aeshIndices(room)`, `_aeshPresentForFilter(cls, idx, filter)`.
+
+### Présence selon le filtre groupe (Phase 4)
+
+Une AESH n'est physiquement en salle que quand un de ses élèves accompagnés y a cours. Conséquence : quand le filtre groupe est actif (G1/G2/G3), une AESH n'apparaît que si **au moins un élève qu'elle accompagne appartient au groupe filtré**.
+
+- **Filtre Tous (0)** : toutes les AESH configurées sont présentes.
+- **Filtre G1** : AESH présente ssi ≥ 1 élève lié avec `stu.groupe === 1`.
+- **Filtre G2 / G3** : idem avec le groupe correspondant.
+- **AESH liée à 2 élèves dans des groupes différents** (ex. un en G1, un en G2) : présente dans **les deux** filtres correspondants (cas mixte légitime).
+- **AESH sans aucun élève lié** : absente de tout filtre groupe spécifique (visible uniquement en « Tous »).
+
+Helper central : **`_aeshPresentForFilter(cls, idx, filter)`** — retourne `true` si filter=0 ou si au moins un sid lié a `stu.groupe === filter`.
+
+Effet sur l'UI quand l'AESH n'est pas présente pour le filtre actif :
+- **Plan Prof** (`buildCell`) : cellule reçoit la classe `.ghost` (opacity .22, `pointer-events:none` — donc drag/clic/toggle absence inactifs). Titre adapté : `« AESH — pas en salle pour G2 (n'accompagne aucun élève de ce groupe) »`. L'état absent (mode appel/post-appel) est masqué visuellement (pas de 🚫, pas de classe `.absent`).
+- **Vue Élève** (`renderStudentView`) : cellule rendue comme vide (`em`) au lieu du fond rose AESH — les élèves ne voient pas le slot inutile.
+- **Compteur `tg-count`** : `🧑‍🏫 N/M AESH placée(s)` compte uniquement les AESH présentes pour le filtre. `🚫 X AESH absente(s)` idem.
+- **Impressions Plan Prof / Vue Élève** (`doPrint` mode 't' et 's') : AESH ghost rendue comme cellule vide (pas de marqueur 🧑‍🏫, pas de label rose) — un plan imprimé pour G1 ne montre pas une AESH qui ne sera pas là.
+
+**Inchangés** (sciemment hors-scope, parce que la donnée concernée n'est pas dépendante du groupe en cours) :
+- **QCMCam export** (`_allQcmLines`, `renderQcmcam`) : les marqueurs ArUco sont physiques sur les tables, indépendants du groupe.
+- **Auto-placement / mélange aléatoire** (`_doOneRandomPlacement`) : placement physique de la chaise AESH, ne change pas selon qui a cours.
+- **Snapshots de positions** : lecture seule de l'état historique, pas de filtre groupe.
+- **Impression « Plusieurs plans »** (`buildTeacherPageHTML`) : utilise effectivement `groupFilter=0` (impression globale toutes classes), donc toutes les AESH apparaissent.
+- **Badge 🤝 sur élèves liés** : reste affiché. Quand une AESH est ghost pour un filtre, le ou les élèves liés sont eux-mêmes hors filtre (par construction du critère « présente ssi un élève lié est dans le filtre »), donc leur cellule est aussi ghost — le badge est faded avec le reste, cohérent.
 
 ### Configuration (Config Salle → mode 🧑‍🏫 AESH)
 - 5e chip rose dans la barre de modes. Active la toolbar AESH sous la grille :
