@@ -40,10 +40,13 @@ Le filet rouge et les lignes Seyès sont **cachés à l'impression** via `@media
 
 ## Fichiers
 - `plan de classe.html` — application complète (HTML + CSS + JS dans un seul fichier)
+- `index.html` — page de redirection servie à la racine `belenos-toutatis.github.io/plan-de-classe/`. Meta refresh + `<script>location.replace(...)</script>` vers `./plan%20de%20classe.html`. Mini design "carnet du prof" en fallback si la redirection traîne. Permet d'utiliser une URL courte au lieu de l'URL longue avec `%20`.
+- `.nojekyll` — fichier vide. Désactive le pipeline Jekyll de GitHub Pages (sinon Jekyll prend `README.md` comme index automatique et ignore `index.html`). **Indispensable** pour que la redirection fonctionne.
 - `manifest.json` — manifeste PWA (thème #1a252f, bleu foncé)
 - `sw.js` — service worker (utilisation hors-ligne, network-first)
 - `README.md` — documentation utilisateur (orientée GitHub)
-- `LICENSE` — licence MIT
+- `LICENSE` — double licence : MIT (code de l'app) + CC BY-NC-SA 4.0 (composants ArUco — algorithme, mapping des 125 patterns, layout d'impression — dérivés de QCMcam par Sébastien COGEZ)
+- `CREDITS.md` — remerciements détaillés à Sébastien COGEZ (QCMcam), à la communauté enseignante, et aux polices embarquées (Fraunces, IBM Plex Sans, JetBrains Mono — toutes sous SIL Open Font License)
 - `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`)
 - `plan-classe-AAAA-MM-JJ-HHhMMmSS.json` — exports manuels horodatés (non versionnés)
 - `plan-classe-auto.json` — fichier de sync auto (écrasé en continu, non versionné)
@@ -66,6 +69,20 @@ Affiché 300ms après init() si `createDemo()` vient d'installer les données fi
 - Le contenu de la démo
 - Comment partir d'un fichier vierge (Classes → 🗑 Réinitialiser → 🔥 Tout effacer)
 - L'état localStorage / sync auto
+
+Le bouton de fermeture **"👍 Compris, je découvre"** déclenche `closeWelcomeAndOpenAbout()` qui ferme mwelcome ET enchaîne automatiquement sur `mabout` (cf. section suivante) — pour que l'utilisateur voit les crédits et la licence dès le 1er lancement.
+
+## Modale À propos (`mabout`)
+
+Modale centralisée accessible **à tout moment** via le bouton **ⓘ** dans le header (à droite des boutons Sync/Export/Maj, fonction `openAbout()`). Anciennement plusieurs informations éparpillées (RGPD en bannière, crédits ArUco dans QCMCam, version dans `mupdate`, licence dans LICENSE seulement). 5 sections homogènes (classe CSS `.about-section` : fond `paper-warm`, bordure gauche `ink-blue`, h3 serif) :
+
+1. **📦 Version & mises à jour** : `APP_VERSION` affiché dans `<code id="about-version-disp">`, bouton **🆕 Vérifier les MAJ** (appelle `checkForUpdate()` après avoir fermé `mabout`), liens GitHub repo + issues
+2. **🙏 Crédits & remerciements** : Sébastien COGEZ (QCMcam) avec lien et licence CC BY-NC-SA 4.0, mention communauté enseignante, renvoi vers `CREDITS.md`
+3. **⚖️ Licence** : MIT pour l'app + section CC BY-NC-SA 4.0 pour les composants ArUco (algorithme + mapping + layout d'impression), lien vers `LICENSE`
+4. **🔒 Vie privée (RGPD)** : explique localStorage + fichiers JSON, recommandation **Nextcloud académique nuage03.apps.education.fr** (Apps Education de l'Éducation nationale, hébergement souverain conforme RGPD) avec **🔄 Sync auto**, mention des données sensibles à déclarer au DPO (PPRE/PPS/PAI/ULIS/UPE2A/absences récurrentes)
+5. **⌨️ Raccourcis clavier** : table avec `<kbd>` stylé (font-mono, ombre)
+
+À cause de cette consolidation, le bouton **🆕 Maj** du header a été **retiré** (la vérif MAJ est désormais accessible depuis `mabout`, plus de doublon).
 
 ## Onglets de navigation (à 2 niveaux)
 
@@ -223,6 +240,7 @@ Ordre des migrations dans `postLoadHook()` :
 - **UPE2A inclusion** : élève UPE2A inclus régulièrement
 - **PPRE** : badge orange
 - **Gevasco / PPS** : badge bleu
+- **PAI** : badge rose `#ec4899` (Projet d'Accueil Individualisé — médical : allergies, asthme, diabète, etc.). **Cumulable avec TOUT le reste** (PPRE, PPS, ULIS, UPE2A…), contrairement aux autres statuts pédagogiques qui sont exclusifs intra-groupe. `STATUS_GROUP_C = ['pai']` (seul dans son groupe). Toggle `toggleStuPai(id)` / `ctxTogglePai()` avec icône ⚕️. Visible dans le tableau Élèves (bouton dédié rose), sur la cellule du plan (badge `.spec-pai`), dans le menu contextuel (sous-menu Aménagements), et dans la modale d'édition élève (checkbox dédiée). Comptabilisé dans le compteur "aménagement" du bilan classe et dans l'impression de la liste.
 - **Groupes** : G1 (bleu), G2 (orange), G3 (violet) pour demi/tiers-groupes
 - **Civilité** : `'M'` ou `'F'` (utilisée pour le mode couleur "genre")
 - **Tags cumulables** (`stu.tags = [tagId, ...]`) : DF, DNL, etc. — un élève peut en avoir plusieurs. Définis globalement dans `S.tags` (id, abbr, name, color). Affichés en chips colorés dans Plan Prof. Un tag peut aussi être affecté à une PLACE (`room.posTagId`) — mutuellement exclusif avec `room.groupes` au niveau de la place (une place est soit dans une zone G1/G2/G3, soit dans une zone de tag).
@@ -304,6 +322,13 @@ Dans `_doOneRandomPlacement`, AVANT le placement standard des élèves :
 
 ## Tablettes — picker unifié (cellule + récap)
 
+### Note "obligation légale de traçabilité"
+Bandeau bleu pédagogique inséré dans l'onglet Tablettes (entre la barre des classes mobiles et le récap des affectations) qui explique le **but légal** de cette fiche :
+- Les tablettes prêtées en classe ne demandent généralement pas à l'élève de s'identifier dessus (prêt physique par le prof)
+- En cas d'incident (perte, casse, contenu inapproprié, accès non autorisé à un compte) → l'établissement doit pouvoir reconstituer qui avait quel appareil et quand — **obligation légale** (responsabilité matériel public + traçabilité accès numériques)
+- La fiche d'affectation + la fiche de prêt PDF répondent à cette exigence (registre nominatif de séance, exportable à la vie scolaire si besoin)
+
+### Picker unifié
 Pour éviter le doublon historique « `<span class="cipad">Tab. N</span>` ET `<select class="isel">` dans la même cellule de Plan Prof », l'affectation des tablettes passe désormais par **une modale unique `mipad-picker`** :
 
 - **Trigger** : clic sur le pavé `Tab. N` (ou `Tab. —` quand non assigné) — visible à la fois **dans les cellules Plan Prof** ET **dans le récap de l'onglet Tablettes** (le `<select>` du récap a été remplacé par un span cliquable identique).
@@ -627,6 +652,7 @@ Le modal **🕓 Historique** d'un élève a deux onglets :
 - **`✅ N présents` affiché si :** mode appel actif **OU** post-appel actif (`_isStillInSavedSlot()`) **OU** absentN > 0 **OU** lateN > 0. Permet à l'enseignant de toujours voir le décompte tant qu'il y a une session d'appel active, même à 0/0 (ex. « ✅ 30 présents · 30/30 placés » confirme visuellement que l'appel a bien été enregistré).
 - 🚫 et ⏰ n'apparaissent que si > 0 (pas de « 0 absent » ou « 0 retard »).
 - ULIS hors classe affiché uniquement si U > 0
+- **Note** : l'indicateur de pool actif (`📱 <nom-pool>`) historiquement affiché dans `tg-count` a été **retiré** — il est désormais visible directement dans la toolbar du Plan Prof à côté du sélecteur de salle (cf. `.pool-buttons-container` partagé entre Plan Prof et Tablettes). Évite le doublon.
 
 ## QCMCam — numérotation et marqueurs ArUco
 
