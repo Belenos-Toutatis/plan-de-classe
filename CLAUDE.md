@@ -40,6 +40,7 @@ Le filet rouge et les lignes Seyès sont **cachés à l'impression** via `@media
 
 ## Fichiers
 - `plan de classe.html` — application complète (HTML + CSS + JS dans un seul fichier)
+- `plan de classe.html.bak` — copie de sécurité locale de l'app avant modifications lourdes (créée manuellement par l'utilisateur). Gitignoré via `*.bak`, non publié sur GitHub Pages.
 - `index.html` — page de redirection servie à la racine `belenos-toutatis.github.io/plan-de-classe/`. Meta refresh + `<script>location.replace(...)</script>` vers `./plan%20de%20classe.html`. Mini design "carnet du prof" en fallback si la redirection traîne. Permet d'utiliser une URL courte au lieu de l'URL longue avec `%20`.
 - `.nojekyll` — fichier vide. Désactive le pipeline Jekyll de GitHub Pages (sinon Jekyll prend `README.md` comme index automatique et ignore `index.html`). **Indispensable** pour que la redirection fonctionne.
 - `manifest.json` — manifeste PWA (thème #1a252f, bleu foncé)
@@ -47,7 +48,7 @@ Le filet rouge et les lignes Seyès sont **cachés à l'impression** via `@media
 - `README.md` — documentation utilisateur (orientée GitHub)
 - `LICENSE` — double licence : MIT (code de l'app) + CC BY-NC-SA 4.0 (composants ArUco — algorithme, mapping des 125 patterns, layout d'impression — dérivés de QCMcam par Sébastien COGEZ)
 - `CREDITS.md` — remerciements détaillés à Sébastien COGEZ (QCMcam), à la communauté enseignante, et aux polices embarquées (Fraunces, IBM Plex Sans, JetBrains Mono — toutes sous SIL Open Font License)
-- `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`)
+- `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`, `*.bak`, `*.tmp`)
 - `plan-classe-AAAA-MM-JJ-HHhMMmSS.json` — exports manuels horodatés (non versionnés)
 - `plan-classe-auto.json` — fichier de sync auto (écrasé en continu, non versionné)
 - `plan-classe-bk-AAAA-MM-JJ-HHhMMm.json` — backups horodatés (rétention par paliers, non versionnés)
