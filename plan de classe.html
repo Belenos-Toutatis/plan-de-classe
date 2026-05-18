@@ -1577,6 +1577,7 @@ kbd {
       </span>
       <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Sauvegarder ou consulter des dispositions de classe">📸 Snapshots</button>
       <button class="btn btn-g btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Mode appel : clic = absent/présent (raccourci touche A)">🙋 Mode appel</button>
+      <button class="btn btn-g btn-sm" id="btn-tp-mode" onclick="openTpModeDialog()" title="Saisie rapide de compétences pendant un TP — sélectionne 1 à 3 compétences puis clique sur les cellules élèves pour saisir leur niveau">🎯 Saisie compétences</button>
       <button class="btn btn-g btn-sm" onclick="openAttendanceModal()" title="Consulter les appels enregistrés">📅 Appels passés</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
       <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
@@ -2801,6 +2802,35 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Démarrer une passation depuis Plan Prof (Phase 5) ── -->
+<div id="mtp-start" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>🎯 Saisie rapide de compétences</h2>
+    <p style="margin:0 0 14px;font-size:.88em;color:var(--pencil);line-height:1.5">Démarre une <strong>passation</strong> dans une évaluation Type B (compétences au fil de l'eau). Tu pourras ensuite cliquer sur les cellules élèves du Plan Prof pour saisir leur niveau directement.</p>
+
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-weight:600;margin-bottom:5px;font-size:.92em">1. Évaluation cible</label>
+      <select id="mtp-target-eval" style="width:100%;padding:5px 8px" onchange="_mtpUpdateAfterEvalChange()"></select>
+      <button class="btn btn-g btn-sm" onclick="_mtpCreateNewEval()" style="margin-top:6px">+ Créer une nouvelle éval Type B</button>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label for="mtp-code" style="display:block;font-weight:600;margin-bottom:5px;font-size:.92em">2. Code court de cette passation</label>
+      <input type="text" id="mtp-code" maxlength="12" placeholder="ex. A9, TP3" style="width:160px;padding:5px 8px;font-family:var(--font-mono)">
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-weight:600;margin-bottom:5px;font-size:.92em">3. Compétences évaluées <span style="color:var(--pencil);font-weight:normal;font-size:.85em">(1 à 3 conseillé)</span></label>
+      <div id="mtp-comps"></div>
+    </div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('mtp-start')">Annuler</button>
+      <button class="btn btn-p" onclick="_mtpStart()">🎯 Démarrer la passation</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Nouvelle passation (Type B) ── -->
 <div id="meval-pass-new" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
@@ -3651,7 +3681,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T00:00:00Z';
+const APP_VERSION   = '2026-05-20T00:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -10896,6 +10926,7 @@ function renderTeacherGrid() {
   renderAttendanceSide();
   updateAppelBanner();
   _updateMovedHighlightBtnUI();
+  _updateTpBanner();
 }
 
 // ─── Rendu Plan Prof en MODE CONSULTATION (snapshot positions) ───
@@ -11307,6 +11338,7 @@ function buildCell(cls, row, col) {
       ${specBadges}
       <button class="cell-unplace" onclick="event.stopPropagation();removeSeat(getCls(),'${key}')" title="Retirer de sa place">✕</button>
       <div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+      ${_tpRenderPills(cls, stu.id)}
       <div class="cell-ctrs">
         <span class="cctr" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié">📦 ${stu.oublis}</span>
         <span class="cctr" style="background:${oubliColor(stu.non_travail)};border-radius:3px" onclick="event.stopPropagation();incNT('${stu.id}')" title="Travail non fait">📝 ${stu.non_travail}</span>
@@ -20782,6 +20814,8 @@ function init() {
   // Restaure l'état transient de l'appel (absents/retards + créneau enregistré) depuis localStorage.
   // _absencesAutoReset() au 1er render fera le ménage si on a passé minuit ou changé de slot.
   _loadAttTransient();
+  // Restaure la session "mode TP rapide compétences" (phase 5)
+  _tpLoadSession();
   const demoJustInstalled = createDemo();
   refreshSelector();
   refreshLastFileUI();
@@ -22597,6 +22631,263 @@ function _evalPassSaisieNext() {
   if (idx < 0 || idx >= sids.length - 1) return;
   document.getElementById('meval-pass-saisie-sid').value = sids[idx + 1];
   _evalPassSaisieRender();
+}
+
+// ═══════════════ MODE TP RAPIDE — saisie de compétences sur Plan Prof (phase 5) ═══════════════
+// Variable globale + persistance localStorage. Restaurée à init().
+let _tpSession = null;  // null ou { evalId, passId, classId, competenceIds: [...] }
+
+function _tpSaveSession() {
+  try {
+    if (_tpSession) localStorage.setItem('planClasse_tpSession', JSON.stringify(_tpSession));
+    else localStorage.removeItem('planClasse_tpSession');
+  } catch (e) {}
+}
+function _tpLoadSession() {
+  try {
+    const raw = localStorage.getItem('planClasse_tpSession');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    // Valide que l'éval + la passation existent toujours
+    const ev = S.evaluations?.[s.evalId];
+    if (!ev || ev.type !== 'B') { localStorage.removeItem('planClasse_tpSession'); return; }
+    const p = ev.passations?.find(p => p.id === s.passId);
+    if (!p) { localStorage.removeItem('planClasse_tpSession'); return; }
+    _tpSession = s;
+  } catch (e) {}
+}
+
+// Ouvre la modale "Démarrer une passation" pour le Plan Prof
+function openTpModeDialog() {
+  const cls = getCls();
+  if (!cls) { toast('⚠ Sélectionne d\'abord une classe', 'warn'); return; }
+  if (_tpSession) {
+    // Une session existe : proposer de la reprendre ou d'en démarrer une nouvelle
+    if (_tpSession.classId === cls.id) {
+      const ev = S.evaluations?.[_tpSession.evalId];
+      const p  = ev?.passations?.find(p => p.id === _tpSession.passId);
+      if (confirm(`Une passation est déjà active pour cette classe : ${ev?.nomCourt} / ${p?.code}.\n\n[OK] Terminer la passation active\n[Annuler] Conserver`)) {
+        _tpEnd();
+      }
+      return;
+    } else {
+      toast('⚠ Une passation est active sur une autre classe — termine-la d\'abord (bandeau bleu)', 'warn');
+      return;
+    }
+  }
+  // Pas de session : choisir une éval Type B de la classe ou en créer une
+  const sel = document.getElementById('mtp-target-eval');
+  sel.innerHTML = '';
+  const typeBs = Object.values(S.evaluations || {})
+    .filter(e => e.type === 'B' && e.classId === cls.id)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (typeBs.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '__none__'; opt.textContent = '— Aucune éval Type B pour cette classe — crée-en une';
+    sel.appendChild(opt);
+  } else {
+    const optEmpty = document.createElement('option');
+    optEmpty.value = ''; optEmpty.textContent = '— Choisir —';
+    sel.appendChild(optEmpty);
+    for (const ev of typeBs) {
+      const opt = document.createElement('option');
+      opt.value = ev.id;
+      opt.textContent = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''} (${ev.periode})`;
+      sel.appendChild(opt);
+    }
+  }
+  document.getElementById('mtp-code').value = '';
+  // Compétences : par défaut, toutes les compétences existantes proposées
+  _mtpUpdateAfterEvalChange();
+  openMod('mtp-start');
+}
+
+function _mtpCreateNewEval() {
+  closeMod2('mtp-start');
+  openNewEvalModal();
+  document.querySelector('input[name="meval-new-type"][value="B"]').checked = true;
+  document.getElementById('meval-new-nomcourt')?.focus();
+  toast('💡 Choisis le type B, crée l\'éval — tu pourras lancer la passation après');
+}
+
+function _mtpUpdateAfterEvalChange() {
+  // (Re)peuple la liste de compétences proposées
+  // On propose toutes les compétences disponibles ; l'utilisateur en coche 1 à 3.
+  _passNewSelected = new Set();
+  const wrap = document.getElementById('mtp-comps');
+  if (!wrap) return;
+  const byDomain = {};
+  for (const c of Object.values(S.competences || {})) {
+    const dId = c.domainId || '_nodom';
+    (byDomain[dId] = byDomain[dId] || []).push(c);
+  }
+  const domainOrder = Object.keys(S.competenceDomains || {});
+  if (byDomain._nodom) domainOrder.push('_nodom');
+  let html = '';
+  for (const dId of domainOrder) {
+    const comps = byDomain[dId];
+    if (!comps || comps.length === 0) continue;
+    const dom = S.competenceDomains?.[dId];
+    html += `<div style="margin-bottom:4px"><span style="font-family:var(--font-mono);color:var(--pencil);font-size:.78em;margin-right:6px">${_esc(dom?.code || '—')}</span>`;
+    for (const c of comps) {
+      html += `<label style="display:inline-flex;align-items:center;gap:4px;padding:3px 7px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:12px;cursor:pointer;font-size:.85em;margin:2px" title="${_esc(c.name || '')}">
+        <input type="checkbox" data-cid="${_esc(c.id)}" onchange="_mtpToggle('${_esc(c.id)}', this.checked, this)" style="margin:0">
+        <strong style="font-family:var(--font-mono)">${_esc(c.code)}</strong>
+      </label>`;
+    }
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _mtpToggle(cid, checked, inputEl) {
+  if (checked) _passNewSelected.add(cid);
+  else _passNewSelected.delete(cid);
+  // Visual feedback sur le chip (parent label)
+  const label = inputEl?.closest('label');
+  if (label) {
+    label.style.background = checked ? '#e6f0fa' : 'var(--paper-warm)';
+    label.style.borderColor = checked ? 'var(--ink-blue)' : 'var(--rule-line)';
+  }
+  if (_passNewSelected.size > 3) {
+    toast('💡 Garde 3 compétences max pour rester lisible sur le plan', 'info');
+  }
+}
+
+function _mtpStart() {
+  const cls = getCls();
+  if (!cls) return;
+  const evalId = document.getElementById('mtp-target-eval').value;
+  if (!evalId || evalId === '__none__') {
+    toast('⚠ Choisis une évaluation cible (ou crée-en une)', 'warn');
+    return;
+  }
+  const code = (document.getElementById('mtp-code').value || '').trim();
+  if (!code) { toast('⚠ Code court obligatoire (ex. A9)', 'warn'); return; }
+  if (_passNewSelected.size === 0) { toast('⚠ Sélectionne au moins une compétence', 'warn'); return; }
+  if (_passNewSelected.size > 6) { toast('⚠ Maximum 6 compétences simultanées', 'warn'); return; }
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  pushUndo();
+  // Crée la passation
+  const passId = _newPassationId();
+  ev.passations = ev.passations || [];
+  ev.passations.push({
+    id: passId,
+    code, date: new Date().toISOString().slice(0, 10),
+    competenceIds: Array.from(_passNewSelected),
+    niveaux: {},
+  });
+  ev.date = new Date().toISOString().slice(0, 10);
+  ev.updatedAt = Date.now();
+  // Active la session
+  _tpSession = { evalId, passId, classId: cls.id, competenceIds: Array.from(_passNewSelected) };
+  _tpSaveSession();
+  save();
+  closeMod2('mtp-start');
+  renderTeacherGrid();
+  toast(`🎯 Passation "${code}" démarrée — clique sur les cellules pour saisir les niveaux`);
+}
+
+function _tpEnd() {
+  if (!_tpSession) return;
+  const ev = S.evaluations?.[_tpSession.evalId];
+  const p  = ev?.passations?.find(p => p.id === _tpSession.passId);
+  if (p) {
+    // Sauvegarde déjà faite à chaque saisie ; on flush juste au cas où
+    save();
+  }
+  _tpSession = null;
+  _tpSaveSession();
+  renderTeacherGrid();
+  toast('✓ Passation terminée');
+}
+
+// Helper : retourne HTML des pastilles compétences pour une cellule élève (mode TP actif)
+function _tpRenderPills(cls, sid) {
+  if (!_tpSession || _tpSession.classId !== cls.id) return '';
+  const ev = S.evaluations?.[_tpSession.evalId];
+  const p  = ev?.passations?.find(p => p.id === _tpSession.passId);
+  if (!p) return '';
+  const niveaux = p.niveaux?.[sid] || {};
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  let html = '<div class="tp-cell-pills" style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;margin-top:4px">';
+  for (const cid of (p.competenceIds || [])) {
+    const c = S.competences?.[cid];
+    if (!c) continue;
+    const niv = niveaux[cid] || 0;
+    const bg = niv > 0 ? colors[niv - 1] : '#fff';
+    const color = niv > 0 ? '#fff' : 'var(--pencil)';
+    const border = niv > 0 ? colors[niv - 1] : 'var(--rule-line)';
+    const text = niv > 0 ? `${_esc(c.code)}:${niv}` : _esc(c.code);
+    html += `<span class="tp-pill" onclick="event.stopPropagation();_tpCyclePill('${_esc(sid)}','${_esc(cid)}')" title="${_esc(c.code)} — ${_esc(c.name || '')} (clic pour cycler N${niv}→N${(niv % 4) + 1})" style="display:inline-block;padding:1px 5px;background:${bg};color:${color};border:1px solid ${border};border-radius:8px;font-family:var(--font-mono);font-size:.75em;cursor:pointer;font-weight:600;line-height:1.2">${text}</span>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+// Cycle le niveau d'une compétence pour un élève : 0→1→2→3→4→0
+function _tpCyclePill(sid, cid) {
+  if (!_tpSession) return;
+  const ev = S.evaluations?.[_tpSession.evalId];
+  const p  = ev?.passations?.find(p => p.id === _tpSession.passId);
+  if (!p) return;
+  p.niveaux = p.niveaux || {};
+  p.niveaux[sid] = p.niveaux[sid] || {};
+  const cur = p.niveaux[sid][cid] || 0;
+  const next = (cur + 1) % 5;
+  if (next === 0) delete p.niveaux[sid][cid];
+  else p.niveaux[sid][cid] = next;
+  ev.updatedAt = Date.now();
+  save();
+  // Re-render uniquement les pastilles de la cellule concernée (perf : pas tout le plan)
+  const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
+  // Plus simple : re-render le plan complet — c'est rapide
+  renderTeacherGrid();
+}
+
+// Bandeau au-dessus de la grille quand mode TP actif
+function _updateTpBanner() {
+  let banner = document.getElementById('tp-banner');
+  if (!_tpSession) {
+    if (banner) banner.remove();
+    return;
+  }
+  const cls = getCls();
+  if (!cls || cls.id !== _tpSession.classId) {
+    if (banner) banner.remove();
+    return;
+  }
+  const ev = S.evaluations?.[_tpSession.evalId];
+  const p  = ev?.passations?.find(p => p.id === _tpSession.passId);
+  if (!ev || !p) {
+    if (banner) banner.remove();
+    _tpSession = null; _tpSaveSession();
+    return;
+  }
+  const tg = document.getElementById('tg');
+  if (!tg) return;
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'tp-banner';
+    banner.style.cssText = 'background:#dbeafe;border:2px solid var(--ink-blue);border-radius:5px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:.92em';
+    tg.parentNode.insertBefore(banner, tg);
+  }
+  const chips = (p.competenceIds || []).map(cid => {
+    const c = S.competences?.[cid];
+    return c ? `<strong style="font-family:var(--font-mono);background:var(--paper-warm);padding:1px 6px;border-radius:3px;margin:0 2px">${_esc(c.code)}</strong>` : '';
+  }).join('');
+  banner.innerHTML = `
+    <div style="flex:1">
+      🎯 <strong>Passation ${_esc(p.code)}</strong> en cours
+      <span style="color:var(--pencil)"> · ${_esc(ev.nomCourt)} · ${_fmtDateFr(p.date)}</span>
+      <span style="margin-left:8px">${chips}</span>
+      <div style="margin-top:3px;font-size:.85em;color:var(--pencil);font-style:italic">Clic sur une pastille pour cycler N0 → N1 → N2 → N3 → N4 → N0.</div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-p" onclick="_tpEnd()">✅ Terminer</button>
+    </div>
+  `;
 }
 
 // ═══════════════ THEME TOGGLE (clair/sombre) ═══════════════
