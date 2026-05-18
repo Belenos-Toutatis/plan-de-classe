@@ -2678,6 +2678,19 @@ kbd {
   <div class="mb" style="max-width:560px;width:100%">
     <h2 id="meval-new-title">+ Nouvelle évaluation</h2>
     <input type="hidden" id="meval-new-id">
+    <div style="margin-bottom:14px;padding:10px;background:var(--paper-warm);border-radius:4px">
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">Type d'évaluation</div>
+      <label style="display:block;margin:3px 0;cursor:pointer">
+        <input type="radio" name="meval-new-type" value="A" checked>
+        <strong>Type A — Mini-notes (DS / IE classique)</strong>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Liste de petites notes (Q1/3, Q2/5…) sommées et ramenées proportionnellement à la note finale.</div>
+      </label>
+      <label style="display:block;margin:3px 0;cursor:pointer">
+        <input type="radio" name="meval-new-type" value="C">
+        <strong>Type C — Sommative classique avec exercices</strong>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Exercices × questions × points (compétences optionnelles par question). Idéal pour DS structurés. Total des points = note finale.</div>
+      </label>
+    </div>
     <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;font-size:.92em">
       <label for="meval-new-nomcourt">Nom court <span style="color:var(--margin-red)">*</span></label>
       <input type="text" id="meval-new-nomcourt" maxlength="20" placeholder="ex. DS3, IE2, TP1…" style="padding:5px 8px">
@@ -2724,14 +2737,12 @@ kbd {
       </div>
     </div>
 
-    <div class="about-section">
-      <h3>🔢 Mini-notes (questions / items)</h3>
-      <p style="margin:0 0 8px;font-size:.85em;color:var(--pencil)">Chaque mini-note a un libellé court et un nombre de points maximum. La note finale est calculée proportionnellement à la note maximale.</p>
-      <div id="meval-edit-mininotes" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-g btn-sm" onclick="_evalEditAddMiniNote()">+ Ajouter une mini-note</button>
-        <span id="meval-edit-totalpts" style="font-size:.85em;color:var(--pencil)"></span>
-      </div>
+    <div class="about-section" id="meval-edit-structure-section">
+      <h3 id="meval-edit-structure-title">🔢 Mini-notes (questions / items)</h3>
+      <p id="meval-edit-structure-help" style="margin:0 0 8px;font-size:.85em;color:var(--pencil)"></p>
+      <div id="meval-edit-structure" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+      <div id="meval-edit-structure-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+      <div id="meval-edit-totalpts" style="font-size:.85em;color:var(--pencil);margin-top:8px"></div>
     </div>
 
     <div class="about-section">
@@ -2784,6 +2795,21 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="_evalSaisiePrev()" id="meval-saisie-prev-btn">← Précédent</button>
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-saisie')">Fermer</button>
       <button class="btn btn-p btn-sm" onclick="_evalSaisieNext()" id="meval-saisie-next-btn">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Picker de compétences (Type C, par question) ── -->
+<div id="meval-pick-comp" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:680px;width:100%;max-height:80vh;overflow-y:auto">
+    <h2>🎯 Compétences évaluées par cette question</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
+      Choisis une ou plusieurs compétences du référentiel (regroupées par domaine du socle). Quand l'élève sera évalué, son niveau de maîtrise sera dérivé du score obtenu à cette question (voir <strong>⚙ Paramètres → Conversion note → niveau</strong>).
+    </p>
+    <div id="meval-pick-comp-list" style="margin-bottom:14px"></div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-pick-comp')">Annuler</button>
+      <button class="btn btn-p" onclick="_competencePickerApply()">✓ Appliquer</button>
     </div>
   </div>
 </div>
@@ -3571,7 +3597,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-19T23:00:00Z';
+const APP_VERSION   = '2026-05-19T23:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21112,6 +21138,34 @@ function _fmtNote(n) {
   return r.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 }
 
+// Convertit un score (sur un barème donné) en niveau de maîtrise 1..4 selon
+// les préférences globales (S.evalPrefs.thresholdMode = 'midpoint' | 'percent').
+// Retourne 0 si non évaluable (score null, max ≤ 0, valeur invalide).
+function _noteToLevel(score, max) {
+  if (score == null || !Number.isFinite(score) || max == null || max <= 0) return 0;
+  const prefs = S.evalPrefs || {};
+  if (prefs.thresholdMode === 'percent') {
+    const pct = (score / max) * 100;
+    const seps = prefs.thresholdPercents || [40, 60, 85];
+    if (pct < seps[0]) return 1;
+    if (pct < seps[1]) return 2;
+    if (pct < seps[2]) return 3;
+    return 4;
+  }
+  // 'midpoint' — seuils au milieu entre les valeurs maitrisePoints, ramenés au barème
+  const pts = prefs.maitrisePoints || [5, 8, 15, 20];
+  const ptsMax = pts[3] || 20;
+  // Convertit score à l'échelle des maitrisePoints
+  const scaled = (score / max) * ptsMax;
+  const t12 = (pts[0] + pts[1]) / 2;
+  const t23 = (pts[1] + pts[2]) / 2;
+  const t34 = (pts[2] + pts[3]) / 2;
+  if (scaled < t12) return 1;
+  if (scaled < t23) return 2;
+  if (scaled < t34) return 3;
+  return 4;
+}
+
 // Parse une saisie utilisateur en valeur de mini-note.
 // Retourne 'NN', 'A', un nombre, ou null si vide / invalide.
 function _parseMiniNoteInput(raw) {
@@ -21166,12 +21220,18 @@ function renderEvalNotes() {
     const totalStudents = (cls.eleves || []).length;
     const nbMini = (ev.miniNotes || []).length;
     const totalMax = (ev.miniNotes || []).reduce((s, m) => s + (m.max || 0), 0);
+    const typeBadge = ev.type === 'C'
+      ? '<span style="display:inline-block;padding:1px 6px;background:var(--ink-blue);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE C</span>'
+      : '<span style="display:inline-block;padding:1px 6px;background:var(--margin-red);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE A</span>';
+    const exoInfo = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0
+      ? ` dans ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''}`
+      : '';
     html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalOpenEditor('${_esc(ev.id)}')" title="Ouvrir l'éditeur de cette évaluation">
       <div style="flex:1">
-        <div><strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
+        <div>${typeBadge}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
         <div style="font-size:.85em;color:var(--pencil);margin-top:2px">
           📅 ${ev.date ? _fmtDateFr(ev.date) : '—'} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
-          · ${nbMini} mini-note${nbMini > 1 ? 's' : ''} (${totalMax} pts)
+          · ${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${totalMax} pts)
           · <strong>${nbStudents}/${totalStudents}</strong> saisis
         </div>
       </div>
@@ -21219,14 +21279,16 @@ function _evalNewSave() {
   if (!Number.isFinite(noteMax) || noteMax <= 0) { toast('⚠ Note maximale invalide', 'warn'); return; }
   if (!Number.isFinite(coef) || coef < 0) { toast('⚠ Coefficient invalide', 'warn'); return; }
 
+  const type = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
   pushUndo();
   const id = _newEvalId();
   const now = Date.now();
   S.evaluations[id] = {
-    id, type: 'A',
+    id, type,
     classId: cls.id,
     nomCourt, nomLong, date, periode, coef, noteMax,
-    miniNotes: [],
+    miniNotes: [],                          // questions plates (avec exerciceId pour Type C)
+    exercices: type === 'C' ? [] : undefined, // [{id, label}] uniquement pour Type C
     notes: {},
     createdAt: now, updatedAt: now,
   };
@@ -21262,31 +21324,261 @@ function _evalEditRenderMiniNotes() {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
-  const wrap = document.getElementById('meval-edit-mininotes');
+  const wrap = document.getElementById('meval-edit-structure');
+  const actions = document.getElementById('meval-edit-structure-actions');
+  const title = document.getElementById('meval-edit-structure-title');
+  const help  = document.getElementById('meval-edit-structure-help');
   wrap.innerHTML = '';
+  actions.innerHTML = '';
   ev.miniNotes = ev.miniNotes || [];
+
+  // ── Type A : mini-notes plates ──
+  if (ev.type !== 'C') {
+    title.textContent = '🔢 Mini-notes (questions / items)';
+    help.textContent  = 'Chaque mini-note a un libellé et un nombre de points maximum. La note finale est calculée proportionnellement à la note maximale.';
+    let totalPts = 0;
+    ev.miniNotes.forEach((mn, idx) => {
+      totalPts += (mn.max || 0);
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
+      row.innerHTML = `
+        <span style="font-family:var(--font-mono);color:var(--pencil);min-width:24px;text-align:right">${idx + 1}.</span>
+        <input type="text" value="${_esc(mn.label || '')}" placeholder="Libellé (ex. Q1, Exercice 2…)" maxlength="40"
+               style="flex:1;padding:4px 8px" oninput="_evalEditUpdateMiniNote(${idx}, 'label', this.value)">
+        <span style="color:var(--pencil);font-size:.85em">/</span>
+        <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}"
+               style="width:70px;padding:4px 8px;font-family:var(--font-mono);text-align:right"
+               oninput="_evalEditUpdateMiniNote(${idx}, 'max', this.value)">
+        <span style="color:var(--pencil);font-size:.85em">pts</span>
+        <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${idx})" title="Supprimer cette mini-note">✕</button>
+      `;
+      wrap.appendChild(row);
+    });
+    actions.innerHTML = '<button class="btn btn-g btn-sm" onclick="_evalEditAddMiniNote()">+ Ajouter une mini-note</button>';
+    document.getElementById('meval-edit-totalpts').textContent =
+      ev.miniNotes.length === 0
+        ? 'Aucune mini-note pour l\'instant. La saisie sera vide.'
+        : `Total : ${totalPts} pts répartis sur ${ev.miniNotes.length} mini-note${ev.miniNotes.length > 1 ? 's' : ''} · ramené à /${ev.noteMax ?? 20} par proportionnalité`;
+    return;
+  }
+
+  // ── Type C : exercices > questions ──
+  title.textContent = '📚 Structure (exercices → questions)';
+  help.innerHTML = 'Chaque exercice contient des questions avec leur barème. Tu peux <strong>rattacher une ou plusieurs compétences</strong> à chaque question (optionnel) — utile pour générer le bilan compétences (phase 11).';
+  ev.exercices = ev.exercices || [];
   let totalPts = 0;
-  ev.miniNotes.forEach((mn, idx) => {
-    totalPts += (mn.max || 0);
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
-    row.innerHTML = `
-      <span style="font-family:var(--font-mono);color:var(--pencil);min-width:24px;text-align:right">${idx + 1}.</span>
-      <input type="text" value="${_esc(mn.label || '')}" placeholder="Libellé (ex. Q1, Exercice 2…)" maxlength="40"
-             style="flex:1;padding:4px 8px" oninput="_evalEditUpdateMiniNote(${idx}, 'label', this.value)">
-      <span style="color:var(--pencil);font-size:.85em">/</span>
-      <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}"
-             style="width:70px;padding:4px 8px;font-family:var(--font-mono);text-align:right"
-             oninput="_evalEditUpdateMiniNote(${idx}, 'max', this.value)">
-      <span style="color:var(--pencil);font-size:.85em">pts</span>
-      <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${idx})" title="Supprimer cette mini-note">✕</button>
-    `;
-    wrap.appendChild(row);
+  let questionGlobalIdx = 0;
+  ev.exercices.forEach((exo, exoIdx) => {
+    const exoBlock = document.createElement('div');
+    exoBlock.style.cssText = 'background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--ink-blue);border-radius:3px;padding:8px';
+    // En-tête de l'exercice
+    let exoHeaderHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:bold;font-size:.85em">EX.${exoIdx + 1}</span>
+      <input type="text" value="${_esc(exo.label || '')}" placeholder="Libellé de l'exercice (ex. Lecture du diagramme)" maxlength="60"
+             style="flex:1;padding:4px 8px;font-family:var(--font-serif);font-weight:600" oninput="_evalEditUpdateExo(${exoIdx}, this.value)">
+      <button class="btn btn-r btn-sm" onclick="_evalEditRemoveExo(${exoIdx})" title="Supprimer cet exercice (et toutes ses questions)">✕ Exo</button>
+    </div>`;
+    // Questions de cet exercice
+    const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
+    const qBlocks = [];
+    qs.forEach((q, qIdxInExo) => {
+      const globalIdx = ev.miniNotes.indexOf(q);
+      totalPts += (q.max || 0);
+      questionGlobalIdx++;
+      const compChips = _renderCompetenceChips(q.competenceIds || [], globalIdx);
+      qBlocks.push(`<div style="display:flex;gap:6px;align-items:center;padding:4px 6px;padding-left:24px;border-top:1px dashed var(--rule-line-soft)">
+        <span style="font-family:var(--font-mono);color:var(--pencil);font-size:.85em;min-width:36px">Q${exoIdx + 1}.${qIdxInExo + 1}</span>
+        <input type="text" value="${_esc(q.label || '')}" placeholder="Libellé question" maxlength="50"
+               style="flex:1;padding:3px 6px;font-size:.92em" oninput="_evalEditUpdateMiniNote(${globalIdx}, 'label', this.value)">
+        <span style="color:var(--pencil);font-size:.8em">/</span>
+        <input type="number" min="0" max="100" step="0.5" value="${q.max ?? 1}"
+               style="width:60px;padding:3px 6px;font-family:var(--font-mono);text-align:right;font-size:.92em"
+               oninput="_evalEditUpdateMiniNote(${globalIdx}, 'max', this.value)">
+        <span style="color:var(--pencil);font-size:.8em">pts</span>
+        ${compChips}
+        <button class="btn btn-g btn-sm" onclick="_evalEditPickCompetences(${globalIdx})" title="Rattacher / détacher des compétences" style="padding:2px 8px;font-size:.85em">🎯</button>
+        <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${globalIdx})" title="Supprimer cette question" style="padding:2px 6px">✕</button>
+      </div>`);
+    });
+    exoHeaderHTML += '<div style="display:flex;flex-direction:column">' + qBlocks.join('') + '</div>';
+    exoHeaderHTML += `<div style="margin-top:6px;text-align:right"><button class="btn btn-g btn-sm" onclick="_evalEditAddQuestion('${_esc(exo.id)}')">+ Question dans Ex.${exoIdx + 1}</button></div>`;
+    exoBlock.innerHTML = exoHeaderHTML;
+    wrap.appendChild(exoBlock);
   });
+  // Questions orphelines (sans exerciceId valide) — peut arriver si on supprime un exo
+  const orphans = ev.miniNotes.filter(mn => !mn.exerciceId || !ev.exercices.some(e => e.id === mn.exerciceId));
+  if (orphans.length > 0) {
+    const orphBlock = document.createElement('div');
+    orphBlock.style.cssText = 'background:var(--paper);border:1px dashed var(--margin-red);padding:8px';
+    let orphHTML = `<div style="font-size:.85em;color:var(--margin-red);margin-bottom:6px">⚠ ${orphans.length} question${orphans.length > 1 ? 's' : ''} sans exercice :</div>`;
+    orphans.forEach(q => {
+      const globalIdx = ev.miniNotes.indexOf(q);
+      totalPts += (q.max || 0);
+      orphHTML += `<div style="display:flex;gap:6px;align-items:center;padding:4px 6px">
+        <span style="font-family:var(--font-mono);color:var(--pencil);font-size:.85em">?</span>
+        <input type="text" value="${_esc(q.label || '')}" maxlength="50"
+               style="flex:1;padding:3px 6px;font-size:.92em" oninput="_evalEditUpdateMiniNote(${globalIdx}, 'label', this.value)">
+        <span style="color:var(--pencil);font-size:.8em">/</span>
+        <input type="number" min="0" max="100" step="0.5" value="${q.max ?? 1}"
+               style="width:60px;padding:3px 6px;font-family:var(--font-mono);text-align:right;font-size:.92em"
+               oninput="_evalEditUpdateMiniNote(${globalIdx}, 'max', this.value)">
+        <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${globalIdx})">✕</button>
+      </div>`;
+    });
+    orphBlock.innerHTML = orphHTML;
+    wrap.appendChild(orphBlock);
+  }
+  actions.innerHTML = '<button class="btn btn-g btn-sm" onclick="_evalEditAddExo()">+ Ajouter un exercice</button>';
+
   document.getElementById('meval-edit-totalpts').textContent =
     ev.miniNotes.length === 0
-      ? 'Aucune mini-note pour l\'instant. La saisie sera vide.'
-      : `Total : ${totalPts} pts répartis sur ${ev.miniNotes.length} mini-note${ev.miniNotes.length > 1 ? 's' : ''} · ramené à /${ev.noteMax ?? 20} par proportionnalité`;
+      ? 'Aucune question pour l\'instant.'
+      : `Total : ${totalPts} pts sur ${ev.miniNotes.length} question${ev.miniNotes.length > 1 ? 's' : ''} dans ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''} · ramené à /${ev.noteMax ?? 20} par proportionnalité`;
+}
+
+// Rend des "chips" compactes des compétences rattachées à une question (code court).
+function _renderCompetenceChips(competenceIds, globalIdx) {
+  if (!competenceIds || competenceIds.length === 0) return '';
+  const chips = competenceIds.map(cid => {
+    const c = S.competences?.[cid];
+    if (!c) return '';
+    return `<span title="${_esc(c.name || '')}" style="display:inline-block;padding:1px 6px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:8px;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue)">${_esc(c.code)}</span>`;
+  }).join(' ');
+  return `<span style="display:inline-flex;gap:3px;flex-wrap:wrap;margin-left:4px">${chips}</span>`;
+}
+
+// ── Type C : éditeur d'exercices ──
+function _evalEditAddExo() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'C') return;
+  ev.exercices = ev.exercices || [];
+  const exoId = 'exo_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+  const idx = ev.exercices.length + 1;
+  ev.exercices.push({ id: exoId, label: `Exercice ${idx}` });
+  _evalEditDirty = true;
+  _evalEditRenderMiniNotes();
+}
+
+function _evalEditUpdateExo(idx, label) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !ev.exercices?.[idx]) return;
+  ev.exercices[idx].label = String(label || '');
+  _evalEditDirty = true;
+}
+
+function _evalEditRemoveExo(idx) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !ev.exercices?.[idx]) return;
+  const exo = ev.exercices[idx];
+  const nbQ = ev.miniNotes.filter(mn => mn.exerciceId === exo.id).length;
+  const msg = nbQ > 0
+    ? `Supprimer "${exo.label || '(sans nom)'}" et ses ${nbQ} question${nbQ > 1 ? 's' : ''} ? Les notes saisies seront perdues.`
+    : `Supprimer "${exo.label || '(sans nom)'}" ?`;
+  if (!confirm(msg)) return;
+  // Supprime l'exo et ses questions (avec leurs saisies)
+  const qIds = ev.miniNotes.filter(mn => mn.exerciceId === exo.id).map(mn => mn.id);
+  ev.miniNotes = ev.miniNotes.filter(mn => mn.exerciceId !== exo.id);
+  for (const sid in (ev.notes || {})) {
+    for (const qid of qIds) {
+      if (ev.notes[sid]?.values) delete ev.notes[sid].values[qid];
+    }
+  }
+  ev.exercices.splice(idx, 1);
+  _evalEditDirty = true;
+  _evalEditRenderMiniNotes();
+}
+
+function _evalEditAddQuestion(exoId) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'C') return;
+  const exo = ev.exercices?.find(e => e.id === exoId);
+  if (!exo) return;
+  ev.miniNotes = ev.miniNotes || [];
+  const qInExo = ev.miniNotes.filter(mn => mn.exerciceId === exoId).length;
+  const exoIdx = ev.exercices.indexOf(exo);
+  ev.miniNotes.push({
+    id: _newMiniNoteId(),
+    label: `Q${exoIdx + 1}.${qInExo + 1}`,
+    max: 1,
+    exerciceId: exoId,
+    competenceIds: [],
+  });
+  _evalEditDirty = true;
+  _evalEditRenderMiniNotes();
+}
+
+// Popup de sélection multi-compétences pour une question (Type C uniquement)
+function _evalEditPickCompetences(globalIdx) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !ev.miniNotes?.[globalIdx]) return;
+  const q = ev.miniNotes[globalIdx];
+  q.competenceIds = q.competenceIds || [];
+  // Ouvre la modale dédiée
+  _competencePicker.targetEval = evalId;
+  _competencePicker.targetQIdx = globalIdx;
+  _competencePicker.selected   = new Set(q.competenceIds);
+  _competencePickerRender();
+  openMod('meval-pick-comp');
+}
+
+const _competencePicker = { targetEval: null, targetQIdx: null, selected: new Set() };
+
+function _competencePickerRender() {
+  const wrap = document.getElementById('meval-pick-comp-list');
+  if (!wrap) return;
+  // Group competences by domain
+  const byDomain = {};
+  for (const c of Object.values(S.competences || {})) {
+    const dId = c.domainId || '_nodom';
+    (byDomain[dId] = byDomain[dId] || []).push(c);
+  }
+  // Domain order = order in S.competenceDomains, with '_nodom' last
+  const domainOrder = Object.keys(S.competenceDomains || {});
+  if (byDomain._nodom) domainOrder.push('_nodom');
+  let html = '';
+  for (const dId of domainOrder) {
+    const comps = byDomain[dId];
+    if (!comps || comps.length === 0) continue;
+    const dom = S.competenceDomains?.[dId];
+    const domLabel = dom ? `${dom.code} — ${dom.name}` : 'Sans domaine';
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:.78em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:4px">${_esc(domLabel)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    for (const c of comps) {
+      const sel = _competencePicker.selected.has(c.id);
+      html += `<label style="display:inline-flex;align-items:center;gap:5px;padding:4px 8px;background:${sel ? '#e6f0fa' : 'var(--paper-warm)'};border:1px solid ${sel ? 'var(--ink-blue)' : 'var(--rule-line)'};border-radius:14px;cursor:pointer;font-size:.88em" title="${_esc(c.name || '')}">
+        <input type="checkbox" ${sel ? 'checked' : ''} onchange="_competencePickerToggle('${_esc(c.id)}', this.checked)" style="margin:0">
+        <strong style="font-family:var(--font-mono)">${_esc(c.code)}</strong>
+        <span style="color:var(--pencil);font-size:.92em">— ${_esc(c.name || '')}</span>
+      </label>`;
+    }
+    html += '</div></div>';
+  }
+  wrap.innerHTML = html || '<p style="color:var(--pencil);font-style:italic">Aucune compétence définie. Crée-les dans <strong>⚙ Paramètres</strong> (à venir en phase ultérieure).</p>';
+}
+
+function _competencePickerToggle(cid, checked) {
+  if (checked) _competencePicker.selected.add(cid);
+  else _competencePicker.selected.delete(cid);
+  _competencePickerRender();
+}
+
+function _competencePickerApply() {
+  const ev = S.evaluations?.[_competencePicker.targetEval];
+  const idx = _competencePicker.targetQIdx;
+  if (!ev || ev.miniNotes?.[idx] == null) { closeMod2('meval-pick-comp'); return; }
+  pushUndo();
+  ev.miniNotes[idx].competenceIds = Array.from(_competencePicker.selected);
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-pick-comp');
+  _evalEditRenderMiniNotes();
+  toast('✓ Compétences mises à jour');
 }
 
 function _evalEditAddMiniNote() {
@@ -21453,21 +21745,42 @@ function _evalSaisieRender() {
   ev.notes[sid] = ev.notes[sid] || { values: {} };
   const values = ev.notes[sid].values;
 
-  ev.miniNotes.forEach((mn, i) => {
-    const v = values[mn.id];
-    const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
-    row.innerHTML = `
-      <span style="font-family:var(--font-mono);color:var(--pencil);min-width:36px;font-size:.85em">${i + 1}.</span>
-      <span style="flex:1;font-weight:500">${_esc(mn.label || '(sans nom)')}</span>
-      <input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}"
-             placeholder="…" maxlength="6"
-             oninput="_evalSaisieUpdateNote(this)"
-             style="width:70px;padding:4px 6px;font-family:var(--font-mono);text-align:right;font-size:1em">
-      <span style="color:var(--pencil);font-size:.85em">/${mn.max}</span>
-    `;
-    wrap.appendChild(row);
+  // Pour Type C : grouper visuellement par exercice ; pour Type A : flat
+  const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+  const groups = isTypeC
+    ? ev.exercices.map(exo => ({ exo, items: ev.miniNotes.filter(mn => mn.exerciceId === exo.id) }))
+    : [{ exo: null, items: ev.miniNotes }];
+  // Ajoute les orphelins (Type C) à la fin
+  if (isTypeC) {
+    const orph = ev.miniNotes.filter(mn => !mn.exerciceId || !ev.exercices.some(e => e.id === mn.exerciceId));
+    if (orph.length > 0) groups.push({ exo: { label: '⚠ Questions sans exercice' }, items: orph });
+  }
+  let globalI = 0;
+  groups.forEach((g, gi) => {
+    if (isTypeC && g.exo) {
+      const header = document.createElement('div');
+      header.style.cssText = 'font-family:var(--font-serif);font-weight:600;color:var(--ink-blue);padding:6px 0 4px;border-bottom:1px solid var(--rule-line);font-size:.95em;margin-top:' + (gi === 0 ? '0' : '8px');
+      header.textContent = g.exo.label || `Exercice ${gi + 1}`;
+      wrap.appendChild(header);
+    }
+    g.items.forEach((mn) => {
+      globalI++;
+      const v = values[mn.id];
+      const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
+      const compChips = isTypeC ? _renderCompetenceChips(mn.competenceIds || []) : '';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
+      row.innerHTML = `
+        <span style="font-family:var(--font-mono);color:var(--pencil);min-width:36px;font-size:.85em">${globalI}.</span>
+        <span style="flex:1;font-weight:500">${_esc(mn.label || '(sans nom)')}${compChips}</span>
+        <input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}"
+               placeholder="…" maxlength="6"
+               oninput="_evalSaisieUpdateNote(this)"
+               style="width:70px;padding:4px 6px;font-family:var(--font-mono);text-align:right;font-size:1em">
+        <span style="color:var(--pencil);font-size:.85em">/${mn.max}</span>
+      `;
+      wrap.appendChild(row);
+    });
   });
   _evalSaisieRecomputeTotal();
 }
@@ -21620,16 +21933,56 @@ function _evalTableurRender() {
   const sids = _evalTableurSortedSids(cls);
   const wrap = document.getElementById('meval-tableur-wrap');
 
+  // Ordonne les questions par exercice pour Type C (regroupement de colonnes contiguës).
+  // On reconstruit un tableau de questions ordonnées + un mapping exo→[colIdx].
+  const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+  let orderedMNs;
+  let exoGroups = []; // [{label, span, colStart}]
+  if (isTypeC) {
+    orderedMNs = [];
+    let colStart = 0;
+    for (const exo of ev.exercices) {
+      const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
+      if (qs.length > 0) exoGroups.push({ label: exo.label || '(sans nom)', span: qs.length, colStart });
+      orderedMNs.push(...qs);
+      colStart += qs.length;
+    }
+    const orphans = ev.miniNotes.filter(mn => !mn.exerciceId || !ev.exercices.some(e => e.id === mn.exerciceId));
+    if (orphans.length > 0) {
+      exoGroups.push({ label: '⚠ Sans exercice', span: orphans.length, colStart });
+      orderedMNs.push(...orphans);
+    }
+  } else {
+    orderedMNs = ev.miniNotes;
+  }
+
   let html = '<table id="meval-tableur-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
-  // En-tête
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
+
+  // En-tête supplémentaire pour Type C : ligne des exercices avec colspan
+  if (isTypeC && exoGroups.length > 0) {
+    html += '<tr>';
+    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+    for (const g of exoGroups) {
+      html += `<th colspan="${g.span}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}">${_esc(g.label)}</th>`;
+    }
+    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+    html += '</tr>';
+  }
+
   html += '<tr>';
-  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
-  ev.miniNotes.forEach((mn, ci) => {
+  if (!isTypeC || exoGroups.length === 0) {
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+  }
+  orderedMNs.forEach((mn) => {
     html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:70px;font-family:var(--font-mono);font-weight:600" title="${_esc(mn.label || '(sans nom)')}">${_esc(mn.label || '?')}<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${mn.max}</span></th>`;
   });
-  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+  if (!isTypeC || exoGroups.length === 0) {
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+  }
   html += '</tr></thead><tbody>';
+  // Stocke l'ordre des mn pour les inputs (ci correspond à orderedMNs)
+  const mnOrder = orderedMNs;
   // Lignes élèves
   sids.forEach((sid, ri) => {
     const stu = S.eleves[sid];
@@ -21638,7 +21991,7 @@ function _evalTableurRender() {
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
-    ev.miniNotes.forEach((mn, ci) => {
+    mnOrder.forEach((mn, ci) => {
       const v = values[mn.id];
       const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
       html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onkeydown="_evalTableurKey(event,this)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent"></td>`;
