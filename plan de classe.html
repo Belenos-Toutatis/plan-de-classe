@@ -2782,6 +2782,12 @@ kbd {
       <div id="meval-edit-saisie-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
 
+    <div class="about-section">
+      <h3>💾 Export ENT</h3>
+      <p style="margin:0 0 8px;font-size:.88em;line-height:1.5">Tableau prêt à coller dans Pronote, EcoleDirecte ou tout ENT : note /20 par élève, bilan compétences (1 colonne par compétence évaluée, code court en en-tête + nom complet au survol), remarque personnalisée.</p>
+      <button class="btn btn-p" onclick="_evalExportOpen()">💾 Ouvrir l'export</button>
+    </div>
+
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
       <button class="btn btn-r btn-sm" onclick="_evalEditDelete()">🗑 Supprimer l'évaluation</button>
       <div style="display:flex;gap:8px">
@@ -2837,6 +2843,34 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="_evalSaisiePrev()" id="meval-saisie-prev-btn">← Précédent</button>
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-saisie')">Fermer</button>
       <button class="btn btn-p btn-sm" onclick="_evalSaisieNext()" id="meval-saisie-next-btn">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Export ENT (phase 10) ── -->
+<div id="meval-export" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 id="meval-export-title" style="margin:0">💾 Export ENT</h2>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:.85em;color:var(--pencil)">Tri :</label>
+        <select id="meval-export-sort" onchange="_evalExportRender()" style="padding:4px 8px;font-size:.88em"></select>
+        <button class="btn btn-g btn-sm" onclick="_evalExportCopyAll()" title="Copie tout le tableau (TSV) au presse-papier">📋 Copier tout</button>
+        <button class="btn btn-g btn-sm" onclick="_evalExportDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
+      </div>
+    </div>
+    <input type="hidden" id="meval-export-evalid">
+
+    <div id="meval-export-cols" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:.85em"></div>
+
+    <div id="meval-export-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
+
+    <p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+      Pour copier <strong>une partie</strong> du tableau : sélectionne à la souris les cellules voulues puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Ctrl+C</kbd>. Pour <strong>tout copier d'un coup</strong> : bouton <strong>📋 Copier tout</strong>.
+    </p>
+
+    <div class="ma" style="margin-top:8px">
+      <button class="btn btn-p" onclick="closeMod2('meval-export')">Fermer</button>
     </div>
   </div>
 </div>
@@ -3842,7 +3876,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T02:30:00Z';
+const APP_VERSION   = '2026-05-20T03:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -23187,6 +23221,235 @@ function _tpCyclePill(sid, cid) {
   const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
   // Plus simple : re-render le plan complet — c'est rapide
   renderTeacherGrid();
+}
+
+// ═══════════════ EXPORT ENT (phase 10) ═══════════════
+// Pour une éval donnée : tableau triable et copiable au format TSV/CSV avec :
+// - Élève (Nom Prénom)
+// - Note /noteMax
+// - Une colonne par compétence évaluée dans l'éval (niveau 1..4, '—' si non évalué)
+// - Remarque personnalisée
+
+// État local de l'export : choix des colonnes visibles
+let _evalExportColsState = { note: true, comps: true, remarque: true };
+
+function _evalExportOpen() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  document.getElementById('meval-export-evalid').value = evalId;
+  document.getElementById('meval-export-title').textContent = `💾 Export ENT — ${ev.nomCourt}${ev.nomLong ? ' · ' + ev.nomLong : ''}`;
+  // Peuple le sélecteur de tri (idem tableur)
+  const sortSel = document.getElementById('meval-export-sort');
+  sortSel.innerHTML = '<option value="nom-prenom">Nom Prénom (défaut ENT)</option><option value="prenom-nom">Prénom Nom</option>';
+  const cls = S.classes?.[ev.classId];
+  const salle = cls ? S.salles?.[cls.activeRoom] : null;
+  for (const p of (salle?.collectPatterns || [])) {
+    const opt = document.createElement('option');
+    opt.value = `pat-${p.id}`;
+    opt.textContent = `Pattern ramassage : ${p.nom}`;
+    sortSel.appendChild(opt);
+  }
+  sortSel.value = 'nom-prenom';
+  // Render
+  _evalExportRender();
+  openMod('meval-export');
+}
+
+// Retourne la liste des compétences évaluées dans l'éval (Type B/C) ordonnée par code
+function _evalCompetencesEvaluated(ev) {
+  const ids = new Set();
+  if (ev.type === 'B') {
+    for (const p of (ev.passations || [])) {
+      for (const cid of (p.competenceIds || [])) ids.add(cid);
+    }
+  } else if (ev.type === 'C' || ev.type === 'A') {
+    for (const mn of (ev.miniNotes || [])) {
+      for (const cid of (mn.competenceIds || [])) ids.add(cid);
+    }
+  }
+  const list = Array.from(ids).map(id => S.competences?.[id]).filter(Boolean);
+  list.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  return list;
+}
+
+// Niveau d'un élève sur une compétence dans le contexte d'une éval donnée.
+// Type B : déjà implémenté via _computeStudentCompetenceLevel.
+// Type C : agrège les questions évaluées sur cette compétence (chacune convertie en niveau via _noteToLevel) et moyenne arithmétique (règle simple ; affinements possibles plus tard).
+function _evalStudentCompetenceLevel(ev, sid, cid) {
+  if (ev.type === 'B') return _computeStudentCompetenceLevel(ev, sid, cid);
+  // Type A/C : passe par les questions
+  const values   = ev.notes?.[sid]?.values || {};
+  const comments = ev.notes?.[sid]?.comments || {};
+  const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+  const niveaux = [];
+  for (const mn of (ev.miniNotes || [])) {
+    if (!mn.competenceIds?.includes(cid)) continue;
+    if (excluded.has(mn.id)) continue;
+    const v = values[mn.id];
+    if (v === 'NN' || v === 'A' || v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) continue;
+    const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+    const niv = _noteToLevel(eff, mn.max);
+    if (niv > 0) niveaux.push(niv);
+  }
+  if (niveaux.length === 0) return 0;
+  return niveaux.reduce((s, x) => s + x, 0) / niveaux.length;
+}
+
+// Construit les données de l'export sous forme d'un tableau de lignes [{ name, note, comps:[{cid, level}], remarque }]
+function _evalExportBuildRows(ev) {
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return { rows: [], comps: [] };
+  const sortSel = document.getElementById('meval-export-sort');
+  const sortMode = sortSel?.value || 'nom-prenom';
+  let sids;
+  if (sortMode.startsWith('pat-')) {
+    const patternId = sortMode.slice(4);
+    sids = _sidsOrderedByPattern(cls, patternId) || cls.eleves.slice();
+  } else if (sortMode === 'prenom-nom') {
+    sids = cls.eleves.slice().sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      const ka = (sa?.prenom || '').toLowerCase() + '|' + (sa?.nom || '').toLowerCase();
+      const kb = (sb?.prenom || '').toLowerCase() + '|' + (sb?.nom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
+  } else {
+    sids = cls.eleves.slice().sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+      const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
+  }
+  const comps = _evalCompetencesEvaluated(ev);
+  const rows = [];
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    const name = `${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim();
+    const note = _computeStudentEvalNote(ev, sid);
+    const compLevels = comps.map(c => {
+      const niv = _evalStudentCompetenceLevel(ev, sid, c.id);
+      return { cid: c.id, code: c.code, name: c.name, level: niv > 0 ? niv : null };
+    });
+    const remarque = ev.notes?.[sid]?.remarque || '';
+    rows.push({ sid, name, note, comps: compLevels, remarque });
+  }
+  return { rows, comps };
+}
+
+function _evalExportRender() {
+  const evalId = document.getElementById('meval-export-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const { rows, comps } = _evalExportBuildRows(ev);
+  // Toggles de colonnes
+  const colsWrap = document.getElementById('meval-export-cols');
+  let togHTML = '<span style="color:var(--pencil);align-self:center;margin-right:6px">Colonnes :</span>';
+  togHTML += `<label style="cursor:pointer;padding:2px 8px;background:${_evalExportColsState.note ? '#e6f0fa' : 'var(--paper-warm)'};border-radius:10px;border:1px solid var(--rule-line)"><input type="checkbox" ${_evalExportColsState.note ? 'checked' : ''} onchange="_evalExportColsState.note=this.checked;_evalExportRender()"> Note</label>`;
+  togHTML += `<label style="cursor:pointer;padding:2px 8px;background:${_evalExportColsState.comps ? '#e6f0fa' : 'var(--paper-warm)'};border-radius:10px;border:1px solid var(--rule-line)"><input type="checkbox" ${comps.length === 0 ? 'disabled' : ''} ${_evalExportColsState.comps ? 'checked' : ''} onchange="_evalExportColsState.comps=this.checked;_evalExportRender()"> Compétences (${comps.length})</label>`;
+  togHTML += `<label style="cursor:pointer;padding:2px 8px;background:${_evalExportColsState.remarque ? '#e6f0fa' : 'var(--paper-warm)'};border-radius:10px;border:1px solid var(--rule-line)"><input type="checkbox" ${_evalExportColsState.remarque ? 'checked' : ''} onchange="_evalExportColsState.remarque=this.checked;_evalExportRender()"> Remarque</label>`;
+  colsWrap.innerHTML = togHTML;
+  // Tableau
+  const wrap = document.getElementById('meval-export-wrap');
+  let html = '<table id="meval-export-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
+  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+  if (_evalExportColsState.note) html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+  if (_evalExportColsState.comps) {
+    for (const c of comps) {
+      html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:48px" title="${_esc(c.name || '')}">${_esc(c.code)}</th>`;
+    }
+  }
+  if (_evalExportColsState.remarque) html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:200px">Remarque</th>`;
+  html += '</tr></thead><tbody>';
+
+  rows.forEach((r, ri) => {
+    const bg = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
+    html += `<tr style="background:${bg}">`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_esc(r.name)}</td>`;
+    if (_evalExportColsState.note) {
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600">${r.note != null ? _fmtNote(r.note) : ''}</td>`;
+    }
+    if (_evalExportColsState.comps) {
+      for (const c of r.comps) {
+        const lvl = c.level;
+        const cell = lvl == null ? '' : _fmtNote(lvl);
+        html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono)">${cell}</td>`;
+      }
+    }
+    if (_evalExportColsState.remarque) {
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);font-size:.88em">${_esc(r.remarque || '')}</td>`;
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+// Construit le contenu textuel (TSV) du tableau d'export
+function _evalExportToTSV(ev) {
+  const { rows, comps } = _evalExportBuildRows(ev);
+  const headers = ['Élève'];
+  if (_evalExportColsState.note)     headers.push(`Note /${ev.noteMax}`);
+  if (_evalExportColsState.comps)    for (const c of comps) headers.push(c.code);
+  if (_evalExportColsState.remarque) headers.push('Remarque');
+  const lines = [headers.join('\t')];
+  for (const r of rows) {
+    const cells = [r.name];
+    if (_evalExportColsState.note)     cells.push(r.note != null ? _fmtNote(r.note) : '');
+    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level != null ? _fmtNote(c.level) : '');
+    if (_evalExportColsState.remarque) cells.push((r.remarque || '').replace(/\t|\n/g, ' '));
+    lines.push(cells.join('\t'));
+  }
+  return lines.join('\n');
+}
+
+function _evalExportCopyAll() {
+  const evalId = document.getElementById('meval-export-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const tsv = _evalExportToTSV(ev);
+  navigator.clipboard.writeText(tsv).then(
+    () => toast('📋 Tableau copié — colle-le dans Pronote/EcoleDirecte/un ENT'),
+    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris et fais Ctrl+C', 'warn')
+  );
+}
+
+function _evalExportDownloadCsv() {
+  const evalId = document.getElementById('meval-export-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  // CSV avec ; (séparateur compatible Excel France) et virgule décimale conservée
+  const { rows, comps } = _evalExportBuildRows(ev);
+  const csvEsc = s => {
+    const str = String(s ?? '');
+    return /[";\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const headers = ['Élève'];
+  if (_evalExportColsState.note)     headers.push(`Note /${ev.noteMax}`);
+  if (_evalExportColsState.comps)    for (const c of comps) headers.push(c.code);
+  if (_evalExportColsState.remarque) headers.push('Remarque');
+  const lines = [headers.map(csvEsc).join(';')];
+  for (const r of rows) {
+    const cells = [r.name];
+    if (_evalExportColsState.note)     cells.push(r.note != null ? _fmtNote(r.note) : '');
+    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level != null ? _fmtNote(c.level) : '');
+    if (_evalExportColsState.remarque) cells.push(r.remarque || '');
+    lines.push(cells.map(csvEsc).join(';'));
+  }
+  // BOM UTF-8 pour Excel
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${ev.nomCourt || 'eval'}-${ev.classId}-${ev.date || 'YYYY-MM-DD'}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  toast('💾 CSV téléchargé');
 }
 
 // ═══════════════ COLLER DES NOTES (phase 8) ═══════════════
