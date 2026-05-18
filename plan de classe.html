@@ -1689,6 +1689,7 @@ kbd {
         <label>Colonnes <input id="cfg-cols" type="number" min="1" max="15" value="10" style="width:68px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em;text-align:center" onchange="setCfgDimensions()"></label>
       </span>
       <button class="btn btn-g btn-sm" onclick="doPrintEmptyConfigSalle()" title="Imprimer un plan vide à compléter à la main (Ctrl+P)" style="margin-left:auto">🖨 Plan vide</button>
+      <button class="btn btn-g btn-sm" onclick="openCollectPatternsModal()" title="Définir l'ordre dans lequel tu ramasses les copies dans cette salle. Plusieurs patterns possibles (par îlot, en serpentin…). Utilisés au tri dans la saisie d'évaluation.">📋 Patterns ramassage</button>
       <button class="btn btn-d btn-sm" onclick="deleteSelectedSalle()">🗑 Supprimer cette salle</button>
     </div>
     <div class="al al-i" id="cfg-hint-tables">
@@ -2802,6 +2803,42 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Patterns de ramassage (phase 6) — liste pour une salle ── -->
+<div id="mcollect" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2 id="mcollect-title">📋 Patterns de ramassage</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">L'ordre dans lequel tu ramasses les copies dans cette salle. Plusieurs patterns possibles (selon le type de travail) — tu choisiras lequel utiliser au moment de la saisie des notes (mode fiche ou tableur).</p>
+    <div id="mcollect-list" style="margin-bottom:14px"></div>
+    <button class="btn btn-p" onclick="_collectAddPattern()">+ Nouveau pattern</button>
+    <div class="ma" style="margin-top:14px"><button class="btn btn-g" onclick="closeMod2('mcollect')">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ── MODAL Édition d'un pattern de ramassage (clic-glissé pour numéroter) ── -->
+<div id="mcollect-edit" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,900px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 style="margin:0">📋 Édition pattern</h2>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:.85em;color:var(--pencil)">Nom :</label>
+        <input type="text" id="mcollect-edit-nom" maxlength="40" placeholder="ex. Serpentin, Par îlot, Standard…" style="padding:4px 8px;font-size:.92em">
+        <button class="btn btn-g btn-sm" onclick="_collectEditReset()" title="Vider la numérotation et recommencer">↺ Reset</button>
+      </div>
+    </div>
+    <input type="hidden" id="mcollect-edit-patternid">
+    <input type="hidden" id="mcollect-edit-salleid">
+    <p style="margin:0 0 10px;font-size:.88em;color:var(--pencil);line-height:1.5">Clique sur la première table, puis <strong>glisse la souris</strong> sur les tables suivantes dans l'ordre. Tu peux aussi <strong>cliquer table par table</strong>. Cliquer sur une table déjà numérotée annule la suite à partir de cette table.</p>
+    <div id="mcollect-edit-grid-wrap" style="flex:1;overflow:auto;background:var(--paper);padding:14px;border:1px solid var(--rule-line);border-radius:4px"></div>
+    <div class="ma" style="margin-top:10px;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-r btn-sm" onclick="_collectEditDelete()">🗑 Supprimer ce pattern</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g" onclick="closeMod2('mcollect-edit')">Annuler</button>
+        <button class="btn btn-p" onclick="_collectEditSave()">✓ Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Démarrer une passation depuis Plan Prof (Phase 5) ── -->
 <div id="mtp-start" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
@@ -3681,7 +3718,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T00:30:00Z';
+const APP_VERSION   = '2026-05-20T01:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -4164,8 +4201,12 @@ function postLoadHook() {
   migrateEvalDefaults();
   // Îlots définis par salle (regroupements physiques de tables sur plusieurs rangées)
   // Structure salle.ilots : { [ilotId]: { id, nom, cells: ['r,c', ...] } }
+  // Patterns de ramassage : salle.collectPatterns = [{id, nom, order: ['r,c',...]}]
+  //   ordre dans lequel l'enseignant ramasse les copies → utilisé comme tri en
+  //   saisie d'évaluation (mode fiche et tableur).
   for (const salle of Object.values(S.salles || {})) {
     if (!salle.ilots || typeof salle.ilots !== 'object') salle.ilots = {};
+    if (!Array.isArray(salle.collectPatterns)) salle.collectPatterns = [];
   }
   migrateToRooms();
   migrateSchedules();
@@ -22064,8 +22105,18 @@ function _evalOpenTableur() {
   if (_evalEditDirty) _evalEditSave();
   document.getElementById('meval-tableur-evalid').value = evalId;
   document.getElementById('meval-tableur-title').textContent = `📊 ${ev.nomCourt} — saisie tableur`;
-  // Pré-sélection du tri (défaut nom-prénom)
-  document.getElementById('meval-tableur-sort').value = 'nom-prenom';
+  // Peuple le select avec les options de tri (incluant patterns de la salle active)
+  const sortSel = document.getElementById('meval-tableur-sort');
+  sortSel.innerHTML = '<option value="nom-prenom">Nom Prénom (défaut ENT)</option><option value="prenom-nom">Prénom Nom</option>';
+  const cls = S.classes?.[ev.classId];
+  const salle = cls ? S.salles?.[cls.activeRoom] : null;
+  for (const p of (salle?.collectPatterns || [])) {
+    const opt = document.createElement('option');
+    opt.value = `pat-${p.id}`;
+    opt.textContent = `Pattern ramassage : ${p.nom}`;
+    sortSel.appendChild(opt);
+  }
+  sortSel.value = 'nom-prenom';
   _evalTableurRender();
   _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
   openMod('meval-tableur');
@@ -22073,6 +22124,12 @@ function _evalOpenTableur() {
 
 function _evalTableurSortedSids(cls) {
   const mode = document.getElementById('meval-tableur-sort')?.value || 'nom-prenom';
+  // Pattern de ramassage : mode = 'pat-<patternId>'
+  if (mode.startsWith('pat-')) {
+    const patternId = mode.slice(4);
+    const ordered = _sidsOrderedByPattern(cls, patternId);
+    if (ordered) return ordered;
+  }
   const sids = (cls.eleves || []).slice();
   if (mode === 'prenom-nom') {
     sids.sort((a, b) => {
@@ -22844,6 +22901,234 @@ function _tpCyclePill(sid, cid) {
   const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
   // Plus simple : re-render le plan complet — c'est rapide
   renderTeacherGrid();
+}
+
+// ═══════════════ PATTERNS DE RAMASSAGE (phase 6) ═══════════════
+// salle.collectPatterns = [{ id, nom, order: ['r,c', ...] }]
+// L'ordre est la séquence de tables visitées par l'enseignant lors du ramassage.
+
+function _newPatternId() {
+  return 'pat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+}
+
+function _getCfgSalle() {
+  // La salle active dans l'onglet Config Salle. Utilise cfgSelectedSalle (variable globale existante).
+  return (typeof cfgSelectedSalle !== 'undefined' && cfgSelectedSalle) ? S.salles?.[cfgSelectedSalle] : null;
+}
+function _getCfgSalleId() {
+  return (typeof cfgSelectedSalle !== 'undefined' && cfgSelectedSalle) ? cfgSelectedSalle : null;
+}
+
+function openCollectPatternsModal() {
+  const salle = _getCfgSalle();
+  if (!salle) { toast('⚠ Aucune salle sélectionnée', 'warn'); return; }
+  document.getElementById('mcollect-title').textContent = `📋 Patterns de ramassage — ${salle.nom}`;
+  _collectRenderList();
+  openMod('mcollect');
+}
+
+function _collectRenderList() {
+  const salle = _getCfgSalle();
+  if (!salle) return;
+  const wrap = document.getElementById('mcollect-list');
+  salle.collectPatterns = salle.collectPatterns || [];
+  if (salle.collectPatterns.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:6px 0">Aucun pattern défini pour cette salle.</p>';
+    return;
+  }
+  const totalTables = (salle.rows * salle.cols) - (salle.positions_vides?.length || 0);
+  let html = '<div style="display:flex;flex-direction:column;gap:6px">';
+  for (const p of salle.collectPatterns) {
+    const cov = (p.order || []).length;
+    const covLabel = cov === totalTables ? 'complet' : `${cov}/${totalTables} tables`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+      <div style="flex:1">
+        <strong style="font-family:var(--font-serif)">${_esc(p.nom || '(sans nom)')}</strong>
+        <span style="color:var(--pencil);font-size:.85em;margin-left:8px">${covLabel}</span>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="_collectEditPattern('${_esc(p.id)}')">✏ Éditer</button>
+    </div>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function _collectAddPattern() {
+  const salle = _getCfgSalle();
+  if (!salle) return;
+  salle.collectPatterns = salle.collectPatterns || [];
+  // Génère un nom par défaut
+  const idx = salle.collectPatterns.length + 1;
+  const newPat = { id: _newPatternId(), nom: `Pattern ${idx}`, order: [] };
+  pushUndo();
+  salle.collectPatterns.push(newPat);
+  save();
+  _collectRenderList();
+  _collectEditPattern(newPat.id);
+}
+
+// État courant de l'éditeur
+let _collectEditState = null;
+
+function _collectEditPattern(patternId) {
+  const salle = _getCfgSalle();
+  if (!salle) return;
+  const pat = salle.collectPatterns?.find(p => p.id === patternId);
+  if (!pat) return;
+  closeMod2('mcollect');
+  document.getElementById('mcollect-edit-patternid').value = patternId;
+  document.getElementById('mcollect-edit-salleid').value = _getCfgSalleId();
+  document.getElementById('mcollect-edit-nom').value = pat.nom || '';
+  _collectEditState = {
+    salleId: _getCfgSalleId(),
+    patternId,
+    order: (pat.order || []).slice(),
+    dragging: false,
+  };
+  _collectEditRenderGrid();
+  openMod('mcollect-edit');
+  // Permet de revenir sur la liste à la fermeture
+  _modalReturnTo['mcollect-edit'] = () => openCollectPatternsModal();
+}
+
+function _collectEditRenderGrid() {
+  const salle = _getCfgSalle();
+  if (!salle) return;
+  const wrap = document.getElementById('mcollect-edit-grid-wrap');
+  const rows = salle.rows, cols = salle.cols;
+  const cellSize = 70;
+  // Vue prof : col 0 à droite, r=rows-1 au fond
+  let html = `<div style="display:flex;flex-direction:column;gap:4px;width:max-content;margin:0 auto;user-select:none">`;
+  for (let r = rows - 1; r >= 0; r--) {
+    html += '<div style="display:flex;gap:4px;justify-content:flex-end">';
+    for (let c = cols - 1; c >= 0; c--) {
+      const key = `${r},${c}`;
+      const isEmpty = (salle.positions_vides || []).includes(key);
+      const pos = _collectEditState.order.indexOf(key);
+      let bg, border, text, cursor;
+      if (isEmpty) {
+        bg = 'transparent'; border = '1px dashed var(--rule-line)'; text = '<span style="color:var(--pencil);font-size:1.4em">×</span>'; cursor = 'not-allowed';
+      } else if (pos >= 0) {
+        bg = 'var(--ink-blue)'; border = '2px solid var(--ink-blue)'; text = `<span style="color:#fff;font-family:var(--font-mono);font-weight:bold;font-size:1.2em">${pos + 1}</span>`; cursor = 'pointer';
+      } else {
+        bg = '#fff'; border = '1px solid var(--rule-line)'; text = `<span style="color:var(--pencil);font-size:.78em;font-family:var(--font-mono)">${r},${c}</span>`; cursor = 'pointer';
+      }
+      html += `<div data-key="${key}" data-empty="${isEmpty}" style="width:${cellSize}px;height:${cellSize}px;display:flex;align-items:center;justify-content:center;background:${bg};border:${border};border-radius:4px;cursor:${cursor}">${text}</div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  // Attach events for drag-numbering
+  wrap.querySelectorAll('div[data-key]').forEach(cell => {
+    cell.addEventListener('mousedown', e => {
+      if (cell.getAttribute('data-empty') === 'true') return;
+      e.preventDefault();
+      _collectEditState.dragging = true;
+      const key = cell.getAttribute('data-key');
+      _collectEditHandleCellHover(key);
+    });
+    cell.addEventListener('mouseenter', () => {
+      if (!_collectEditState.dragging) return;
+      if (cell.getAttribute('data-empty') === 'true') return;
+      const key = cell.getAttribute('data-key');
+      _collectEditHandleCellHover(key);
+    });
+    cell.addEventListener('click', e => {
+      if (_collectEditState.dragging) return; // click géré via mousedown
+      if (cell.getAttribute('data-empty') === 'true') return;
+      const key = cell.getAttribute('data-key');
+      _collectEditHandleCellHover(key);
+    });
+  });
+  document.addEventListener('mouseup', _collectEditMouseUp);
+}
+
+function _collectEditMouseUp() {
+  _collectEditState && (_collectEditState.dragging = false);
+}
+
+function _collectEditHandleCellHover(key) {
+  // Si la cellule est déjà numérotée, on tronque après elle (le suivant écrasera)
+  const idx = _collectEditState.order.indexOf(key);
+  if (idx >= 0) {
+    // Tronque après idx (garde 0..idx, supprime idx+1..end). Si on rappuie sur la dernière, ne change rien.
+    if (idx < _collectEditState.order.length - 1) {
+      _collectEditState.order = _collectEditState.order.slice(0, idx + 1);
+    }
+  } else {
+    _collectEditState.order.push(key);
+  }
+  _collectEditRenderGrid();
+}
+
+function _collectEditReset() {
+  if (!_collectEditState) return;
+  _collectEditState.order = [];
+  _collectEditRenderGrid();
+}
+
+function _collectEditSave() {
+  if (!_collectEditState) return;
+  const salle = S.salles?.[_collectEditState.salleId];
+  if (!salle) return;
+  const pat = salle.collectPatterns?.find(p => p.id === _collectEditState.patternId);
+  if (!pat) return;
+  const nom = (document.getElementById('mcollect-edit-nom').value || '').trim();
+  if (!nom) { toast('⚠ Le nom du pattern est obligatoire', 'warn'); return; }
+  pushUndo();
+  pat.nom = nom;
+  pat.order = _collectEditState.order.slice();
+  document.removeEventListener('mouseup', _collectEditMouseUp);
+  save();
+  closeMod2('mcollect-edit');
+  toast('✓ Pattern enregistré');
+}
+
+function _collectEditDelete() {
+  if (!_collectEditState) return;
+  const salle = S.salles?.[_collectEditState.salleId];
+  if (!salle) return;
+  const pat = salle.collectPatterns?.find(p => p.id === _collectEditState.patternId);
+  if (!pat) return;
+  if (!confirm(`Supprimer le pattern "${pat.nom || '(sans nom)'}" ?`)) return;
+  pushUndo();
+  salle.collectPatterns = salle.collectPatterns.filter(p => p.id !== _collectEditState.patternId);
+  document.removeEventListener('mouseup', _collectEditMouseUp);
+  save();
+  closeMod2('mcollect-edit');
+  toast('🗑 Pattern supprimé');
+}
+
+// Utilisation des patterns pour trier des sids selon les positions de la salle active.
+// Élèves dans l'ordre du pattern d'abord, puis les non-positionnés/non-couverts à la fin
+// (alpha nom-prénom comme défaut).
+function _sidsOrderedByPattern(cls, patternId) {
+  if (!cls || !patternId) return null;
+  const salle = S.salles?.[cls.activeRoom];
+  const pat = salle?.collectPatterns?.find(p => p.id === patternId);
+  if (!pat) return null;
+  const seating = cls.seating || {};
+  const sids = cls.eleves.slice();
+  const seenSids = new Set();
+  const ordered = [];
+  // 1. Élèves dans l'ordre du pattern
+  for (const key of (pat.order || [])) {
+    const sid = seating[key];
+    if (sid && sids.includes(sid) && !seenSids.has(sid)) {
+      ordered.push(sid);
+      seenSids.add(sid);
+    }
+  }
+  // 2. Reste : non-placés ou hors pattern → alpha nom-prénom
+  const rest = sids.filter(s => !seenSids.has(s));
+  rest.sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+    const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+    return ka.localeCompare(kb, 'fr');
+  });
+  return ordered.concat(rest);
 }
 
 // Bandeau au-dessus de la grille quand mode TP actif
