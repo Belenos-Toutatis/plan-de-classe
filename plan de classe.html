@@ -2809,6 +2809,29 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Coller des notes (phase 8) ── -->
+<div id="meval-paste" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:680px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>📥 Coller des notes</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Colle une <strong>colonne de notes</strong> issue d'une autre source (QCMCam, tableur perso, copie depuis Pronote…). Les notes seront affectées aux élèves <strong>dans l'ordre actuel du tableau</strong>, donc tri-le d'abord pour qu'il corresponde à ta source.</p>
+
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:flex-start;font-size:.92em;margin-bottom:12px">
+      <label style="padding-top:5px">1. Mini-note cible</label>
+      <select id="meval-paste-target" style="width:100%;padding:5px 8px"></select>
+
+      <label style="padding-top:5px">2. Coller ici</label>
+      <textarea id="meval-paste-input" placeholder="Une note par ligne (peut contenir des codes NN, A, ABS).&#10;Ex.&#10;14&#10;12,5&#10;A&#10;9&#10;NN" style="width:100%;min-height:150px;padding:6px 8px;font-family:var(--font-mono);resize:vertical" oninput="_evalPastePreview()"></textarea>
+    </div>
+
+    <div id="meval-paste-preview" style="font-size:.88em;color:var(--pencil);margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px;min-height:40px"></div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-paste')">Annuler</button>
+      <button class="btn btn-p" onclick="_evalPasteApply()" id="meval-paste-apply-btn">✓ Coller (efface les valeurs précédentes)</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Commentaires d'une mini-note (phase 7) ── -->
 <div id="meval-comments" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:600px;width:100%;max-height:88vh;overflow-y:auto">
@@ -3014,6 +3037,7 @@ kbd {
           <option value="nom-prenom">Nom Prénom (défaut ENT)</option>
           <option value="prenom-nom">Prénom Nom</option>
         </select>
+        <button class="btn btn-g btn-sm" onclick="_evalPasteOpen()" title="Coller une colonne de notes depuis une autre source (QCMCam, tableur…) dans l'ordre du tri actuel">📥 Coller des notes</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="Copie le tableau complet (élève + mini-notes + total) au format TSV, prêt à coller dans un tableur ou un ENT">📋 Copier tout</button>
       </div>
     </div>
@@ -3786,7 +3810,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T01:30:00Z';
+const APP_VERSION   = '2026-05-20T02:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -23025,6 +23049,138 @@ function _tpCyclePill(sid, cid) {
   const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
   // Plus simple : re-render le plan complet — c'est rapide
   renderTeacherGrid();
+}
+
+// ═══════════════ COLLER DES NOTES (phase 8) ═══════════════
+// Mode A : colle une colonne de notes dans l'ordre du tri actif du tableur.
+// Une note par ligne (séparateur newline). Codes NN/N/A/ABS reconnus.
+// Affecte les notes séquentiellement aux sids du tri courant.
+
+function _evalPasteOpen() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  if (!ev.miniNotes || ev.miniNotes.length === 0) {
+    toast('⚠ Pas de mini-note définie', 'warn'); return;
+  }
+  // Peuple le sélecteur de mini-note cible
+  const sel = document.getElementById('meval-paste-target');
+  sel.innerHTML = '';
+  // Si Type C : grouper par exercice
+  const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+  if (isTypeC) {
+    for (const exo of ev.exercices) {
+      const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
+      if (qs.length === 0) continue;
+      const og = document.createElement('optgroup');
+      og.label = exo.label || '(sans nom)';
+      for (const mn of qs) {
+        const opt = document.createElement('option');
+        opt.value = mn.id;
+        opt.textContent = `${mn.label} (/${mn.max})`;
+        og.appendChild(opt);
+      }
+      sel.appendChild(og);
+    }
+  } else {
+    for (const mn of ev.miniNotes) {
+      const opt = document.createElement('option');
+      opt.value = mn.id;
+      opt.textContent = `${mn.label} (/${mn.max})`;
+      sel.appendChild(opt);
+    }
+  }
+  document.getElementById('meval-paste-input').value = '';
+  _evalPastePreview();
+  openMod('meval-paste');
+  setTimeout(() => document.getElementById('meval-paste-input')?.focus(), 50);
+}
+
+function _evalPasteParseLines(text) {
+  // Split par lignes, accepte newline ou \r\n. Tab/virgule sont des séparateurs de colonnes
+  // (on prend la 1re colonne en mode A — utile si l'utilisateur copie 2 colonnes par mégarde).
+  const lines = String(text || '').split(/\r?\n/).map(l => l.split(/[\t;]/)[0].trim()).filter(l => l !== '');
+  return lines.map(l => ({ raw: l, parsed: _parseMiniNoteInput(l) }));
+}
+
+function _evalPastePreview() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return;
+  const sids = _evalTableurSortedSids(cls);
+  const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value);
+  const preview = document.getElementById('meval-paste-preview');
+  const btn = document.getElementById('meval-paste-apply-btn');
+
+  if (lines.length === 0) {
+    preview.innerHTML = '<em>Aucune valeur détectée. Colle ta colonne dans la zone ci-dessus.</em>';
+    btn.disabled = true;
+    return;
+  }
+  const mnId = document.getElementById('meval-paste-target').value;
+  const mn   = ev.miniNotes.find(m => m.id === mnId);
+  const max  = mn?.max || 1;
+  let nbOK = 0, nbHorsLim = 0, nbInvalid = 0;
+  const samples = [];
+  for (const { raw, parsed } of lines) {
+    if (parsed == null) nbInvalid++;
+    else if (typeof parsed === 'number' && (parsed < 0 || parsed > max)) nbHorsLim++;
+    else nbOK++;
+    if (samples.length < 6) samples.push(`<span style="font-family:var(--font-mono);padding:1px 5px;background:#fff;border-radius:3px;margin-right:4px">${_esc(raw)}</span>`);
+  }
+  if (lines.length > 6) samples.push('<span style="color:var(--pencil)">…</span>');
+  const lineCount = lines.length;
+  const studentCount = sids.length;
+  const overflow = lineCount > studentCount ? `<br><span style="color:var(--margin-red)">⚠ ${lineCount - studentCount} valeur(s) en surplus — ignorées</span>` : '';
+  const underflow = lineCount < studentCount ? `<br><span style="color:var(--pencil)">ℹ ${studentCount - lineCount} élève(s) en fin de tri sans valeur — leurs notes existantes ne seront <strong>pas</strong> modifiées</span>` : '';
+  const horsLim = nbHorsLim > 0 ? `<br><span style="color:var(--margin-red)">⚠ ${nbHorsLim} hors barème [0, ${max}]</span>` : '';
+  const invalid = nbInvalid > 0 ? `<br><span style="color:var(--margin-red)">⚠ ${nbInvalid} valeur(s) invalide(s) — ignorées</span>` : '';
+  preview.innerHTML = `
+    <strong>${lineCount} valeur${lineCount > 1 ? 's' : ''} détectée${lineCount > 1 ? 's' : ''}</strong> · ${nbOK} valides${nbHorsLim ? ', '+nbHorsLim+' hors barème' : ''}${nbInvalid ? ', '+nbInvalid+' invalides' : ''}
+    <br>Aperçu : ${samples.join('')}
+    ${overflow}${underflow}${horsLim}${invalid}
+  `;
+  btn.disabled = (nbOK + nbHorsLim === 0);
+}
+
+function _evalPasteApply() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return;
+  const mnId = document.getElementById('meval-paste-target').value;
+  const mn   = ev.miniNotes.find(m => m.id === mnId);
+  if (!mn) return;
+  const sids = _evalTableurSortedSids(cls);
+  const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value);
+  if (lines.length === 0) { toast('⚠ Aucune valeur à coller', 'warn'); return; }
+
+  pushUndo();
+  let applied = 0, skipped = 0;
+  ev.notes = ev.notes || {};
+  for (let i = 0; i < Math.min(lines.length, sids.length); i++) {
+    const sid = sids[i];
+    const val = lines[i].parsed;
+    if (val == null) { skipped++; continue; }
+    if (typeof val === 'number' && (val < 0 || val > mn.max)) {
+      // On clampe à [0, max] — utilisateur prévenu en aperçu
+      const clamped = Math.max(0, Math.min(val, mn.max));
+      ev.notes[sid] = ev.notes[sid] || { values: {} };
+      ev.notes[sid].values[mnId] = clamped;
+    } else {
+      ev.notes[sid] = ev.notes[sid] || { values: {} };
+      ev.notes[sid].values[mnId] = val;
+    }
+    applied++;
+  }
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-paste');
+  _evalTableurRender();
+  toast(`✓ ${applied} note${applied > 1 ? 's' : ''} collée${applied > 1 ? 's' : ''} sur "${mn.label}"${skipped > 0 ? ` (${skipped} ignorée${skipped > 1 ? 's' : ''})` : ''}`);
 }
 
 // ═══════════════ COMMENTAIRES (phase 7) ═══════════════
