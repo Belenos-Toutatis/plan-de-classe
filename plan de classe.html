@@ -2750,6 +2750,24 @@ kbd {
       </div>
     </div>
 
+    <div class="about-section">
+      <h3>⚙ Options avancées</h3>
+      <label style="display:block;margin-bottom:6px;cursor:pointer;font-size:.92em">
+        <input type="checkbox" id="meval-edit-countsForMean" onchange="_evalEditMarkDirty()" checked>
+        <strong>Compte dans la moyenne du semestre</strong> <span style="color:var(--pencil);font-size:.88em">(décocher pour une <em>éval diagnostique</em>)</span>
+      </label>
+      <label style="display:block;margin-bottom:6px;cursor:pointer;font-size:.92em">
+        <input type="checkbox" id="meval-edit-facultative" onchange="_evalEditMarkDirty();_evalEditToggleFacMode()">
+        <strong>Évaluation facultative</strong> <span style="color:var(--pencil);font-size:.88em">(ex. interro à valeur ajoutée)</span>
+      </label>
+      <div id="meval-edit-facmode" style="margin-left:24px;display:none;padding:8px;background:var(--paper-warm);border-radius:4px;font-size:.88em">
+        <div style="margin-bottom:4px;color:var(--pencil)">Mode de prise en compte dans la moyenne :</div>
+        <label style="display:block;cursor:pointer"><input type="radio" name="meval-edit-facmoderadio" value="improveOnly" onchange="_evalEditMarkDirty()"> Ne compte <strong>que si elle améliore</strong> la moyenne</label>
+        <label style="display:block;cursor:pointer"><input type="radio" name="meval-edit-facmoderadio" value="bonus" onchange="_evalEditMarkDirty()"> <strong>Bonus</strong> : ajoute les points <em>au-dessus de 10/20</em> au numérateur</label>
+        <label style="display:block;cursor:pointer"><input type="radio" name="meval-edit-facmoderadio" value="over10" onchange="_evalEditMarkDirty()"> Compte <strong>uniquement si &gt; 10/20</strong></label>
+      </div>
+    </div>
+
     <div class="about-section" id="meval-edit-structure-section">
       <h3 id="meval-edit-structure-title">🔢 Mini-notes (questions / items)</h3>
       <p id="meval-edit-structure-help" style="margin:0 0 8px;font-size:.85em;color:var(--pencil)"></p>
@@ -2790,6 +2808,20 @@ kbd {
     </div>
 
     <div id="meval-saisie-mininotes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+
+    <details id="meval-saisie-amenagements" style="margin-bottom:14px;padding:8px 12px;background:var(--paper-warm);border-radius:4px">
+      <summary style="cursor:pointer;font-weight:600;font-size:.92em">⚙ Aménagements / rattrapage / remarque <span id="meval-saisie-amen-summary" style="color:var(--pencil);font-weight:normal;font-size:.85em;margin-left:8px"></span></summary>
+      <div style="margin-top:10px">
+        <div style="font-size:.85em;color:var(--pencil);margin-bottom:4px">Questions retirées pour cet élève (barème adapté) — décocher = compte normalement.</div>
+        <div id="meval-saisie-excluded" style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 10px;align-items:center;font-size:.92em;margin-bottom:8px">
+          <label for="meval-saisie-dateindiv">Date de rattrapage</label>
+          <input type="date" id="meval-saisie-dateindiv" placeholder="(éval normale → vide)" style="padding:4px 8px;font-family:var(--font-mono);width:200px" onchange="_evalSaisieSaveAmen()">
+        </div>
+        <label for="meval-saisie-remarque" style="display:block;font-size:.92em;margin-bottom:4px">Remarque personnalisée (pour l'export ENT) :</label>
+        <textarea id="meval-saisie-remarque" placeholder="Commentaire de fin d'éval pour cet élève — ira dans la colonne 'Remarque' de l'export." maxlength="500" style="width:100%;min-height:55px;padding:5px 8px;font-family:var(--font-sans);resize:vertical" oninput="_evalSaisieSaveAmen()"></textarea>
+      </div>
+    </details>
 
     <div id="meval-saisie-total" style="text-align:center;padding:12px;background:var(--paper-warm);border-radius:5px;margin-bottom:12px">
       <div style="font-size:.8em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.1em;font-family:var(--font-mono)">Note totale</div>
@@ -3810,7 +3842,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T02:00:00Z';
+const APP_VERSION   = '2026-05-20T02:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21342,13 +21374,15 @@ function _computeStudentEvalNote(evalObj, sid) {
   if (evalObj.type === 'B') return _computeStudentEvalNoteB(evalObj, sid);
   const notes = evalObj.notes?.[sid]?.values || {};
   const comments = evalObj.notes?.[sid]?.comments || {};
+  const excluded = evalObj.notes?.[sid]?.excluded || [];
+  const excSet = new Set(excluded);
   let sumVal = 0, sumMax = 0, hasAny = false;
   for (const mn of evalObj.miniNotes || []) {
+    if (excSet.has(mn.id)) continue;  // Question retirée pour cet élève (aménagement)
     const v = notes[mn.id];
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
     if (!Number.isFinite(n)) continue;
-    // Applique les commentaires (bonus/malus/remplacement) puis clamp [0, max]
     const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
     sumVal += eff;
     sumMax += mn.max;
@@ -21603,10 +21637,21 @@ function _evalOpenEditor(evalId) {
   _fillPeriodeSelect(document.getElementById('meval-edit-periode'), ev.periode);
   document.getElementById('meval-edit-notemax').value  = ev.noteMax  ?? 20;
   document.getElementById('meval-edit-coef').value     = ev.coef     ?? 1;
+  document.getElementById('meval-edit-countsForMean').checked = (ev.countsForMean !== false);
+  document.getElementById('meval-edit-facultative').checked = !!(ev.facultative?.active);
+  for (const r of document.querySelectorAll('input[name="meval-edit-facmoderadio"]')) {
+    r.checked = (r.value === (ev.facultative?.mode || 'improveOnly'));
+  }
+  _evalEditToggleFacMode();
   _evalEditDirty = false;
   _evalEditRenderMiniNotes();
   _evalEditRenderSaisieSection(ev);
   openMod('meval-edit');
+}
+
+function _evalEditToggleFacMode() {
+  const checked = document.getElementById('meval-edit-facultative').checked;
+  document.getElementById('meval-edit-facmode').style.display = checked ? 'block' : 'none';
 }
 
 // Rend la section "Saisie" de l'éditeur selon le type
@@ -21997,6 +22042,13 @@ function _evalEditSave() {
   ev.periode  = document.getElementById('meval-edit-periode').value;
   ev.noteMax  = noteMax;
   ev.coef     = coef;
+  ev.countsForMean = document.getElementById('meval-edit-countsForMean').checked;
+  if (document.getElementById('meval-edit-facultative').checked) {
+    const mode = document.querySelector('input[name="meval-edit-facmoderadio"]:checked')?.value || 'improveOnly';
+    ev.facultative = { active: true, mode };
+  } else {
+    ev.facultative = { active: false, mode: 'improveOnly' };
+  }
   ev.updatedAt = Date.now();
   _evalEditDirty = false;
   save();
@@ -22138,7 +22190,90 @@ function _evalSaisieRender() {
       wrap.appendChild(row);
     });
   });
+  _evalSaisieRenderAmenagements();
   _evalSaisieRecomputeTotal();
+}
+
+// ── Aménagements + rattrapage + remarque par élève (phase 9) ──
+function _evalSaisieRenderAmenagements() {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  const entry = ev.notes[sid];
+  const excluded = new Set(entry.excluded || []);
+  // Liste des mini-notes avec checkbox excluded
+  const wrap = document.getElementById('meval-saisie-excluded');
+  let html = '';
+  for (const mn of ev.miniNotes || []) {
+    const isExc = excluded.has(mn.id);
+    html += `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88em;padding:2px 4px">
+      <input type="checkbox" data-mnid="${_esc(mn.id)}" ${isExc ? 'checked' : ''} onchange="_evalSaisieToggleExcluded(this)">
+      <span>${_esc(mn.label || '?')} <span style="color:var(--pencil)">(/${mn.max})</span></span>
+    </label>`;
+  }
+  wrap.innerHTML = html;
+  document.getElementById('meval-saisie-dateindiv').value = entry.dateIndiv || '';
+  document.getElementById('meval-saisie-remarque').value  = entry.remarque || '';
+  // Summary line
+  const parts = [];
+  if (excluded.size > 0) parts.push(`${excluded.size} question${excluded.size > 1 ? 's' : ''} retirée${excluded.size > 1 ? 's' : ''}`);
+  if (entry.dateIndiv) parts.push(`rattrapage le ${_fmtDateFr(entry.dateIndiv)}`);
+  if (entry.remarque) parts.push('remarque');
+  document.getElementById('meval-saisie-amen-summary').textContent = parts.length > 0 ? '· ' + parts.join(' · ') : '';
+  // Auto-ouvre les aménagements si l'élève en a déjà
+  if (parts.length > 0) document.getElementById('meval-saisie-amenagements').open = true;
+  else document.getElementById('meval-saisie-amenagements').open = false;
+}
+
+function _evalSaisieToggleExcluded(checkbox) {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const mnId   = checkbox.getAttribute('data-mnid');
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  ev.notes[sid].excluded = ev.notes[sid].excluded || [];
+  if (checkbox.checked) {
+    if (!ev.notes[sid].excluded.includes(mnId)) ev.notes[sid].excluded.push(mnId);
+  } else {
+    ev.notes[sid].excluded = ev.notes[sid].excluded.filter(id => id !== mnId);
+  }
+  ev.updatedAt = Date.now();
+  _evalSaisieDirty = true;
+  _evalSaisieDebouncedSave();
+  _evalSaisieRecomputeTotal();
+  // Met à jour la pastille summary
+  const parts = [];
+  if (ev.notes[sid].excluded.length > 0) parts.push(`${ev.notes[sid].excluded.length} retirée${ev.notes[sid].excluded.length > 1 ? 's' : ''}`);
+  if (ev.notes[sid].dateIndiv) parts.push(`rattrapage le ${_fmtDateFr(ev.notes[sid].dateIndiv)}`);
+  if (ev.notes[sid].remarque) parts.push('remarque');
+  document.getElementById('meval-saisie-amen-summary').textContent = parts.length > 0 ? '· ' + parts.join(' · ') : '';
+}
+
+function _evalSaisieSaveAmen() {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  const dateIndiv = document.getElementById('meval-saisie-dateindiv').value;
+  const remarque  = document.getElementById('meval-saisie-remarque').value;
+  if (dateIndiv) ev.notes[sid].dateIndiv = dateIndiv; else delete ev.notes[sid].dateIndiv;
+  if (remarque)  ev.notes[sid].remarque  = remarque;  else delete ev.notes[sid].remarque;
+  ev.updatedAt = Date.now();
+  _evalSaisieDirty = true;
+  _evalSaisieDebouncedSave();
+  // Met à jour le summary
+  const parts = [];
+  if (ev.notes[sid].excluded?.length > 0) parts.push(`${ev.notes[sid].excluded.length} retirée${ev.notes[sid].excluded.length > 1 ? 's' : ''}`);
+  if (dateIndiv) parts.push(`rattrapage le ${_fmtDateFr(dateIndiv)}`);
+  if (remarque) parts.push('remarque');
+  document.getElementById('meval-saisie-amen-summary').textContent = parts.length > 0 ? '· ' + parts.join(' · ') : '';
 }
 
 function _evalSaisieUpdateNote(inputEl) {
@@ -22192,8 +22327,10 @@ function _evalSaisieRecomputeTotal() {
   // Détail : somme effective (post-commentaires) et barème exploitable
   const values = ev.notes[sid]?.values || {};
   const comments = ev.notes[sid]?.comments || {};
-  let sumVal = 0, sumMax = 0, nb = 0, nbExcl = 0, nbAdj = 0;
+  const excludedSet = new Set(ev.notes[sid]?.excluded || []);
+  let sumVal = 0, sumMax = 0, nb = 0, nbExcl = 0, nbAdj = 0, nbAmen = 0;
   for (const mn of ev.miniNotes) {
+    if (excludedSet.has(mn.id)) { nbAmen++; continue; }
     const v = values[mn.id];
     if (v === 'NN' || v === 'A') { nbExcl++; continue; }
     if (v == null || v === '') continue;
@@ -22209,6 +22346,7 @@ function _evalSaisieRecomputeTotal() {
   if (nb > 0) detail = `${_fmtNote(sumVal)} / ${sumMax} ${nbAdj > 0 ? 'après commentaires' : 'brut'} · ${nb} mini-note${nb > 1 ? 's' : ''} prise${nb > 1 ? 's' : ''} en compte`;
   if (nbExcl > 0) detail += (detail ? ' · ' : '') + `${nbExcl} exclue${nbExcl > 1 ? 's' : ''} (NN/A)`;
   if (nbAdj > 0)  detail += (detail ? ' · ' : '') + `${nbAdj} ajusté${nbAdj > 1 ? 'es' : 'e'} par commentaire`;
+  if (nbAmen > 0) detail += (detail ? ' · ' : '') + `${nbAmen} retirée${nbAmen > 1 ? 's' : ''} (aménagement)`;
   document.getElementById('meval-saisie-totalpts').textContent = detail;
 }
 
