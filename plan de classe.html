@@ -2736,8 +2736,11 @@ kbd {
 
     <div class="about-section">
       <h3>✍ Saisie des notes</h3>
-      <p style="margin:0 0 8px;font-size:.88em;line-height:1.5">Mode fiche : un élève à la fois, navigation Précédent / Suivant, total calculé en temps réel.</p>
-      <button class="btn btn-p" onclick="_evalOpenSaisie()" id="meval-edit-saisie-btn">📝 Ouvrir la saisie (mode fiche)</button>
+      <p style="margin:0 0 8px;font-size:.88em;line-height:1.5">Deux modes au choix. <strong>Mode fiche</strong> : un élève à la fois, défilement Précédent/Suivant — pratique pour corriger les copies dans l'ordre où on les a ramassées. <strong>Mode tableur</strong> : tous les élèves en lignes, mini-notes en colonnes, navigation clavier Tab/Enter/Flèches — pratique pour recopier des notes d'une autre source.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-p" onclick="_evalOpenSaisie()" id="meval-edit-saisie-btn">📝 Mode fiche</button>
+        <button class="btn btn-p" onclick="_evalOpenTableur()" id="meval-edit-tableur-btn">📊 Mode tableur</button>
+      </div>
     </div>
 
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
@@ -2781,6 +2784,35 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="_evalSaisiePrev()" id="meval-saisie-prev-btn">← Précédent</button>
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-saisie')">Fermer</button>
       <button class="btn btn-p btn-sm" onclick="_evalSaisieNext()" id="meval-saisie-next-btn">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Saisie mode tableur (élèves × mini-notes) ── -->
+<div id="meval-tableur" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 id="meval-tableur-title" style="margin:0">📊 Saisie en mode tableur</h2>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:.85em;color:var(--pencil)">Tri :</label>
+        <select id="meval-tableur-sort" onchange="_evalTableurRender()" style="padding:4px 8px;font-size:.88em">
+          <option value="nom-prenom">Nom Prénom (défaut ENT)</option>
+          <option value="prenom-nom">Prénom Nom</option>
+        </select>
+        <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="Copie le tableau complet (élève + mini-notes + total) au format TSV, prêt à coller dans un tableur ou un ENT">📋 Copier tout</button>
+      </div>
+    </div>
+    <input type="hidden" id="meval-tableur-evalid">
+
+    <div id="meval-tableur-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
+
+    <p style="margin:10px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+      <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> ligne en dessous · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
+      <br><strong>Codes :</strong> <code>NN</code> non noté, <code>A</code> ou <code>ABS</code> absent (exclus du total).
+    </p>
+
+    <div class="ma" style="margin-top:10px">
+      <button class="btn btn-p" onclick="closeMod2('meval-tableur')">Fermer</button>
     </div>
   </div>
 </div>
@@ -3539,7 +3571,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-19T22:30:00Z';
+const APP_VERSION   = '2026-05-19T23:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21530,6 +21562,228 @@ function _evalSaisieNext() {
 function _evalSaisieCloseHook() {
   if (_evalSaisieDirty) { save(); _evalSaisieDirty = false; }
   if (_evalSaisieSaveTimer) { clearTimeout(_evalSaisieSaveTimer); _evalSaisieSaveTimer = null; }
+  renderEvalNotes();
+}
+
+// ── Mode tableur — élèves en lignes × mini-notes en colonnes ──
+let _evalTableurDirty = false;
+let _evalTableurSaveTimer = null;
+
+function _evalOpenTableur() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  if (!ev.miniNotes || ev.miniNotes.length === 0) {
+    toast('⚠ Ajoute d\'abord au moins une mini-note avant de saisir', 'warn');
+    return;
+  }
+  if (_evalEditDirty) _evalEditSave();
+  document.getElementById('meval-tableur-evalid').value = evalId;
+  document.getElementById('meval-tableur-title').textContent = `📊 ${ev.nomCourt} — saisie tableur`;
+  // Pré-sélection du tri (défaut nom-prénom)
+  document.getElementById('meval-tableur-sort').value = 'nom-prenom';
+  _evalTableurRender();
+  _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
+  openMod('meval-tableur');
+}
+
+function _evalTableurSortedSids(cls) {
+  const mode = document.getElementById('meval-tableur-sort')?.value || 'nom-prenom';
+  const sids = (cls.eleves || []).slice();
+  if (mode === 'prenom-nom') {
+    sids.sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      if (!sa || !sb) return 0;
+      const ka = (sa.prenom || '').toLowerCase() + '|' + (sa.nom || '').toLowerCase();
+      const kb = (sb.prenom || '').toLowerCase() + '|' + (sb.nom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
+  } else {
+    sids.sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      if (!sa || !sb) return 0;
+      const ka = (sa.nom || '').toLowerCase() + '|' + (sa.prenom || '').toLowerCase();
+      const kb = (sb.nom || '').toLowerCase() + '|' + (sb.prenom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
+  }
+  return sids;
+}
+
+function _evalTableurRender() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return;
+
+  const sids = _evalTableurSortedSids(cls);
+  const wrap = document.getElementById('meval-tableur-wrap');
+
+  let html = '<table id="meval-tableur-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
+  // En-tête
+  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
+  html += '<tr>';
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+  ev.miniNotes.forEach((mn, ci) => {
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:70px;font-family:var(--font-mono);font-weight:600" title="${_esc(mn.label || '(sans nom)')}">${_esc(mn.label || '?')}<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${mn.max}</span></th>`;
+  });
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+  html += '</tr></thead><tbody>';
+  // Lignes élèves
+  sids.forEach((sid, ri) => {
+    const stu = S.eleves[sid];
+    if (!stu) return;
+    const values = ev.notes?.[sid]?.values || {};
+    const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
+    html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    ev.miniNotes.forEach((mn, ci) => {
+      const v = values[mn.id];
+      const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
+      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onkeydown="_evalTableurKey(event,this)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent"></td>`;
+    });
+    const total = _computeStudentEvalNote(ev, sid);
+    const totalDisp = total == null ? '—' : _fmtNote(total);
+    html += `<td class="meval-row-total" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;color:var(--ink-blue);background:${bgRow}" data-sid="${_esc(sid)}">${totalDisp}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function _evalTableurUpdate(inputEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const ri    = parseInt(inputEl.getAttribute('data-ri'));
+  const mnId  = inputEl.getAttribute('data-mnid');
+  const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
+  const row   = inputEl.closest('tr');
+  const sid   = row?.getAttribute('data-sid');
+  if (!sid) return;
+  const parsed = _parseMiniNoteInput(inputEl.value);
+
+  if (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax)) {
+    inputEl.style.background = '#fee';
+    inputEl.title = `Valeur hors barème (attendu : 0 – ${mnMax})`;
+  } else {
+    inputEl.style.background = '';
+    inputEl.title = '';
+  }
+
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  if (parsed === null && inputEl.value.trim() === '') {
+    delete ev.notes[sid].values[mnId];
+  } else {
+    ev.notes[sid].values[mnId] = parsed;
+  }
+  ev.updatedAt = Date.now();
+  _evalTableurDirty = true;
+
+  // Met à jour le total de la ligne uniquement (perf : pas de re-render complet)
+  const total = _computeStudentEvalNote(ev, sid);
+  const cellTotal = row.querySelector('.meval-row-total');
+  if (cellTotal) cellTotal.textContent = total == null ? '—' : _fmtNote(total);
+
+  if (_evalTableurSaveTimer) clearTimeout(_evalTableurSaveTimer);
+  _evalTableurSaveTimer = setTimeout(() => {
+    if (_evalTableurDirty) { save(); _evalTableurDirty = false; }
+  }, 800);
+}
+
+function _evalTableurKey(e, inputEl) {
+  const ri = parseInt(inputEl.getAttribute('data-ri'));
+  const ci = parseInt(inputEl.getAttribute('data-ci'));
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const numCols = ev.miniNotes.length;
+  const numRows = document.querySelectorAll('#meval-tableur-tbl tbody tr').length;
+
+  let targetRi = ri, targetCi = ci;
+  const key = e.key;
+  if (key === 'Tab') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      if (ci > 0) targetCi = ci - 1;
+      else if (ri > 0) { targetRi = ri - 1; targetCi = numCols - 1; }
+      else return;
+    } else {
+      if (ci < numCols - 1) targetCi = ci + 1;
+      else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
+      else return;
+    }
+  } else if (key === 'Enter') {
+    e.preventDefault();
+    if (ri < numRows - 1) targetRi = ri + 1;
+    else return;
+  } else if (key === 'ArrowDown') {
+    e.preventDefault();
+    if (ri < numRows - 1) targetRi = ri + 1;
+    else return;
+  } else if (key === 'ArrowUp') {
+    e.preventDefault();
+    if (ri > 0) targetRi = ri - 1;
+    else return;
+  } else if (key === 'ArrowLeft') {
+    // Seulement si curseur en début d'input (pour ne pas piéger l'édition)
+    if (inputEl.selectionStart !== 0 || inputEl.selectionEnd !== 0) return;
+    e.preventDefault();
+    if (ci > 0) targetCi = ci - 1;
+    else if (ri > 0) { targetRi = ri - 1; targetCi = numCols - 1; }
+    else return;
+  } else if (key === 'ArrowRight') {
+    if (inputEl.selectionStart !== inputEl.value.length || inputEl.selectionEnd !== inputEl.value.length) return;
+    e.preventDefault();
+    if (ci < numCols - 1) targetCi = ci + 1;
+    else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
+    else return;
+  } else {
+    return;
+  }
+  const target = document.querySelector(`#meval-tableur-tbl input[data-ri="${targetRi}"][data-ci="${targetCi}"]`);
+  if (target) { target.focus(); target.select(); }
+}
+
+// Copie TSV de tout le tableau (en-tête + données) — prêt à coller dans Excel/LibreOffice/Pronote
+function _evalTableurCopyAll() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return;
+  const sids = _evalTableurSortedSids(cls);
+  const headers = ['Élève'];
+  for (const mn of ev.miniNotes) headers.push(`${mn.label || '?'} (/${mn.max})`);
+  headers.push(`Total (/${ev.noteMax})`);
+  const lines = [headers.join('\t')];
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    const cells = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
+    const values = ev.notes?.[sid]?.values || {};
+    for (const mn of ev.miniNotes) {
+      const v = values[mn.id];
+      if (v === 'NN' || v === 'A') cells.push(v);
+      else if (v == null || v === '') cells.push('');
+      else cells.push(String(v).replace('.', ','));
+    }
+    const total = _computeStudentEvalNote(ev, sid);
+    cells.push(total == null ? '' : _fmtNote(total));
+    lines.push(cells.join('\t'));
+  }
+  const tsv = lines.join('\n');
+  navigator.clipboard.writeText(tsv).then(
+    () => toast('📋 Tableau copié — colle-le dans Excel/Pronote/un ENT'),
+    () => toast('⚠ Copie automatique impossible — sélectionne le tableau à la souris et fais Ctrl+C', 'warn')
+  );
+}
+
+function _evalTableurCloseHook() {
+  if (_evalTableurSaveTimer) { clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null; }
+  if (_evalTableurDirty) { save(); _evalTableurDirty = false; }
   renderEvalNotes();
 }
 
