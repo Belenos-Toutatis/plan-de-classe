@@ -1473,7 +1473,7 @@ kbd {
     <span class="group-label">Évaluation <em>· en construction</em></span>
     <button class="nb" onclick="showTab('notes',this)" title="Évaluations : création, saisie, notes /20">📊 Notes</button>
     <button class="nb" onclick="showTab('comp',this)" title="Bilan par compétence : vue transverse classe + niveau moyen par élève sur chaque compétence évaluée">🎯 Compétences</button>
-    <button class="nb" disabled title="Bientôt : bilan trimestre / semestre par élève — moyenne par domaine du socle, export ready-for-bulletin">📜 Bilan</button>
+    <button class="nb" onclick="showTab('bilan',this)" title="Bilan semestre / trimestre par élève : moyenne /20 et moyenne par domaine du socle, prêt à coller dans le bulletin">📜 Bilan</button>
   </div>
 </nav>
 </div>
@@ -2003,6 +2003,23 @@ kbd {
       <em>Volet en construction (phase 1) — d'autres types d'évaluations (compétences, sommatives par compétence) arriveront prochainement.</em>
     </p>
     <div id="evals-list-wrap"></div>
+  </div>
+
+  <!-- ── TAB: Bilan (volet Évaluation — phase 12 : agrégation semestrielle) ── -->
+  <div id="tab-bilan" class="tab">
+    <div class="sh">
+      <h2>📜 Bilan</h2>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+        <label style="font-size:.85em;color:var(--pencil)">Période :</label>
+        <select id="bilan-period-filter" onchange="renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
+        <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">📋 Copier tout</button>
+        <button class="btn btn-g btn-sm" onclick="_bilanDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
+      </div>
+    </div>
+    <p class="al al-i" style="margin-bottom:8px">
+      Synthèse de la période pour le bulletin : <strong>moyenne /20</strong> pondérée par les coefficients des évaluations + <strong>moyenne par domaine du socle</strong> (D1.1, D1.2, D1.3, D1.4, D2, D3, D4, D5) basée sur les niveaux de compétences atteints. Les évaluations avec ❝ne compte pas dans la moyenne❞ (diagnostiques) sont ignorées.
+    </p>
+    <div id="bilan-wrap"></div>
   </div>
 
   <!-- ── TAB: Compétences (volet Évaluation — phase 11 : bilan transverse) ── -->
@@ -3891,7 +3908,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T03:30:00Z';
+const APP_VERSION   = '2026-05-20T04:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -8854,6 +8871,7 @@ function renderTab(name) {
     case 'export-pos': renderExportPositions(); break;
     case 'notes':      renderEvalNotes();       break;
     case 'comp':       renderCompetencesTab();  break;
+    case 'bilan':      renderBilanTab();        break;
   }
   updateSnapshotBanner();
 }
@@ -23237,6 +23255,262 @@ function _tpCyclePill(sid, cid) {
   const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
   // Plus simple : re-render le plan complet — c'est rapide
   renderTeacherGrid();
+}
+
+// ═══════════════ ONGLET BILAN (phase 12) ═══════════════
+// Synthèse semestrielle/trimestrielle : moyenne /20 pondérée par coefficients
+// + moyenne par domaine du socle (D1.1, D1.2, D1.3, D1.4, D2, D3, D4, D5).
+// Gère facultative (3 modes) + countsForMean (false → ignoré).
+
+// Moyenne /20 d'un élève sur une période donnée, pondérée par les coefficients
+// des évaluations. Tient compte de ev.countsForMean et ev.facultative.
+function _computeStudentMeanForPeriod(classId, sid, periode) {
+  const evs = Object.values(S.evaluations || {})
+    .filter(e => e.classId === classId)
+    .filter(e => !periode || e.periode === periode)
+    .filter(e => e.countsForMean !== false);
+  if (evs.length === 0) return null;
+  const noteMaxRef = 20; // référence /20 pour toutes les évals
+  // 1ère passe : sépare facultatives des obligatoires
+  const obligatoires = evs.filter(e => !e.facultative?.active);
+  const facultatives = evs.filter(e =>  e.facultative?.active);
+  // Calcule la moyenne obligatoire (toutes les évals non-facultatives)
+  let num = 0, den = 0;
+  for (const ev of obligatoires) {
+    const note = _computeStudentEvalNote(ev, sid);
+    if (note == null) continue;
+    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const coef = (ev.coef != null ? ev.coef : 1);
+    num += coef * noteSur20;
+    den += coef;
+  }
+  const moyOblig = (den > 0) ? num / den : null;
+  // Applique les facultatives
+  for (const ev of facultatives) {
+    const note = _computeStudentEvalNote(ev, sid);
+    if (note == null) continue;
+    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const coef = (ev.coef != null ? ev.coef : 1);
+    const mode = ev.facultative.mode || 'improveOnly';
+    if (mode === 'over10') {
+      // Ne compte que si > 10/20 (intégrée normalement)
+      if (noteSur20 > 10) {
+        num += coef * noteSur20;
+        den += coef;
+      }
+    } else if (mode === 'bonus') {
+      // Bonus : ajoute (note - 10) si > 10 directement au numérateur (sans changer le dénominateur)
+      if (noteSur20 > 10) {
+        num += coef * (noteSur20 - 10);
+      }
+    } else {
+      // improveOnly : on garde la facultative seulement si la moyenne globale s'améliore
+      const num2 = num + coef * noteSur20;
+      const den2 = den + coef;
+      const moyAvec = (den2 > 0) ? num2 / den2 : null;
+      const moyActuelle = (den > 0) ? num / den : null;
+      if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
+        num = num2; den = den2;
+      }
+    }
+  }
+  if (den === 0 && num > 0) return num; // cas bonus pur sans aucune obligatoire — improbable mais cohérent
+  if (den === 0) return null;
+  return num / den;
+}
+
+// Niveau moyen d'un élève sur un domaine du socle : agrège tous les niveaux
+// atteints sur les compétences de ce domaine, à travers toutes les évals
+// (qui countsForMean) de la classe/période.
+function _computeStudentDomainLevel(classId, sid, domainId, periode) {
+  const compIds = Object.values(S.competences || {})
+    .filter(c => c.domainId === domainId)
+    .map(c => c.id);
+  if (compIds.length === 0) return null;
+  const levels = [];
+  for (const cid of compIds) {
+    for (const ev of Object.values(S.evaluations || {})) {
+      if (ev.classId !== classId) continue;
+      if (periode && ev.periode !== periode) continue;
+      if (ev.countsForMean === false) continue;
+      const agg = _aggregateStudentCompetence(classId, sid, cid, periode);
+      // On compte cette compétence si elle a un niveau (déjà filtré par classe/période dans _aggregateStudentCompetence)
+      if (agg.levelMean != null) levels.push(agg.levelMean);
+      break; // _aggregateStudentCompetence parcourt déjà toutes les évals → 1 itération suffit par cid
+    }
+  }
+  if (levels.length === 0) return null;
+  return levels.reduce((s, l) => s + l, 0) / levels.length;
+}
+
+function renderBilanTab() {
+  const cls = getCls();
+  const wrap = document.getElementById('bilan-wrap');
+  if (!wrap) return;
+  const sel = document.getElementById('bilan-period-filter');
+  if (sel) {
+    const cur = sel.value || _currentPeriode();
+    sel.innerHTML = '';
+    for (const o of _periodeOptions()) {
+      const opt = document.createElement('option');
+      opt.value = o.code; opt.textContent = o.code;
+      if (o.code === cur) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+  const periode = sel?.value || _currentPeriode();
+  if (!cls) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir le bilan.</p>';
+    return;
+  }
+  // Identifie quels domaines ont au moins une compétence évaluée pour cette classe/période
+  const domainsUsed = new Set();
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev.classId !== cls.id || (periode && ev.periode !== periode)) continue;
+    if (ev.countsForMean === false) continue;
+    const compIds = new Set();
+    if (ev.type === 'B') {
+      for (const p of (ev.passations || [])) for (const c of (p.competenceIds || [])) compIds.add(c);
+    } else {
+      for (const mn of (ev.miniNotes || [])) for (const c of (mn.competenceIds || [])) compIds.add(c);
+    }
+    for (const cid of compIds) {
+      const c = S.competences?.[cid];
+      if (c?.domainId) domainsUsed.add(c.domainId);
+    }
+  }
+  const domains = Object.values(S.competenceDomains || {})
+    .filter(d => domainsUsed.has(d.id))
+    .sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+
+  // Tri élèves alpha nom-prénom
+  const sids = cls.eleves.slice().sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+    const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+    return ka.localeCompare(kb, 'fr');
+  });
+
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  let html = '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
+  html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
+  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
+  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
+  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Moyenne /20</th>';
+  for (const d of domains) {
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px;cursor:help" title="${_esc(d.code + ' — ' + d.name)}">${_esc(d.code)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    const moy = _computeStudentMeanForPeriod(cls.id, sid, periode);
+    html += `<tr><td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:var(--paper);font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700">${moy != null ? _fmtNote(moy) : '—'}</td>`;
+    for (const d of domains) {
+      const lvl = _computeStudentDomainLevel(cls.id, sid, d.id, periode);
+      if (lvl == null) {
+        html += '<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
+      } else {
+        const idx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
+        html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><span style="display:inline-block;padding:2px 7px;background:${colors[idx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span></td>`;
+      }
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+
+  // Légende
+  html += '<div style="margin-top:8px;font-size:.85em;color:var(--pencil);display:flex;gap:14px;flex-wrap:wrap"><strong>Légende :</strong>';
+  ['Insuffisant','Fragile','Satisfaisant','Très bonne maîtrise'].forEach((lbl,i) => {
+    html += `<span><span style="display:inline-block;width:14px;height:14px;background:${colors[i]};border-radius:7px;vertical-align:middle;margin-right:4px"></span>N${i+1} ${lbl}</span>`;
+  });
+  html += '</div>';
+
+  // Stocker l'état pour copy/csv
+  wrap.dataset.periode = periode;
+  wrap.innerHTML += '<div></div>';
+  wrap.innerHTML = html + '<div id="bilan-extra"></div>';
+}
+
+function _bilanBuildRows() {
+  const cls = getCls();
+  if (!cls) return { rows: [], domains: [] };
+  const sel = document.getElementById('bilan-period-filter');
+  const periode = sel?.value || _currentPeriode();
+  // Domaines utilisés (idem renderBilanTab)
+  const domainsUsed = new Set();
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev.classId !== cls.id || ev.periode !== periode) continue;
+    if (ev.countsForMean === false) continue;
+    if (ev.type === 'B') {
+      for (const p of (ev.passations || [])) for (const c of (p.competenceIds || [])) {
+        const cmp = S.competences?.[c]; if (cmp?.domainId) domainsUsed.add(cmp.domainId);
+      }
+    } else {
+      for (const mn of (ev.miniNotes || [])) for (const c of (mn.competenceIds || [])) {
+        const cmp = S.competences?.[c]; if (cmp?.domainId) domainsUsed.add(cmp.domainId);
+      }
+    }
+  }
+  const domains = Object.values(S.competenceDomains || {})
+    .filter(d => domainsUsed.has(d.id))
+    .sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  const sids = cls.eleves.slice().sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    return ((sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase())
+      .localeCompare((sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase(), 'fr');
+  });
+  const rows = sids.map(sid => {
+    const stu = S.eleves[sid];
+    if (!stu) return null;
+    const moy = _computeStudentMeanForPeriod(cls.id, sid, periode);
+    const dlevels = domains.map(d => _computeStudentDomainLevel(cls.id, sid, d.id, periode));
+    return { name: `${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim(), moy, dlevels };
+  }).filter(Boolean);
+  return { rows, domains };
+}
+
+function _bilanCopyAll() {
+  const { rows, domains } = _bilanBuildRows();
+  const headers = ['Élève', 'Moyenne /20', ...domains.map(d => d.code)];
+  const lines = [headers.join('\t')];
+  for (const r of rows) {
+    const cells = [r.name, r.moy != null ? _fmtNote(r.moy) : ''];
+    for (const lvl of r.dlevels) cells.push(lvl != null ? _fmtNote(lvl) : '');
+    lines.push(cells.join('\t'));
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(
+    () => toast('📋 Bilan copié — colle-le dans le bulletin'),
+    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
+  );
+}
+
+function _bilanDownloadCsv() {
+  const cls = getCls();
+  const { rows, domains } = _bilanBuildRows();
+  const sel = document.getElementById('bilan-period-filter');
+  const periode = sel?.value || '';
+  const csvEsc = s => {
+    const str = String(s ?? '');
+    return /[";\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const headers = ['Élève', 'Moyenne /20', ...domains.map(d => d.code)];
+  const lines = [headers.map(csvEsc).join(';')];
+  for (const r of rows) {
+    const cells = [r.name, r.moy != null ? _fmtNote(r.moy) : ''];
+    for (const lvl of r.dlevels) cells.push(lvl != null ? _fmtNote(lvl) : '');
+    lines.push(cells.map(csvEsc).join(';'));
+  }
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bilan-${cls?.nom || 'classe'}-${periode || 'periode'}.csv`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  toast('💾 CSV téléchargé');
 }
 
 // ═══════════════ ONGLET COMPÉTENCES (phase 11) ═══════════════
