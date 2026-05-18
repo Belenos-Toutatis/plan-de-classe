@@ -2660,6 +2660,12 @@ kbd {
     </div>
 
     <div class="about-section">
+      <h3>💬 Bibliothèque de commentaires</h3>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Commentaires pré-réglables réutilisables pour annoter les mini-notes (avec parsing automatique <code>[+-]N pt(s)</code>).</p>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('mevalprefs');openCommentLibrary()">📚 Ouvrir la bibliothèque</button>
+    </div>
+
+    <div class="about-section">
       <h3>🎯 Note maximale par défaut</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Note finale par défaut quand on crée une nouvelle évaluation (modifiable éval par éval).</p>
       <input type="number" id="evalprefs-maxNote" min="1" max="100" step="1" style="width:90px;padding:4px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil)">points</span>
@@ -2800,6 +2806,68 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-saisie')">Fermer</button>
       <button class="btn btn-p btn-sm" onclick="_evalSaisieNext()" id="meval-saisie-next-btn">Suivant →</button>
     </div>
+  </div>
+</div>
+
+<!-- ── MODAL Commentaires d'une mini-note (phase 7) ── -->
+<div id="meval-comments" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:600px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2 id="meval-comments-title">💬 Commentaires</h2>
+    <input type="hidden" id="meval-comments-mnid">
+    <p style="margin:0 0 10px;font-size:.85em;color:var(--pencil);line-height:1.5">
+      Annote chaque mini-note. Si tu écris un motif <code>[+-]N pt(s)</code> dans un commentaire,
+      la note est <strong>automatiquement ajustée</strong> :
+      <code>-1pt</code> = malus · <code>+1pt</code> = bonus · <code>0pt tricherie</code> = remplacement.
+    </p>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:6px">📋 Commentaires actifs</div>
+      <div id="meval-comments-list" style="display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:6px">➕ Ajouter depuis la bibliothèque</div>
+      <div id="meval-comments-lib"></div>
+    </div>
+
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="text" id="meval-comments-newinput" placeholder="ou tape un commentaire libre (Entrée = ajouter)" maxlength="120" style="flex:1;padding:5px 8px" onkeydown="if(event.key==='Enter'){_evalCommentsAddFreeText();}">
+      <button class="btn btn-p btn-sm" onclick="_evalCommentsAddFreeText()">+ Ajouter</button>
+    </div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-g btn-sm" onclick="closeMod2('meval-comments');openCommentLibrary()">⚙ Bibliothèque…</button>
+      <button class="btn btn-p" onclick="closeMod2('meval-comments')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Bibliothèque de commentaires (positifs/négatifs) ── -->
+<div id="mcomlib" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:680px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>📚 Bibliothèque de commentaires</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Commentaires pré-réglables réutilisables sur toutes tes évaluations. Tu peux y mettre un motif <code>[+-]N pt(s)</code> qui sera reconnu et appliqué automatiquement aux notes.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <h3 style="margin:0 0 6px;font-size:1em;color:#16a34a">➕ Positifs / Bonus</h3>
+        <div id="mcomlib-pos" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:4px">
+          <input type="text" id="mcomlib-pos-new" placeholder="ex. +1pt aide apportée" maxlength="120" style="flex:1;padding:4px 6px;font-size:.88em" onkeydown="if(event.key==='Enter'){_comLibAdd('positive');}">
+          <button class="btn btn-p btn-sm" onclick="_comLibAdd('positive')">+</button>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 6px;font-size:1em;color:#dc2626">➖ Négatifs / Malus</h3>
+        <div id="mcomlib-neg" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:4px">
+          <input type="text" id="mcomlib-neg-new" placeholder="ex. -1pt bavardage" maxlength="120" style="flex:1;padding:4px 6px;font-size:.88em" onkeydown="if(event.key==='Enter'){_comLibAdd('negative');}">
+          <button class="btn btn-p btn-sm" onclick="_comLibAdd('negative')">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ma" style="margin-top:14px"><button class="btn btn-p" onclick="closeMod2('mcomlib')">Fermer</button></div>
   </div>
 </div>
 
@@ -3718,7 +3786,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T01:00:00Z';
+const APP_VERSION   = '2026-05-20T01:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21249,13 +21317,16 @@ function _computeStudentEvalNote(evalObj, sid) {
   if (!evalObj) return null;
   if (evalObj.type === 'B') return _computeStudentEvalNoteB(evalObj, sid);
   const notes = evalObj.notes?.[sid]?.values || {};
+  const comments = evalObj.notes?.[sid]?.comments || {};
   let sumVal = 0, sumMax = 0, hasAny = false;
   for (const mn of evalObj.miniNotes || []) {
     const v = notes[mn.id];
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
     if (!Number.isFinite(n)) continue;
-    sumVal += Math.max(0, Math.min(n, mn.max));
+    // Applique les commentaires (bonus/malus/remplacement) puis clamp [0, max]
+    const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+    sumVal += eff;
     sumMax += mn.max;
     hasAny = true;
   }
@@ -21296,6 +21367,45 @@ function _noteToLevel(score, max) {
   if (scaled < t23) return 2;
   if (scaled < t34) return 3;
   return 4;
+}
+
+// Parse les commentaires d'une mini-note pour extraire les ajustements de points.
+// Reconnaît le motif [+-]?\s?\d+([.,]\d+)?\s?pts? (insensible casse) :
+//   "-1pt bavardage" → malus -1
+//   "+2 pts effort"  → bonus +2
+//   "0pt tricherie", "3 pts"  → remplacement (la dernière occurrence sans signe gagne)
+// Plusieurs occurrences dans le même commentaire → bonus/malus cumulés, remplacement écrasé.
+// Plusieurs commentaires → idem cumulé.
+function _parseCommentsAdjustment(comments) {
+  let delta = 0;
+  let lastReplace = null;
+  const re = /([+\-])?\s?(\d+(?:[.,]\d+)?)\s?pts?\b/gi;
+  for (const c of (comments || [])) {
+    if (!c) continue;
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(c)) !== null) {
+      const sign = m[1];
+      const val = parseFloat(m[2].replace(',', '.'));
+      if (!Number.isFinite(val)) continue;
+      if (sign === '+') delta += val;
+      else if (sign === '-') delta -= val;
+      else lastReplace = val;
+    }
+  }
+  return { delta, replace: lastReplace, hasAdj: (delta !== 0 || lastReplace != null) };
+}
+
+// Applique les commentaires à une valeur brute de mini-note. Retourne la valeur
+// effective (clampée à [0, max]). Si baseVal n'est pas un nombre (NN/A/null), pas d'effet.
+function _applyCommentsToValue(baseVal, comments, mnMax) {
+  if (typeof baseVal !== 'number') return baseVal;
+  const { delta, replace } = _parseCommentsAdjustment(comments);
+  let v = (replace != null) ? replace : baseVal;
+  v += delta;
+  if (mnMax > 0) v = Math.max(0, Math.min(v, mnMax));
+  else v = Math.max(0, v);
+  return v;
 }
 
 // Parse une saisie utilisateur en valeur de mini-note.
@@ -21980,6 +22090,15 @@ function _evalSaisieRender() {
       const v = values[mn.id];
       const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
       const compChips = isTypeC ? _renderCompetenceChips(mn.competenceIds || []) : '';
+      const comments  = ev.notes[sid]?.comments?.[mn.id] || [];
+      const nbCom = comments.length;
+      const adj = _parseCommentsAdjustment(comments);
+      // Petite info "(effective: X)" si commentaires modifient la valeur
+      let effHint = '';
+      if (typeof v === 'number' && (adj.delta !== 0 || adj.replace != null)) {
+        const eff = _applyCommentsToValue(v, comments, mn.max);
+        effHint = `<span style="font-size:.75em;color:var(--margin-red);margin-left:2px" title="Valeur effective après commentaires">→ ${_fmtNote(eff)}</span>`;
+      }
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
       row.innerHTML = `
@@ -21988,8 +22107,9 @@ function _evalSaisieRender() {
         <input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}"
                placeholder="…" maxlength="6"
                oninput="_evalSaisieUpdateNote(this)"
-               style="width:70px;padding:4px 6px;font-family:var(--font-mono);text-align:right;font-size:1em">
-        <span style="color:var(--pencil);font-size:.85em">/${mn.max}</span>
+               style="width:64px;padding:4px 6px;font-family:var(--font-mono);text-align:right;font-size:1em">
+        <span style="color:var(--pencil);font-size:.85em">/${mn.max}</span>${effHint}
+        <button onclick="_evalCommentsOpen('${_esc(mn.id)}')" title="${nbCom > 0 ? `${nbCom} commentaire(s)` : 'Ajouter un commentaire'}" style="background:${nbCom > 0 ? 'var(--margin-red)' : 'transparent'};color:${nbCom > 0 ? '#fff' : 'var(--pencil)'};border:1px solid ${nbCom > 0 ? 'var(--margin-red)' : 'var(--rule-line)'};border-radius:11px;padding:2px 8px;cursor:pointer;font-size:.85em">💬${nbCom > 0 ? ` ${nbCom}` : ''}</button>
       `;
       wrap.appendChild(row);
     });
@@ -22045,22 +22165,26 @@ function _evalSaisieRecomputeTotal() {
   const note = _computeStudentEvalNote(ev, sid);
   document.getElementById('meval-saisie-totaldisp').textContent =
     note == null ? '—' : `${_fmtNote(note)} / ${ev.noteMax}`;
-  // Détail : somme brute et barème exploitable
+  // Détail : somme effective (post-commentaires) et barème exploitable
   const values = ev.notes[sid]?.values || {};
-  let sumVal = 0, sumMax = 0, nb = 0, nbExcl = 0;
+  const comments = ev.notes[sid]?.comments || {};
+  let sumVal = 0, sumMax = 0, nb = 0, nbExcl = 0, nbAdj = 0;
   for (const mn of ev.miniNotes) {
     const v = values[mn.id];
     if (v === 'NN' || v === 'A') { nbExcl++; continue; }
     if (v == null || v === '') continue;
     const n = parseFloat(v);
     if (!Number.isFinite(n)) continue;
-    sumVal += Math.max(0, Math.min(n, mn.max));
+    const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+    if (eff !== Math.max(0, Math.min(n, mn.max))) nbAdj++;
+    sumVal += eff;
     sumMax += mn.max;
     nb++;
   }
   let detail = '';
-  if (nb > 0) detail = `${_fmtNote(sumVal)} / ${sumMax} brut · ${nb} mini-note${nb > 1 ? 's' : ''} prise${nb > 1 ? 's' : ''} en compte`;
+  if (nb > 0) detail = `${_fmtNote(sumVal)} / ${sumMax} ${nbAdj > 0 ? 'après commentaires' : 'brut'} · ${nb} mini-note${nb > 1 ? 's' : ''} prise${nb > 1 ? 's' : ''} en compte`;
   if (nbExcl > 0) detail += (detail ? ' · ' : '') + `${nbExcl} exclue${nbExcl > 1 ? 's' : ''} (NN/A)`;
+  if (nbAdj > 0)  detail += (detail ? ' · ' : '') + `${nbAdj} ajusté${nbAdj > 1 ? 'es' : 'e'} par commentaire`;
   document.getElementById('meval-saisie-totalpts').textContent = detail;
 }
 
@@ -22901,6 +23025,158 @@ function _tpCyclePill(sid, cid) {
   const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
   // Plus simple : re-render le plan complet — c'est rapide
   renderTeacherGrid();
+}
+
+// ═══════════════ COMMENTAIRES (phase 7) ═══════════════
+// Stockés dans ev.notes[sid].comments[mnId] = [string, string, ...]
+// Bibliothèque globale : S.evalCommentLibrary = { positive: [str,...], negative: [str,...] }
+
+function _evalCommentsOpen(mnId) {
+  document.getElementById('meval-comments-mnid').value = mnId;
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const mn = ev?.miniNotes?.find(m => m.id === mnId);
+  document.getElementById('meval-comments-title').textContent = `💬 Commentaires — ${mn?.label || '?'}`;
+  _evalCommentsRender();
+  _modalReturnTo['meval-comments'] = () => { _evalSaisieRender(); _evalSaisieRecomputeTotal(); };
+  openMod('meval-comments');
+  setTimeout(() => document.getElementById('meval-comments-newinput')?.focus(), 50);
+}
+
+function _evalCommentsGetList() {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const mnId   = document.getElementById('meval-comments-mnid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !sid || !mnId) return null;
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  ev.notes[sid].comments = ev.notes[sid].comments || {};
+  ev.notes[sid].comments[mnId] = ev.notes[sid].comments[mnId] || [];
+  return { ev, sid, mnId, list: ev.notes[sid].comments[mnId] };
+}
+
+function _evalCommentsRender() {
+  const ctx = _evalCommentsGetList();
+  if (!ctx) return;
+  const wrap = document.getElementById('meval-comments-list');
+  if (ctx.list.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun commentaire pour l\'instant.</p>';
+  } else {
+    let html = '';
+    ctx.list.forEach((c, i) => {
+      const adj = _parseCommentsAdjustment([c]);
+      const adjLbl = adj.delta !== 0 || adj.replace != null
+        ? `<span style="font-family:var(--font-mono);color:var(--margin-red);font-size:.85em;margin-right:8px">${adj.replace != null ? `=${adj.replace}` : ''}${adj.delta > 0 ? '+' + adj.delta : adj.delta < 0 ? adj.delta : ''}pt</span>`
+        : '';
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 8px;background:var(--paper-warm);border-radius:3px;font-size:.92em">
+        <span style="flex:1">${_esc(c)}</span>${adjLbl}
+        <button onclick="_evalCommentsRemove(${i})" title="Supprimer" style="background:transparent;border:none;color:var(--margin-red);cursor:pointer;font-size:1em;padding:2px 6px">✕</button>
+      </div>`;
+    });
+    wrap.innerHTML = html;
+  }
+  // Lib chips
+  const libWrap = document.getElementById('meval-comments-lib');
+  const lib = S.evalCommentLibrary || { positive: [], negative: [] };
+  let libHTML = '';
+  if (lib.positive.length === 0 && lib.negative.length === 0) {
+    libHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Bibliothèque vide. Clique sur <strong>⚙ Bibliothèque…</strong> pour en ajouter.</p>';
+  } else {
+    if (lib.positive.length > 0) {
+      libHTML += '<div style="margin-bottom:4px"><span style="color:#16a34a;font-family:var(--font-mono);font-size:.78em;margin-right:4px">+</span>';
+      libHTML += lib.positive.map(c => `<button onclick="_evalCommentsAddFromLib(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += '</div>';
+    }
+    if (lib.negative.length > 0) {
+      libHTML += '<div><span style="color:#dc2626;font-family:var(--font-mono);font-size:.78em;margin-right:4px">−</span>';
+      libHTML += lib.negative.map(c => `<button onclick="_evalCommentsAddFromLib(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += '</div>';
+    }
+  }
+  libWrap.innerHTML = libHTML;
+}
+
+function _evalCommentsAddFreeText() {
+  const inp = document.getElementById('meval-comments-newinput');
+  const text = (inp.value || '').trim();
+  if (!text) return;
+  const ctx = _evalCommentsGetList();
+  if (!ctx) return;
+  pushUndo();
+  ctx.list.push(text);
+  ctx.ev.updatedAt = Date.now();
+  save();
+  inp.value = '';
+  _evalCommentsRender();
+}
+
+function _evalCommentsAddFromLib(text) {
+  if (!text) return;
+  const ctx = _evalCommentsGetList();
+  if (!ctx) return;
+  pushUndo();
+  ctx.list.push(text);
+  ctx.ev.updatedAt = Date.now();
+  save();
+  _evalCommentsRender();
+}
+
+function _evalCommentsRemove(idx) {
+  const ctx = _evalCommentsGetList();
+  if (!ctx || !ctx.list[idx]) return;
+  pushUndo();
+  ctx.list.splice(idx, 1);
+  ctx.ev.updatedAt = Date.now();
+  save();
+  _evalCommentsRender();
+}
+
+// ── Bibliothèque ──
+function openCommentLibrary() {
+  _comLibRender();
+  openMod('mcomlib');
+}
+
+function _comLibRender() {
+  const lib = S.evalCommentLibrary || (S.evalCommentLibrary = { positive: [], negative: [] });
+  for (const kind of ['positive', 'negative']) {
+    const wrap = document.getElementById(kind === 'positive' ? 'mcomlib-pos' : 'mcomlib-neg');
+    if (lib[kind].length === 0) {
+      wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Vide.</p>';
+      continue;
+    }
+    let html = '';
+    lib[kind].forEach((c, i) => {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 8px;background:${kind === 'positive' ? '#dcfce7' : '#fee2e2'};border-left:3px solid ${kind === 'positive' ? '#16a34a' : '#dc2626'};border-radius:3px;font-size:.88em">
+        <span style="flex:1">${_esc(c)}</span>
+        <button onclick="_comLibRemove('${kind}', ${i})" title="Supprimer" style="background:transparent;border:none;color:var(--margin-red);cursor:pointer;padding:2px 6px">✕</button>
+      </div>`;
+    });
+    wrap.innerHTML = html;
+  }
+}
+
+function _comLibAdd(kind) {
+  const inp = document.getElementById(kind === 'positive' ? 'mcomlib-pos-new' : 'mcomlib-neg-new');
+  const text = (inp.value || '').trim();
+  if (!text) return;
+  S.evalCommentLibrary = S.evalCommentLibrary || { positive: [], negative: [] };
+  S.evalCommentLibrary[kind] = S.evalCommentLibrary[kind] || [];
+  if (S.evalCommentLibrary[kind].includes(text)) { toast('💡 Déjà dans la bibliothèque', 'info'); return; }
+  pushUndo();
+  S.evalCommentLibrary[kind].push(text);
+  save();
+  inp.value = '';
+  _comLibRender();
+}
+
+function _comLibRemove(kind, idx) {
+  S.evalCommentLibrary = S.evalCommentLibrary || { positive: [], negative: [] };
+  pushUndo();
+  S.evalCommentLibrary[kind].splice(idx, 1);
+  save();
+  _comLibRender();
 }
 
 // ═══════════════ PATTERNS DE RAMASSAGE (phase 6) ═══════════════
