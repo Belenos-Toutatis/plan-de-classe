@@ -2690,6 +2690,11 @@ kbd {
         <strong>Type C — Sommative classique avec exercices</strong>
         <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Exercices × questions × points (compétences optionnelles par question). Idéal pour DS structurés. Total des points = note finale.</div>
       </label>
+      <label style="display:block;margin:3px 0;cursor:pointer">
+        <input type="radio" name="meval-new-type" value="B">
+        <strong>Type B — Compétences au fil de l'eau (passations)</strong>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Container long (semestre) qui accumule des <strong>passations</strong>. Chaque passation = 1 séance, 1 code court (A9, TP3…), 1 à 3 compétences évaluées par niveau N1..N4. Note finale calculée à partir des niveaux atteints.</div>
+      </label>
     </div>
     <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;font-size:.92em">
       <label for="meval-new-nomcourt">Nom court <span style="color:var(--margin-red)">*</span></label>
@@ -2745,13 +2750,10 @@ kbd {
       <div id="meval-edit-totalpts" style="font-size:.85em;color:var(--pencil);margin-top:8px"></div>
     </div>
 
-    <div class="about-section">
-      <h3>✍ Saisie des notes</h3>
-      <p style="margin:0 0 8px;font-size:.88em;line-height:1.5">Deux modes au choix. <strong>Mode fiche</strong> : un élève à la fois, défilement Précédent/Suivant — pratique pour corriger les copies dans l'ordre où on les a ramassées. <strong>Mode tableur</strong> : tous les élèves en lignes, mini-notes en colonnes, navigation clavier Tab/Enter/Flèches — pratique pour recopier des notes d'une autre source.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-p" onclick="_evalOpenSaisie()" id="meval-edit-saisie-btn">📝 Mode fiche</button>
-        <button class="btn btn-p" onclick="_evalOpenTableur()" id="meval-edit-tableur-btn">📊 Mode tableur</button>
-      </div>
+    <div class="about-section" id="meval-edit-saisie-section">
+      <h3 id="meval-edit-saisie-title">✍ Saisie des notes</h3>
+      <p id="meval-edit-saisie-help" style="margin:0 0 8px;font-size:.88em;line-height:1.5"></p>
+      <div id="meval-edit-saisie-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
 
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
@@ -2795,6 +2797,58 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="_evalSaisiePrev()" id="meval-saisie-prev-btn">← Précédent</button>
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-saisie')">Fermer</button>
       <button class="btn btn-p btn-sm" onclick="_evalSaisieNext()" id="meval-saisie-next-btn">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Nouvelle passation (Type B) ── -->
+<div id="meval-pass-new" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>+ Nouvelle passation</h2>
+    <input type="hidden" id="meval-pass-new-evalid">
+    <input type="hidden" id="meval-pass-new-passid">
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Une passation = une séance pendant laquelle tu as évalué une ou plusieurs compétences sur tes élèves. Le code court t'aidera à retrouver à quelle activité elle correspondait (A9, TP3, Atelier 2…).</p>
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;font-size:.92em">
+      <label for="meval-pass-new-code">Code court</label>
+      <input type="text" id="meval-pass-new-code" maxlength="12" placeholder="ex. A9, TP3" style="padding:5px 8px;font-family:var(--font-mono);max-width:160px">
+      <label for="meval-pass-new-date">Date</label>
+      <input type="date" id="meval-pass-new-date" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
+      <label style="align-self:flex-start;padding-top:4px">Compétences évaluées <span style="color:var(--margin-red)">*</span></label>
+      <div id="meval-pass-new-comps"></div>
+    </div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-pass-new')">Annuler</button>
+      <button class="btn btn-p" onclick="_evalPassNewSave()">✓ Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Saisie passation (Type B — fiche mode, pastilles N1..N4) ── -->
+<div id="meval-pass-saisie" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:680px;width:100%;max-height:92vh;overflow-y:auto">
+    <h2 id="meval-pass-saisie-title">🎯 Saisie passation</h2>
+    <input type="hidden" id="meval-pass-saisie-evalid">
+    <input type="hidden" id="meval-pass-saisie-passid">
+    <input type="hidden" id="meval-pass-saisie-sid">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+      <div>
+        <strong id="meval-pass-saisie-studentname" style="font-family:var(--font-serif);font-size:1.1em"></strong>
+        <span id="meval-pass-saisie-studentpos" style="margin-left:8px;color:var(--pencil);font-size:.85em"></span>
+      </div>
+      <div id="meval-pass-saisie-progress" style="font-size:.85em;color:var(--pencil);font-family:var(--font-mono)"></div>
+    </div>
+
+    <div id="meval-pass-saisie-comps" style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px"></div>
+
+    <p style="margin:0 0 12px;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+      Clique sur la pastille correspondant au niveau atteint pour chaque compétence. Cliquer sur la pastille déjà active = retirer la saisie (niveau 0 = non évalué pour cet élève).
+    </p>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="_evalPassSaisiePrev()" id="meval-pass-saisie-prev-btn">← Précédent</button>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('meval-pass-saisie')">Fermer</button>
+      <button class="btn btn-p btn-sm" onclick="_evalPassSaisieNext()" id="meval-pass-saisie-next-btn">Suivant →</button>
     </div>
   </div>
 </div>
@@ -3597,7 +3651,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-19T23:30:00Z';
+const APP_VERSION   = '2026-05-20T00:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21112,10 +21166,13 @@ function _evalsForClass(classId, periode) {
   return periode ? evs.filter(e => e.periode === periode) : evs;
 }
 
-// Calcule la note finale d'un élève sur une éval Type A.
-// Règle : note = somme(valeurs non NN/A) × noteMax / somme(max des mini-notes non NN/A).
-// Retourne null si aucune mini-note n'est exploitable (vide ou tout NN/A).
+// Calcule la note finale d'un élève sur une éval (route selon type).
+// Type A et C : somme(valeurs non NN/A) × noteMax / somme(max des mn non NN/A).
+// Type B : agrège les niveaux des passations selon ev.weighting + maitrisePoints.
+// Retourne null si aucune saisie exploitable.
 function _computeStudentEvalNote(evalObj, sid) {
+  if (!evalObj) return null;
+  if (evalObj.type === 'B') return _computeStudentEvalNoteB(evalObj, sid);
   const notes = evalObj.notes?.[sid]?.values || {};
   let sumVal = 0, sumMax = 0, hasAny = false;
   for (const mn of evalObj.miniNotes || []) {
@@ -21123,7 +21180,7 @@ function _computeStudentEvalNote(evalObj, sid) {
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
     if (!Number.isFinite(n)) continue;
-    sumVal += Math.max(0, Math.min(n, mn.max));   // clamp [0, max] par sécurité
+    sumVal += Math.max(0, Math.min(n, mn.max));
     sumMax += mn.max;
     hasAny = true;
   }
@@ -21213,25 +21270,43 @@ function renderEvalNotes() {
   }
   let html = '<div style="display:flex;flex-direction:column;gap:8px">';
   for (const ev of evs) {
-    const nbStudents = Object.keys(ev.notes || {}).filter(sid => {
-      const vals = ev.notes[sid]?.values || {};
-      return Object.values(vals).some(v => v != null && v !== '');
-    }).length;
     const totalStudents = (cls.eleves || []).length;
-    const nbMini = (ev.miniNotes || []).length;
-    const totalMax = (ev.miniNotes || []).reduce((s, m) => s + (m.max || 0), 0);
-    const typeBadge = ev.type === 'C'
-      ? '<span style="display:inline-block;padding:1px 6px;background:var(--ink-blue);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE C</span>'
-      : '<span style="display:inline-block;padding:1px 6px;background:var(--margin-red);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE A</span>';
-    const exoInfo = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0
-      ? ` dans ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''}`
-      : '';
+    let typeBadge, summaryInfo, nbStudents;
+    if (ev.type === 'B') {
+      typeBadge = '<span style="display:inline-block;padding:1px 6px;background:#16a34a;color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE B</span>';
+      const nbPass = (ev.passations || []).length;
+      const compIds = new Set();
+      for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+      // Compte les élèves ayant au moins une saisie de niveau quelconque
+      const seen = new Set();
+      for (const p of (ev.passations || [])) {
+        for (const sid in (p.niveaux || {})) {
+          if (Object.values(p.niveaux[sid] || {}).some(n => n > 0)) seen.add(sid);
+        }
+      }
+      nbStudents = seen.size;
+      summaryInfo = `${nbPass} passation${nbPass > 1 ? 's' : ''} · ${compIds.size} compétence${compIds.size > 1 ? 's' : ''} évaluée${compIds.size > 1 ? 's' : ''}`;
+    } else {
+      typeBadge = ev.type === 'C'
+        ? '<span style="display:inline-block;padding:1px 6px;background:var(--ink-blue);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE C</span>'
+        : '<span style="display:inline-block;padding:1px 6px;background:var(--margin-red);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE A</span>';
+      nbStudents = Object.keys(ev.notes || {}).filter(sid => {
+        const vals = ev.notes[sid]?.values || {};
+        return Object.values(vals).some(v => v != null && v !== '');
+      }).length;
+      const nbMini   = (ev.miniNotes || []).length;
+      const totalMax = (ev.miniNotes || []).reduce((s, m) => s + (m.max || 0), 0);
+      const exoInfo  = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0
+        ? ` dans ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''}`
+        : '';
+      summaryInfo = `${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${totalMax} pts)`;
+    }
     html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalOpenEditor('${_esc(ev.id)}')" title="Ouvrir l'éditeur de cette évaluation">
       <div style="flex:1">
         <div>${typeBadge}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
         <div style="font-size:.85em;color:var(--pencil);margin-top:2px">
           📅 ${ev.date ? _fmtDateFr(ev.date) : '—'} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
-          · ${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${totalMax} pts)
+          · ${summaryInfo}
           · <strong>${nbStudents}/${totalStudents}</strong> saisis
         </div>
       </div>
@@ -21287,9 +21362,13 @@ function _evalNewSave() {
     id, type,
     classId: cls.id,
     nomCourt, nomLong, date, periode, coef, noteMax,
-    miniNotes: [],                          // questions plates (avec exerciceId pour Type C)
-    exercices: type === 'C' ? [] : undefined, // [{id, label}] uniquement pour Type C
-    notes: {},
+    // Type A / C : structure de mini-notes/questions
+    miniNotes:  type === 'B' ? undefined : [],
+    exercices:  type === 'C' ? [] : undefined,
+    notes:      type === 'B' ? undefined : {},
+    // Type B : passations accumulées
+    passations: type === 'B' ? [] : undefined,
+    weighting:  type === 'B' ? 'equal' : undefined,
     createdAt: now, updatedAt: now,
   };
   save();
@@ -21317,13 +21396,71 @@ function _evalOpenEditor(evalId) {
   document.getElementById('meval-edit-coef').value     = ev.coef     ?? 1;
   _evalEditDirty = false;
   _evalEditRenderMiniNotes();
+  _evalEditRenderSaisieSection(ev);
   openMod('meval-edit');
+}
+
+// Rend la section "Saisie" de l'éditeur selon le type
+function _evalEditRenderSaisieSection(ev) {
+  const title   = document.getElementById('meval-edit-saisie-title');
+  const help    = document.getElementById('meval-edit-saisie-help');
+  const actions = document.getElementById('meval-edit-saisie-actions');
+  if (ev.type === 'B') {
+    title.textContent = '🎯 Passations (séances où des compétences sont évaluées)';
+    help.innerHTML = 'Chaque passation correspond à une séance avec son <strong>code court</strong> (ex. A9, TP3), sa <strong>date</strong>, et 1 à 3 compétences évaluées. Plusieurs passations s\'accumulent au fil du semestre pour former cette évaluation.';
+    // Liste des passations
+    ev.passations = ev.passations || [];
+    let html = '';
+    if (ev.passations.length === 0) {
+      html = '<p style="color:var(--pencil);font-style:italic;margin:0 0 8px">Aucune passation pour l\'instant.</p>';
+    } else {
+      html = '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">';
+      // Tri par date desc
+      const sorted = ev.passations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      for (const p of sorted) {
+        const compsChips = _renderCompetenceChips(p.competenceIds || []);
+        const nbSaisis = Object.keys(p.niveaux || {}).filter(sid => {
+          const niv = p.niveaux[sid] || {};
+          return Object.values(niv).some(n => n != null && n > 0);
+        }).length;
+        const cls = S.classes?.[ev.classId];
+        const total = cls?.eleves?.length || 0;
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--ink-blue);border-radius:3px">
+          <div style="flex:1">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <strong style="font-family:var(--font-mono);background:var(--ink-blue);color:#fff;padding:1px 6px;border-radius:3px;font-size:.85em">${_esc(p.code || '?')}</strong>
+              <span style="color:var(--pencil);font-size:.85em">${p.date ? _fmtDateFr(p.date) : '—'}</span>
+              ${compsChips}
+              <span style="color:var(--pencil);font-size:.85em">· <strong>${nbSaisis}/${total}</strong> saisis</span>
+            </div>
+          </div>
+          <button class="btn btn-p btn-sm" onclick="_evalOpenPassationSaisie('${_esc(p.id)}')">✏ Saisir</button>
+          <button class="btn btn-r btn-sm" onclick="_evalRemovePassation('${_esc(p.id)}')" title="Supprimer cette passation">✕</button>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '<button class="btn btn-p" onclick="_evalAddPassation()">+ Ajouter une passation</button>';
+    actions.innerHTML = html;
+  } else {
+    title.textContent = '✍ Saisie des notes';
+    help.innerHTML = 'Deux modes au choix. <strong>Mode fiche</strong> : un élève à la fois, défilement Précédent/Suivant — pratique pour corriger les copies dans l\'ordre où on les a ramassées. <strong>Mode tableur</strong> : tous les élèves en lignes, mini-notes en colonnes, navigation clavier Tab/Enter/Flèches — pratique pour recopier des notes d\'une autre source.';
+    actions.innerHTML = '<button class="btn btn-p" onclick="_evalOpenSaisie()">📝 Mode fiche</button>'
+                     + '<button class="btn btn-p" onclick="_evalOpenTableur()">📊 Mode tableur</button>';
+  }
 }
 
 function _evalEditRenderMiniNotes() {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
+  const section = document.getElementById('meval-edit-structure-section');
+  // Type B : pas de structure, juste les passations (rendues dans la section "Saisie")
+  if (ev.type === 'B') {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
   const wrap = document.getElementById('meval-edit-structure');
   const actions = document.getElementById('meval-edit-structure-actions');
   const title = document.getElementById('meval-edit-structure-title');
@@ -22138,6 +22275,328 @@ function _evalTableurCloseHook() {
   if (_evalTableurSaveTimer) { clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null; }
   if (_evalTableurDirty) { save(); _evalTableurDirty = false; }
   renderEvalNotes();
+}
+
+// ═══════════════ TYPE B — Passations (compétences au fil de l'eau) ═══════════════
+
+function _newPassationId() {
+  return 'pass_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+}
+
+// Renvoie le niveau moyen d'un élève sur une compétence à travers toutes les
+// passations d'une éval Type B, selon la règle S.evalPrefs.meanRule.
+function _computeStudentCompetenceLevel(ev, sid, cId) {
+  if (!ev?.passations) return 0;
+  // Récupère tous les niveaux saisis (> 0) pour cette compétence sur cet élève
+  const entries = [];
+  for (const p of ev.passations) {
+    if (!p.competenceIds?.includes(cId)) continue;
+    const niv = p.niveaux?.[sid]?.[cId];
+    if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
+      entries.push({ date: p.date || '', niveau: niv });
+    }
+  }
+  if (entries.length === 0) return 0;
+  const rule = S.evalPrefs?.meanRule || 'arithmetic';
+  if (rule === 'last') {
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    return entries[entries.length - 1].niveau;
+  }
+  if (rule === 'best') {
+    return entries.reduce((m, e) => Math.max(m, e.niveau), 0);
+  }
+  if (rule === 'weightedRecency') {
+    // Pondération linéaire selon le rang chronologique (plus récent = plus de poids)
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    let num = 0, den = 0;
+    entries.forEach((e, i) => { const w = i + 1; num += w * e.niveau; den += w; });
+    return den > 0 ? num / den : 0;
+  }
+  // 'arithmetic'
+  return entries.reduce((s, e) => s + e.niveau, 0) / entries.length;
+}
+
+// Calcule la note finale d'un élève sur une éval Type B en fonction des
+// passations + niveaux moyens par compétence + S.evalPrefs.maitrisePoints.
+function _computeStudentEvalNoteB(ev, sid) {
+  if (!ev?.passations || ev.passations.length === 0) return null;
+  const pts = S.evalPrefs?.maitrisePoints || [5, 8, 15, 20];
+  const noteMax = ev.noteMax || 20;
+  const ptsMax  = pts[3] || 20;
+
+  // Convertit un niveau (1..4 possiblement non-entier) en points par interpolation
+  const niveauToPts = (n) => {
+    if (n <= 1) return pts[0];
+    if (n >= 4) return pts[3];
+    const lo = Math.floor(n);
+    const t  = n - lo;
+    return pts[lo - 1] + t * (pts[lo] - pts[lo - 1]);
+  };
+
+  const weighting = ev.weighting || 'equal';
+
+  if (weighting === 'perCompetence') {
+    // 1 moyenne par compétence puis moyenne des compétences
+    const compIds = new Set();
+    for (const p of ev.passations) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+    let sumNiv = 0, nbComps = 0;
+    for (const cid of compIds) {
+      const niv = _computeStudentCompetenceLevel(ev, sid, cid);
+      if (niv > 0) { sumNiv += niv; nbComps++; }
+    }
+    if (nbComps === 0) return null;
+    const moy = sumNiv / nbComps;
+    return (niveauToPts(moy) / ptsMax) * noteMax;
+  }
+
+  // 'equal' ou 'coef' : on agrège toutes les saisies passations × compétences × niveaux
+  let sumPts = 0, sumW = 0;
+  for (const p of ev.passations) {
+    const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
+    if (w <= 0) continue;
+    for (const cid of (p.competenceIds || [])) {
+      const niv = p.niveaux?.[sid]?.[cid];
+      if (typeof niv !== 'number' || niv < 1 || niv > 4) continue;
+      sumPts += w * niveauToPts(niv);
+      sumW   += w;
+    }
+  }
+  if (sumW === 0) return null;
+  const avgPts = sumPts / sumW;
+  return (avgPts / ptsMax) * noteMax;
+}
+
+// Nouveau ou édition d'une passation : ouvre la modale
+function _evalAddPassation(passId) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  document.getElementById('meval-pass-new-evalid').value = evalId;
+  document.getElementById('meval-pass-new-passid').value = passId || '';
+  const pass = passId ? ev.passations?.find(p => p.id === passId) : null;
+  document.getElementById('meval-pass-new-code').value = pass?.code || '';
+  document.getElementById('meval-pass-new-date').value = pass?.date || new Date().toISOString().slice(0, 10);
+  _passNewSelected = new Set(pass?.competenceIds || []);
+  _evalPassNewRenderComps();
+  openMod('meval-pass-new');
+  setTimeout(() => document.getElementById('meval-pass-new-code')?.focus(), 50);
+}
+
+// Sélection en cours de compétences dans la modale "Nouvelle passation"
+let _passNewSelected = new Set();
+
+function _evalPassNewRenderComps() {
+  const wrap = document.getElementById('meval-pass-new-comps');
+  if (!wrap) return;
+  // Group by domain
+  const byDomain = {};
+  for (const c of Object.values(S.competences || {})) {
+    const dId = c.domainId || '_nodom';
+    (byDomain[dId] = byDomain[dId] || []).push(c);
+  }
+  const domainOrder = Object.keys(S.competenceDomains || {});
+  if (byDomain._nodom) domainOrder.push('_nodom');
+  let html = '';
+  for (const dId of domainOrder) {
+    const comps = byDomain[dId];
+    if (!comps || comps.length === 0) continue;
+    const dom = S.competenceDomains?.[dId];
+    const domLabel = dom ? `${dom.code}` : '—';
+    html += `<div style="margin-bottom:6px"><span style="font-family:var(--font-mono);color:var(--pencil);font-size:.78em;margin-right:6px">${_esc(domLabel)}</span>`;
+    for (const c of comps) {
+      const sel = _passNewSelected.has(c.id);
+      html += `<label style="display:inline-flex;align-items:center;gap:4px;padding:3px 7px;background:${sel ? '#e6f0fa' : 'var(--paper-warm)'};border:1px solid ${sel ? 'var(--ink-blue)' : 'var(--rule-line)'};border-radius:12px;cursor:pointer;font-size:.85em;margin:2px" title="${_esc(c.name || '')}">
+        <input type="checkbox" ${sel ? 'checked' : ''} onchange="_passNewToggle('${_esc(c.id)}', this.checked)" style="margin:0">
+        <strong style="font-family:var(--font-mono)">${_esc(c.code)}</strong>
+      </label>`;
+    }
+    html += '</div>';
+  }
+  wrap.innerHTML = html || '<p style="color:var(--pencil);font-style:italic">Aucune compétence disponible.</p>';
+}
+
+function _passNewToggle(cid, checked) {
+  if (checked) _passNewSelected.add(cid);
+  else _passNewSelected.delete(cid);
+  _evalPassNewRenderComps();
+}
+
+function _evalPassNewSave() {
+  const evalId = document.getElementById('meval-pass-new-evalid').value;
+  const passId = document.getElementById('meval-pass-new-passid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  const code = (document.getElementById('meval-pass-new-code').value || '').trim();
+  const date = document.getElementById('meval-pass-new-date').value;
+  if (!code) { toast('⚠ Le code court est obligatoire', 'warn'); return; }
+  if (!date) { toast('⚠ La date est obligatoire', 'warn'); return; }
+  if (_passNewSelected.size === 0) { toast('⚠ Sélectionne au moins une compétence', 'warn'); return; }
+  pushUndo();
+  ev.passations = ev.passations || [];
+  if (passId) {
+    // Édition
+    const p = ev.passations.find(p => p.id === passId);
+    if (p) {
+      p.code = code; p.date = date;
+      p.competenceIds = Array.from(_passNewSelected);
+    }
+  } else {
+    // Nouvelle
+    ev.passations.push({
+      id: _newPassationId(),
+      code, date,
+      competenceIds: Array.from(_passNewSelected),
+      niveaux: {},
+    });
+  }
+  // Date globale de l'éval = max des dates des passations
+  ev.date = ev.passations.reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-pass-new');
+  _evalEditRenderSaisieSection(ev);
+  renderEvalNotes();
+  toast(`✓ Passation "${code}" ${passId ? 'mise à jour' : 'créée'}`);
+}
+
+function _evalRemovePassation(passId) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  const p = ev.passations?.find(p => p.id === passId);
+  if (!p) return;
+  const nbSaisis = Object.keys(p.niveaux || {}).filter(sid => Object.values(p.niveaux[sid] || {}).some(n => n > 0)).length;
+  const msg = nbSaisis > 0
+    ? `Supprimer la passation "${p.code}" ?\n${nbSaisis} saisies seront perdues.`
+    : `Supprimer la passation "${p.code}" ?`;
+  if (!confirm(msg)) return;
+  pushUndo();
+  ev.passations = ev.passations.filter(x => x.id !== passId);
+  ev.date = ev.passations.reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  ev.updatedAt = Date.now();
+  save();
+  _evalEditRenderSaisieSection(ev);
+  renderEvalNotes();
+  toast('🗑 Passation supprimée');
+}
+
+// Saisie d'une passation : fiche mode (un élève à la fois, pastilles N1-N4 par compétence)
+function _evalOpenPassationSaisie(passId) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const p = ev.passations?.find(p => p.id === passId);
+  if (!p) return;
+  const cls = S.classes?.[ev.classId];
+  if (!cls || !cls.eleves || cls.eleves.length === 0) {
+    toast('⚠ Aucun élève dans cette classe', 'warn');
+    return;
+  }
+  const sids = cls.eleves.slice().sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+    const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+    return ka.localeCompare(kb, 'fr');
+  });
+  document.getElementById('meval-pass-saisie-evalid').value = evalId;
+  document.getElementById('meval-pass-saisie-passid').value = passId;
+  document.getElementById('meval-pass-saisie-sid').value    = sids[0];
+  document.getElementById('meval-pass-saisie').dataset.sids = JSON.stringify(sids);
+  _evalPassSaisieRender();
+  _modalReturnTo['meval-pass-saisie'] = () => { _evalEditRenderSaisieSection(ev); renderEvalNotes(); };
+  openMod('meval-pass-saisie');
+}
+
+function _evalPassSaisieRender() {
+  const evalId = document.getElementById('meval-pass-saisie-evalid').value;
+  const passId = document.getElementById('meval-pass-saisie-passid').value;
+  const sid    = document.getElementById('meval-pass-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const p = ev.passations?.find(x => x.id === passId);
+  if (!p) return;
+  const stu = S.eleves?.[sid];
+  if (!stu) return;
+  const sids = JSON.parse(document.getElementById('meval-pass-saisie').dataset.sids || '[]');
+  const idx = sids.indexOf(sid);
+
+  document.getElementById('meval-pass-saisie-title').textContent = `🎯 ${ev.nomCourt} — Passation ${p.code} (${_fmtDateFr(p.date)})`;
+  document.getElementById('meval-pass-saisie-studentname').textContent = `${stu.nom?.toUpperCase() || ''} ${stu.prenom || ''}`.trim();
+  document.getElementById('meval-pass-saisie-studentpos').textContent = stu.groupe ? `G${stu.groupe}` : '';
+  document.getElementById('meval-pass-saisie-progress').textContent = `${idx + 1} / ${sids.length}`;
+  document.getElementById('meval-pass-saisie-prev-btn').disabled = (idx <= 0);
+  document.getElementById('meval-pass-saisie-next-btn').disabled = (idx >= sids.length - 1);
+
+  p.niveaux = p.niveaux || {};
+  p.niveaux[sid] = p.niveaux[sid] || {};
+
+  const wrap = document.getElementById('meval-pass-saisie-comps');
+  wrap.innerHTML = '';
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  for (const cid of (p.competenceIds || [])) {
+    const c = S.competences?.[cid];
+    if (!c) continue;
+    const currentNiv = p.niveaux[sid][cid] || 0;
+    const block = document.createElement('div');
+    block.style.cssText = 'padding:8px 12px;background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--ink-blue);border-radius:4px';
+    let pillsHTML = '';
+    for (let n = 1; n <= 4; n++) {
+      const active = (currentNiv === n);
+      const bg = active ? colors[n - 1] : '#fff';
+      const color = active ? '#fff' : 'var(--ink-deep)';
+      const border = active ? colors[n - 1] : 'var(--rule-line)';
+      pillsHTML += `<button onclick="_evalPassSaisieSetLevel('${_esc(cid)}', ${n})" title="Niveau ${n} — ${_esc(_MAITRISE_LABELS[n-1])}" style="width:42px;height:42px;border-radius:50%;background:${bg};color:${color};border:2px solid ${border};font-family:var(--font-mono);font-weight:bold;font-size:1em;cursor:pointer;transition:transform .15s">N${n}</button>`;
+    }
+    block.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div>
+          <strong style="font-family:var(--font-mono);background:var(--paper-warm);padding:1px 6px;border-radius:3px">${_esc(c.code)}</strong>
+          <span style="margin-left:6px">${_esc(c.name || '')}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">${pillsHTML}</div>
+      </div>
+    `;
+    wrap.appendChild(block);
+  }
+}
+
+function _evalPassSaisieSetLevel(cid, niveau) {
+  const evalId = document.getElementById('meval-pass-saisie-evalid').value;
+  const passId = document.getElementById('meval-pass-saisie-passid').value;
+  const sid    = document.getElementById('meval-pass-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const p = ev.passations?.find(x => x.id === passId);
+  if (!p) return;
+  p.niveaux = p.niveaux || {};
+  p.niveaux[sid] = p.niveaux[sid] || {};
+  const cur = p.niveaux[sid][cid] || 0;
+  if (cur === niveau) {
+    // Re-clic sur le niveau actif = retirer (passe à 0 = non évalué)
+    delete p.niveaux[sid][cid];
+  } else {
+    p.niveaux[sid][cid] = niveau;
+  }
+  ev.updatedAt = Date.now();
+  save();
+  _evalPassSaisieRender();
+}
+
+function _evalPassSaisiePrev() {
+  const sids = JSON.parse(document.getElementById('meval-pass-saisie').dataset.sids || '[]');
+  const cur  = document.getElementById('meval-pass-saisie-sid').value;
+  const idx  = sids.indexOf(cur);
+  if (idx <= 0) return;
+  document.getElementById('meval-pass-saisie-sid').value = sids[idx - 1];
+  _evalPassSaisieRender();
+}
+function _evalPassSaisieNext() {
+  const sids = JSON.parse(document.getElementById('meval-pass-saisie').dataset.sids || '[]');
+  const cur  = document.getElementById('meval-pass-saisie-sid').value;
+  const idx  = sids.indexOf(cur);
+  if (idx < 0 || idx >= sids.length - 1) return;
+  document.getElementById('meval-pass-saisie-sid').value = sids[idx + 1];
+  _evalPassSaisieRender();
 }
 
 // ═══════════════ THEME TOGGLE (clair/sombre) ═══════════════
