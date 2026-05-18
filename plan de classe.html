@@ -1469,11 +1469,11 @@ kbd {
     <button class="nb" onclick="showTab('ipads',this)">📱 Tablettes</button>
     <button class="nb" onclick="showTab('qcmcam',this)">📷 QCMCam</button>
   </div>
-  <div class="tab-group disabled">
-    <span class="group-label">Évaluation <em>· bientôt</em></span>
-    <button class="nb" disabled title="Bientôt : gestion des notes et compétences">📊 Notes</button>
-    <button class="nb" disabled title="Bientôt : référentiel de compétences personnalisé">🎯 Compétences</button>
-    <button class="nb" disabled title="Bientôt : bilan trimestre par élève — soit toutes les notes, soit toutes les compétences évaluées">📜 Bilan</button>
+  <div class="tab-group">
+    <span class="group-label">Évaluation <em>· en construction</em></span>
+    <button class="nb" onclick="showTab('notes',this)" title="Évaluations : création, saisie, notes /20">📊 Notes</button>
+    <button class="nb" disabled title="Bientôt : bilan par compétence — vue transverse classe + progression par élève">🎯 Compétences</button>
+    <button class="nb" disabled title="Bientôt : bilan trimestre / semestre par élève — moyenne par domaine du socle, export ready-for-bulletin">📜 Bilan</button>
   </div>
 </nav>
 </div>
@@ -1985,8 +1985,26 @@ kbd {
     <div id="qcm-sum"></div>
   </div>
 
-  <!-- ── TAB: Export positions (accessible via bouton dans Élèves, plus dans la nav) ── -->
+  <!-- ── TAB: Notes (volet Évaluation — phase 1 : évaluations Type A) ── -->
   <div id="tab-notes" class="tab">
+    <div class="sh">
+      <h2>📊 Évaluations</h2>
+      <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation pour la classe active">+ Nouvelle évaluation</button>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+        <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
+        <select id="eval-period-filter" onchange="renderEvalNotes()" style="padding:4px 8px;font-size:.9em"></select>
+        <button class="btn btn-g btn-sm" onclick="openEvalPrefs()" title="Paramètres globaux : couleurs des niveaux, points par niveau, période, règle de moyenne…">⚙ Paramètres</button>
+      </div>
+    </div>
+    <p class="al al-i" style="margin-bottom:8px">
+      Évaluations Type A — somme de mini-notes formant un total /20. Chaque évaluation est rattachée à une classe et une période.
+      <em>Volet en construction (phase 1) — d'autres types d'évaluations (compétences, sommatives par compétence) arriveront prochainement.</em>
+    </p>
+    <div id="evals-list-wrap"></div>
+  </div>
+
+  <!-- ── TAB: Export positions (accessible via bouton dans Élèves, plus dans la nav) ── -->
+  <div id="tab-export-pos" class="tab">
     <div class="tb" id="notes-salle-row" style="background:#fafafa;border-bottom:1px solid #eee">
       <span style="font-size:.85em;color:#666;align-self:center">📍 Salle :</span>
       <span id="notes-salle-buttons" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
@@ -1994,7 +2012,7 @@ kbd {
     <div class="sh">
       <h2>📊 Export des élèves</h2>
       <button class="btn btn-p btn-sm" onclick="switchTab('eleves')" title="Retour à la vue Élèves">↩ Retour Élèves</button>
-      <button class="btn btn-g btn-sm" onclick="exportNotesCsv()" title="Exporter en .csv (séparateur point-virgule, ouverture directe dans Excel/LibreOffice)">💾 Exporter CSV</button>
+      <button class="btn btn-g btn-sm" onclick="exportPositionsCsv()" title="Exporter en .csv (séparateur point-virgule, ouverture directe dans Excel/LibreOffice)">💾 Exporter CSV</button>
     </div>
     <p class="al al-i" style="margin-bottom:8px">Tableau complet de la classe : position dans la salle, groupe, compteurs (matériel oublié / travail non fait / absences / retards), aménagements et notes. Cliquez sur un en-tête pour trier, sur 📋 pour copier la colonne.</p>
     <div id="notes-sum"></div>
@@ -2651,6 +2669,118 @@ kbd {
         <button class="btn btn-g" onclick="closeMod2('mevalprefs')">Annuler</button>
         <button class="btn btn-p" onclick="_evalPrefsSave()">✓ Enregistrer</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Nouvelle évaluation (phase 1) ── -->
+<div id="meval-new" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px;width:100%">
+    <h2 id="meval-new-title">+ Nouvelle évaluation</h2>
+    <input type="hidden" id="meval-new-id">
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;font-size:.92em">
+      <label for="meval-new-nomcourt">Nom court <span style="color:var(--margin-red)">*</span></label>
+      <input type="text" id="meval-new-nomcourt" maxlength="20" placeholder="ex. DS3, IE2, TP1…" style="padding:5px 8px">
+      <label for="meval-new-nomlong">Nom long</label>
+      <input type="text" id="meval-new-nomlong" maxlength="80" placeholder="ex. Contrôle Chapitre 4 — Lumière" style="padding:5px 8px">
+      <label for="meval-new-date">Date</label>
+      <input type="date" id="meval-new-date" style="padding:5px 8px;font-family:var(--font-mono)">
+      <label for="meval-new-periode">Période</label>
+      <select id="meval-new-periode" style="padding:5px 8px"></select>
+      <label for="meval-new-notemax">Note maximale</label>
+      <div><input type="number" id="meval-new-notemax" min="1" max="100" step="0.5" value="20" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.88em">points</span></div>
+      <label for="meval-new-coef">Coefficient</label>
+      <div><input type="number" id="meval-new-coef" min="0" max="20" step="0.5" value="1" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.88em">dans la moyenne de la période</span></div>
+    </div>
+    <p style="margin:14px 0 0;font-size:.85em;color:var(--pencil);font-style:italic">La classe active reçoit l'évaluation. Tu pourras ensuite définir la structure (mini-notes : Q1/3, Q2/5…) et saisir les notes élève par élève.</p>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-new')">Annuler</button>
+      <button class="btn btn-p" onclick="_evalNewSave()">✓ Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Éditeur d'évaluation (structure + actions) ── -->
+<div id="meval-edit" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:720px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2 id="meval-edit-title">📊 Édition de l'évaluation</h2>
+    <input type="hidden" id="meval-edit-id">
+
+    <div class="about-section">
+      <h3>📝 Informations</h3>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:8px 12px;align-items:center;font-size:.92em">
+        <label>Nom court</label>
+        <input type="text" id="meval-edit-nomcourt" maxlength="20" style="padding:4px 8px" oninput="_evalEditMarkDirty()">
+        <label>Nom long</label>
+        <input type="text" id="meval-edit-nomlong" maxlength="80" style="padding:4px 8px" oninput="_evalEditMarkDirty()">
+        <label>Date</label>
+        <input type="date" id="meval-edit-date" style="padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty()">
+        <label>Période</label>
+        <select id="meval-edit-periode" style="padding:4px 8px" onchange="_evalEditMarkDirty()"></select>
+        <label>Note maximale</label>
+        <div><input type="number" id="meval-edit-notemax" min="1" max="100" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty()"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
+        <label>Coefficient</label>
+        <input type="number" id="meval-edit-coef" min="0" max="20" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty()">
+      </div>
+    </div>
+
+    <div class="about-section">
+      <h3>🔢 Mini-notes (questions / items)</h3>
+      <p style="margin:0 0 8px;font-size:.85em;color:var(--pencil)">Chaque mini-note a un libellé court et un nombre de points maximum. La note finale est calculée proportionnellement à la note maximale.</p>
+      <div id="meval-edit-mininotes" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-g btn-sm" onclick="_evalEditAddMiniNote()">+ Ajouter une mini-note</button>
+        <span id="meval-edit-totalpts" style="font-size:.85em;color:var(--pencil)"></span>
+      </div>
+    </div>
+
+    <div class="about-section">
+      <h3>✍ Saisie des notes</h3>
+      <p style="margin:0 0 8px;font-size:.88em;line-height:1.5">Mode fiche : un élève à la fois, navigation Précédent / Suivant, total calculé en temps réel.</p>
+      <button class="btn btn-p" onclick="_evalOpenSaisie()" id="meval-edit-saisie-btn">📝 Ouvrir la saisie (mode fiche)</button>
+    </div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-r btn-sm" onclick="_evalEditDelete()">🗑 Supprimer l'évaluation</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g" onclick="closeMod2('meval-edit')">Fermer</button>
+        <button class="btn btn-p" onclick="_evalEditSave()" id="meval-edit-save-btn">✓ Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Saisie mode fiche (un élève à la fois) ── -->
+<div id="meval-saisie" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%;max-height:92vh;overflow-y:auto">
+    <h2 id="meval-saisie-title">✍ Saisie des notes</h2>
+    <input type="hidden" id="meval-saisie-evalid">
+    <input type="hidden" id="meval-saisie-sid">
+
+    <div id="meval-saisie-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+      <div>
+        <strong id="meval-saisie-studentname" style="font-family:var(--font-serif);font-size:1.1em"></strong>
+        <span id="meval-saisie-studentpos" style="margin-left:8px;color:var(--pencil);font-size:.85em"></span>
+      </div>
+      <div id="meval-saisie-progress" style="font-size:.85em;color:var(--pencil);font-family:var(--font-mono)"></div>
+    </div>
+
+    <div id="meval-saisie-mininotes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+
+    <div id="meval-saisie-total" style="text-align:center;padding:12px;background:var(--paper-warm);border-radius:5px;margin-bottom:12px">
+      <div style="font-size:.8em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.1em;font-family:var(--font-mono)">Note totale</div>
+      <div id="meval-saisie-totaldisp" style="font-size:1.6em;font-family:var(--font-mono);font-weight:bold;color:var(--ink-blue)">—</div>
+      <div id="meval-saisie-totalpts" style="font-size:.8em;color:var(--pencil);margin-top:2px"></div>
+    </div>
+
+    <p style="margin:0 0 12px;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+      <strong>Codes spéciaux :</strong> tape <code>NN</code> ou <code>N</code> pour "non noté", <code>A</code> ou <code>ABS</code> pour "absent". Ces mini-notes sont exclues du calcul du total.
+    </p>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="_evalSaisiePrev()" id="meval-saisie-prev-btn">← Précédent</button>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('meval-saisie')">Fermer</button>
+      <button class="btn btn-p btn-sm" onclick="_evalSaisieNext()" id="meval-saisie-next-btn">Suivant →</button>
     </div>
   </div>
 </div>
@@ -3409,7 +3539,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-19T22:00:00Z';
+const APP_VERSION   = '2026-05-19T22:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -8335,7 +8465,7 @@ function switchTab(name) {
 }
 
 // Affiche l'onglet "Export positions" (caché de la nav, accessible via bouton dans Élèves)
-function goToExportPositions() { switchTab('notes'); }
+function goToExportPositions() { switchTab('export-pos'); }
 
 // Menus déroulants (toolbar)
 function toggleDd(btn) {
@@ -8365,7 +8495,8 @@ function renderTab(name) {
     case 'config':  renderConfigGrid(); break;
     case 'ipads':   renderIpads(); break;
     case 'qcmcam':  renderQcmcam(); break;
-    case 'notes':   renderNotes();  break;
+    case 'export-pos': renderExportPositions(); break;
+    case 'notes':      renderEvalNotes();       break;
   }
   updateSnapshotBanner();
 }
@@ -15144,7 +15275,7 @@ function copyQcmAllClasses() {
 
 // EXPORT NOTES
 // ═══════════════════════════════════════════════════════════
-let notesSort = _loadPersistedSort('notes', { col: 0, dir: 1 }); // col: 0=Position, 1=Groupe, 2=Nom, 3=Prénom
+let notesSort = _loadPersistedSort('export-pos', { col: 0, dir: 1 }); // col: 0=Position, 1=Groupe, 2=Nom, 3=Prénom
 
 // Génère la chaîne "Aménagements" : liste de statuts séparés par '+' (ex. "PPRE", "UPE2A+ + PPRE")
 function _amenagementsLabel(stu) {
@@ -15160,7 +15291,9 @@ function _amenagementsLabel(stu) {
   return parts.join(' + ');
 }
 
-function renderNotes() {
+// (renommée de renderNotes → renderExportPositions, phase 1 volet Évaluation libère
+//  le nom "Notes" pour la saisie des évaluations.)
+function renderExportPositions() {
   const cls = getCls();
   const el  = document.getElementById('notes-sum');
 
@@ -15247,8 +15380,8 @@ function renderNotes() {
 function sortNotes(col) {
   if (notesSort.col === col) notesSort.dir = -notesSort.dir;
   else { notesSort.col = col; notesSort.dir = 1; }
-  _persistSort('notes', notesSort);
-  renderNotes();
+  _persistSort('export-pos', notesSort);
+  renderExportPositions();
 }
 
 function copyNotesCol(n) {
@@ -15349,7 +15482,7 @@ function copySelectedCols() {
 // Export du tableau Élèves en .csv (séparateur ; pour Excel français).
 // Lit directement le DOM du tableau rendu par renderNotes() — toutes les colonnes (avec entêtes
 // nettoyés des emojis et flèches de tri) y compris l'aménagement et les notes.
-function exportNotesCsv() {
+function exportPositionsCsv() {
   const cls = getCls();
   const tbl = document.getElementById('notes-tbl');
   if (!cls || !tbl || !tbl.tBodies[0]) return toast('Rien à exporter.');
@@ -20436,10 +20569,10 @@ document.addEventListener('keydown', e => {
       _afterModalClose(m.id);
     });
     if (hadModal) return;
-    // Onglet Export (notes) : Esc → retour à la vue Élèves (équivalent du bouton ↩ Retour Élèves)
+    // Onglet Export positions : Esc → retour à la vue Élèves (équivalent du bouton ↩ Retour Élèves)
     const _curTabEl = document.querySelector('.tab.on');
     const _curTabId = _curTabEl ? _curTabEl.id.replace('tab-', '') : '';
-    if (_curTabId === 'notes') { switchTab('eleves'); return; }
+    if (_curTabId === 'export-pos') { switchTab('eleves'); return; }
     // Désélectionne le mode tap-to-place (iPad) si actif
     if (_tapMode) { _tapClear(); return; }
     // 🎲 Carte d'interrogation flottante visible → la fermer en priorité
@@ -20486,6 +20619,7 @@ document.addEventListener('keydown', e => {
     if (curTab === 'eleves')  { e.preventDefault(); printElevesList(); return; }
     if (curTab === 'classes') { e.preventDefault(); printClassesBilan(); return; }
     if (curTab === 'qcmcam')  { e.preventDefault(); openQcmMarkersDialog(); return; }
+    if (curTab === 'notes')   { e.preventDefault(); toast('🖨 Impression des évaluations à venir (phase 10 — export ENT)', 'info'); return; }
   }
 
   // Zoom et filtres groupe sur Plan Prof / Vue Élève
@@ -20559,8 +20693,10 @@ function init() {
 
   // Restaurer l'onglet actif (svue n'a plus de bouton de nav, on retombe sur 'plan')
   let savedTab = localStorage.getItem('planClasse_tab') || 'classes';
-  if (savedTab === 'svue')  savedTab = 'plan';   // Vue Élève sortie de la nav
-  if (savedTab === 'notes') savedTab = 'eleves'; // Export positions sorti de la nav
+  if (savedTab === 'svue')      savedTab = 'plan';     // Vue Élève sortie de la nav
+  if (savedTab === 'export-pos') savedTab = 'eleves';  // Export positions accessible via bouton, plus dans la nav
+  // (Note : 'notes' était utilisé historiquement pour Export positions, désormais c'est l'onglet
+  // Évaluation/Notes. Pas de redirect → les anciens utilisateurs landent sur le nouvel onglet.)
   const tabBtn = [...document.querySelectorAll('.nb')]
     .find(b => b.getAttribute('onclick')?.includes(`'${savedTab}'`));
   showTab(savedTab, tabBtn);
@@ -20850,6 +20986,551 @@ function _evalPrefsSave() {
   save();
   closeMod2('mevalprefs');
   toast('✓ Paramètres évaluation enregistrés');
+}
+
+// ═══════════════ ÉVALUATION TYPE A — saisie de mini-notes (phase 1) ═══════════════
+// Modèle pour une évaluation Type A (somme de mini-notes proportionnée à noteMax) :
+//   S.evaluations[evalId] = {
+//     id, type: 'A',
+//     classId, nomCourt, nomLong, date,        // date globale YYYY-MM-DD
+//     periode,                                 // 'S1' | 'S2' | 'T1' | 'T2' | 'T3'
+//     coef,                                    // coefficient dans la moyenne de la période
+//     noteMax,                                 // ex. 20
+//     miniNotes: [ { id, label, max } ],       // structure (ordonnée)
+//     notes: {                                 // saisies par élève
+//       [sid]: { values: { [miniNoteId]: number | 'NN' | 'A' | null } }
+//     },
+//     createdAt, updatedAt
+//   }
+
+function _newEvalId() {
+  // ev_<base36 ts>_<rand>
+  return 'ev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+}
+function _newMiniNoteId() {
+  return 'mn_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+}
+
+// Période courante par défaut : S1 (semestre) avant 1er février, sinon S2
+// pour trimestre, T1 jusqu'au 31/11, T2 jusqu'au 28/02, T3 ensuite.
+function _currentPeriode() {
+  const mode = S.evalPrefs?.periodMode || 'semestre';
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth() + 1, d = today.getDate();
+  if (mode === 'semestre') {
+    // S1 : sept → janvier ; S2 : février → août
+    if (m >= 9 || m === 1) return 'S1';
+    return 'S2';
+  }
+  // trimestre
+  if (m >= 9 && m <= 11) return 'T1';
+  if (m === 12 || (m === 1)) return 'T1';   // T1 couvre sept-déc
+  // T2 : janvier-mars  ; T3 : avril-août. (Approximation, l'utilisateur peut ajuster manuellement.)
+  if (m === 2 || m === 3) return 'T2';
+  return 'T3';
+}
+
+// Liste des codes de période disponibles selon le mode (alimente les selects).
+function _periodeOptions() {
+  return (S.evalPrefs?.periodMode === 'trimestre')
+    ? [{ code: 'T1', label: 'T1 — Trimestre 1' }, { code: 'T2', label: 'T2 — Trimestre 2' }, { code: 'T3', label: 'T3 — Trimestre 3' }]
+    : [{ code: 'S1', label: 'S1 — Semestre 1' }, { code: 'S2', label: 'S2 — Semestre 2' }];
+}
+// Helper : alimente un <select> avec les options de période courantes
+function _fillPeriodeSelect(selEl, valueToSelect) {
+  if (!selEl) return;
+  selEl.innerHTML = '';
+  for (const o of _periodeOptions()) {
+    const opt = document.createElement('option');
+    opt.value = o.code; opt.textContent = o.label;
+    if (o.code === valueToSelect) opt.selected = true;
+    selEl.appendChild(opt);
+  }
+}
+
+// Évaluations de la classe active, filtrées par période (null = toutes)
+function _evalsForClass(classId, periode) {
+  const evs = Object.values(S.evaluations || {}).filter(e => e.classId === classId);
+  return periode ? evs.filter(e => e.periode === periode) : evs;
+}
+
+// Calcule la note finale d'un élève sur une éval Type A.
+// Règle : note = somme(valeurs non NN/A) × noteMax / somme(max des mini-notes non NN/A).
+// Retourne null si aucune mini-note n'est exploitable (vide ou tout NN/A).
+function _computeStudentEvalNote(evalObj, sid) {
+  const notes = evalObj.notes?.[sid]?.values || {};
+  let sumVal = 0, sumMax = 0, hasAny = false;
+  for (const mn of evalObj.miniNotes || []) {
+    const v = notes[mn.id];
+    if (v === 'NN' || v === 'A' || v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) continue;
+    sumVal += Math.max(0, Math.min(n, mn.max));   // clamp [0, max] par sécurité
+    sumMax += mn.max;
+    hasAny = true;
+  }
+  if (!hasAny || sumMax <= 0) return null;
+  return (sumVal * evalObj.noteMax) / sumMax;
+}
+
+// Formate une note pour affichage : 14.5 → "14,5", 14 → "14", null → "—"
+function _fmtNote(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  const r = Math.round(n * 100) / 100;
+  return r.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
+}
+
+// Parse une saisie utilisateur en valeur de mini-note.
+// Retourne 'NN', 'A', un nombre, ou null si vide / invalide.
+function _parseMiniNoteInput(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim().toUpperCase();
+  if (s === '') return null;
+  if (s === 'NN' || s === 'N') return 'NN';
+  if (s === 'A' || s === 'ABS') return 'A';
+  const n = parseFloat(s.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+// ── Onglet Notes — rendu de la liste d'évaluations ──
+function renderEvalNotes() {
+  const cls = getCls();
+  const wrap = document.getElementById('evals-list-wrap');
+  if (!wrap) return;
+
+  // Sélecteur de période
+  const sel = document.getElementById('eval-period-filter');
+  if (sel) {
+    const cur = sel.value || _currentPeriode();
+    sel.innerHTML = '';
+    const optAll = document.createElement('option');
+    optAll.value = '';
+    optAll.textContent = 'Toutes';
+    sel.appendChild(optAll);
+    for (const o of _periodeOptions()) {
+      const opt = document.createElement('option');
+      opt.value = o.code; opt.textContent = o.code;
+      if (o.code === cur) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+  const periode = sel?.value || _currentPeriode();
+
+  if (!cls) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir ses évaluations.</p>';
+    return;
+  }
+  const evs = _evalsForClass(cls.id, periode || null).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (evs.length === 0) {
+    wrap.innerHTML = `<p style="color:var(--pencil);font-style:italic;padding:14px">Aucune évaluation pour <strong>${_esc(cls.nom)}</strong>${periode ? ' en ' + _esc(periode) : ''}. Clique sur <strong>+ Nouvelle évaluation</strong> pour commencer.</p>`;
+    return;
+  }
+  let html = '<div style="display:flex;flex-direction:column;gap:8px">';
+  for (const ev of evs) {
+    const nbStudents = Object.keys(ev.notes || {}).filter(sid => {
+      const vals = ev.notes[sid]?.values || {};
+      return Object.values(vals).some(v => v != null && v !== '');
+    }).length;
+    const totalStudents = (cls.eleves || []).length;
+    const nbMini = (ev.miniNotes || []).length;
+    const totalMax = (ev.miniNotes || []).reduce((s, m) => s + (m.max || 0), 0);
+    html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalOpenEditor('${_esc(ev.id)}')" title="Ouvrir l'éditeur de cette évaluation">
+      <div style="flex:1">
+        <div><strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
+        <div style="font-size:.85em;color:var(--pencil);margin-top:2px">
+          📅 ${ev.date ? _fmtDateFr(ev.date) : '—'} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
+          · ${nbMini} mini-note${nbMini > 1 ? 's' : ''} (${totalMax} pts)
+          · <strong>${nbStudents}/${totalStudents}</strong> saisis
+        </div>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="event.stopPropagation();_evalOpenEditor('${_esc(ev.id)}')">✏ Éditer</button>
+    </div>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+// Helper d'échappement HTML (minimaliste — utilisé dans innerHTML)
+function _esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function _fmtDateFr(ymd) {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd || '';
+  const [y, m, d] = ymd.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+// ── Modale "Nouvelle évaluation" ──
+function openNewEvalModal() {
+  const cls = getCls();
+  if (!cls) { toast('⚠ Sélectionne d\'abord une classe', 'warn'); return; }
+  document.getElementById('meval-new-nomcourt').value = '';
+  document.getElementById('meval-new-nomlong').value = '';
+  document.getElementById('meval-new-date').value = new Date().toISOString().slice(0, 10);
+  _fillPeriodeSelect(document.getElementById('meval-new-periode'), _currentPeriode());
+  document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
+  document.getElementById('meval-new-coef').value = 1;
+  openMod('meval-new');
+  setTimeout(() => document.getElementById('meval-new-nomcourt')?.focus(), 50);
+}
+
+function _evalNewSave() {
+  const cls = getCls();
+  if (!cls) { toast('⚠ Pas de classe active', 'warn'); return; }
+  const nomCourt = (document.getElementById('meval-new-nomcourt').value || '').trim();
+  if (!nomCourt) { toast('⚠ Le nom court est obligatoire', 'warn'); return; }
+  const nomLong = (document.getElementById('meval-new-nomlong').value || '').trim();
+  const date    = document.getElementById('meval-new-date').value || new Date().toISOString().slice(0, 10);
+  const periode = document.getElementById('meval-new-periode').value;
+  const noteMax = parseFloat(document.getElementById('meval-new-notemax').value);
+  const coef    = parseFloat(document.getElementById('meval-new-coef').value);
+  if (!Number.isFinite(noteMax) || noteMax <= 0) { toast('⚠ Note maximale invalide', 'warn'); return; }
+  if (!Number.isFinite(coef) || coef < 0) { toast('⚠ Coefficient invalide', 'warn'); return; }
+
+  pushUndo();
+  const id = _newEvalId();
+  const now = Date.now();
+  S.evaluations[id] = {
+    id, type: 'A',
+    classId: cls.id,
+    nomCourt, nomLong, date, periode, coef, noteMax,
+    miniNotes: [],
+    notes: {},
+    createdAt: now, updatedAt: now,
+  };
+  save();
+  closeMod2('meval-new');
+  renderEvalNotes();
+  toast(`✓ Évaluation "${nomCourt}" créée — clique dessus pour ajouter les mini-notes`);
+  // Ouvre directement l'éditeur pour faciliter la mise en place
+  setTimeout(() => _evalOpenEditor(id), 80);
+}
+
+// ── Modale "Éditeur d'évaluation" ──
+let _evalEditDirty = false;
+function _evalEditMarkDirty() { _evalEditDirty = true; }
+
+function _evalOpenEditor(evalId) {
+  const ev = S.evaluations?.[evalId];
+  if (!ev) { toast('⚠ Évaluation introuvable', 'warn'); return; }
+  document.getElementById('meval-edit-id').value = evalId;
+  document.getElementById('meval-edit-title').textContent = `📊 ${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}`;
+  document.getElementById('meval-edit-nomcourt').value = ev.nomCourt || '';
+  document.getElementById('meval-edit-nomlong').value  = ev.nomLong  || '';
+  document.getElementById('meval-edit-date').value     = ev.date     || '';
+  _fillPeriodeSelect(document.getElementById('meval-edit-periode'), ev.periode);
+  document.getElementById('meval-edit-notemax').value  = ev.noteMax  ?? 20;
+  document.getElementById('meval-edit-coef').value     = ev.coef     ?? 1;
+  _evalEditDirty = false;
+  _evalEditRenderMiniNotes();
+  openMod('meval-edit');
+}
+
+function _evalEditRenderMiniNotes() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const wrap = document.getElementById('meval-edit-mininotes');
+  wrap.innerHTML = '';
+  ev.miniNotes = ev.miniNotes || [];
+  let totalPts = 0;
+  ev.miniNotes.forEach((mn, idx) => {
+    totalPts += (mn.max || 0);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
+    row.innerHTML = `
+      <span style="font-family:var(--font-mono);color:var(--pencil);min-width:24px;text-align:right">${idx + 1}.</span>
+      <input type="text" value="${_esc(mn.label || '')}" placeholder="Libellé (ex. Q1, Exercice 2…)" maxlength="40"
+             style="flex:1;padding:4px 8px" oninput="_evalEditUpdateMiniNote(${idx}, 'label', this.value)">
+      <span style="color:var(--pencil);font-size:.85em">/</span>
+      <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}"
+             style="width:70px;padding:4px 8px;font-family:var(--font-mono);text-align:right"
+             oninput="_evalEditUpdateMiniNote(${idx}, 'max', this.value)">
+      <span style="color:var(--pencil);font-size:.85em">pts</span>
+      <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${idx})" title="Supprimer cette mini-note">✕</button>
+    `;
+    wrap.appendChild(row);
+  });
+  document.getElementById('meval-edit-totalpts').textContent =
+    ev.miniNotes.length === 0
+      ? 'Aucune mini-note pour l\'instant. La saisie sera vide.'
+      : `Total : ${totalPts} pts répartis sur ${ev.miniNotes.length} mini-note${ev.miniNotes.length > 1 ? 's' : ''} · ramené à /${ev.noteMax ?? 20} par proportionnalité`;
+}
+
+function _evalEditAddMiniNote() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  ev.miniNotes = ev.miniNotes || [];
+  const nextIdx = ev.miniNotes.length + 1;
+  ev.miniNotes.push({ id: _newMiniNoteId(), label: `Q${nextIdx}`, max: 1 });
+  _evalEditDirty = true;
+  _evalEditRenderMiniNotes();
+}
+
+function _evalEditUpdateMiniNote(idx, field, raw) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !ev.miniNotes[idx]) return;
+  if (field === 'label') ev.miniNotes[idx].label = String(raw || '');
+  else if (field === 'max') {
+    const n = parseFloat(raw);
+    if (Number.isFinite(n) && n >= 0) ev.miniNotes[idx].max = n;
+  }
+  _evalEditDirty = true;
+  // Met à jour seulement la ligne du total (évite de re-render et perdre le focus)
+  const ev2 = ev;
+  let totalPts = 0;
+  for (const mn of ev2.miniNotes) totalPts += (mn.max || 0);
+  document.getElementById('meval-edit-totalpts').textContent =
+    `Total : ${totalPts} pts répartis sur ${ev2.miniNotes.length} mini-note${ev2.miniNotes.length > 1 ? 's' : ''} · ramené à /${ev2.noteMax ?? 20} par proportionnalité`;
+}
+
+function _evalEditRemoveMiniNote(idx) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !ev.miniNotes[idx]) return;
+  const mn = ev.miniNotes[idx];
+  // Avertit si des notes ont été saisies sur cette mini-note
+  let usage = 0;
+  for (const sid in (ev.notes || {})) {
+    if (ev.notes[sid]?.values?.[mn.id] != null) usage++;
+  }
+  const msg = usage > 0
+    ? `Supprimer la mini-note "${mn.label || '(sans nom)'}" ? ${usage} saisie${usage > 1 ? 's' : ''} associée${usage > 1 ? 's' : ''} sera perdue${usage > 1 ? 's' : ''}.`
+    : `Supprimer la mini-note "${mn.label || '(sans nom)'}" ?`;
+  if (!confirm(msg)) return;
+  // Retire la mini-note ET nettoie les saisies orphelines
+  ev.miniNotes.splice(idx, 1);
+  for (const sid in (ev.notes || {})) {
+    if (ev.notes[sid]?.values) delete ev.notes[sid].values[mn.id];
+  }
+  _evalEditDirty = true;
+  _evalEditRenderMiniNotes();
+}
+
+function _evalEditSave() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const nomCourt = (document.getElementById('meval-edit-nomcourt').value || '').trim();
+  if (!nomCourt) { toast('⚠ Le nom court est obligatoire', 'warn'); return; }
+  const noteMax = parseFloat(document.getElementById('meval-edit-notemax').value);
+  if (!Number.isFinite(noteMax) || noteMax <= 0) { toast('⚠ Note maximale invalide', 'warn'); return; }
+  const coef = parseFloat(document.getElementById('meval-edit-coef').value);
+  if (!Number.isFinite(coef) || coef < 0) { toast('⚠ Coefficient invalide', 'warn'); return; }
+
+  pushUndo();
+  ev.nomCourt = nomCourt;
+  ev.nomLong  = (document.getElementById('meval-edit-nomlong').value || '').trim();
+  ev.date     = document.getElementById('meval-edit-date').value || ev.date;
+  ev.periode  = document.getElementById('meval-edit-periode').value;
+  ev.noteMax  = noteMax;
+  ev.coef     = coef;
+  ev.updatedAt = Date.now();
+  _evalEditDirty = false;
+  save();
+  renderEvalNotes();
+  // Met à jour le titre de l'éditeur sans le fermer (l'utilisateur veut peut-être saisir ensuite)
+  document.getElementById('meval-edit-title').textContent = `📊 ${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}`;
+  toast('✓ Évaluation enregistrée');
+}
+
+function _evalEditDelete() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const nbSaisis = Object.keys(ev.notes || {}).filter(sid => {
+    const vals = ev.notes[sid]?.values || {};
+    return Object.values(vals).some(v => v != null && v !== '');
+  }).length;
+  const msg = nbSaisis > 0
+    ? `Supprimer définitivement l'évaluation "${ev.nomCourt}" ?\n${nbSaisis} saisies seront perdues.\n\n(Annulable via Ctrl+Z dans la session courante.)`
+    : `Supprimer l'évaluation "${ev.nomCourt}" ?\n\n(Annulable via Ctrl+Z dans la session courante.)`;
+  if (!confirm(msg)) return;
+  pushUndo();
+  delete S.evaluations[evalId];
+  save();
+  closeMod2('meval-edit');
+  renderEvalNotes();
+  toast('🗑 Évaluation supprimée');
+}
+
+// ── Modale "Saisie mode fiche" ──
+let _evalSaisieDirty = false;
+
+function _evalOpenSaisie() {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  if (!ev.miniNotes || ev.miniNotes.length === 0) {
+    toast('⚠ Ajoute d\'abord au moins une mini-note avant de saisir', 'warn');
+    return;
+  }
+  // Sauvegarde implicite des modifs de structure non encore enregistrées (pour fiabilité)
+  if (_evalEditDirty) _evalEditSave();
+  const cls = S.classes?.[ev.classId];
+  if (!cls || !cls.eleves || cls.eleves.length === 0) {
+    toast('⚠ Aucun élève dans cette classe', 'warn');
+    return;
+  }
+  // Trie alphabétique nom-prénom (défaut ENT)
+  const sids = cls.eleves.slice().sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    if (!sa || !sb) return 0;
+    const ka = (sa.nom || '').toLowerCase() + '|' + (sa.prenom || '').toLowerCase();
+    const kb = (sb.nom || '').toLowerCase() + '|' + (sb.prenom || '').toLowerCase();
+    return ka.localeCompare(kb, 'fr');
+  });
+  if (sids.length === 0) return;
+  document.getElementById('meval-saisie-evalid').value = evalId;
+  document.getElementById('meval-saisie-sid').value = sids[0];
+  // Stocke la liste ordonnée des sids dans la modale pour navigation
+  document.getElementById('meval-saisie').dataset.sids = JSON.stringify(sids);
+  _evalSaisieRender();
+  // Hook de fin : flush debounce save + re-render de la liste (compteur "saisis")
+  _modalReturnTo['meval-saisie'] = _evalSaisieCloseHook;
+  openMod('meval-saisie');
+}
+
+function _evalSaisieGetSids() {
+  try { return JSON.parse(document.getElementById('meval-saisie').dataset.sids || '[]'); }
+  catch (e) { return []; }
+}
+
+function _evalSaisieRender() {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  const stu = S.eleves?.[sid];
+  if (!ev || !stu) return;
+  const sids = _evalSaisieGetSids();
+  const idx = sids.indexOf(sid);
+
+  document.getElementById('meval-saisie-title').textContent = `✍ ${ev.nomCourt} — saisie`;
+  document.getElementById('meval-saisie-studentname').textContent = `${stu.nom?.toUpperCase() || ''} ${stu.prenom || ''}`.trim();
+  document.getElementById('meval-saisie-studentpos').textContent = stu.groupe ? `G${stu.groupe}` : '';
+  document.getElementById('meval-saisie-progress').textContent = `${idx + 1} / ${sids.length}`;
+  document.getElementById('meval-saisie-prev-btn').disabled = (idx <= 0);
+  document.getElementById('meval-saisie-next-btn').disabled = (idx >= sids.length - 1);
+
+  // Mini-notes
+  const wrap = document.getElementById('meval-saisie-mininotes');
+  wrap.innerHTML = '';
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  const values = ev.notes[sid].values;
+
+  ev.miniNotes.forEach((mn, i) => {
+    const v = values[mn.id];
+    const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
+    row.innerHTML = `
+      <span style="font-family:var(--font-mono);color:var(--pencil);min-width:36px;font-size:.85em">${i + 1}.</span>
+      <span style="flex:1;font-weight:500">${_esc(mn.label || '(sans nom)')}</span>
+      <input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}"
+             placeholder="…" maxlength="6"
+             oninput="_evalSaisieUpdateNote(this)"
+             style="width:70px;padding:4px 6px;font-family:var(--font-mono);text-align:right;font-size:1em">
+      <span style="color:var(--pencil);font-size:.85em">/${mn.max}</span>
+    `;
+    wrap.appendChild(row);
+  });
+  _evalSaisieRecomputeTotal();
+}
+
+function _evalSaisieUpdateNote(inputEl) {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const mnId = inputEl.getAttribute('data-mnid');
+  const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
+  const parsed = _parseMiniNoteInput(inputEl.value);
+
+  // Validation : un nombre doit être dans [0, mnMax]
+  if (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax)) {
+    inputEl.style.background = '#fee';
+    inputEl.title = `Valeur hors barème (attendu : 0 – ${mnMax})`;
+  } else {
+    inputEl.style.background = '';
+    inputEl.title = '';
+  }
+
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || { values: {} };
+  if (parsed === null && inputEl.value.trim() === '') {
+    delete ev.notes[sid].values[mnId];
+  } else {
+    ev.notes[sid].values[mnId] = parsed;
+  }
+  ev.updatedAt = Date.now();
+  _evalSaisieDirty = true;
+  _evalSaisieRecomputeTotal();
+  // Pas de save() à chaque frappe — on save au changement d'élève ou à la fermeture (debounce léger)
+  _evalSaisieDebouncedSave();
+}
+
+let _evalSaisieSaveTimer = null;
+function _evalSaisieDebouncedSave() {
+  if (_evalSaisieSaveTimer) clearTimeout(_evalSaisieSaveTimer);
+  _evalSaisieSaveTimer = setTimeout(() => {
+    if (_evalSaisieDirty) { save(); _evalSaisieDirty = false; }
+  }, 800);
+}
+
+function _evalSaisieRecomputeTotal() {
+  const evalId = document.getElementById('meval-saisie-evalid').value;
+  const sid    = document.getElementById('meval-saisie-sid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const note = _computeStudentEvalNote(ev, sid);
+  document.getElementById('meval-saisie-totaldisp').textContent =
+    note == null ? '—' : `${_fmtNote(note)} / ${ev.noteMax}`;
+  // Détail : somme brute et barème exploitable
+  const values = ev.notes[sid]?.values || {};
+  let sumVal = 0, sumMax = 0, nb = 0, nbExcl = 0;
+  for (const mn of ev.miniNotes) {
+    const v = values[mn.id];
+    if (v === 'NN' || v === 'A') { nbExcl++; continue; }
+    if (v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) continue;
+    sumVal += Math.max(0, Math.min(n, mn.max));
+    sumMax += mn.max;
+    nb++;
+  }
+  let detail = '';
+  if (nb > 0) detail = `${_fmtNote(sumVal)} / ${sumMax} brut · ${nb} mini-note${nb > 1 ? 's' : ''} prise${nb > 1 ? 's' : ''} en compte`;
+  if (nbExcl > 0) detail += (detail ? ' · ' : '') + `${nbExcl} exclue${nbExcl > 1 ? 's' : ''} (NN/A)`;
+  document.getElementById('meval-saisie-totalpts').textContent = detail;
+}
+
+function _evalSaisiePrev() {
+  if (_evalSaisieDirty) { save(); _evalSaisieDirty = false; }
+  const sids = _evalSaisieGetSids();
+  const cur  = document.getElementById('meval-saisie-sid').value;
+  const idx  = sids.indexOf(cur);
+  if (idx <= 0) return;
+  document.getElementById('meval-saisie-sid').value = sids[idx - 1];
+  _evalSaisieRender();
+}
+function _evalSaisieNext() {
+  if (_evalSaisieDirty) { save(); _evalSaisieDirty = false; }
+  const sids = _evalSaisieGetSids();
+  const cur  = document.getElementById('meval-saisie-sid').value;
+  const idx  = sids.indexOf(cur);
+  if (idx < 0 || idx >= sids.length - 1) return;
+  document.getElementById('meval-saisie-sid').value = sids[idx + 1];
+  _evalSaisieRender();
+}
+
+// Save à la fermeture de la saisie + re-render de la liste
+function _evalSaisieCloseHook() {
+  if (_evalSaisieDirty) { save(); _evalSaisieDirty = false; }
+  if (_evalSaisieSaveTimer) { clearTimeout(_evalSaisieSaveTimer); _evalSaisieSaveTimer = null; }
+  renderEvalNotes();
 }
 
 // ═══════════════ THEME TOGGLE (clair/sombre) ═══════════════
