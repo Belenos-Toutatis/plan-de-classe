@@ -1472,7 +1472,7 @@ kbd {
   <div class="tab-group">
     <span class="group-label">Évaluation <em>· en construction</em></span>
     <button class="nb" onclick="showTab('notes',this)" title="Évaluations : création, saisie, notes /20">📊 Notes</button>
-    <button class="nb" disabled title="Bientôt : bilan par compétence — vue transverse classe + progression par élève">🎯 Compétences</button>
+    <button class="nb" onclick="showTab('comp',this)" title="Bilan par compétence : vue transverse classe + niveau moyen par élève sur chaque compétence évaluée">🎯 Compétences</button>
     <button class="nb" disabled title="Bientôt : bilan trimestre / semestre par élève — moyenne par domaine du socle, export ready-for-bulletin">📜 Bilan</button>
   </div>
 </nav>
@@ -2003,6 +2003,21 @@ kbd {
       <em>Volet en construction (phase 1) — d'autres types d'évaluations (compétences, sommatives par compétence) arriveront prochainement.</em>
     </p>
     <div id="evals-list-wrap"></div>
+  </div>
+
+  <!-- ── TAB: Compétences (volet Évaluation — phase 11 : bilan transverse) ── -->
+  <div id="tab-comp" class="tab">
+    <div class="sh">
+      <h2>🎯 Bilan compétences</h2>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+        <label style="font-size:.85em;color:var(--pencil)">Période :</label>
+        <select id="comp-period-filter" onchange="renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
+      </div>
+    </div>
+    <p class="al al-i" style="margin-bottom:8px">
+      Vue transverse : tableau élèves × compétences agrégeant toutes les évaluations de la classe et de la période. Niveau moyen (1–4) calculé selon la règle de moyenne (Paramètres évaluation). Survole une cellule pour voir le détail.
+    </p>
+    <div id="comp-wrap"></div>
   </div>
 
   <!-- ── TAB: Export positions (accessible via bouton dans Élèves, plus dans la nav) ── -->
@@ -3876,7 +3891,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T03:00:00Z';
+const APP_VERSION   = '2026-05-20T03:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -8838,6 +8853,7 @@ function renderTab(name) {
     case 'qcmcam':  renderQcmcam(); break;
     case 'export-pos': renderExportPositions(); break;
     case 'notes':      renderEvalNotes();       break;
+    case 'comp':       renderCompetencesTab();  break;
   }
   updateSnapshotBanner();
 }
@@ -23221,6 +23237,174 @@ function _tpCyclePill(sid, cid) {
   const cell = document.querySelector(`#tg .cell[data-key]`)?.parentElement?.querySelector(`.cell`);
   // Plus simple : re-render le plan complet — c'est rapide
   renderTeacherGrid();
+}
+
+// ═══════════════ ONGLET COMPÉTENCES (phase 11) ═══════════════
+// Vue transverse : tableau élèves × compétences agrégeant toutes les évaluations
+// de la classe et de la période. Niveau moyen 1..4 par cellule + couleur de la
+// palette maitriseColors. Survol d'une cellule = détail (combien d'évals, quels
+// niveaux, dans quelles évals).
+
+// Pour un élève + une compétence sur la classe active + période, agrège tous
+// les niveaux atteints (toutes évals confondues). Retourne :
+// { entries: [{evalId, evalNomCourt, date, niveau}], levelMean: number|null }
+function _aggregateStudentCompetence(classId, sid, cid, periode) {
+  const entries = [];
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev.classId !== classId) continue;
+    if (periode && ev.periode !== periode) continue;
+    // Pour Type B : on prend toutes les passations sur cette compétence
+    if (ev.type === 'B') {
+      for (const p of (ev.passations || [])) {
+        if (!p.competenceIds?.includes(cid)) continue;
+        const niv = p.niveaux?.[sid]?.[cid];
+        if (typeof niv !== 'number' || niv < 1) continue;
+        entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: p.code, date: p.date || ev.date, niveau: niv });
+      }
+    } else if (ev.type === 'A' || ev.type === 'C') {
+      // Pour Type C : chaque question rattachée à cette compétence devient un niveau
+      // (via _noteToLevel, ignorant les questions exclues)
+      const values = ev.notes?.[sid]?.values || {};
+      const comments = ev.notes?.[sid]?.comments || {};
+      const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+      for (const mn of (ev.miniNotes || [])) {
+        if (!mn.competenceIds?.includes(cid)) continue;
+        if (excluded.has(mn.id)) continue;
+        const v = values[mn.id];
+        if (v === 'NN' || v === 'A' || v == null || v === '') continue;
+        const n = parseFloat(v);
+        if (!Number.isFinite(n)) continue;
+        const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+        const niv = _noteToLevel(eff, mn.max);
+        if (niv > 0) entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: mn.label, date: ev.date, niveau: niv });
+      }
+    }
+  }
+  if (entries.length === 0) return { entries: [], levelMean: null };
+  // Application de la règle de moyenne pour la moyenne agrégée
+  const rule = S.evalPrefs?.meanRule || 'arithmetic';
+  let mean = 0;
+  if (rule === 'last') {
+    const sorted = entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    mean = sorted[sorted.length - 1].niveau;
+  } else if (rule === 'best') {
+    mean = entries.reduce((m, e) => Math.max(m, e.niveau), 0);
+  } else if (rule === 'weightedRecency') {
+    const sorted = entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    let num = 0, den = 0;
+    sorted.forEach((e, i) => { const w = i + 1; num += w * e.niveau; den += w; });
+    mean = den > 0 ? num / den : 0;
+  } else {
+    mean = entries.reduce((s, e) => s + e.niveau, 0) / entries.length;
+  }
+  return { entries, levelMean: mean };
+}
+
+// Rendu de l'onglet Compétences
+function renderCompetencesTab() {
+  const cls = getCls();
+  const wrap = document.getElementById('comp-wrap');
+  if (!wrap) return;
+  const sel = document.getElementById('comp-period-filter');
+  if (sel) {
+    const cur = sel.value || _currentPeriode();
+    sel.innerHTML = '';
+    const optAll = document.createElement('option');
+    optAll.value = ''; optAll.textContent = 'Toutes';
+    sel.appendChild(optAll);
+    for (const o of _periodeOptions()) {
+      const opt = document.createElement('option');
+      opt.value = o.code; opt.textContent = o.code;
+      if (o.code === cur) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+  const periode = sel?.value || _currentPeriode();
+  if (!cls) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir le bilan compétences.</p>';
+    return;
+  }
+
+  // Compétences évaluées dans la classe + période
+  const compIds = new Set();
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev.classId !== cls.id) continue;
+    if (periode && ev.periode !== periode) continue;
+    if (ev.type === 'B') {
+      for (const p of (ev.passations || [])) for (const c of (p.competenceIds || [])) compIds.add(c);
+    } else {
+      for (const mn of (ev.miniNotes || [])) for (const c of (mn.competenceIds || [])) compIds.add(c);
+    }
+  }
+  const comps = Array.from(compIds).map(id => S.competences?.[id]).filter(Boolean);
+  comps.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+
+  if (comps.length === 0) {
+    wrap.innerHTML = `<p style="color:var(--pencil);font-style:italic;padding:14px">Aucune compétence évaluée pour <strong>${_esc(cls.nom)}</strong>${periode ? ' en ' + _esc(periode) : ''}. Crée une éval Type B (compétences au fil de l'eau) ou Type C avec compétences rattachées aux questions.</p>`;
+    return;
+  }
+  // Tri élèves alpha nom-prénom
+  const sids = cls.eleves.slice().sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+    const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+    return ka.localeCompare(kb, 'fr');
+  });
+
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  let html = '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
+  html += '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
+  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
+  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
+  for (const c of comps) {
+    const dom = S.competenceDomains?.[c.domainId];
+    const tip = `${c.code} — ${c.name || ''}${dom ? ' (' + dom.code + ')' : ''}`;
+    html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(tip)}">${_esc(c.code)}</th>`;
+  }
+  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Moyenne</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    const bg = 'var(--paper)';
+    html += `<tr style="background:${bg}">`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    let sumMean = 0, nbMean = 0;
+    for (const c of comps) {
+      const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
+      if (agg.levelMean == null) {
+        html += '<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
+        continue;
+      }
+      sumMean += agg.levelMean; nbMean++;
+      const lvl = agg.levelMean;
+      const lvlIdx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
+      const tipDetail = agg.entries.map(e => `• ${e.evalNomCourt}${e.code ? '/' + e.code : ''} (${_fmtDateFr(e.date || '')}) : N${e.niveau}`).join('\n');
+      const tip = `${_fmtNote(lvl)} / 4 — moyenne sur ${agg.entries.length} évaluation${agg.entries.length > 1 ? 's' : ''}\n\n${tipDetail}`;
+      html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="${_esc(tip)}">
+        <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span>
+      </td>`;
+    }
+    if (nbMean > 0) {
+      const moy = sumMean / nbMean;
+      const moyIdx = Math.max(1, Math.min(4, Math.round(moy))) - 1;
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><span style="display:inline-block;padding:2px 8px;background:${colors[moyIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(moy)}</span></td>`;
+    } else {
+      html += '<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+
+  // Mini-légende
+  html += '<div style="margin-top:8px;font-size:.85em;color:var(--pencil);display:flex;gap:14px;flex-wrap:wrap"><strong>Légende :</strong>';
+  ['Insuffisant','Fragile','Satisfaisant','Très bonne maîtrise'].forEach((lbl,i) => {
+    html += `<span><span style="display:inline-block;width:14px;height:14px;background:${colors[i]};border-radius:7px;vertical-align:middle;margin-right:4px"></span>N${i+1} ${lbl}</span>`;
+  });
+  html += '</div>';
+
+  wrap.innerHTML = html;
 }
 
 // ═══════════════ EXPORT ENT (phase 10) ═══════════════
