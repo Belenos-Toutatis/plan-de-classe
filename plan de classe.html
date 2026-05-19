@@ -3365,9 +3365,9 @@ kbd {
 
     <div id="meval-tableur-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
 
-    <div id="meval-tableur-help-wrap" style="margin:10px 0 0;position:relative">
-      <button id="meval-tableur-help-toggle" onclick="_evalTableurToggleHelp()" title="Afficher / masquer le mode d'emploi" style="position:absolute;top:-2px;right:-2px;border:none;background:transparent;color:var(--pencil);font-size:1em;cursor:pointer;padding:2px 6px">✕</button>
-      <p id="meval-tableur-help" style="margin:0;padding-right:24px;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+    <div id="meval-tableur-help-wrap" style="margin:10px 0 0">
+      <p id="meval-tableur-help" style="margin:0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5;position:relative;padding-right:24px">
+        <button onclick="_evalTableurToggleHelp()" title="Masquer le mode d'emploi" style="position:absolute;top:-2px;right:-2px;border:none;background:transparent;color:var(--pencil);font-size:1em;cursor:pointer;padding:2px 6px">✕</button>
         <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
         <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
         <br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.
@@ -3375,7 +3375,9 @@ kbd {
       </p>
     </div>
 
-    <div class="ma" style="margin-top:10px">
+    <div class="ma" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+      <button id="meval-tableur-help-show" onclick="_evalTableurToggleHelp()" title="Afficher le mode d'emploi" style="display:none;background:transparent;border:1px solid var(--rule-line);color:var(--pencil);padding:4px 10px;border-radius:14px;cursor:pointer;font-family:var(--font-mono);font-size:.9em">?</button>
+      <span></span>
       <button class="btn btn-p" onclick="closeMod2('meval-tableur')">Fermer</button>
     </div>
   </div>
@@ -23452,10 +23454,7 @@ function _evalOpenTableur(forcedId) {
   // Restaure l'état affiché/masqué du mode d'emploi
   try {
     const hidden = localStorage.getItem('planClasse_evalTableurHelpHidden') === '1';
-    const help = document.getElementById('meval-tableur-help');
-    if (help) help.style.display = hidden ? 'none' : '';
-    const btn = document.getElementById('meval-tableur-help-toggle');
-    if (btn) btn.textContent = hidden ? '?' : '✕';
+    _evalTableurApplyHelpState(hidden);
   } catch (e) {}
   _evalTableurRender();
   _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
@@ -23465,12 +23464,16 @@ function _evalOpenTableur(forcedId) {
 // Toggle visibilité du mode d'emploi en bas du tableur (persisté)
 function _evalTableurToggleHelp() {
   const help = document.getElementById('meval-tableur-help');
-  const btn = document.getElementById('meval-tableur-help-toggle');
-  if (!help || !btn) return;
+  if (!help) return;
   const isHidden = help.style.display === 'none';
-  help.style.display = isHidden ? '' : 'none';
-  btn.textContent = isHidden ? '✕' : '?';
-  try { localStorage.setItem('planClasse_evalTableurHelpHidden', isHidden ? '0' : '1'); } catch (e) {}
+  _evalTableurApplyHelpState(!isHidden ? true : false);
+  try { localStorage.setItem('planClasse_evalTableurHelpHidden', !isHidden ? '1' : '0'); } catch (e) {}
+}
+function _evalTableurApplyHelpState(hidden) {
+  const help = document.getElementById('meval-tableur-help');
+  const showBtn = document.getElementById('meval-tableur-help-show');
+  if (help) help.style.display = hidden ? 'none' : '';
+  if (showBtn) showBtn.style.display = hidden ? '' : 'none';
 }
 
 // Affiche le sélecteur de classe (visible seulement si l'éval est multi-classes)
@@ -23708,7 +23711,7 @@ function _evalTableurRender() {
       const badge = nbCom > 0
         ? `<span class="tab-com-badge" onclick="event.stopPropagation();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')" title="${nbCom} commentaire${nbCom > 1 ? 's' : ''} — clic pour éditer" style="position:absolute;top:1px;right:1px;background:var(--margin-red);color:#fff;font-size:.65em;font-family:var(--font-mono);padding:0 4px;border-radius:8px;cursor:pointer;line-height:1.3">💬${nbCom > 1 ? nbCom : ''}</span>`
         : '';
-      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" class="meval-niveau-input" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     const total = _computeStudentEvalNote(ev, sid);
     const disp = _studentNoteDisplay(ev, sid);
@@ -24403,10 +24406,12 @@ function _evalRenderBilanComps() {
       noteBg = ''; noteColor = 'var(--ink-blue)';
     }
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${disp.text}</td>`;
-    // Rang dans la classe (ex æquo = même rang)
+    // Rang dans la classe (ex æquo = même rang). Couleur en dégradé vert→rouge.
     const rang = ranks[sid];
-    const rangDisp = (rang == null) ? '—' : `${rang}<span style="color:var(--pencil);font-size:.78em">/${totalRanked}</span>`;
-    html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:${bgRow}">${rangDisp}</td>`;
+    const rgBg = _rankGradientColor(rang, totalRanked);
+    const rangDisp = (rang == null) ? '—' : `${rang}<span style="color:rgba(255,255,255,0.75);font-size:.78em">/${totalRanked}</span>`;
+    const rangColor = rgBg ? '#fff' : 'var(--ink-blue)';
+    html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${rangColor};background:${rgBg || bgRow}">${rangDisp}</td>`;
     html += '</tr>';
   }
   // ─── Pied de tableau : moyenne de niveau par compétence + stats complètes pour la note ───
@@ -24940,6 +24945,16 @@ function _statsCellHTML(values, opts) {
           + `<div style="color:var(--margin-red)">&lt;${fmt(halfMax)} : <strong>${below}</strong></div>`
           : '')
        + `</div>`;
+}
+
+// Renvoie une couleur en dégradé vert (rang 1) → rouge (dernier rang).
+// Interpolation linéaire en HSL (hue 120° = vert → 0° = rouge).
+function _rankGradientColor(rang, total) {
+  if (rang == null || total == null || total <= 0) return '';
+  if (total <= 1) return 'hsl(120, 55%, 42%)';
+  const ratio = Math.max(0, Math.min(1, (rang - 1) / (total - 1)));
+  const hue = 120 * (1 - ratio);
+  return `hsl(${hue.toFixed(0)}, 60%, 42%)`;
 }
 
 // Renvoie la couleur de fond pour une note donnée, selon S.evalPrefs.noteThresholds.
