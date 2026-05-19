@@ -22103,16 +22103,19 @@ function renderEvalNotes() {
   for (const ev of evs) {
     const totalStudents = (cls.eleves || []).length;
     let typeBadge, summaryInfo, nbStudents;
+    // L'éval peut couvrir plusieurs classes, mais on affiche les stats de la classe active.
+    const classSidSet = new Set(cls.eleves || []);
     if (ev.type === 'B') {
       typeBadge = '<span style="display:inline-block;padding:1px 6px;background:#16a34a;color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE B</span>';
       const nbPass = (ev.passations || []).length;
       const compIds = new Set();
       for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
-      // Compte les élèves ayant au moins une saisie de niveau quelconque
+      // Compte les élèves DE LA CLASSE ACTIVE ayant au moins une saisie
       const seen = new Set();
       for (const p of (ev.passations || [])) {
         for (const sid in (p.niveaux || {})) {
-          if (Object.values(p.niveaux[sid] || {}).some(n => n > 0)) seen.add(sid);
+          if (!classSidSet.has(sid)) continue;
+          if (Object.values(p.niveaux[sid] || {}).some(n => n != null)) seen.add(sid);
         }
       }
       nbStudents = seen.size;
@@ -22121,7 +22124,9 @@ function renderEvalNotes() {
       typeBadge = ev.type === 'C'
         ? '<span style="display:inline-block;padding:1px 6px;background:var(--ink-blue);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE C</span>'
         : '<span style="display:inline-block;padding:1px 6px;background:var(--margin-red);color:#fff;border-radius:3px;font-family:var(--font-mono);font-size:.7em;letter-spacing:0.1em;margin-right:6px">TYPE A</span>';
+      // Limite à la classe active (les évals multi-classes peuvent partager ev.notes)
       nbStudents = Object.keys(ev.notes || {}).filter(sid => {
+        if (!classSidSet.has(sid)) return false;
         const vals = ev.notes[sid]?.values || {};
         return Object.values(vals).some(v => v != null && v !== '');
       }).length;
@@ -22132,13 +22137,30 @@ function renderEvalNotes() {
         : '';
       summaryInfo = `${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${totalMax} pts)`;
     }
+    // Stats essentielles : moyenne / min / max / σ des notes finales (classe active uniquement)
+    const allNotes = (cls.eleves || [])
+      .map(sid => _computeStudentEvalNote(ev, sid))
+      .filter(v => typeof v === 'number' && Number.isFinite(v));
+    let statsHTML = '';
+    if (allNotes.length > 0) {
+      const stats = _statsForNumbers(allNotes);
+      const halfMax = (ev.noteMax || 20) / 2;
+      const above = allNotes.filter(v => v >= halfMax).length;
+      statsHTML = `<span style="display:inline-flex;gap:10px;align-items:center;margin-left:8px;padding:2px 8px;background:#e6f0fa;border-radius:10px;font-family:var(--font-mono);font-size:.85em">
+        <span title="Moyenne"><strong>μ ${_fmtNote(stats.avg)}</strong></span>
+        <span title="Min · médiane · max" style="color:var(--pencil)">${_fmtNote(stats.min)}–${_fmtNote(stats.median)}–${_fmtNote(stats.max)}</span>
+        <span title="Écart-type" style="color:var(--pencil)">σ ${_fmtNote(stats.std)}</span>
+        <span title="Nombre d'élèves avec note ≥ ${_fmtNote(halfMax)}" style="color:var(--ink-blue)">≥${_fmtNote(halfMax)} : <strong>${above}/${allNotes.length}</strong></span>
+      </span>`;
+    }
     html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')" title="Ouvrir la saisie (mode tableur) — utilise les boutons à droite pour les réglages / export / suppression">
       <div style="flex:1">
         <div>${typeBadge}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
-        <div style="font-size:.85em;color:var(--pencil);margin-top:2px">
-          📅 ${ev.date ? _fmtDateFr(ev.date) : '—'}${ev.slotId ? ' · ' + _esc(ev.slotId) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
+        <div style="font-size:.85em;color:var(--pencil);margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+          <span>📅 ${ev.date ? _fmtDateFr(ev.date) : '—'}${ev.slotId ? ' · ' + _esc(ev.slotId) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
           · ${summaryInfo}
-          · <strong>${nbStudents}/${totalStudents}</strong> saisis
+          · <strong>${nbStudents}/${totalStudents}</strong> saisi${nbStudents > 1 ? 's' : ''}</span>
+          ${statsHTML}
         </div>
       </div>
       <div style="display:flex;gap:4px;flex-wrap:nowrap" onclick="event.stopPropagation()">
