@@ -23600,6 +23600,8 @@ function _evalTableurRender() {
   // Ordonne les questions par exercice pour Type C (regroupement de colonnes contiguës).
   // On reconstruit un tableau de questions ordonnées + un mapping exo→[colIdx].
   const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+  // Type C : liste des compétences évaluées (affichées en colonnes inline à droite)
+  const inlineComps = isTypeC ? _evalListEvaluatedCompetences(ev, 'code') : [];
   let orderedMNs;
   let exoGroups = []; // [{label, span, colStart}]
   if (isTypeC) {
@@ -23638,6 +23640,10 @@ function _evalTableurRender() {
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
     html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
     html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève">📝 Remarque</th>`;
+    // Compétences inline (Type C avec exos)
+    for (const c of inlineComps) {
+      html += `<th rowspan="2" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${_esc(c.code)}</th>`;
+    }
     html += '</tr>';
   }
 
@@ -23678,6 +23684,10 @@ function _evalTableurRender() {
     }
     // Colonne Remarque (facultative, par élève — Type A et Type C)
     html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
+    // Type C : colonnes inline pour chaque compétence évaluée
+    for (const c of inlineComps) {
+      html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${_esc(c.code)}</th>`;
+    }
   }
   html += '</tr></thead><tbody>';
   // Stocke l'ordre des mn pour les inputs (ci correspond à orderedMNs)
@@ -23733,6 +23743,18 @@ function _evalTableurRender() {
     // Cellule Remarque (par élève — Type A et Type C)
     const remark = ev.studentRemarks?.[sid] || '';
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="Remarque facultative pour cet élève"></td>`;
+    // Type C : cellules inline niveau par compétence (calculées automatiquement depuis les saisies)
+    if (isTypeC && inlineComps.length > 0) {
+      const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+      for (const c of inlineComps) {
+        const niv = _evalStudentLevelForComp(ev, sid, c.id);
+        const isNull = (niv == null);
+        const dispVal = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
+        const cellBg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
+        const cellColor = isNull ? 'var(--pencil)' : '#fff';
+        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispVal}</td>`;
+      }
+    }
     html += '</tr>';
   });
   // ─── Pied de tableau : statistiques par colonne (sticky en bas) ───
@@ -23757,6 +23779,12 @@ function _evalTableurRender() {
     // Pas de stats pour la colonne Rattrapage (dates) + Remarque
     html += '<td style="background:var(--paper-warm)"></td>';
     html += '<td style="background:var(--paper-warm)"></td>';
+    // Stats pour chaque compétence inline (niveau moyen)
+    for (const c of inlineComps) {
+      const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, c.id))
+                       .filter(v => typeof v === 'number');
+      html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
+    }
   } else if (ev.type === 'A') {
     // Remarque (Type A)
     html += '<td style="background:var(--paper-warm)"></td>';
@@ -24356,8 +24384,8 @@ function _evalRenderBilanComps() {
     for (const g of domGroups) {
       html += `<th colspan="${g.span}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}">${_esc(g.label)}</th>`;
     }
-    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
-    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
+    html += `<th rowspan="2" style="padding:6px 4px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;width:54px;min-width:54px;max-width:54px;white-space:nowrap">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
+    html += `<th rowspan="2" style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;width:60px;min-width:60px;max-width:60px;white-space:nowrap">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
     html += '</tr>';
   }
 
@@ -24369,8 +24397,8 @@ function _evalRenderBilanComps() {
     html += `<th style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm)" title="${_esc(c.name || '')}">${_esc(c.code)}</th>`;
   }
   if (sortMode !== 'domain') {
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
+    html += `<th style="padding:6px 4px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;width:54px;min-width:54px;max-width:54px;white-space:nowrap">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
+    html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;width:60px;min-width:60px;max-width:60px;white-space:nowrap">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
   }
   html += '</tr></thead><tbody>';
 
