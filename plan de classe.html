@@ -2684,7 +2684,7 @@ kbd {
 
     <div class="about-section">
       <h3>📊 Compétence évaluée plusieurs fois</h3>
-      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Comment calculer le niveau "moyen" d'une compétence quand elle est évaluée plusieurs fois dans la même éval (ou plusieurs passations).</p>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Comment calculer le niveau "moyen" d'une compétence quand elle est évaluée plusieurs fois dans la même éval (ou plusieurs passations). <strong>Règle par défaut</strong> — chaque évaluation peut la <strong>surcharger individuellement</strong> dans son éditeur (<em>⚙ Options avancées → Compétence évaluée plusieurs fois</em>).</p>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="arithmetic"> <strong>Moyenne arithmétique</strong> des niveaux <span style="color:var(--pencil);font-size:.85em">— défaut</span></label>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="weightedRecency"> <strong>Pondérée par récence</strong> (plus récent = plus gros poids)</label>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="last"> <strong>Dernier niveau saisi</strong></label>
@@ -3161,6 +3161,11 @@ kbd {
           <option value="nom-prenom">Nom Prénom (défaut ENT)</option>
           <option value="prenom-nom">Prénom Nom</option>
         </select>
+        <label style="font-size:.85em;color:var(--pencil);margin-left:6px" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)">↩ Entrée :</label>
+        <select id="meval-tableur-enter" style="padding:4px 8px;font-size:.88em" title="Comportement de la touche Entrée">
+          <option value="question" selected>Question suivante (→)</option>
+          <option value="student">Élève suivant (↓)</option>
+        </select>
         <button class="btn btn-g btn-sm" onclick="_evalPasteOpen()" title="Coller une colonne de notes depuis une autre source (QCMCam, tableur…) dans l'ordre du tri actuel">📥 Coller des notes</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="Copie le tableau complet (élève + mini-notes + total) au format TSV, prêt à coller dans un tableur ou un ENT">📋 Copier tout</button>
       </div>
@@ -3170,7 +3175,7 @@ kbd {
     <div id="meval-tableur-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
 
     <p style="margin:10px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
-      <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> ligne en dessous · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
+      <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
       <br><strong>Codes :</strong> <code>NN</code> non noté, <code>A</code> ou <code>ABS</code> absent (exclus du total).
     </p>
 
@@ -3934,7 +3939,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T04:30:00Z';
+const APP_VERSION   = '2026-05-20T05:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -22523,6 +22528,15 @@ function _evalOpenTableur() {
     sortSel.appendChild(opt);
   }
   sortSel.value = 'nom-prenom';
+  // Persistance du comportement de la touche Entrée (mémorisé entre sessions ; défaut 'question')
+  const enterSel = document.getElementById('meval-tableur-enter');
+  if (enterSel) {
+    try { enterSel.value = localStorage.getItem('planClasse_evalTableurEnter') || 'question'; }
+    catch (e) { enterSel.value = 'question'; }
+    enterSel.onchange = () => {
+      try { localStorage.setItem('planClasse_evalTableurEnter', enterSel.value); } catch (e) {}
+    };
+  }
   _evalTableurRender();
   _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
   openMod('meval-tableur');
@@ -22704,8 +22718,16 @@ function _evalTableurKey(e, inputEl) {
     }
   } else if (key === 'Enter') {
     e.preventDefault();
-    if (ri < numRows - 1) targetRi = ri + 1;
-    else return;
+    const enterBehavior = document.getElementById('meval-tableur-enter')?.value || 'question';
+    if (enterBehavior === 'student') {
+      if (ri < numRows - 1) targetRi = ri + 1;
+      else return;
+    } else {
+      // 'question' (défaut) : cellule suivante (idem Tab sans Shift)
+      if (ci < numCols - 1) targetCi = ci + 1;
+      else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
+      else return;
+    }
   } else if (key === 'ArrowDown') {
     e.preventDefault();
     if (ri < numRows - 1) targetRi = ri + 1;
