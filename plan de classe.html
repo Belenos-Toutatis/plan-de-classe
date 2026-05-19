@@ -3885,7 +3885,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T07:00:00Z';
+const APP_VERSION   = '2026-05-20T07:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -22681,7 +22681,13 @@ function _evalTableurRender() {
     mnOrder.forEach((mn, ci) => {
       const v = values[mn.id];
       const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
-      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onkeydown="_evalTableurKey(event,this)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent"></td>`;
+      // Indicateur commentaires : si présents, montre un mini badge cliquable + clic droit sur la cellule
+      const stuComments = ev.notes?.[sid]?.comments?.[mn.id] || [];
+      const nbCom = stuComments.length;
+      const badge = nbCom > 0
+        ? `<span class="tab-com-badge" onclick="event.stopPropagation();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')" title="${nbCom} commentaire${nbCom > 1 ? 's' : ''} — clic pour éditer" style="position:absolute;top:1px;right:1px;background:var(--margin-red);color:#fff;font-size:.65em;font-family:var(--font-mono);padding:0 4px;border-radius:8px;cursor:pointer;line-height:1.3">💬${nbCom > 1 ? nbCom : ''}</span>`
+        : '';
+      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent">${badge}</td>`;
     });
     const total = _computeStudentEvalNote(ev, sid);
     const totalDisp = total == null ? '—' : _fmtNote(total);
@@ -24263,22 +24269,33 @@ function _evalPasteApply() {
 // Stockés dans ev.notes[sid].comments[mnId] = [string, string, ...]
 // Bibliothèque globale : S.evalCommentLibrary = { positive: [str,...], negative: [str,...] }
 
-function _evalCommentsOpen(mnId) {
+// Contexte courant des commentaires (set par les callers — fiche supprimée, tableur uniquement maintenant)
+const _commentsCtx = { evalId: null, sid: null, mnId: null };
+
+function _evalCommentsOpen(mnId, sid, evalId) {
+  // Compat : si appelé sans sid/evalId (signature historique), on tente l'éval courante du tableur
+  evalId = evalId || document.getElementById('meval-tableur-evalid')?.value;
+  sid    = sid    || document.getElementById('meval-saisie-sid')?.value;
+  if (!evalId || !sid || !mnId) { toast('⚠ Contexte commentaire incomplet', 'warn'); return; }
+  _commentsCtx.evalId = evalId;
+  _commentsCtx.sid    = sid;
+  _commentsCtx.mnId   = mnId;
   document.getElementById('meval-comments-mnid').value = mnId;
-  const evalId = document.getElementById('meval-saisie-evalid').value;
   const ev = S.evaluations?.[evalId];
   const mn = ev?.miniNotes?.find(m => m.id === mnId);
-  document.getElementById('meval-comments-title').textContent = `💬 Commentaires — ${mn?.label || '?'}`;
+  const stu = S.eleves?.[sid];
+  const studentName = stu ? `${stu.nom?.toUpperCase() || ''} ${stu.prenom || ''}`.trim() : '';
+  document.getElementById('meval-comments-title').textContent = `💬 Commentaires — ${mn?.label || '?'}${studentName ? ' · ' + studentName : ''}`;
   _evalCommentsRender();
-  _modalReturnTo['meval-comments'] = () => { _evalSaisieRender(); _evalSaisieRecomputeTotal(); };
+  _modalReturnTo['meval-comments'] = () => { _evalTableurRender(); };
   openMod('meval-comments');
   setTimeout(() => document.getElementById('meval-comments-newinput')?.focus(), 50);
 }
 
 function _evalCommentsGetList() {
-  const evalId = document.getElementById('meval-saisie-evalid').value;
-  const sid    = document.getElementById('meval-saisie-sid').value;
-  const mnId   = document.getElementById('meval-comments-mnid').value;
+  const evalId = _commentsCtx.evalId;
+  const sid    = _commentsCtx.sid;
+  const mnId   = _commentsCtx.mnId;
   const ev = S.evaluations?.[evalId];
   if (!ev || !sid || !mnId) return null;
   ev.notes = ev.notes || {};
