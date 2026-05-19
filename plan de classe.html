@@ -2750,6 +2750,15 @@ kbd {
           <option value="student">Élève suivant (↓)</option>
           <option value="column">Colonne par colonne</option>
         </select>
+        <label>Granulométrie note</label>
+        <select id="evalprefs-defaultGranularity" style="padding:4px 8px;font-size:.9em" title="Précision d'arrondi pour la note finale (réglable aussi par éval)">
+          <option value="0">Aucune (toutes décimales)</option>
+          <option value="0.01">Centième (12,34)</option>
+          <option value="0.1">Dixième (12,3)</option>
+          <option value="0.25">Quart de point (12 · 12,25 · 12,5 · 12,75)</option>
+          <option value="0.5">Demi-point (12 · 12,5)</option>
+          <option value="1">Entier (12 · 13)</option>
+        </select>
       </div>
     </div>
 
@@ -2838,6 +2847,16 @@ kbd {
         <div><input type="number" id="meval-edit-notemax" min="1" max="100" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty()"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
         <label>Coefficient</label>
         <input type="number" id="meval-edit-coef" min="0" max="20" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty()">
+        <label>Granulométrie</label>
+        <select id="meval-edit-granularity" style="padding:4px 8px;font-size:.9em;max-width:280px" onchange="_evalEditMarkDirty()" title="Précision d'arrondi pour la note finale de cette éval">
+          <option value="">— Défaut global —</option>
+          <option value="0">Aucune (toutes décimales)</option>
+          <option value="0.01">Centième (12,34)</option>
+          <option value="0.1">Dixième (12,3)</option>
+          <option value="0.25">Quart de point</option>
+          <option value="0.5">Demi-point (12,5)</option>
+          <option value="1">Entier (12)</option>
+        </select>
       </div>
     </div>
 
@@ -4762,6 +4781,13 @@ const DEFAULT_EVAL_PREFS = {
     { max: 15,   color: '#16a34a' },
     { max: null, color: '#2563eb' },
   ],
+  // Granulométrie par défaut de la note finale (pas d'arrondi).
+  //   1   = entier (12, 13, 14)
+  //   0.5 = demi-point (12.5, 13)
+  //   0.25= quart de point (12.25, 12.5, 12.75)
+  //   0.1 = dixième (12.1, 12.2…)
+  //   0   = aucune (toutes les décimales, défaut historique)
+  defaultGranularity: 0,
 };
 
 function migrateEvalDefaults() {
@@ -4821,6 +4847,7 @@ function migrateEvalDefaults() {
   if (typeof ep.defaultCoef !== 'number' || ep.defaultCoef < 0) ep.defaultCoef = 1;
   if (!['nom-prenom','prenom-nom'].includes(ep.defaultSort)) ep.defaultSort = 'nom-prenom';
   if (!['question','student','column'].includes(ep.defaultEnterBehavior)) ep.defaultEnterBehavior = 'question';
+  if (typeof ep.defaultGranularity !== 'number' || ep.defaultGranularity < 0) ep.defaultGranularity = 0;
   if (!Array.isArray(ep.noteThresholds) || ep.noteThresholds.length === 0) {
     ep.noteThresholds = DEFAULT_EVAL_PREFS.noteThresholds.map(t => ({ ...t }));
   }
@@ -21594,6 +21621,7 @@ function _evalPrefsRenderAll(prefs) {
   const dc = document.getElementById('evalprefs-defaultCoef'); if (dc) dc.value = prefs.defaultCoef ?? 1;
   const ds = document.getElementById('evalprefs-defaultSort'); if (ds) ds.value = prefs.defaultSort || 'nom-prenom';
   const de = document.getElementById('evalprefs-defaultEnter'); if (de) de.value = prefs.defaultEnterBehavior || 'question';
+  const dg = document.getElementById('evalprefs-defaultGranularity'); if (dg) dg.value = String(prefs.defaultGranularity ?? 0);
   // ── Seuils de couleur note ──
   _evalPrefsRenderNoteThresholds(prefs.noteThresholds || []);
 }
@@ -21838,6 +21866,8 @@ function _evalPrefsSave() {
   S.evalPrefs.defaultCoef = (Number.isFinite(dCoef) && dCoef >= 0) ? dCoef : 1;
   S.evalPrefs.defaultSort = document.getElementById('evalprefs-defaultSort')?.value || 'nom-prenom';
   S.evalPrefs.defaultEnterBehavior = document.getElementById('evalprefs-defaultEnter')?.value || 'question';
+  const dGran = parseFloat(document.getElementById('evalprefs-defaultGranularity')?.value);
+  S.evalPrefs.defaultGranularity = (Number.isFinite(dGran) && dGran >= 0) ? dGran : 0;
   // Seuils note /20
   const noteThresholds = _evalPrefsReadNoteThresholds();
   if (noteThresholds.length > 0) S.evalPrefs.noteThresholds = noteThresholds;
@@ -22219,6 +22249,8 @@ function _evalOpenEditor(evalId) {
   _fillPeriodeSelect(document.getElementById('meval-edit-periode'), ev.periode);
   document.getElementById('meval-edit-notemax').value  = ev.noteMax  ?? 20;
   document.getElementById('meval-edit-coef').value     = ev.coef     ?? 1;
+  // Granulométrie : '' = défaut global ; sinon valeur en string
+  document.getElementById('meval-edit-granularity').value = (ev.granularity != null) ? String(ev.granularity) : '';
   document.getElementById('meval-edit-countsForMean').checked = (ev.countsForMean !== false);
   document.getElementById('meval-edit-facultative').checked = !!(ev.facultative?.active);
   for (const r of document.querySelectorAll('input[name="meval-edit-facmoderadio"]')) {
@@ -22892,6 +22924,14 @@ function _evalEditSave() {
   ev.periode  = document.getElementById('meval-edit-periode').value;
   ev.noteMax  = noteMax;
   ev.coef     = coef;
+  // Granulométrie de la note finale ('' = utiliser le défaut global)
+  const granRaw = document.getElementById('meval-edit-granularity')?.value || '';
+  if (granRaw === '') {
+    delete ev.granularity;
+  } else {
+    const g = parseFloat(granRaw);
+    if (Number.isFinite(g) && g >= 0) ev.granularity = g;
+  }
   ev.countsForMean = document.getElementById('meval-edit-countsForMean').checked;
   if (document.getElementById('meval-edit-facultative').checked) {
     const mode = document.querySelector('input[name="meval-edit-facmoderadio"]:checked')?.value || 'improveOnly';
@@ -24750,11 +24790,25 @@ function _studentNoteAbsenceReason(ev, sid) {
   return 'none';
 }
 
+// Arrondit une note selon la granulométrie configurée (par éval, sinon défaut global).
+// Granulométrie = 0 → pas d'arrondi (toutes décimales).
+function _roundNoteToGranularity(value, ev) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return value;
+  const g = (ev && typeof ev.granularity === 'number' && ev.granularity > 0)
+            ? ev.granularity
+            : (S.evalPrefs?.defaultGranularity || 0);
+  if (!g || g <= 0) return value;
+  return Math.round(value / g) * g;
+}
+
 // Renvoie l'affichage à mettre dans la colonne "Note finale" pour un élève :
 // soit la note numérique formatée, soit le code A/NN, soit '—'.
 function _studentNoteDisplay(ev, sid) {
-  const note = _computeStudentEvalNote(ev, sid);
-  if (note != null) return { text: _fmtNote(note), kind: 'num', value: note };
+  const raw = _computeStudentEvalNote(ev, sid);
+  if (raw != null) {
+    const v = _roundNoteToGranularity(raw, ev);
+    return { text: _fmtNote(v), kind: 'num', value: v };
+  }
   const reason = _studentNoteAbsenceReason(ev, sid);
   if (reason === 'A')    return { text: (S.evalPrefs?.codeAbsent  || 'A'),  kind: 'A' };
   if (reason === 'NN')   return { text: (S.evalPrefs?.codeNonNote || 'NN'), kind: 'NN' };
@@ -26736,7 +26790,9 @@ function _evalExportRender() {
     if (_evalExportColsState.comps) {
       for (const c of r.comps) {
         const lvl = c.level;
-        const cell = lvl == null ? '' : _fmtNote(lvl);
+        // Niveau formaté avec le label personnalisé de l'utilisateur (S.evalPrefs.niveauLabels).
+        // Si pas de niveau → label "0" (= non évalué), cohérent avec le bilan compétences.
+        const cell = (lvl == null) ? _formatNiveau(0) : _formatNiveau(Math.round(lvl));
         html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono)">${cell}</td>`;
       }
     }
@@ -26760,7 +26816,7 @@ function _evalExportToTSV(ev) {
   for (const r of rows) {
     const cells = [r.name];
     if (_evalExportColsState.note)     cells.push(r.note != null ? _fmtNote(r.note) : '');
-    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level != null ? _fmtNote(c.level) : '');
+    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? _formatNiveau(0) : _formatNiveau(Math.round(c.level)));
     if (_evalExportColsState.remarque) cells.push((r.remarque || '').replace(/\t|\n/g, ' '));
     lines.push(cells.join('\t'));
   }
@@ -26796,7 +26852,7 @@ function _evalExportDownloadCsv() {
   for (const r of rows) {
     const cells = [r.name];
     if (_evalExportColsState.note)     cells.push(r.note != null ? _fmtNote(r.note) : '');
-    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level != null ? _fmtNote(c.level) : '');
+    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? _formatNiveau(0) : _formatNiveau(Math.round(c.level)));
     if (_evalExportColsState.remarque) cells.push(r.remarque || '');
     lines.push(cells.map(csvEsc).join(';'));
   }
