@@ -2720,7 +2720,7 @@ kbd {
       <h3>📊 Compétence évaluée plusieurs fois</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Comment calculer le niveau "moyen" d'une compétence quand elle est évaluée plusieurs fois dans la même éval (ou plusieurs passations). <strong>Règle par défaut</strong> — chaque évaluation peut la <strong>surcharger individuellement</strong> dans son éditeur (<em>⚙ Options avancées → Compétence évaluée plusieurs fois</em>).</p>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="arithmetic"> <strong>Moyenne arithmétique</strong> des niveaux <span style="color:var(--pencil);font-size:.85em">— défaut</span></label>
-      <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="weightedRecency"> <strong>Pondérée par récence</strong> (plus récent = plus gros poids)</label>
+      <label style="display:block;margin:3px 0;cursor:pointer" title="Tri des niveaux saisis par date croissante (du plus ancien au plus récent), puis pondération avec poids w_i = i (i = 1 pour le plus ancien, 2 pour le suivant…). Niveau moyen = (Σ w_i × N_i) / (Σ w_i). Exemple sur 3 saisies [N2, N3, N4] : (1×2 + 2×3 + 3×4) / (1+2+3) = 20/6 ≈ 3,3."><input type="radio" name="evalprefs-meanRule" value="weightedRecency"> <strong>Pondérée par récence</strong> (plus récent = plus gros poids) <span style="color:var(--pencil);font-size:.85em;cursor:help" title="Tri par date croissante puis poids w_i = i (1 pour le plus ancien). Niveau moyen = Σ w_i × N_i / Σ w_i. Ex. [N2,N3,N4] → (1×2 + 2×3 + 3×4) / 6 = 20/6 ≈ 3,3.">ℹ</span></label>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="last"> <strong>Dernier niveau saisi</strong></label>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="best"> <strong>Meilleur niveau atteint</strong></label>
     </div>
@@ -2732,9 +2732,32 @@ kbd {
     </div>
 
     <div class="about-section">
-      <h3>🎯 Note maximale par défaut</h3>
-      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Note finale par défaut quand on crée une nouvelle évaluation (modifiable éval par éval).</p>
-      <input type="number" id="evalprefs-maxNote" min="1" max="100" step="1" style="width:90px;padding:4px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil)">points</span>
+      <h3>🎯 Défauts à la création d'une évaluation</h3>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Valeurs pré-remplies quand tu crées une nouvelle éval (toujours modifiables ensuite par éval).</p>
+      <div style="display:grid;grid-template-columns:170px 1fr;gap:6px 12px;align-items:center;font-size:.9em">
+        <label>Note maximale</label>
+        <div><input type="number" id="evalprefs-maxNote" min="1" max="100" step="1" style="width:90px;padding:4px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
+        <label>Coefficient</label>
+        <div><input type="number" id="evalprefs-defaultCoef" min="0" max="20" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)"></div>
+        <label>Tri des élèves</label>
+        <select id="evalprefs-defaultSort" style="padding:4px 8px;font-size:.9em">
+          <option value="nom-prenom">Nom Prénom (défaut ENT)</option>
+          <option value="prenom-nom">Prénom Nom</option>
+        </select>
+        <label>Touche Entrée</label>
+        <select id="evalprefs-defaultEnter" style="padding:4px 8px;font-size:.9em">
+          <option value="question">Question suivante (→)</option>
+          <option value="student">Élève suivant (↓)</option>
+          <option value="column">Colonne par colonne</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="about-section">
+      <h3>🌡 Seuils de couleur pour la note /20</h3>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Couleurs de fond appliquées à la colonne <strong>Total</strong> dans le tableur et le bilan. Chaque ligne définit le seuil <em>au-dessous duquel</em> on applique la couleur. La dernière ligne (sans seuil) couvre les valeurs au-dessus. Tu peux ajouter/retirer des plages.</p>
+      <div id="evalprefs-noteThresholds" style="display:flex;flex-direction:column;gap:6px"></div>
+      <button class="btn btn-g btn-sm" onclick="_evalPrefsAddNoteThreshold()" style="margin-top:8px">+ Ajouter une plage</button>
     </div>
 
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
@@ -2760,14 +2783,14 @@ kbd {
         <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Liste de petites notes (Q1/3, Q2/5…) sommées et ramenées proportionnellement à la note finale.</div>
       </label>
       <label style="display:block;margin:3px 0;cursor:pointer">
+        <input type="radio" name="meval-new-type" value="B">
+        <strong>Type B — Compétences au fil de l'eau (passations)</strong>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Container long (semestre) qui accumule des <strong>passations</strong>. Chaque passation = 1 séance, 1 code court (A9, TP3…), 1 à 3 compétences évaluées par niveau. Note finale calculée à partir des niveaux atteints.</div>
+      </label>
+      <label style="display:block;margin:3px 0;cursor:pointer">
         <input type="radio" name="meval-new-type" value="C">
         <strong>Type C — Sommative classique avec exercices</strong>
         <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Exercices × questions × points (compétences optionnelles par question). Idéal pour DS structurés. Total des points = note finale.</div>
-      </label>
-      <label style="display:block;margin:3px 0;cursor:pointer">
-        <input type="radio" name="meval-new-type" value="B">
-        <strong>Type B — Compétences au fil de l'eau (passations)</strong>
-        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Container long (semestre) qui accumule des <strong>passations</strong>. Chaque passation = 1 séance, 1 code court (A9, TP3…), 1 à 3 compétences évaluées par niveau N1..N4. Note finale calculée à partir des niveaux atteints.</div>
       </label>
     </div>
     <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;font-size:.92em">
@@ -3048,7 +3071,7 @@ kbd {
     <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;font-size:.92em">
       <label for="meval-pass-new-code">Code court</label>
       <input type="text" id="meval-pass-new-code" maxlength="12" placeholder="ex. A9, TP3" style="padding:5px 8px;font-family:var(--font-mono);max-width:160px">
-      <label for="meval-pass-new-name">Nom complet</label>
+      <label for="meval-pass-new-name">Descriptif</label>
       <input type="text" id="meval-pass-new-name" maxlength="120" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
       <label for="meval-pass-new-date">Date</label>
       <input type="date" id="meval-pass-new-date" oninput="_evalPassNewUpdateSlots()" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
@@ -3129,8 +3152,8 @@ kbd {
     <div style="display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;font-size:.92em;margin-bottom:12px">
       <label>Code court</label>
       <input type="text" id="meval-mn-menu-label" maxlength="20" style="padding:5px 8px;font-family:var(--font-mono)">
-      <label>Nom complet</label>
-      <input type="text" id="meval-mn-menu-name" maxlength="80" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
+      <label>Descriptif</label>
+      <input type="text" id="meval-mn-menu-name" maxlength="120" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
       <label>Maximum</label>
       <div><input type="number" id="meval-mn-menu-max" min="0" max="100" step="0.5" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
       <label id="meval-mn-menu-date-label">Date</label>
@@ -4665,6 +4688,19 @@ const DEFAULT_EVAL_PREFS = {
   // Codes pour absent / non noté (saisis dans le tableur)
   codeAbsent:       'A',
   codeNonNote:      'NN',
+  // Défauts à la création d'une nouvelle évaluation
+  defaultCoef:      1,
+  defaultSort:      'nom-prenom',     // 'nom-prenom' | 'prenom-nom'
+  defaultEnterBehavior: 'question',   // 'question' | 'student' | 'column'
+  // Seuils de couleur pour la note finale /maxNote, sous forme [{ max, color }, ...]
+  // Le dernier (avec max = null) couvre les valeurs au-dessus du dernier seuil.
+  // Défaut : rouge < 8 < orange < 12 < vert < 15 < bleu
+  noteThresholds:   [
+    { max: 8,    color: '#dc2626' },
+    { max: 12,   color: '#f59e0b' },
+    { max: 15,   color: '#16a34a' },
+    { max: null, color: '#2563eb' },
+  ],
 };
 
 function migrateEvalDefaults() {
@@ -4721,6 +4757,12 @@ function migrateEvalDefaults() {
   if (typeof ep.zeroLabel !== 'string' || !ep.zeroLabel) ep.zeroLabel = '0';
   if (typeof ep.codeAbsent !== 'string' || !ep.codeAbsent) ep.codeAbsent = 'A';
   if (typeof ep.codeNonNote !== 'string' || !ep.codeNonNote) ep.codeNonNote = 'NN';
+  if (typeof ep.defaultCoef !== 'number' || ep.defaultCoef < 0) ep.defaultCoef = 1;
+  if (!['nom-prenom','prenom-nom'].includes(ep.defaultSort)) ep.defaultSort = 'nom-prenom';
+  if (!['question','student','column'].includes(ep.defaultEnterBehavior)) ep.defaultEnterBehavior = 'question';
+  if (!Array.isArray(ep.noteThresholds) || ep.noteThresholds.length === 0) {
+    ep.noteThresholds = DEFAULT_EVAL_PREFS.noteThresholds.map(t => ({ ...t }));
+  }
   // Bibliothèque commentaires (regroupée positifs/négatifs ; liste plate dans chaque groupe)
   if (!S.evalCommentLibrary || typeof S.evalCommentLibrary !== 'object') {
     S.evalCommentLibrary = { positive: [], negative: [] };
@@ -21366,20 +21408,68 @@ function openEvalPrefs() {
   openMod('mevalprefs');
 }
 
+// Palette de couleurs par défaut pour 2..6 niveaux (interpolation simple
+// rouge → vert → bleu). On garde les défauts 4 niveaux historiques inchangés.
+function _defaultColorsForNb(n) {
+  const palettes = {
+    2: ['#dc2626', '#16a34a'],
+    3: ['#dc2626', '#f59e0b', '#16a34a'],
+    4: ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'],
+    5: ['#dc2626', '#f59e0b', '#fbbf24', '#16a34a', '#2563eb'],
+    6: ['#dc2626', '#ef4444', '#f59e0b', '#fbbf24', '#16a34a', '#2563eb'],
+  };
+  return (palettes[n] || palettes[4]).slice();
+}
+// Points par défaut : interpolation linéaire de 0 à 20 sur n paliers
+function _defaultPointsForNb(n) {
+  const arr = [];
+  for (let i = 0; i < n; i++) arr.push(Math.round((20 / (n - 1)) * i * 10) / 10);
+  if (n === 4) return [5, 8, 15, 20];   // défaut historique
+  if (n === 2) return [0, 20];
+  return arr;
+}
+// Pourcentages-seuils par défaut entre niveaux successifs
+function _defaultPercentsForNb(n) {
+  const arr = [];
+  for (let i = 1; i < n; i++) arr.push(Math.round((100 / n) * i));
+  if (n === 4) return [40, 60, 85];     // défaut historique
+  return arr;
+}
+
+// Libellé court pour un niveau (utilisé dans la modale Réglages quand on liste
+// les niveaux 1..n). Si l'utilisateur a un label personnalisé, l'afficher.
+function _niveauUiLabel(i, prefs) {
+  const lab = prefs?.niveauLabels?.[i] || String(i + 1);
+  return `Niveau ${lab}`;
+}
+
 // Rendu complet de la modale à partir d'un objet prefs (S.evalPrefs ou défauts)
 function _evalPrefsRenderAll(prefs) {
+  const nb = prefs.nbLevels || 4;
+  // Étend si trop court (fallback couleurs/points par défaut pour nbLevels grand)
+  while ((prefs.maitriseColors || []).length < nb) {
+    prefs.maitriseColors = _defaultColorsForNb(nb);
+    break;
+  }
+  while ((prefs.maitrisePoints || []).length < nb) {
+    prefs.maitrisePoints = _defaultPointsForNb(nb);
+    break;
+  }
+  while ((prefs.thresholdPercents || []).length < nb - 1) {
+    prefs.thresholdPercents = _defaultPercentsForNb(nb);
+    break;
+  }
   // ── Couleurs ──
   const wc = document.getElementById('evalprefs-colors');
   if (wc) {
     wc.innerHTML = '';
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < nb; i++) {
       const wrap = document.createElement('label');
       wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:.8em';
       wrap.innerHTML = `
-        <span style="font-weight:bold">N${i+1}</span>
+        <span style="font-weight:bold">${_esc(prefs.niveauLabels?.[i] || String(i + 1))}</span>
         <input type="color" data-idx="${i}" value="${prefs.maitriseColors[i]}"
-               style="width:50px;height:36px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
-        <span style="color:var(--pencil);font-size:.85em">${_MAITRISE_LABELS[i]}</span>`;
+               style="width:50px;height:36px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">`;
       wc.appendChild(wrap);
     }
   }
@@ -21387,11 +21477,11 @@ function _evalPrefsRenderAll(prefs) {
   const wp = document.getElementById('evalprefs-points');
   if (wp) {
     wp.innerHTML = '';
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < nb; i++) {
       const wrap = document.createElement('label');
       wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:.85em';
       wrap.innerHTML = `
-        <span><strong>N${i+1}</strong> <span style="color:var(--pencil)">${_MAITRISE_LABELS[i]}</span></span>
+        <span><strong>${_esc(prefs.niveauLabels?.[i] || String(i + 1))}</strong></span>
         <input type="number" data-idx="${i}" value="${prefs.maitrisePoints[i]}" min="0" max="999" step="0.5"
                oninput="_evalPrefsUpdateMidpointPreview()"
                style="width:80px;padding:4px 6px;font-family:var(--font-mono)">`;
@@ -21402,16 +21492,16 @@ function _evalPrefsRenderAll(prefs) {
   for (const r of document.querySelectorAll('input[name="evalprefs-thresholdMode"]')) {
     r.checked = (r.value === prefs.thresholdMode);
   }
-  // ── Pourcentages (3 séparateurs entre N1/N2, N2/N3, N3/N4) ──
+  // ── Pourcentages (nb-1 séparateurs entre niveaux) ──
   const wpct = document.getElementById('evalprefs-percents');
   if (wpct) {
     wpct.innerHTML = '';
-    const labels = ['N1 → N2', 'N2 → N3', 'N3 → N4'];
-    for (let i = 0; i < 3; i++) {
+    const lbls = prefs.niveauLabels || [];
+    for (let i = 0; i < nb - 1; i++) {
       const wrap = document.createElement('label');
       wrap.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:.85em;margin-right:14px';
       wrap.innerHTML = `
-        <span><strong>${labels[i]}</strong></span>
+        <span><strong>${_esc(lbls[i] || String(i + 1))} → ${_esc(lbls[i + 1] || String(i + 2))}</strong></span>
         <input type="number" data-idx="${i}" value="${prefs.thresholdPercents[i]}" min="0" max="100" step="1"
                style="width:60px;padding:4px 6px;font-family:var(--font-mono)">
         <span style="color:var(--pencil)">%</span>`;
@@ -21439,6 +21529,68 @@ function _evalPrefsRenderAll(prefs) {
   const zl = document.getElementById('evalprefs-zeroLabel'); if (zl) zl.value = prefs.zeroLabel || '0';
   const ca = document.getElementById('evalprefs-codeAbsent'); if (ca) ca.value = prefs.codeAbsent || 'A';
   const cn = document.getElementById('evalprefs-codeNonNote'); if (cn) cn.value = prefs.codeNonNote || 'NN';
+  // ── Défauts éval (coef, tri, touche Entrée) ──
+  const dc = document.getElementById('evalprefs-defaultCoef'); if (dc) dc.value = prefs.defaultCoef ?? 1;
+  const ds = document.getElementById('evalprefs-defaultSort'); if (ds) ds.value = prefs.defaultSort || 'nom-prenom';
+  const de = document.getElementById('evalprefs-defaultEnter'); if (de) de.value = prefs.defaultEnterBehavior || 'question';
+  // ── Seuils de couleur note ──
+  _evalPrefsRenderNoteThresholds(prefs.noteThresholds || []);
+}
+
+function _evalPrefsRenderNoteThresholds(thresholds) {
+  const wrap = document.getElementById('evalprefs-noteThresholds');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  thresholds.forEach((t, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:.9em';
+    const isLast = (t.max == null);
+    const maxField = isLast
+      ? `<span style="color:var(--pencil);font-style:italic;width:80px">(au-dessus)</span>`
+      : `<input type="number" min="0" max="100" step="0.5" value="${t.max}" data-idx="${idx}" data-field="max" style="width:80px;padding:4px 6px;font-family:var(--font-mono)">`;
+    row.innerHTML = `
+      <span style="color:var(--pencil);font-size:.85em">${isLast ? '≥' : '<'}</span>
+      ${maxField}
+      <span style="color:var(--pencil);font-size:.85em">→</span>
+      <input type="color" value="${t.color}" data-idx="${idx}" data-field="color" style="width:50px;height:30px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
+      <span style="font-family:var(--font-mono);font-size:.85em;color:#fff;background:${t.color};padding:2px 8px;border-radius:3px">${isLast ? 'haut' : t.max + '/20'}</span>
+      ${isLast ? '' : `<button class="btn btn-r btn-sm" onclick="_evalPrefsRemoveNoteThreshold(${idx})" title="Supprimer cette plage" style="padding:2px 8px;margin-left:auto">✕</button>`}
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+function _evalPrefsAddNoteThreshold() {
+  const cur = _evalPrefsReadNoteThresholds();
+  // Insère une nouvelle plage juste avant la dernière (la "au-dessus")
+  const lastIdx = cur.length - 1;
+  const last = cur[lastIdx];
+  const prev = cur[lastIdx - 1];
+  const newMax = prev ? Math.min(20, prev.max + 2) : 10;
+  cur.splice(lastIdx, 0, { max: newMax, color: '#a78bfa' });
+  _evalPrefsRenderNoteThresholds(cur);
+}
+
+function _evalPrefsRemoveNoteThreshold(idx) {
+  const cur = _evalPrefsReadNoteThresholds();
+  if (cur.length <= 1) return; // garde au moins la "au-dessus"
+  cur.splice(idx, 1);
+  _evalPrefsRenderNoteThresholds(cur);
+}
+
+function _evalPrefsReadNoteThresholds() {
+  const wrap = document.getElementById('evalprefs-noteThresholds');
+  if (!wrap) return [];
+  const rows = wrap.querySelectorAll('div');
+  const out = [];
+  rows.forEach(row => {
+    const maxInp = row.querySelector('input[type="number"][data-field="max"]');
+    const colInp = row.querySelector('input[type="color"][data-field="color"]');
+    if (!colInp) return;
+    const max = maxInp ? parseFloat(maxInp.value) : null;
+    out.push({ max: (maxInp ? max : null), color: colInp.value });
+  });
+  return out;
 }
 
 function _evalPrefsRenderNiveauLabels(prefs) {
@@ -21458,15 +21610,43 @@ function _evalPrefsRenderNiveauLabels(prefs) {
   }
 }
 
-// Quand le nb de niveaux change, re-render la grille des labels en préservant les valeurs déjà saisies
+// Quand le nb de niveaux change, re-render LIBELLÉS, COULEURS, POINTS, SEUILS
+// en préservant les valeurs déjà saisies (étend par les défauts si nécessaire).
 function _evalPrefsRebuildLabels() {
-  const wrap = document.getElementById('evalprefs-niveauLabels');
-  if (!wrap) return;
-  const current = Array.from(wrap.querySelectorAll('input[data-idx]')).map(i => i.value);
   const nb = parseInt(document.getElementById('evalprefs-nbLevels')?.value || 4, 10);
-  const labels = [];
-  for (let i = 0; i < nb; i++) labels.push(current[i] || String(i + 1));
-  _evalPrefsRenderNiveauLabels({ niveauLabels: labels, nbLevels: nb });
+  // Lit les valeurs courantes
+  const curLabels = Array.from(document.querySelectorAll('#evalprefs-niveauLabels input[data-idx]')).map(i => i.value);
+  const curColors = Array.from(document.querySelectorAll('#evalprefs-colors input[data-idx]')).map(i => i.value);
+  const curPoints = Array.from(document.querySelectorAll('#evalprefs-points input[data-idx]')).map(i => parseFloat(i.value));
+  const curPercents = Array.from(document.querySelectorAll('#evalprefs-percents input[data-idx]')).map(i => parseFloat(i.value));
+  const defLabels = []; for (let i = 0; i < nb; i++) defLabels.push(String(i + 1));
+  const defColors = _defaultColorsForNb(nb);
+  const defPoints = _defaultPointsForNb(nb);
+  const defPercents = _defaultPercentsForNb(nb);
+  const labels = [], colors = [], points = [];
+  for (let i = 0; i < nb; i++) {
+    labels.push(curLabels[i] || defLabels[i]);
+    colors.push(curColors[i] || defColors[i]);
+    points.push(Number.isFinite(curPoints[i]) ? curPoints[i] : defPoints[i]);
+  }
+  const percents = [];
+  for (let i = 0; i < nb - 1; i++) {
+    percents.push(Number.isFinite(curPercents[i]) ? curPercents[i] : defPercents[i]);
+  }
+  _evalPrefsRenderAll({
+    nbLevels: nb,
+    niveauLabels: labels,
+    maitriseColors: colors,
+    maitrisePoints: points,
+    thresholdMode: document.querySelector('input[name="evalprefs-thresholdMode"]:checked')?.value || S.evalPrefs?.thresholdMode || 'midpoint',
+    thresholdPercents: percents,
+    periodMode: S.evalPrefs?.periodMode || 'semestre',
+    meanRule: S.evalPrefs?.meanRule || 'arithmetic',
+    maxNoteDefault: S.evalPrefs?.maxNoteDefault || 20,
+    zeroLabel: S.evalPrefs?.zeroLabel || '0',
+    codeAbsent: S.evalPrefs?.codeAbsent || 'A',
+    codeNonNote: S.evalPrefs?.codeNonNote || 'NN',
+  });
 }
 
 // Toggle visibilité du bloc pourcentages selon le mode choisi
@@ -21481,14 +21661,28 @@ function _evalPrefsUpdateMidpointPreview() {
   const el = document.getElementById('evalprefs-midpoint-preview');
   if (!el) return;
   const inputs = document.querySelectorAll('#evalprefs-points input[type="number"]');
-  if (inputs.length !== 4) return;
+  if (inputs.length < 2) return;
   const pts = Array.from(inputs).map(i => parseFloat(i.value) || 0);
-  // seuils = milieu entre chaque paire successive
-  const t12 = (pts[0] + pts[1]) / 2;
-  const t23 = (pts[1] + pts[2]) / 2;
-  const t34 = (pts[2] + pts[3]) / 2;
-  const max = pts[3] || 20;
-  el.textContent = `Ex. avec [${pts.join(' / ')}] : <${t12} = N1 · ${t12}–${t23} = N2 · ${t23}–${t34} = N3 · ≥${t34} = N4 (max ${max}).`;
+  const nb = pts.length;
+  const lbls = Array.from(document.querySelectorAll('#evalprefs-niveauLabels input[data-idx]')).map(i => i.value)
+            || S.evalPrefs?.niveauLabels || [];
+  const parts = [];
+  for (let i = 0; i < nb; i++) {
+    const lab = lbls[i] || String(i + 1);
+    if (i === 0) {
+      const t = (pts[0] + pts[1]) / 2;
+      parts.push(`<${t} = ${lab}`);
+    } else if (i === nb - 1) {
+      const t = (pts[nb - 2] + pts[nb - 1]) / 2;
+      parts.push(`≥${t} = ${lab}`);
+    } else {
+      const tl = (pts[i - 1] + pts[i]) / 2;
+      const th = (pts[i] + pts[i + 1]) / 2;
+      parts.push(`${tl}–${th} = ${lab}`);
+    }
+  }
+  const max = pts[nb - 1] || 20;
+  el.textContent = `Ex. avec [${pts.join(' / ')}] : ${parts.join(' · ')} (max ${max}).`;
 }
 
 // Restaure les valeurs d'usine dans la modale (sans toucher S tant qu'Enregistrer pas cliqué)
@@ -21508,12 +21702,14 @@ function _evalPrefsResetDefaults() {
 
 // Lit la modale, valide, écrit dans S.evalPrefs, sauve
 function _evalPrefsSave() {
+  const nbLvlRaw = parseInt(document.getElementById('evalprefs-nbLevels')?.value, 10);
+  const nb = (nbLvlRaw >= 2 && nbLvlRaw <= 6) ? nbLvlRaw : 4;
   // Couleurs
   const colors = [];
   for (const inp of document.querySelectorAll('#evalprefs-colors input[type="color"]')) {
     colors.push(inp.value);
   }
-  if (colors.length !== 4) { toast('⚠ Erreur de saisie des couleurs', 'warn'); return; }
+  if (colors.length !== nb) { toast(`⚠ Couleurs : attendu ${nb} entrées, trouvé ${colors.length}`, 'warn'); return; }
   // Points
   const points = [];
   for (const inp of document.querySelectorAll('#evalprefs-points input[type="number"]')) {
@@ -21521,11 +21717,11 @@ function _evalPrefsSave() {
     if (!Number.isFinite(v) || v < 0) { toast('⚠ Points par niveau invalides (≥ 0)', 'warn'); return; }
     points.push(v);
   }
-  if (points.length !== 4) { toast('⚠ Erreur de saisie des points', 'warn'); return; }
-  // Validation : strictement croissants (N1 < N2 < N3 < N4)
-  for (let i = 1; i < 4; i++) {
+  if (points.length !== nb) { toast(`⚠ Points : attendu ${nb} entrées, trouvé ${points.length}`, 'warn'); return; }
+  // Validation : strictement croissants
+  for (let i = 1; i < nb; i++) {
     if (points[i] <= points[i-1]) {
-      toast(`⚠ Les points doivent être croissants : N${i} (${points[i-1]}) < N${i+1} (${points[i]})`, 'warn');
+      toast(`⚠ Les points doivent être croissants : niveau ${i} (${points[i-1]}) < niveau ${i+1} (${points[i]})`, 'warn');
       return;
     }
   }
@@ -21538,9 +21734,9 @@ function _evalPrefsSave() {
     if (!Number.isFinite(v) || v < 0 || v > 100) { toast('⚠ Pourcentage hors [0,100]', 'warn'); return; }
     percents.push(v);
   }
-  if (percents.length !== 3) { toast('⚠ Erreur de saisie des seuils', 'warn'); return; }
+  if (percents.length !== nb - 1) { toast(`⚠ Seuils : attendu ${nb - 1} entrées, trouvé ${percents.length}`, 'warn'); return; }
   if (thresholdMode === 'percent') {
-    for (let i = 1; i < 3; i++) {
+    for (let i = 1; i < percents.length; i++) {
       if (percents[i] <= percents[i-1]) {
         toast('⚠ Les pourcentages doivent être strictement croissants', 'warn');
         return;
@@ -21564,8 +21760,7 @@ function _evalPrefsSave() {
   S.evalPrefs.periodMode        = periodMode;
   S.evalPrefs.meanRule          = meanRule;
   S.evalPrefs.maxNoteDefault    = maxNote;
-  const nbLvl = parseInt(document.getElementById('evalprefs-nbLevels')?.value, 10);
-  S.evalPrefs.nbLevels = (nbLvl >= 2 && nbLvl <= 6) ? nbLvl : 4;
+  S.evalPrefs.nbLevels = nb;
   // Libellés des niveaux + codes spéciaux
   const nivInputs = Array.from(document.querySelectorAll('#evalprefs-niveauLabels input[data-idx]'));
   const niveauLabels = [];
@@ -21577,6 +21772,14 @@ function _evalPrefsSave() {
   S.evalPrefs.zeroLabel = (document.getElementById('evalprefs-zeroLabel')?.value || '0').trim() || '0';
   S.evalPrefs.codeAbsent = (document.getElementById('evalprefs-codeAbsent')?.value || 'A').trim() || 'A';
   S.evalPrefs.codeNonNote = (document.getElementById('evalprefs-codeNonNote')?.value || 'NN').trim() || 'NN';
+  // Défauts éval
+  const dCoef = parseFloat(document.getElementById('evalprefs-defaultCoef')?.value);
+  S.evalPrefs.defaultCoef = (Number.isFinite(dCoef) && dCoef >= 0) ? dCoef : 1;
+  S.evalPrefs.defaultSort = document.getElementById('evalprefs-defaultSort')?.value || 'nom-prenom';
+  S.evalPrefs.defaultEnterBehavior = document.getElementById('evalprefs-defaultEnter')?.value || 'question';
+  // Seuils note /20
+  const noteThresholds = _evalPrefsReadNoteThresholds();
+  if (noteThresholds.length > 0) S.evalPrefs.noteThresholds = noteThresholds;
   save();
   closeMod2('mevalprefs');
   // Re-render le tableur courant si ouvert
@@ -21871,7 +22074,7 @@ function openNewEvalModal() {
   document.getElementById('meval-new-date').value = new Date().toISOString().slice(0, 10);
   _fillPeriodeSelect(document.getElementById('meval-new-periode'), _currentPeriode());
   document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
-  document.getElementById('meval-new-coef').value = 1;
+  document.getElementById('meval-new-coef').value = (S.evalPrefs?.defaultCoef ?? 1);
   openMod('meval-new');
   setTimeout(() => document.getElementById('meval-new-nomcourt')?.focus(), 50);
 }
@@ -22180,9 +22383,10 @@ function _evalEditRenderSaisieSection(ev) {
       const cls = S.classes?.[ev.classId];
       const total = cls?.eleves?.length || 0;
       const tip = p.name ? `${p.code || '?'} — ${p.name}` : (p.code || '?');
-      html += `<div class="meval-pass-card" draggable="true" data-passid="${_esc(p.id)}"
+      html += `<div class="meval-pass-card" data-structdrag="pass" draggable="true" data-passid="${_esc(p.id)}"
           ondragstart="_evalPassDragStart(event,'${_esc(p.id)}')"
           ondragover="_evalPassDragOver(event)"
+          ondragleave="_evalPassDragLeave(event)"
           ondrop="_evalPassDrop(event,'${_esc(p.id)}')"
           ondragend="_evalPassDragEnd(event)"
           title="${_esc(tip)}"
@@ -22240,6 +22444,8 @@ function _evalEditRenderMiniNotes() {
       row.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px;cursor:grab';
       row.addEventListener('dragstart', e => _evalStructDragStart(e, 'mn', idx));
       row.addEventListener('dragover', _evalStructDragOver);
+      row.addEventListener('dragleave', _evalStructDragLeave);
+      row.addEventListener('dragend', _evalStructClearDropIndicators);
       row.addEventListener('drop', e => _evalStructDrop(e, 'mn', idx));
       row.innerHTML = `
         <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:600;cursor:grab" title="Glisse pour réordonner">⋮⋮</span>
@@ -22247,8 +22453,8 @@ function _evalEditRenderMiniNotes() {
         <input type="text" value="${_esc(mn.label || '')}" placeholder="Code court (Q1…)" maxlength="20"
                style="width:90px;padding:4px 6px;font-family:var(--font-mono)" title="Code court (affiché en en-tête de colonne)"
                oninput="_evalEditUpdateMiniNote(${idx}, 'label', this.value)">
-        <input type="text" value="${_esc(mn.name || '')}" placeholder="Nom complet (tooltip — optionnel)" maxlength="80"
-               style="flex:1;min-width:150px;padding:4px 8px" title="Nom complet — affiché au survol"
+        <input type="text" value="${_esc(mn.name || '')}" placeholder="Descriptif (tooltip — optionnel)" maxlength="120"
+               style="flex:1;min-width:150px;padding:4px 8px" title="Descriptif — affiché au survol"
                oninput="_evalEditUpdateMiniNote(${idx}, 'name', this.value)">
         <span style="color:var(--pencil);font-size:.85em">/</span>
         <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}"
@@ -22285,6 +22491,8 @@ function _evalEditRenderMiniNotes() {
     exoBlock.style.cssText = 'background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--ink-blue);border-radius:3px;padding:8px;cursor:grab';
     exoBlock.addEventListener('dragstart', e => _evalStructDragStart(e, 'exo', exoIdx));
     exoBlock.addEventListener('dragover', _evalStructDragOver);
+    exoBlock.addEventListener('dragleave', _evalStructDragLeave);
+    exoBlock.addEventListener('dragend', _evalStructClearDropIndicators);
     exoBlock.addEventListener('drop', e => _evalStructDrop(e, 'exo', exoIdx));
     // En-tête de l'exercice
     const exoTip = exo.name ? `${exo.label || ''} — ${exo.name}` : (exo.label || '');
@@ -22309,6 +22517,8 @@ function _evalEditRenderMiniNotes() {
       exoHeaderHTML += `<div draggable="true" data-structdrag="q"
             ondragstart="event.stopPropagation();_evalStructDragStart(event,'q',${qIdxInExo},'${_esc(exo.id)}')"
             ondragover="_evalStructDragOver(event)"
+            ondragleave="_evalStructDragLeave(event)"
+            ondragend="_evalStructClearDropIndicators()"
             ondrop="_evalStructDrop(event,'q',${qIdxInExo},'${_esc(exo.id)}')"
             style="display:flex;gap:6px;align-items:center;padding:4px 6px;padding-left:14px;border-top:1px dashed var(--rule-line-soft);cursor:grab">
         <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:600;cursor:grab" title="Glisse pour réordonner les questions de cet exercice">⋮⋮</span>
@@ -23060,12 +23270,14 @@ function _evalOpenTableur(forcedId) {
     opt.textContent = `Pattern ramassage : ${p.nom}`;
     sortSel.appendChild(opt);
   }
-  sortSel.value = 'nom-prenom';
-  // Persistance du comportement de la touche Entrée (mémorisé entre sessions ; défaut 'question')
+  sortSel.value = S.evalPrefs?.defaultSort || 'nom-prenom';
+  // Persistance du comportement de la touche Entrée
   const enterSel = document.getElementById('meval-tableur-enter');
   if (enterSel) {
-    try { enterSel.value = localStorage.getItem('planClasse_evalTableurEnter') || 'question'; }
-    catch (e) { enterSel.value = 'question'; }
+    // Priorité : localStorage > S.evalPrefs.defaultEnterBehavior > 'question'
+    try { enterSel.value = localStorage.getItem('planClasse_evalTableurEnter')
+                        || S.evalPrefs?.defaultEnterBehavior || 'question'; }
+    catch (e) { enterSel.value = S.evalPrefs?.defaultEnterBehavior || 'question'; }
     enterSel.onchange = () => {
       try { localStorage.setItem('planClasse_evalTableurEnter', enterSel.value); } catch (e) {}
     };
@@ -23315,7 +23527,9 @@ function _evalTableurRender() {
     });
     const total = _computeStudentEvalNote(ev, sid);
     const totalDisp = total == null ? '—' : _fmtNote(total);
-    html += `<td class="meval-row-total" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;color:var(--ink-blue);background:${bgRow}" data-sid="${_esc(sid)}">${totalDisp}</td>`;
+    const totalBg = _noteColor(total, ev.noteMax);
+    const totalColor = totalBg ? '#fff' : 'var(--ink-blue)';
+    html += `<td class="meval-row-total" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${totalColor};background:${totalBg || bgRow}" data-sid="${_esc(sid)}">${totalDisp}</td>`;
     // Type C : cellule Date rattrapage par élève
     if (isTypeC) {
       const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
@@ -24057,6 +24271,21 @@ function _parseNiveauInput(raw, nbMax) {
   return undefined;
 }
 
+// Renvoie la couleur de fond pour une note donnée, selon S.evalPrefs.noteThresholds.
+// Note normalisée /20 (donc on rescale si maxNote ≠ 20). Retourne '' si pas de match.
+function _noteColor(note, noteMax) {
+  if (note == null || !Number.isFinite(note)) return '';
+  const thresholds = S.evalPrefs?.noteThresholds || [];
+  if (thresholds.length === 0) return '';
+  const m = noteMax || 20;
+  const scaled = (note / m) * 20; // ramène sur /20
+  for (const t of thresholds) {
+    if (t.max == null) return t.color;
+    if (scaled < t.max) return t.color;
+  }
+  return thresholds[thresholds.length - 1].color || '';
+}
+
 // Renvoie le label à afficher pour un niveau (1..n, 'A', 0, null/undefined)
 function _formatNiveau(v) {
   const ep = S.evalPrefs || {};
@@ -24700,23 +24929,63 @@ function _computeStudentEvalNoteB(ev, sid) {
 // ─── Drag & drop générique pour la Structure (mini-notes, questions, exercices) ───
 let _evalStructDrag = { kind: null, idx: null, exoId: null };
 
+function _evalStructClearDropIndicators() {
+  document.querySelectorAll('[data-structdrag]').forEach(el => {
+    el.style.opacity = '';
+    el.style.borderTop = '';
+    el.style.borderBottom = '';
+    el.style.background = '';
+  });
+}
+
 function _evalStructDragStart(e, kind, idx, exoId) {
   _evalStructDrag = { kind, idx, exoId: exoId || null };
   e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.style.opacity = '0.4';
+  e.currentTarget.style.opacity = '0.35';
+  e.currentTarget.style.background = 'var(--paper-warm)';
   e.stopPropagation();
 }
 function _evalStructDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   e.stopPropagation();
+  // Marqueur visuel sur la cible : barre épaisse au-dessus si on glisse vers le haut,
+  // au-dessous si vers le bas, calculée d'après la position Y du curseur dans la cellule.
+  const target = e.currentTarget;
+  if (!target?.hasAttribute('data-structdrag')) return;
+  // Ignore si on survole sa propre carte
+  const src = _evalStructDrag;
+  if (!src.kind) return;
+  // Reset des autres
+  document.querySelectorAll('[data-structdrag]').forEach(el => {
+    if (el !== target) { el.style.borderTop = ''; el.style.borderBottom = ''; }
+  });
+  const rect = target.getBoundingClientRect();
+  const midpoint = rect.top + rect.height / 2;
+  if (e.clientY < midpoint) {
+    target.style.borderTop = '4px solid var(--margin-red)';
+    target.style.borderBottom = '';
+  } else {
+    target.style.borderBottom = '4px solid var(--margin-red)';
+    target.style.borderTop = '';
+  }
+}
+function _evalStructDragLeave(e) {
+  // Quand on quitte la zone, retire le marqueur (sauf si on rentre dans un enfant)
+  const rel = e.relatedTarget;
+  if (rel && e.currentTarget.contains(rel)) return;
+  e.currentTarget.style.borderTop = '';
+  e.currentTarget.style.borderBottom = '';
 }
 function _evalStructDrop(e, kind, idx, exoId) {
   e.preventDefault();
   e.stopPropagation();
   const src = { ..._evalStructDrag };
   _evalStructDrag = { kind: null, idx: null, exoId: null };
-  document.querySelectorAll('[data-structdrag]').forEach(el => el.style.opacity = '');
+  // Détecte si on dropait au-dessus ou en-dessous (selon le marqueur visuel courant)
+  const tgt = e.currentTarget;
+  const insertBefore = tgt.style.borderTop && !tgt.style.borderBottom;
+  _evalStructClearDropIndicators();
   if (!src.kind || src.kind !== kind) return;
   // Pour les questions : drop accepté uniquement dans le même exo
   if (kind === 'q' && src.exoId !== exoId) return;
@@ -24725,27 +24994,31 @@ function _evalStructDrop(e, kind, idx, exoId) {
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
   pushUndo();
+  // Calcule la position cible en tenant compte de insertBefore/insertAfter
+  const targetIdx = insertBefore ? idx : idx + 1;
   if (kind === 'mn') {
     const [m] = ev.miniNotes.splice(src.idx, 1);
-    ev.miniNotes.splice(idx, 0, m);
+    // Si on supprime avant l'index cible, décale d'1
+    const adj = (src.idx < targetIdx) ? targetIdx - 1 : targetIdx;
+    ev.miniNotes.splice(adj, 0, m);
   } else if (kind === 'exo') {
     const [x] = ev.exercices.splice(src.idx, 1);
-    ev.exercices.splice(idx, 0, x);
+    const adj = (src.idx < targetIdx) ? targetIdx - 1 : targetIdx;
+    ev.exercices.splice(adj, 0, x);
   } else if (kind === 'q') {
-    // Réordonner les questions de cet exo : src.idx et idx sont les positions
-    // DANS LA LISTE FILTRÉE qs de cet exo. On manipule ev.miniNotes directement.
     const qs = ev.miniNotes.filter(mn => mn.exerciceId === exoId);
     const movedQ = qs[src.idx];
     if (!movedQ) return;
     const srcGlobal = ev.miniNotes.indexOf(movedQ);
     ev.miniNotes.splice(srcGlobal, 1);
-    // Trouve la cible globale après suppression
+    // Recalcule la liste filtrée après suppression
     const qsAfter = ev.miniNotes.filter(mn => mn.exerciceId === exoId);
-    const tgtQ = qsAfter[idx];
+    // Cible dans la liste filtrée
+    const adj = (src.idx < targetIdx) ? targetIdx - 1 : targetIdx;
+    const tgtQ = qsAfter[adj];
     let insertGlobal;
     if (tgtQ) insertGlobal = ev.miniNotes.indexOf(tgtQ);
     else {
-      // Fin de section : insère après la dernière question de l'exo (ou à la fin)
       const lastQ = qsAfter[qsAfter.length - 1];
       insertGlobal = lastQ ? ev.miniNotes.indexOf(lastQ) + 1 : ev.miniNotes.length;
     }
@@ -24763,23 +25036,43 @@ let _evalPassDragSrcId = null;
 function _evalPassDragStart(e, passId) {
   _evalPassDragSrcId = passId;
   e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.style.opacity = '0.4';
+  e.currentTarget.style.opacity = '0.35';
+  e.currentTarget.style.background = 'var(--paper-warm)';
 }
 
 function _evalPassDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
-  // Indique visuellement la cible
   const card = e.currentTarget;
-  if (card.classList.contains('meval-pass-card')) {
-    card.style.borderTop = '3px solid var(--margin-red)';
+  if (!card.classList.contains('meval-pass-card')) return;
+  // Marqueur épais selon la moitié haute / basse de la carte
+  document.querySelectorAll('.meval-pass-card').forEach(c => {
+    if (c !== card) { c.style.borderTop = ''; c.style.borderBottom = ''; }
+  });
+  const rect = card.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+  if (e.clientY < midY) {
+    card.style.borderTop = '4px solid var(--margin-red)';
+    card.style.borderBottom = '';
+  } else {
+    card.style.borderBottom = '4px solid var(--margin-red)';
+    card.style.borderTop = '';
   }
+}
+
+function _evalPassDragLeave(e) {
+  const rel = e.relatedTarget;
+  if (rel && e.currentTarget.contains(rel)) return;
+  e.currentTarget.style.borderTop = '';
+  e.currentTarget.style.borderBottom = '';
 }
 
 function _evalPassDrop(e, targetPassId) {
   e.preventDefault();
   const srcId = _evalPassDragSrcId;
   _evalPassDragSrcId = null;
+  const tgt = e.currentTarget;
+  const insertBefore = tgt.style.borderTop && !tgt.style.borderBottom;
   if (!srcId || srcId === targetPassId) {
     _evalPassDragEnd(e);
     return;
@@ -24792,22 +25085,22 @@ function _evalPassDrop(e, targetPassId) {
   if (srcIdx < 0 || tgtIdx < 0) return;
   pushUndo();
   const [moved] = ev.passations.splice(srcIdx, 1);
-  // Insère avant la cible (ou après si on glisse vers le bas)
-  const insertIdx = (srcIdx < tgtIdx) ? tgtIdx : tgtIdx;
-  ev.passations.splice(insertIdx, 0, moved);
+  const targetPos = insertBefore ? tgtIdx : tgtIdx + 1;
+  const adj = (srcIdx < targetPos) ? targetPos - 1 : targetPos;
+  ev.passations.splice(adj, 0, moved);
   ev.updatedAt = Date.now();
   save();
-  // Refresh Structure et tableur si ouvert
   if (typeof _evalEditRenderSaisieSection === 'function') _evalEditRenderSaisieSection(ev);
   if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
   _evalPassDragEnd(e);
 }
 
 function _evalPassDragEnd(e) {
-  // Reset visuel sur toutes les cartes
   document.querySelectorAll('.meval-pass-card').forEach(c => {
     c.style.opacity = '';
     c.style.borderTop = '';
+    c.style.borderBottom = '';
+    c.style.background = '';
   });
 }
 
