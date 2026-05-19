@@ -15870,6 +15870,13 @@ function printSalleArucoMarkers(perPage, opts) {
   // Marges = 0 pour que les carrés à découper prennent appui sur les bords PHYSIQUES
   // de la feuille (sinon décalage de marge → ce n'est plus un carré après découpe).
   _setPrintOrientation('portrait', '0', 'A4');
+  // Force le masquage des autres zones d'impression (Plan Prof #pa, plans QCMCam, etc.)
+  // qui auraient du contenu résiduel d'une impression précédente — sinon elles
+  // apparaissent en pages supplémentaires à la fin du jeu de marqueurs.
+  const hideOtherPrintAreas = document.createElement('style');
+  hideOtherPrintAreas.id = 'am-print-isolate';
+  hideOtherPrintAreas.textContent = `@media print { #pa, #qcm-plan-print-area { display: none !important; } }`;
+  document.head.appendChild(hideOtherPrintAreas);
   const _ot = document.title;
   const _cls = getCls();
   const salleNom = _cls?.activeRoom ? (S.salles[_cls.activeRoom]?.nom || 'salle') : 'salle';
@@ -15881,6 +15888,7 @@ function printSalleArucoMarkers(perPage, opts) {
     document.title = _ot;
     wrap.className = '';
     wrap.innerHTML = '';
+    hideOtherPrintAreas.remove();
   }, 200);
 }
 
