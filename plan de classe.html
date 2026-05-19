@@ -3365,12 +3365,15 @@ kbd {
 
     <div id="meval-tableur-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
 
-    <p style="margin:10px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
-      <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
-      <br><strong>Codes :</strong> <code>NN</code> non noté, <code>A</code> ou <code>ABS</code> absent (exclus du total).
-      <br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote, copie d'un autre tableur). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.
-      <br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).
-    </p>
+    <div id="meval-tableur-help-wrap" style="margin:10px 0 0;position:relative">
+      <button id="meval-tableur-help-toggle" onclick="_evalTableurToggleHelp()" title="Afficher / masquer le mode d'emploi" style="position:absolute;top:-2px;right:-2px;border:none;background:transparent;color:var(--pencil);font-size:1em;cursor:pointer;padding:2px 6px">✕</button>
+      <p id="meval-tableur-help" style="margin:0;padding-right:24px;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+        <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
+        <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
+        <br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.
+        <br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).
+      </p>
+    </div>
 
     <div class="ma" style="margin-top:10px">
       <button class="btn btn-p" onclick="closeMod2('meval-tableur')">Fermer</button>
@@ -23441,9 +23444,33 @@ function _evalOpenTableur(forcedId) {
       }
     }
   } catch (e) {}
+  // Met à jour les codes A/NN dans le mode d'emploi (selon S.evalPrefs)
+  const codeA = S.evalPrefs?.codeAbsent || 'A';
+  const codeNN = S.evalPrefs?.codeNonNote || 'NN';
+  const a = document.getElementById('meval-tableur-help-a'); if (a) a.textContent = codeA;
+  const nn = document.getElementById('meval-tableur-help-nn'); if (nn) nn.textContent = codeNN;
+  // Restaure l'état affiché/masqué du mode d'emploi
+  try {
+    const hidden = localStorage.getItem('planClasse_evalTableurHelpHidden') === '1';
+    const help = document.getElementById('meval-tableur-help');
+    if (help) help.style.display = hidden ? 'none' : '';
+    const btn = document.getElementById('meval-tableur-help-toggle');
+    if (btn) btn.textContent = hidden ? '?' : '✕';
+  } catch (e) {}
   _evalTableurRender();
   _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
   openMod('meval-tableur');
+}
+
+// Toggle visibilité du mode d'emploi en bas du tableur (persisté)
+function _evalTableurToggleHelp() {
+  const help = document.getElementById('meval-tableur-help');
+  const btn = document.getElementById('meval-tableur-help-toggle');
+  if (!help || !btn) return;
+  const isHidden = help.style.display === 'none';
+  help.style.display = isHidden ? '' : 'none';
+  btn.textContent = isHidden ? '✕' : '?';
+  try { localStorage.setItem('planClasse_evalTableurHelpHidden', isHidden ? '0' : '1'); } catch (e) {}
 }
 
 // Affiche le sélecteur de classe (visible seulement si l'éval est multi-classes)
@@ -23609,6 +23636,7 @@ function _evalTableurRender() {
     }
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
     html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
+    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève">📝 Remarque</th>`;
     html += '</tr>';
   }
 
@@ -23638,6 +23666,7 @@ function _evalTableurRender() {
                title="Maximum de points">
       </div>
       ${dateInput}
+      ${isTypeC ? _evalTableurCompPickerHTML(mn) : ''}
     </th>`;
   });
   if (!isTypeC || exoGroups.length === 0) {
@@ -23646,6 +23675,8 @@ function _evalTableurRender() {
     if (isTypeC) {
       html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
     }
+    // Colonne Remarque (facultative, par élève — Type A et Type C)
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
   }
   html += '</tr></thead><tbody>';
   // Stocke l'ordre des mn pour les inputs (ci correspond à orderedMNs)
@@ -23663,13 +23694,21 @@ function _evalTableurRender() {
       const dispVal = (v === 'NN') ? (S.evalPrefs?.codeNonNote || 'NN')
                     : (v === 'A')  ? (S.evalPrefs?.codeAbsent  || 'A')
                     : (v != null && v !== '' ? String(v).replace('.', ',') : '');
+      // Couleur de fond selon le ratio v/mn.max ramené sur /20, via les seuils
+      // configurés (S.evalPrefs.noteThresholds). 'NN' = neutre, 'A' = gris.
+      let cellBg = '';
+      if (v === 'A') cellBg = '#9ca3af';
+      else if (typeof v === 'number' && mn.max > 0) {
+        cellBg = _noteColor(v, mn.max) || '';
+      }
+      const cellColor = cellBg && cellBg !== '' ? '#fff' : '';
       // Indicateur commentaires : si présents, montre un mini badge cliquable + clic droit sur la cellule
       const stuComments = ev.notes?.[sid]?.comments?.[mn.id] || [];
       const nbCom = stuComments.length;
       const badge = nbCom > 0
         ? `<span class="tab-com-badge" onclick="event.stopPropagation();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')" title="${nbCom} commentaire${nbCom > 1 ? 's' : ''} — clic pour éditer" style="position:absolute;top:1px;right:1px;background:var(--margin-red);color:#fff;font-size:.65em;font-family:var(--font-mono);padding:0 4px;border-radius:8px;cursor:pointer;line-height:1.3">💬${nbCom > 1 ? nbCom : ''}</span>`
         : '';
-      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent">${badge}</td>`;
+      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     const total = _computeStudentEvalNote(ev, sid);
     const disp = _studentNoteDisplay(ev, sid);
@@ -23690,15 +23729,20 @@ function _evalTableurRender() {
       const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
       html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><input type="date" value="${_esc(dateIndiv)}" data-sid="${_esc(sid)}" onchange="_evalSetDateIndiv(this)" style="padding:2px 4px;font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:#fff;border-radius:3px" title="Date individuelle pour cet élève (rattrapage après absence). Vide = date globale de l'éval."></td>`;
     }
+    // Cellule Remarque (par élève — Type A et Type C)
+    const remark = ev.studentRemarks?.[sid] || '';
+    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="Remarque facultative pour cet élève"></td>`;
     html += '</tr>';
   });
-  // ─── Pied de tableau : statistiques par colonne ───
-  html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line)">';
-  html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue)">📊 Stats</th>`;
+  // ─── Pied de tableau : statistiques par colonne (sticky en bas) ───
+  // tfoot avec position:sticky pour rester visible au scroll long.
+  html += '</tbody><tfoot>';
+  html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line);position:sticky;bottom:0;z-index:2">';
+  html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
   mnOrder.forEach((mn) => {
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mn.id])
                      .filter(v => typeof v === 'number');
-    html += `<td style="padding:4px 6px;text-align:center;vertical-align:top">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
+    html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm)">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
   });
   // Colonne Total : stats complètes
   // Notes finales arrondies à la granulométrie configurée pour cohérence avec
@@ -23707,14 +23751,49 @@ function _evalTableurRender() {
     const raw = _computeStudentEvalNote(ev, sid);
     return raw == null ? null : _roundNoteToGranularity(raw, ev);
   }).filter(v => v != null);
-  html += `<td style="padding:4px 8px;vertical-align:top">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
+  html += `<td style="padding:4px 8px;vertical-align:top;background:var(--paper-warm)">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
   if (isTypeC) {
-    // Pas de stats pour la colonne Rattrapage (dates)
-    html += '<td></td>';
+    // Pas de stats pour la colonne Rattrapage (dates) + Remarque
+    html += '<td style="background:var(--paper-warm)"></td>';
+    html += '<td style="background:var(--paper-warm)"></td>';
+  } else if (ev.type === 'A') {
+    // Remarque (Type A)
+    html += '<td style="background:var(--paper-warm)"></td>';
   }
   html += '</tr>';
-  html += '</tbody></table>';
+  html += '</tfoot></table>';
   wrap.innerHTML = html;
+}
+
+// HTML d'un mini-picker de compétence à afficher sous chaque en-tête de
+// question (Type C). Affiche le ou les codes courts des compétences rattachées
+// (multi-sélection). Clic → ouvre la modale de picker.
+function _evalTableurCompPickerHTML(mn) {
+  if (!mn) return '';
+  const cids = Array.isArray(mn.competenceIds) ? mn.competenceIds : [];
+  const codes = cids.map(cid => S.competences?.[cid]?.code).filter(Boolean);
+  const labelText = codes.length === 0 ? '🎯 …' : ('🎯 ' + codes.join(' · '));
+  const tip = codes.length === 0
+    ? 'Cliquer pour rattacher une compétence'
+    : cids.map(cid => {
+        const c = S.competences?.[cid];
+        return c ? `${c.code}${c.name ? ' — ' + c.name : ''}` : '';
+      }).filter(Boolean).join('\n');
+  return `<button type="button" onclick="event.stopPropagation();_evalTableurOpenCompPicker('${_esc(mn.id)}')" title="${_esc(tip)}" style="margin-top:2px;padding:1px 6px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:10px;font-family:var(--font-mono);font-size:.72em;color:var(--ink-blue);cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(labelText)}</button>`;
+}
+
+// Ouvre la modale existante de picker de compétences (_evalEditPickCompetences)
+// en visant la mini-note ouverte dans le tableur. Re-render le tableur au retour.
+function _evalTableurOpenCompPicker(mnId) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const idx = (ev.miniNotes || []).findIndex(m => m.id === mnId);
+  if (idx < 0) return;
+  // Sync l'id d'éval pour les handlers existants
+  document.getElementById('meval-edit-id').value = evalId;
+  _modalReturnTo['meval-pick-comp'] = () => _evalTableurRender();
+  _evalEditPickCompetences(idx);
 }
 
 // Saisie de la remarque facultative pour un élève (Type B)
@@ -24771,26 +24850,27 @@ function _evalTableurRenderB(ev, cls) {
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="Remarque facultative pour cet élève"></td>`;
     html += '</tr>';
   });
-  // ─── Pied de tableau Type B : moyenne du niveau par compétence/passation ───
-  html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line)">';
-  html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue)">📊 Stats</th>`;
+  // ─── Pied de tableau Type B : moyenne du niveau par compétence/passation (sticky) ───
+  html += '</tbody><tfoot>';
+  html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line);position:sticky;bottom:0;z-index:2">';
+  html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
   for (const p of sortedPass) {
     const compIds = p.competenceIds || [];
     if (compIds.length === 0) {
-      html += `<td></td>`;
+      html += `<td style="background:var(--paper-warm)"></td>`;
       continue;
     }
     compIds.forEach((cid, kIdx) => {
       const vals = sids.map(sid => p.niveaux?.[sid]?.[cid])
                        .filter(v => typeof v === 'number');
       const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
-      html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;${borderLeft}">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
+      html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${borderLeft}">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
     });
   }
   // Colonne Remarque : pas de stats
-  html += `<td style="border-left:2px solid var(--ink-blue-soft)"></td>`;
+  html += `<td style="border-left:2px solid var(--ink-blue-soft);background:var(--paper-warm)"></td>`;
   html += '</tr>';
-  html += '</tbody></table>';
+  html += '</tfoot></table>';
   wrap.innerHTML = html;
 }
 
