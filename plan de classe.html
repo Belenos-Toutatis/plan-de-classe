@@ -3098,7 +3098,9 @@ kbd {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <h2 id="meval-tableur-title" style="margin:0">📊 Saisie en mode tableur</h2>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-g btn-sm" onclick="_tableurOpenStructure()" title="Modifier la structure : ajouter/supprimer des mini-notes ou questions, gérer les compétences rattachées">🏗 Structure</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-addmn-btn" onclick="_tableurAddMn()" title="Ajouter une mini-note (Type A) ou une question (Type C)" style="display:none">+ Q</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-addexo-btn" onclick="_tableurAddExo()" title="Ajouter un exercice (Type C uniquement)" style="display:none">+ Exo</button>
+        <button class="btn btn-g btn-sm" onclick="_tableurOpenStructure()" title="Structure complète : compétences rattachées, gestion des exercices, passations…">🏗 Structure</button>
         <button class="btn btn-g btn-sm" onclick="_tableurOpenReglages()" title="Réglages : nom, date, période, coefficient, options avancées (facultative, diagnostique, règle de moyenne)">⚙ Réglages</button>
         <button class="btn btn-p btn-sm" id="meval-tableur-plan-btn" onclick="_evalPlanOverlayOpen()" style="display:none" title="Saisir les niveaux sur un plan de classe agrandi : pastilles N1-N4 grandes et cliquables">🪑 Plan de classe</button>
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 2px"></span>
@@ -3123,6 +3125,7 @@ kbd {
     <p style="margin:10px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
       <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
       <br><strong>Codes :</strong> <code>NN</code> non noté, <code>A</code> ou <code>ABS</code> absent (exclus du total).
+      <br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).
     </p>
 
     <div class="ma" style="margin-top:10px">
@@ -3885,7 +3888,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T07:30:00Z';
+const APP_VERSION   = '2026-05-20T08:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -20929,15 +20932,22 @@ function loadDemoOnDemand() {
 // KEYBOARD SHORTCUTS
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
-  // Escape ferme les modals (toujours actif) et désélectionne les élèves
+  // Escape : ferme uniquement la modale au premier plan (z-index le plus élevé)
   if (e.key === 'Escape') {
-    const hadModal = !!document.querySelector('.mo.on');
-    // Ferme tous les modals ouverts en déclenchant leurs hooks "retour vers"
-    document.querySelectorAll('.mo.on').forEach(m => {
-      m.classList.remove('on');
-      _afterModalClose(m.id);
-    });
-    if (hadModal) return;
+    const open = document.querySelectorAll('.mo.on');
+    if (open.length > 0) {
+      // Trouve la modale au plus haut z-index (par défaut 1000, bumpée à 1010+ pour les empilées)
+      let topMod = open[0];
+      let topZ = parseInt(topMod.style.zIndex || '1000', 10);
+      open.forEach(m => {
+        const z = parseInt(m.style.zIndex || '1000', 10);
+        if (z > topZ) { topZ = z; topMod = m; }
+      });
+      topMod.classList.remove('on');
+      topMod.style.zIndex = '';
+      _afterModalClose(topMod.id);
+      return;
+    }
     // Onglet Export positions : Esc → retour à la vue Élèves (équivalent du bouton ↩ Retour Élèves)
     const _curTabEl = document.querySelector('.tab.on');
     const _curTabId = _curTabEl ? _curTabEl.id.replace('tab-', '') : '';
@@ -21665,10 +21675,14 @@ function _evalNewSave() {
   pushUndo();
   const id = _newEvalId();
   const now = Date.now();
+  // Capture du seating au moment de la création — sert au pattern de tri
+  // (position de l'élève à la date de l'éval, pas position actuelle)
+  const seatingHash = _registerSeatingSnapshot(cls.seating || {});
   S.evaluations[id] = {
     id, type,
     classId: cls.id,
     nomCourt, nomLong, date, periode, coef, noteMax,
+    seatingHash,                           // ref vers S.seatingSnapshots[hash]
     // Type A / C : structure de mini-notes/questions
     miniNotes:  type === 'B' ? undefined : [],
     exercices:  type === 'C' ? [] : undefined,
@@ -21801,21 +21815,28 @@ function _evalEditRenderMiniNotes() {
   // ── Type A : mini-notes plates ──
   if (ev.type !== 'C') {
     title.textContent = '🔢 Mini-notes (questions / items)';
-    help.textContent  = 'Chaque mini-note a un libellé et un nombre de points maximum. La note finale est calculée proportionnellement à la note maximale.';
+    help.innerHTML = 'Chaque mini-note a un <strong>code court</strong> (Q1, Q2…), un <strong>nom complet</strong> optionnel (affiché en tooltip) et un nombre de points maximum. La <strong>date</strong> par mini-note est optionnelle — la date globale de l\'éval = la plus récente date d\'une mini-note.';
     let totalPts = 0;
     ev.miniNotes.forEach((mn, idx) => {
       totalPts += (mn.max || 0);
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
+      row.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
       row.innerHTML = `
         <span style="font-family:var(--font-mono);color:var(--pencil);min-width:24px;text-align:right">${idx + 1}.</span>
-        <input type="text" value="${_esc(mn.label || '')}" placeholder="Libellé (ex. Q1, Exercice 2…)" maxlength="40"
-               style="flex:1;padding:4px 8px" oninput="_evalEditUpdateMiniNote(${idx}, 'label', this.value)">
+        <input type="text" value="${_esc(mn.label || '')}" placeholder="Code court (Q1…)" maxlength="20"
+               style="width:90px;padding:4px 6px;font-family:var(--font-mono)" title="Code court (affiché en en-tête de colonne)"
+               oninput="_evalEditUpdateMiniNote(${idx}, 'label', this.value)">
+        <input type="text" value="${_esc(mn.name || '')}" placeholder="Nom complet (tooltip — optionnel)" maxlength="80"
+               style="flex:1;min-width:150px;padding:4px 8px" title="Nom complet — affiché au survol"
+               oninput="_evalEditUpdateMiniNote(${idx}, 'name', this.value)">
         <span style="color:var(--pencil);font-size:.85em">/</span>
         <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}"
-               style="width:70px;padding:4px 8px;font-family:var(--font-mono);text-align:right"
+               style="width:60px;padding:4px 6px;font-family:var(--font-mono);text-align:right" title="Maximum de points"
                oninput="_evalEditUpdateMiniNote(${idx}, 'max', this.value)">
         <span style="color:var(--pencil);font-size:.85em">pts</span>
+        <input type="date" value="${_esc(mn.date || '')}"
+               style="padding:4px 6px;font-family:var(--font-mono);font-size:.85em" title="Date (optionnelle)"
+               onchange="_evalEditUpdateMiniNote(${idx}, 'date', this.value)">
         <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${idx})" title="Supprimer cette mini-note">✕</button>
       `;
       wrap.appendChild(row);
@@ -22081,6 +22102,16 @@ function _evalEditUpdateMiniNote(idx, field, raw) {
   const ev = S.evaluations?.[evalId];
   if (!ev || !ev.miniNotes[idx]) return;
   if (field === 'label') ev.miniNotes[idx].label = String(raw || '');
+  else if (field === 'name') ev.miniNotes[idx].name = String(raw || '');
+  else if (field === 'date') {
+    const d = String(raw || '');
+    if (d) ev.miniNotes[idx].date = d; else delete ev.miniNotes[idx].date;
+    // Date globale de l'éval = max des dates de mini-notes datées
+    const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
+    if (dates.length > 0) {
+      ev.date = dates.reduce((m, d) => d > m ? d : m, '');
+    }
+  }
   else if (field === 'max') {
     const n = parseFloat(raw);
     if (Number.isFinite(n) && n >= 0) ev.miniNotes[idx].max = n;
@@ -22551,9 +22582,14 @@ function _evalOpenTableur(forcedId) {
     delete document.getElementById('meval-tableur').dataset.passId;
   }
   document.getElementById('meval-tableur-title').textContent = `${ev.type === 'B' ? '🎯' : '📊'} ${ev.nomCourt} — saisie tableur`;
-  // Bouton "🪑 Plan de classe" visible uniquement pour Type B
-  const planBtn = document.getElementById('meval-tableur-plan-btn');
-  if (planBtn) planBtn.style.display = (ev.type === 'B') ? '' : 'none';
+  // Boutons toolbar : +Q (A/C), +Exo (C uniquement), Plan classe (B uniquement)
+  const planBtn  = document.getElementById('meval-tableur-plan-btn');
+  const addMnBtn = document.getElementById('meval-tableur-addmn-btn');
+  const addExoBtn= document.getElementById('meval-tableur-addexo-btn');
+  if (planBtn)  planBtn.style.display  = (ev.type === 'B') ? '' : 'none';
+  if (addMnBtn) addMnBtn.style.display = (ev.type === 'A' || ev.type === 'C') ? '' : 'none';
+  if (addExoBtn)addExoBtn.style.display= (ev.type === 'C') ? '' : 'none';
+  if (addMnBtn) addMnBtn.textContent   = (ev.type === 'C') ? '+ Q' : '+ Mini-note';
   // Peuple le select avec les options de tri (incluant patterns de la salle active)
   const sortSel = document.getElementById('meval-tableur-sort');
   sortSel.innerHTML = '<option value="nom-prenom">Nom Prénom (défaut ENT)</option><option value="prenom-nom">Prénom Nom</option>';
@@ -22585,7 +22621,12 @@ function _evalTableurSortedSids(cls) {
   // Pattern de ramassage : mode = 'pat-<patternId>'
   if (mode.startsWith('pat-')) {
     const patternId = mode.slice(4);
-    const ordered = _sidsOrderedByPattern(cls, patternId);
+    // Utilise le seating snapshoté à la date de l'éval (cohérent même si le seating
+    // courant a changé depuis). Fallback sur cls.seating si pas de snapshot.
+    const evalId = document.getElementById('meval-tableur-evalid')?.value;
+    const ev = S.evaluations?.[evalId];
+    const snapSeating = ev?.seatingHash ? _getSeatingSnapshot(ev.seatingHash) : null;
+    const ordered = _sidsOrderedByPattern(cls, patternId, snapSeating);
     if (ordered) return ordered;
   }
   const sids = (cls.eleves || []).slice();
@@ -22662,7 +22703,24 @@ function _evalTableurRender() {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
   }
   orderedMNs.forEach((mn) => {
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:70px;font-family:var(--font-mono);font-weight:600" title="${_esc(mn.label || '(sans nom)')}">${_esc(mn.label || '?')}<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${mn.max}</span></th>`;
+    const tooltip = mn.name ? `${mn.label || '?'} — ${mn.name}` : (mn.label || '(sans nom)');
+    html += `<th class="meval-mn-head" style="padding:4px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:120px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative" title="${_esc(tooltip)}${mn.date ? ' · ' + _fmtDateFr(mn.date) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
+      <input type="text" value="${_esc(mn.label || '')}" data-mnid="${_esc(mn.id)}" data-field="label" placeholder="Code"
+             oninput="_tableurEditMn(this)"
+             style="width:100%;max-width:110px;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:600;text-align:center;font-size:.95em"
+             title="Code court (clic droit = nom complet / suppression)">
+      <div style="display:flex;align-items:center;justify-content:center;gap:2px;margin-top:2px">
+        <span style="font-size:.8em;color:var(--pencil);font-weight:normal">/</span>
+        <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}" data-mnid="${_esc(mn.id)}" data-field="max"
+               oninput="_tableurEditMn(this)"
+               style="width:56px;padding:1px 3px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);text-align:center;font-size:.85em"
+               title="Maximum de points">
+      </div>
+      <input type="date" value="${_esc(mn.date || '')}" data-mnid="${_esc(mn.id)}" data-field="date"
+             onchange="_tableurEditMn(this)"
+             style="width:118px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil)"
+             title="Date de cette mini-note (optionnelle)">
+    </th>`;
   });
   if (!isTypeC || exoGroups.length === 0) {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
@@ -23108,6 +23166,142 @@ function _evalTableurBUpdate(selEl) {
     selEl.style.color = '';
     selEl.style.fontWeight = '400';
   }
+}
+
+// ─── Édition inline depuis l'en-tête du tableur Type A/C ───
+// Met à jour une mini-note quand l'utilisateur édite un champ en en-tête
+// (label / max / date). Pour `max` : recalcule les totaux des lignes sans
+// re-render. Pour `date` : met à jour ev.date = max des dates.
+function _tableurEditMn(inputEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const mnId = inputEl.getAttribute('data-mnid');
+  const field = inputEl.getAttribute('data-field');
+  const mn = ev.miniNotes?.find(m => m.id === mnId);
+  if (!mn) return;
+  if (field === 'label') {
+    mn.label = String(inputEl.value || '');
+  } else if (field === 'max') {
+    const n = parseFloat(inputEl.value);
+    if (!Number.isFinite(n) || n < 0) {
+      inputEl.style.background = '#fee';
+      return;
+    }
+    inputEl.style.background = '';
+    mn.max = n;
+    // Recalcule tous les totaux de ligne
+    document.querySelectorAll('#meval-tableur-tbl tbody tr').forEach(tr => {
+      const sid = tr.getAttribute('data-sid');
+      if (!sid) return;
+      const total = _computeStudentEvalNote(ev, sid);
+      const cellTotal = tr.querySelector('.meval-row-total');
+      if (cellTotal) cellTotal.textContent = total == null ? '—' : _fmtNote(total);
+    });
+  } else if (field === 'date') {
+    const d = String(inputEl.value || '');
+    if (d) mn.date = d; else delete mn.date;
+    // Date globale = max des dates de mini-notes
+    const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
+    if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
+  }
+  ev.updatedAt = Date.now();
+  save();
+}
+
+// Menu contextuel sur l'en-tête d'une mini-note (clic droit) : nom complet + supprimer
+function _tableurMnContextMenu(event, mnId) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const mn = ev.miniNotes?.find(m => m.id === mnId);
+  if (!mn) return;
+  const action = window.prompt(
+    `Mini-note "${mn.label || '(sans nom)'}"\n\nLaisser le nom complet vide pour ne rien afficher (tooltip = code court seul).\n` +
+    `Pour SUPPRIMER cette mini-note, tape : SUPPRIMER\n\nNom complet :`,
+    mn.name || ''
+  );
+  if (action === null) return;
+  if (action.trim().toUpperCase() === 'SUPPRIMER') {
+    let usage = 0;
+    for (const sid in (ev.notes || {})) {
+      if (ev.notes[sid]?.values?.[mnId] != null) usage++;
+    }
+    const msg = usage > 0
+      ? `Supprimer "${mn.label || '(sans nom)'}" ? ${usage} saisie(s) perdue(s).`
+      : `Supprimer "${mn.label || '(sans nom)'}" ?`;
+    if (!confirm(msg)) return;
+    pushUndo();
+    ev.miniNotes = ev.miniNotes.filter(m => m.id !== mnId);
+    for (const sid in (ev.notes || {})) {
+      if (ev.notes[sid]?.values) delete ev.notes[sid].values[mnId];
+      if (ev.notes[sid]?.comments) delete ev.notes[sid].comments[mnId];
+    }
+    ev.updatedAt = Date.now();
+    save();
+    _evalTableurRender();
+    toast('🗑 Mini-note supprimée');
+    return;
+  }
+  pushUndo();
+  if (action.trim()) mn.name = action.trim();
+  else delete mn.name;
+  ev.updatedAt = Date.now();
+  save();
+  _evalTableurRender();
+  toast('✓ Nom complet mis à jour');
+}
+
+// Ajoute une mini-note à la fin (Type A) ou à la fin du dernier exercice (Type C)
+function _tableurAddMn() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type === 'B') return;
+  pushUndo();
+  ev.miniNotes = ev.miniNotes || [];
+  if (ev.type === 'C') {
+    // Pour Type C : ajouter à la fin du dernier exercice (ou créer un exo si aucun)
+    ev.exercices = ev.exercices || [];
+    if (ev.exercices.length === 0) {
+      const exoId = 'exo_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+      ev.exercices.push({ id: exoId, label: 'Exercice 1' });
+    }
+    const lastExo = ev.exercices[ev.exercices.length - 1];
+    const exoIdx = ev.exercices.length;
+    const qInExo = ev.miniNotes.filter(mn => mn.exerciceId === lastExo.id).length;
+    ev.miniNotes.push({
+      id: _newMiniNoteId(),
+      label: `Q${exoIdx}.${qInExo + 1}`,
+      max: 1, exerciceId: lastExo.id, competenceIds: []
+    });
+  } else {
+    const nextIdx = ev.miniNotes.length + 1;
+    ev.miniNotes.push({ id: _newMiniNoteId(), label: `Q${nextIdx}`, max: 1 });
+  }
+  ev.updatedAt = Date.now();
+  save();
+  _evalTableurRender();
+}
+
+// Ajoute un exercice (Type C uniquement) + une 1re question dedans
+function _tableurAddExo() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'C') return;
+  pushUndo();
+  ev.exercices = ev.exercices || [];
+  const exoId = 'exo_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+  const exoIdx = ev.exercices.length + 1;
+  ev.exercices.push({ id: exoId, label: `Exercice ${exoIdx}` });
+  ev.miniNotes = ev.miniNotes || [];
+  ev.miniNotes.push({
+    id: _newMiniNoteId(),
+    label: `Q${exoIdx}.1`,
+    max: 1, exerciceId: exoId, competenceIds: []
+  });
+  ev.updatedAt = Date.now();
+  save();
+  _evalTableurRender();
 }
 
 // Ouvre la modale Structure depuis le tableur (l'eval id est déjà dans #meval-edit-id)
@@ -23984,7 +24178,8 @@ function _evalExportBuildRows(ev) {
   let sids;
   if (sortMode.startsWith('pat-')) {
     const patternId = sortMode.slice(4);
-    sids = _sidsOrderedByPattern(cls, patternId) || cls.eleves.slice();
+    const snapSeating = ev.seatingHash ? _getSeatingSnapshot(ev.seatingHash) : null;
+    sids = _sidsOrderedByPattern(cls, patternId, snapSeating) || cls.eleves.slice();
   } else if (sortMode === 'prenom-nom') {
     sids = cls.eleves.slice().sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
@@ -24628,12 +24823,13 @@ function _collectEditDelete() {
 // Utilisation des patterns pour trier des sids selon les positions de la salle active.
 // Élèves dans l'ordre du pattern d'abord, puis les non-positionnés/non-couverts à la fin
 // (alpha nom-prénom comme défaut).
-function _sidsOrderedByPattern(cls, patternId) {
+function _sidsOrderedByPattern(cls, patternId, seatingOverride) {
   if (!cls || !patternId) return null;
   const salle = S.salles?.[cls.activeRoom];
   const pat = salle?.collectPatterns?.find(p => p.id === patternId);
   if (!pat) return null;
-  const seating = cls.seating || {};
+  // Préfère le seating fourni (snapshot à la date de l'éval) sur le seating courant
+  const seating = seatingOverride || cls.seating || {};
   const sids = cls.eleves.slice();
   const seenSids = new Set();
   const ordered = [];
