@@ -24068,19 +24068,33 @@ function _evalPlanOverlayOpen() {
   }
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
-  // Pré-sélection : la passation active du tableur
-  const passId = document.getElementById('meval-tableur').dataset.passId || ev.passations[0].id;
-  document.getElementById('meval-plan-overlay').dataset.passId = passId;
-  // Peuple le sélecteur de passation
-  const sortedPass = ev.passations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  // Regroupe les passations par date — plusieurs passations à la même date sont
+  // évaluées simultanément (le prof veut voir toutes les compétences en parallèle).
+  const groupsByDate = {};
+  for (const p of ev.passations) {
+    const d = p.date || '';
+    (groupsByDate[d] = groupsByDate[d] || []).push(p);
+  }
+  // Liste des dates triées du + récent au + ancien
+  const dates = Object.keys(groupsByDate).sort((a, b) => b.localeCompare(a));
+  // Pré-sélection : la date de la passation active du tableur (si dispo), sinon la + récente
+  const activePassId = document.getElementById('meval-tableur').dataset.passId;
+  const activePass = ev.passations.find(p => p.id === activePassId);
+  const presetDate = activePass?.date || dates[0];
+  document.getElementById('meval-plan-overlay').dataset.passDate = presetDate;
+  // Peuple le sélecteur de date (regroupant les passations partageant cette date)
   const sel = document.getElementById('meval-plan-overlay-pass');
   sel.innerHTML = '';
-  for (const p of sortedPass) {
-    const compsLbls = (p.competenceIds || []).map(cid => S.competences?.[cid]?.code).filter(Boolean).join(' · ');
+  for (const d of dates) {
+    const passes = groupsByDate[d];
+    const codes = passes.map(p => p.code || '?').join(', ');
+    const compIds = new Set();
+    for (const p of passes) for (const c of (p.competenceIds || [])) compIds.add(c);
+    const compsLbls = Array.from(compIds).map(cid => S.competences?.[cid]?.code).filter(Boolean).join(' · ');
     const o = document.createElement('option');
-    o.value = p.id;
-    o.textContent = `${p.code} — ${_fmtDateFr(p.date)} (${compsLbls})`;
-    if (p.id === passId) o.selected = true;
+    o.value = d;
+    o.textContent = `${_fmtDateFr(d) || '(sans date)'} — ${codes} (${compsLbls})`;
+    if (d === presetDate) o.selected = true;
     sel.appendChild(o);
   }
   document.getElementById('meval-plan-overlay-title').textContent = `🪑 ${ev.nomCourt} — saisie sur plan`;
@@ -24090,10 +24104,8 @@ function _evalPlanOverlayOpen() {
   openMod('meval-plan-overlay');
 }
 
-function _evalPlanOverlayChangePass(passId) {
-  document.getElementById('meval-plan-overlay').dataset.passId = passId;
-  // Aussi sync avec le tableur (au retour) pour cohérence
-  document.getElementById('meval-tableur').dataset.passId = passId;
+function _evalPlanOverlayChangePass(dateStr) {
+  document.getElementById('meval-plan-overlay').dataset.passDate = dateStr;
   _evalPlanOverlayRender();
 }
 
@@ -24103,19 +24115,27 @@ function _evalPlanOverlayRender() {
   if (!ev) return;
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
-  const passId = document.getElementById('meval-plan-overlay').dataset.passId;
-  const pass = ev.passations?.find(p => p.id === passId);
-  if (!pass) return;
-  pass.niveaux = pass.niveaux || {};
+  const activeDate = document.getElementById('meval-plan-overlay').dataset.passDate;
+  // Récupère toutes les passations de la date active (plusieurs si même séance)
+  const passesActive = (ev.passations || []).filter(p => (p.date || '') === activeDate);
+  if (passesActive.length === 0) return;
+  // S'assure que chaque passation a son objet niveaux
+  for (const p of passesActive) p.niveaux = p.niveaux || {};
+  // Liste de paires (passation, cid) à afficher dans chaque cellule
+  const pairs = [];
+  for (const p of passesActive) {
+    for (const cid of (p.competenceIds || [])) {
+      pairs.push({ pass: p, cid });
+    }
+  }
   const room = activeRoomData(cls);
   const salle = S.salles?.[cls.activeRoom];
   if (!room || !salle) return;
   const rows = salle.rows, cols = salle.cols;
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
-  const compIds = pass.competenceIds || [];
-  // Taille de cellule adaptative selon la grille
+  // Taille de cellule adaptative selon le total de compétences à afficher
   const grid = document.getElementById('meval-plan-overlay-grid');
-  const cellMinH = Math.max(120, 70 + compIds.length * 36);
+  const cellMinH = Math.max(120, 70 + pairs.length * 36);
   let html = `<div style="display:grid;grid-template-columns:repeat(${cols}, minmax(160px, 1fr));gap:6px;width:max-content;margin:0 auto">`;
   // Vue prof : r=rows-1 en haut, col 0 à droite
   for (let r = rows - 1; r >= 0; r--) {
@@ -24138,8 +24158,8 @@ function _evalPlanOverlayRender() {
         html += `<div style="min-height:${cellMinH}px;background:#fff;border:1px dashed var(--rule-line-soft);border-radius:4px"></div>`;
         continue;
       }
-      // Élève : nom + compétences. Pastilles : A · 0 · 1 · 2 · 3 · 4
-      const niv = pass.niveaux[sid] || {};
+      // Élève : nom + compétences (toutes les passations de la date active).
+      // Pastilles : A · 0 · 1 · 2 · 3 · 4
       let compsHTML = '';
       const buttons = [
         { v: 'A', label: 'A', bgActive: '#9ca3af', fgActive: '#fff' },
@@ -24149,9 +24169,11 @@ function _evalPlanOverlayRender() {
         { v: 3,   label: '3', bgActive: colors[2], fgActive: '#fff' },
         { v: 4,   label: '4', bgActive: colors[3], fgActive: '#fff' },
       ];
-      for (const cid of compIds) {
+      const multiPass = (passesActive.length > 1);
+      for (const { pass, cid } of pairs) {
         const c = S.competences?.[cid];
         if (!c) continue;
+        const niv = pass.niveaux[sid] || {};
         const cur = niv[cid];
         let pills = '';
         for (const b of buttons) {
@@ -24161,10 +24183,13 @@ function _evalPlanOverlayRender() {
           const bg = active ? b.bgActive : '#fff';
           const fg = active ? b.fgActive : 'var(--ink-deep)';
           const bd = active ? (b.v === 0 ? 'var(--ink-blue)' : b.bgActive) : 'var(--rule-line)';
-          pills += `<button data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-niveau="${b.v}" onclick="_evalPlanOverlayPill(this)" style="flex:1;min-width:26px;height:30px;border-radius:50%;background:${bg};color:${fg};border:2px solid ${bd};font-family:var(--font-mono);font-weight:bold;font-size:.85em;cursor:pointer;padding:0">${b.label}</button>`;
+          pills += `<button data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-passid="${_esc(pass.id)}" data-niveau="${b.v}" onclick="_evalPlanOverlayPill(this)" style="flex:1;min-width:26px;height:30px;border-radius:50%;background:${bg};color:${fg};border:2px solid ${bd};font-family:var(--font-mono);font-weight:bold;font-size:.85em;cursor:pointer;padding:0">${b.label}</button>`;
         }
+        // Si plusieurs passations à cette date, préfixe la compétence par son code de passation
+        const compLabel = multiPass ? `${pass.code}/${c.code}` : c.code;
+        const compTip = multiPass ? `${pass.code} — ${c.name || c.code}` : (c.name || '');
         compsHTML += `<div style="display:flex;align-items:center;gap:5px;margin-top:4px">
-          <span style="font-family:var(--font-mono);font-weight:600;font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);padding:1px 5px;border-radius:3px;min-width:24px;text-align:center" title="${_esc(c.name || '')}">${_esc(c.code)}</span>
+          <span style="font-family:var(--font-mono);font-weight:600;font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);padding:1px 5px;border-radius:3px;min-width:24px;text-align:center" title="${_esc(compTip)}">${_esc(compLabel)}</span>
           <div style="display:flex;gap:3px;flex:1">${pills}</div>
         </div>`;
       }
@@ -24182,7 +24207,8 @@ function _evalPlanOverlayPill(btn) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev || ev.type !== 'B') return;
-  const passId = document.getElementById('meval-plan-overlay').dataset.passId;
+  // La passation est portée par le bouton lui-même (chaque pastille connaît la sienne).
+  const passId = btn.getAttribute('data-passid');
   const pass = ev.passations?.find(p => p.id === passId);
   if (!pass) return;
   const sid = btn.getAttribute('data-sid');
