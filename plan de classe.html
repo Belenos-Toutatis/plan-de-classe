@@ -3074,6 +3074,24 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Plan classe (overlay grand format Type B — saisie compétences sur plan visuel) ── -->
+<div id="meval-plan-overlay" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:none;width:96vw;height:94vh;max-height:none;display:flex;flex-direction:column;padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 id="meval-plan-overlay-title" style="margin:0">🪑 Saisie sur plan de classe</h2>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:.85em;color:var(--pencil)">Passation :</label>
+        <select id="meval-plan-overlay-pass" onchange="_evalPlanOverlayChangePass(this.value)" style="padding:4px 8px;font-size:.92em;font-family:var(--font-mono)"></select>
+        <button class="btn btn-p" onclick="closeMod2('meval-plan-overlay')">✅ Fermer</button>
+      </div>
+    </div>
+    <div id="meval-plan-overlay-grid" style="flex:1;overflow:auto;background:var(--paper);border:1px solid var(--rule-line);border-radius:4px;padding:14px"></div>
+    <p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.4">
+      Clique sur une pastille pour saisir le niveau. Re-clic sur le niveau actif = retirer (N0 = non évalué). Les saisies sont sauvegardées automatiquement.
+    </p>
+  </div>
+</div>
+
 <!-- ── MODAL Saisie mode tableur (élèves × mini-notes) ── -->
 <div id="meval-tableur" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
@@ -3867,7 +3885,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T06:30:00Z';
+const APP_VERSION   = '2026-05-20T07:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -22835,6 +22853,151 @@ function _evalTableurCopyAll() {
     () => toast('📋 Tableau copié — colle-le dans Excel/Pronote/un ENT'),
     () => toast('⚠ Copie automatique impossible — sélectionne le tableau à la souris et fais Ctrl+C', 'warn')
   );
+}
+
+// ─── Plan classe overlay (Type B) — saisie compétences sur plan visuel ───
+// Affiche un plan plein écran avec, dans chaque cellule élève, des pastilles
+// N1-N4 grandes et cliquables pour chaque compétence de la passation active.
+
+function _evalPlanOverlayOpen() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  if (!ev.passations || ev.passations.length === 0) {
+    toast('⚠ Pas de passation à afficher', 'warn'); return;
+  }
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return;
+  // Pré-sélection : la passation active du tableur
+  const passId = document.getElementById('meval-tableur').dataset.passId || ev.passations[0].id;
+  document.getElementById('meval-plan-overlay').dataset.passId = passId;
+  // Peuple le sélecteur de passation
+  const sortedPass = ev.passations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sel = document.getElementById('meval-plan-overlay-pass');
+  sel.innerHTML = '';
+  for (const p of sortedPass) {
+    const compsLbls = (p.competenceIds || []).map(cid => S.competences?.[cid]?.code).filter(Boolean).join(' · ');
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = `${p.code} — ${_fmtDateFr(p.date)} (${compsLbls})`;
+    if (p.id === passId) o.selected = true;
+    sel.appendChild(o);
+  }
+  document.getElementById('meval-plan-overlay-title').textContent = `🪑 ${ev.nomCourt} — saisie sur plan`;
+  _evalPlanOverlayRender();
+  // Fermeture → re-render tableur pour rafraîchir les niveaux saisis
+  _modalReturnTo['meval-plan-overlay'] = () => _evalTableurRender();
+  openMod('meval-plan-overlay');
+}
+
+function _evalPlanOverlayChangePass(passId) {
+  document.getElementById('meval-plan-overlay').dataset.passId = passId;
+  // Aussi sync avec le tableur (au retour) pour cohérence
+  document.getElementById('meval-tableur').dataset.passId = passId;
+  _evalPlanOverlayRender();
+}
+
+function _evalPlanOverlayRender() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cls = S.classes?.[ev.classId];
+  if (!cls) return;
+  const passId = document.getElementById('meval-plan-overlay').dataset.passId;
+  const pass = ev.passations?.find(p => p.id === passId);
+  if (!pass) return;
+  pass.niveaux = pass.niveaux || {};
+  const room = activeRoomData(cls);
+  const salle = S.salles?.[cls.activeRoom];
+  if (!room || !salle) return;
+  const rows = salle.rows, cols = salle.cols;
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const compIds = pass.competenceIds || [];
+  // Taille de cellule adaptative selon la grille
+  const grid = document.getElementById('meval-plan-overlay-grid');
+  const cellMinH = Math.max(120, 70 + compIds.length * 36);
+  let html = `<div style="display:grid;grid-template-columns:repeat(${cols}, minmax(160px, 1fr));gap:6px;width:max-content;margin:0 auto">`;
+  // Vue prof : r=rows-1 en haut, col 0 à droite
+  for (let r = rows - 1; r >= 0; r--) {
+    for (let c = cols - 1; c >= 0; c--) {
+      const key = `${r},${c}`;
+      const isEmpty = (salle.positions_vides || []).includes(key);
+      const aeshIdx = aeshAtKey(cls, key);
+      const sid = cls.seating?.[key];
+      const stu = sid ? S.eleves[sid] : null;
+      if (isEmpty) {
+        html += `<div style="min-height:${cellMinH}px;background:repeating-linear-gradient(45deg,#fafafa,#fafafa 6px,#eee 6px,#eee 12px);border:1px dashed var(--rule-line);border-radius:4px"></div>`;
+        continue;
+      }
+      if (aeshIdx >= 0) {
+        const total = room.aeshCount || 0;
+        html += `<div style="min-height:${cellMinH}px;background:#fde2f3;border:1px solid #c2185b;border-radius:4px;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#880e4f;font-family:var(--font-serif);font-size:.9em"><span style="font-size:1.6em">🧑‍🏫</span><span>${_esc(aeshLabel(aeshIdx, total))}</span></div>`;
+        continue;
+      }
+      if (!stu) {
+        html += `<div style="min-height:${cellMinH}px;background:#fff;border:1px dashed var(--rule-line-soft);border-radius:4px"></div>`;
+        continue;
+      }
+      // Élève : nom + compétences
+      const niv = pass.niveaux[sid] || {};
+      let compsHTML = '';
+      for (const cid of compIds) {
+        const c = S.competences?.[cid];
+        if (!c) continue;
+        const cur = niv[cid] || 0;
+        let pills = '';
+        for (let n = 1; n <= 4; n++) {
+          const active = (cur === n);
+          const bg = active ? colors[n - 1] : '#fff';
+          const fg = active ? '#fff' : 'var(--ink-deep)';
+          const bd = active ? colors[n - 1] : 'var(--rule-line)';
+          pills += `<button data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-niveau="${n}" onclick="_evalPlanOverlayPill(this)" style="flex:1;min-width:30px;height:30px;border-radius:50%;background:${bg};color:${fg};border:2px solid ${bd};font-family:var(--font-mono);font-weight:bold;font-size:.85em;cursor:pointer;padding:0">N${n}</button>`;
+        }
+        compsHTML += `<div style="display:flex;align-items:center;gap:5px;margin-top:4px">
+          <span style="font-family:var(--font-mono);font-weight:600;font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);padding:1px 5px;border-radius:3px;min-width:24px;text-align:center" title="${_esc(c.name || '')}">${_esc(c.code)}</span>
+          <div style="display:flex;gap:3px;flex:1">${pills}</div>
+        </div>`;
+      }
+      html += `<div style="min-height:${cellMinH}px;background:#fff;border:1px solid var(--rule-line);border-radius:4px;padding:6px;display:flex;flex-direction:column">
+        <div style="font-family:var(--font-serif);font-size:.92em;line-height:1.1;text-align:center;color:var(--ink-deep);margin-bottom:4px"><strong>${_esc(stu.prenom)}</strong><br>${_esc(stu.nom?.toUpperCase() || '')}</div>
+        ${compsHTML}
+      </div>`;
+    }
+  }
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+function _evalPlanOverlayPill(btn) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  const passId = document.getElementById('meval-plan-overlay').dataset.passId;
+  const pass = ev.passations?.find(p => p.id === passId);
+  if (!pass) return;
+  const sid = btn.getAttribute('data-sid');
+  const cid = btn.getAttribute('data-cid');
+  const niveau = parseInt(btn.getAttribute('data-niveau'), 10);
+  pass.niveaux = pass.niveaux || {};
+  pass.niveaux[sid] = pass.niveaux[sid] || {};
+  const cur = pass.niveaux[sid][cid] || 0;
+  if (cur === niveau) delete pass.niveaux[sid][cid];
+  else pass.niveaux[sid][cid] = niveau;
+  ev.updatedAt = Date.now();
+  save();
+  // Met à jour les pastilles de cette compétence dans la cellule (perf : pas tout re-render)
+  const cellPills = btn.parentElement;
+  if (cellPills) {
+    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    const newCur = pass.niveaux[sid][cid] || 0;
+    cellPills.querySelectorAll('button').forEach((b, i) => {
+      const n = i + 1;
+      const active = (newCur === n);
+      b.style.background = active ? colors[n - 1] : '#fff';
+      b.style.color = active ? '#fff' : 'var(--ink-deep)';
+      b.style.borderColor = active ? colors[n - 1] : 'var(--rule-line)';
+    });
+  }
 }
 
 // ── Tableur Type B : élèves × compétences de la passation active ──
