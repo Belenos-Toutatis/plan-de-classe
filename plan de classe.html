@@ -23841,75 +23841,6 @@ function _evalStudentLevelForComp(ev, sid, cid) {
   return null;
 }
 
-// Construit une explication textuelle du calcul de la note finale Type B pour un élève.
-// Reflète la logique de _computeStudentEvalNoteB selon ev.weighting.
-function _explainStudentNoteB(ev, sid) {
-  if (!ev || ev.type !== 'B' || !Array.isArray(ev.passations) || ev.passations.length === 0) {
-    return '<span style="color:var(--pencil)">—</span>';
-  }
-  const pts = S.evalPrefs?.maitrisePoints || [5, 8, 15, 20];
-  const noteMax = ev.noteMax || 20;
-  const ptsMax  = pts[pts.length - 1] || 20;
-  const niveauToPts = (n) => {
-    if (n <= 1) return pts[0];
-    if (n >= pts.length) return pts[pts.length - 1];
-    const lo = Math.floor(n);
-    const t  = n - lo;
-    return pts[lo - 1] + t * (pts[lo] - pts[lo - 1]);
-  };
-  const weighting = ev.weighting || 'equal';
-  const niveauLabel = (n) => (S.evalPrefs?.niveauLabels?.[n - 1] || String(n));
-
-  if (weighting === 'perCompetence') {
-    // Liste par compétence : moyenne des niveaux saisis, puis moyenne globale.
-    const compIds = new Set();
-    for (const p of ev.passations) for (const cid of (p.competenceIds || [])) compIds.add(cid);
-    const perComp = [];
-    for (const cid of compIds) {
-      const niv = _computeStudentCompetenceLevel(ev, sid, cid);
-      const c = S.competences?.[cid];
-      if (niv > 0) perComp.push({ code: c?.code || cid, niv });
-    }
-    if (perComp.length === 0) return '<span style="color:var(--pencil)">aucune saisie</span>';
-    const sum = perComp.reduce((s, x) => s + x.niv, 0);
-    const moy = sum / perComp.length;
-    const pp = niveauToPts(moy);
-    const finalNote = (pp / ptsMax) * noteMax;
-    const compsStr = perComp.map(x => `${x.code}=${x.niv.toFixed(2)}`).join(', ');
-    return `<strong>Compétences à égalité</strong><br>`
-         + `Niveau moyen par comp : ${compsStr}<br>`
-         + `Moy. des comp = (${perComp.map(x => x.niv.toFixed(2)).join(' + ')}) / ${perComp.length} = <strong>${moy.toFixed(2)}</strong><br>`
-         + `Pts = ${pp.toFixed(2)} (interp. sur [${pts.join(',')}])<br>`
-         + `Note = ${pp.toFixed(2)} / ${ptsMax} × ${noteMax} = <strong>${finalNote.toFixed(2)}</strong>`;
-  }
-
-  // weighting === 'equal' (ou 'coef') : agrège toutes les saisies passations × comps × niveaux
-  // Liste toutes les saisies sous forme niveau=valeur
-  const entries = []; // [{ pass, cid, niveau, pts }]
-  for (const p of ev.passations) {
-    for (const cid of (p.competenceIds || [])) {
-      const niv = p.niveaux?.[sid]?.[cid];
-      if (typeof niv !== 'number' || niv < 1 || niv > pts.length) continue;
-      const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
-      entries.push({ pass: p.code || '?', cid, niveau: niv, w, pts: niveauToPts(niv) });
-    }
-  }
-  if (entries.length === 0) return '<span style="color:var(--pencil)">aucune saisie</span>';
-  // Détail par saisie
-  const lines = entries.map(e => {
-    const c = S.competences?.[e.cid];
-    return `${e.pass}/${c?.code || '?'}: niv=${e.niveau}→${e.pts}pts`;
-  });
-  const sumPts = entries.reduce((s, e) => s + e.w * e.pts, 0);
-  const sumW   = entries.reduce((s, e) => s + e.w, 0);
-  const avgPts = sumPts / sumW;
-  const finalNote = (avgPts / ptsMax) * noteMax;
-  return `<strong>Pondérée par nb de saisies</strong><br>`
-       + lines.join(' · ') + `<br>`
-       + `Moy. pts = (${entries.map(e => e.pts).join(' + ')}) / ${entries.length} = <strong>${avgPts.toFixed(2)}</strong><br>`
-       + `Note = ${avgPts.toFixed(2)} / ${ptsMax} × ${noteMax} = <strong>${finalNote.toFixed(2)}</strong>`;
-}
-
 function _evalOpenBilanComps() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -23992,9 +23923,6 @@ function _evalRenderBilanComps() {
       html += `<th colspan="${g.span}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}">${_esc(g.label)}</th>`;
     }
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
-    if (ev.type === 'B') {
-      html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;font-size:.85em;min-width:280px">Calcul</th>`;
-    }
     html += '</tr>';
   }
 
@@ -24007,9 +23935,6 @@ function _evalRenderBilanComps() {
   }
   if (sortMode !== 'domain') {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
-    if (ev.type === 'B') {
-      html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;font-size:.85em;min-width:280px">Calcul</th>`;
-    }
   }
   html += '</tr></thead><tbody>';
 
@@ -24032,10 +23957,6 @@ function _evalRenderBilanComps() {
     const noteBg = _noteColor(note, ev.noteMax);
     const noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${noteDisp}</td>`;
-    if (ev.type === 'B') {
-      const calcul = _explainStudentNoteB(ev, sid);
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);background:${bgRow};font-family:var(--font-mono);font-size:.78em;color:var(--ink-deep);line-height:1.5">${calcul}</td>`;
-    }
     html += '</tr>';
   }
   html += '</tbody></table>';
@@ -26384,39 +26305,62 @@ function _evalPasteOpen() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
-  if (ev.type === 'B') {
-    toast('⚠ Coller des notes : non applicable aux évaluations Type B (compétences). Saisis directement dans le tableur.', 'warn');
-    return;
-  }
-  if (!ev.miniNotes || ev.miniNotes.length === 0) {
-    toast('⚠ Pas de mini-note définie', 'warn'); return;
-  }
-  // Peuple le sélecteur de mini-note cible
+  // Peuple le sélecteur cible selon le type
   const sel = document.getElementById('meval-paste-target');
   sel.innerHTML = '';
-  // Si Type C : grouper par exercice
-  const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
-  if (isTypeC) {
-    for (const exo of ev.exercices) {
-      const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
-      if (qs.length === 0) continue;
+  if (ev.type === 'B') {
+    if (!ev.passations || ev.passations.length === 0) {
+      toast('⚠ Pas de passation définie — crée-en une d\'abord', 'warn'); return;
+    }
+    // Une option par couple (passation × compétence) ; format value : "passId|cid"
+    const sortedPass = ev.passations.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    for (const p of sortedPass) {
+      if ((p.competenceIds || []).length === 0) continue;
       const og = document.createElement('optgroup');
-      og.label = exo.label || '(sans nom)';
-      for (const mn of qs) {
+      og.label = `${p.code || '?'} — ${_fmtDateFr(p.date)}`;
+      for (const cid of p.competenceIds) {
+        const c = S.competences?.[cid];
+        if (!c) continue;
         const opt = document.createElement('option');
-        opt.value = mn.id;
-        opt.textContent = `${mn.label} (/${mn.max})`;
+        opt.value = `${p.id}|${cid}`;
+        opt.textContent = `${c.code}${c.name ? ' — ' + c.name : ''}`;
         og.appendChild(opt);
       }
       sel.appendChild(og);
     }
+    // Hint dans le placeholder
+    const ta = document.getElementById('meval-paste-input');
+    if (ta) ta.placeholder = `Un niveau par ligne. Accepte 1, 2, 3, 4 (ou tes libellés), 0 (= effacer), ${S.evalPrefs?.codeAbsent || 'A'} (absent) ou vide.\nEx.\n3\n2\nA\n4\n0`;
   } else {
-    for (const mn of ev.miniNotes) {
-      const opt = document.createElement('option');
-      opt.value = mn.id;
-      opt.textContent = `${mn.label} (/${mn.max})`;
-      sel.appendChild(opt);
+    if (!ev.miniNotes || ev.miniNotes.length === 0) {
+      toast('⚠ Pas de mini-note définie', 'warn'); return;
     }
+    // Type C : grouper par exercice
+    const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+    if (isTypeC) {
+      for (const exo of ev.exercices) {
+        const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
+        if (qs.length === 0) continue;
+        const og = document.createElement('optgroup');
+        og.label = exo.label || '(sans nom)';
+        for (const mn of qs) {
+          const opt = document.createElement('option');
+          opt.value = mn.id;
+          opt.textContent = `${mn.label} (/${mn.max})`;
+          og.appendChild(opt);
+        }
+        sel.appendChild(og);
+      }
+    } else {
+      for (const mn of ev.miniNotes) {
+        const opt = document.createElement('option');
+        opt.value = mn.id;
+        opt.textContent = `${mn.label} (/${mn.max})`;
+        sel.appendChild(opt);
+      }
+    }
+    const ta = document.getElementById('meval-paste-input');
+    if (ta) ta.placeholder = `Une note par ligne (peut contenir des codes ${S.evalPrefs?.codeNonNote || 'NN'}, ${S.evalPrefs?.codeAbsent || 'A'}, ABS).\nEx.\n14\n12,5\nA\n9\nNN`;
   }
   document.getElementById('meval-paste-input').value = '';
   _evalPastePreview();
@@ -26424,10 +26368,19 @@ function _evalPasteOpen() {
   setTimeout(() => document.getElementById('meval-paste-input')?.focus(), 50);
 }
 
-function _evalPasteParseLines(text) {
+function _evalPasteParseLines(text, mode) {
   // Split par lignes, accepte newline ou \r\n. Tab/virgule sont des séparateurs de colonnes
-  // (on prend la 1re colonne en mode A — utile si l'utilisateur copie 2 colonnes par mégarde).
+  // (on prend la 1re colonne — utile si l'utilisateur copie 2 colonnes par mégarde).
   const lines = String(text || '').split(/\r?\n/).map(l => l.split(/[\t;]/)[0].trim()).filter(l => l !== '');
+  if (mode === 'niveau') {
+    // Parsing niveau : retourne 1..nbMax, 'A', 0 (effacer) ou undefined si invalide.
+    const nbMax = S.evalPrefs?.nbLevels || 4;
+    return lines.map(l => {
+      const parsed = _parseNiveauInput(l, nbMax);
+      // undefined → null pour cohérence avec _evalPasteApply (null = ignoré)
+      return { raw: l, parsed: (parsed === undefined ? null : parsed) };
+    });
+  }
   return lines.map(l => ({ raw: l, parsed: _parseMiniNoteInput(l) }));
 }
 
@@ -26438,7 +26391,8 @@ function _evalPastePreview() {
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
   const sids = _evalTableurSortedSids(cls);
-  const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value);
+  const mode = (ev.type === 'B') ? 'niveau' : 'note';
+  const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value, mode);
   const preview = document.getElementById('meval-paste-preview');
   const btn = document.getElementById('meval-paste-apply-btn');
 
@@ -26447,14 +26401,17 @@ function _evalPastePreview() {
     btn.disabled = true;
     return;
   }
-  const mnId = document.getElementById('meval-paste-target').value;
-  const mn   = ev.miniNotes.find(m => m.id === mnId);
-  const max  = mn?.max || 1;
   let nbOK = 0, nbHorsLim = 0, nbInvalid = 0;
   const samples = [];
+  let maxForCheck = 0;
+  if (mode === 'note') {
+    const mnId = document.getElementById('meval-paste-target').value;
+    const mn   = ev.miniNotes.find(m => m.id === mnId);
+    maxForCheck = mn?.max || 1;
+  }
   for (const { raw, parsed } of lines) {
     if (parsed == null) nbInvalid++;
-    else if (typeof parsed === 'number' && (parsed < 0 || parsed > max)) nbHorsLim++;
+    else if (mode === 'note' && typeof parsed === 'number' && (parsed < 0 || parsed > maxForCheck)) nbHorsLim++;
     else nbOK++;
     if (samples.length < 6) samples.push(`<span style="font-family:var(--font-mono);padding:1px 5px;background:#fff;border-radius:3px;margin-right:4px">${_esc(raw)}</span>`);
   }
@@ -26462,8 +26419,8 @@ function _evalPastePreview() {
   const lineCount = lines.length;
   const studentCount = sids.length;
   const overflow = lineCount > studentCount ? `<br><span style="color:var(--margin-red)">⚠ ${lineCount - studentCount} valeur(s) en surplus — ignorées</span>` : '';
-  const underflow = lineCount < studentCount ? `<br><span style="color:var(--pencil)">ℹ ${studentCount - lineCount} élève(s) en fin de tri sans valeur — leurs notes existantes ne seront <strong>pas</strong> modifiées</span>` : '';
-  const horsLim = nbHorsLim > 0 ? `<br><span style="color:var(--margin-red)">⚠ ${nbHorsLim} hors barème [0, ${max}]</span>` : '';
+  const underflow = lineCount < studentCount ? `<br><span style="color:var(--pencil)">ℹ ${studentCount - lineCount} élève(s) en fin de tri sans valeur — leurs ${mode === 'niveau' ? 'niveaux existants' : 'notes existantes'} ne seront <strong>pas</strong> modifié(e)s</span>` : '';
+  const horsLim = nbHorsLim > 0 ? `<br><span style="color:var(--margin-red)">⚠ ${nbHorsLim} hors barème [0, ${maxForCheck}]</span>` : '';
   const invalid = nbInvalid > 0 ? `<br><span style="color:var(--margin-red)">⚠ ${nbInvalid} valeur(s) invalide(s) — ignorées</span>` : '';
   preview.innerHTML = `
     <strong>${lineCount} valeur${lineCount > 1 ? 's' : ''} détectée${lineCount > 1 ? 's' : ''}</strong> · ${nbOK} valides${nbHorsLim ? ', '+nbHorsLim+' hors barème' : ''}${nbInvalid ? ', '+nbInvalid+' invalides' : ''}
@@ -26479,11 +26436,46 @@ function _evalPasteApply() {
   if (!ev) return;
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
+  const sids = _evalTableurSortedSids(cls);
+
+  // Type B : la cible est "passId|cid" et on parse en niveau (1..n, 'A', 0)
+  if (ev.type === 'B') {
+    const targetVal = document.getElementById('meval-paste-target').value;
+    const [passId, cid] = (targetVal || '').split('|');
+    const pass = ev.passations?.find(p => p.id === passId);
+    if (!pass || !cid) { toast('⚠ Cible invalide', 'warn'); return; }
+    const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value, 'niveau');
+    if (lines.length === 0) { toast('⚠ Aucune valeur à coller', 'warn'); return; }
+    pushUndo();
+    pass.niveaux = pass.niveaux || {};
+    let applied = 0, skipped = 0;
+    for (let i = 0; i < Math.min(lines.length, sids.length); i++) {
+      const sid = sids[i];
+      const val = lines[i].parsed;
+      if (val == null) { skipped++; continue; }
+      pass.niveaux[sid] = pass.niveaux[sid] || {};
+      if (val === 0) {
+        // 0 = effacer
+        delete pass.niveaux[sid][cid];
+      } else {
+        pass.niveaux[sid][cid] = val;  // nombre 1..n ou 'A'
+      }
+      applied++;
+    }
+    ev.updatedAt = Date.now();
+    save();
+    closeMod2('meval-paste');
+    _evalTableurRender();
+    const compLabel = S.competences?.[cid]?.code || cid;
+    toast(`✓ ${applied} niveau${applied > 1 ? 'x' : ''} collé${applied > 1 ? 's' : ''} sur ${pass.code}/${compLabel}${skipped > 0 ? ` (${skipped} ignoré${skipped > 1 ? 's' : ''})` : ''}`);
+    return;
+  }
+
+  // Type A/C : cible = mnId, parsing note
   const mnId = document.getElementById('meval-paste-target').value;
   const mn   = ev.miniNotes.find(m => m.id === mnId);
   if (!mn) return;
-  const sids = _evalTableurSortedSids(cls);
-  const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value);
+  const lines = _evalPasteParseLines(document.getElementById('meval-paste-input').value, 'note');
   if (lines.length === 0) { toast('⚠ Aucune valeur à coller', 'warn'); return; }
 
   pushUndo();
