@@ -22014,14 +22014,19 @@ function renderEvalNotes() {
   const wrap = document.getElementById('evals-list-wrap');
   if (!wrap) return;
 
-  // Sélecteur de période
+  // Sélecteur de période — distingue "pas encore initialisé" de "Toutes" (vide explicite)
   const sel = document.getElementById('eval-period-filter');
   if (sel) {
-    const cur = sel.value || _currentPeriode();
+    // Premier rendu : pas d'attribut data-init, on prend la période courante par défaut.
+    // Rendus suivants : on respecte la valeur courante du select (y compris '' = Toutes).
+    const initialised = sel.hasAttribute('data-init');
+    const cur = initialised ? sel.value : _currentPeriode();
+    sel.setAttribute('data-init', '1');
     sel.innerHTML = '';
     const optAll = document.createElement('option');
     optAll.value = '';
     optAll.textContent = 'Toutes';
+    if (cur === '') optAll.selected = true;
     sel.appendChild(optAll);
     for (const o of _periodeOptions()) {
       const opt = document.createElement('option');
@@ -22030,7 +22035,8 @@ function renderEvalNotes() {
       sel.appendChild(opt);
     }
   }
-  const periode = sel?.value || _currentPeriode();
+  // Le filtre actif est la valeur du select : '' = toutes, sinon le code (S1/S2/T1…)
+  const periode = sel?.value || '';
 
   if (!cls) {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir ses évaluations.</p>';
@@ -23835,6 +23841,75 @@ function _evalStudentLevelForComp(ev, sid, cid) {
   return null;
 }
 
+// Construit une explication textuelle du calcul de la note finale Type B pour un élève.
+// Reflète la logique de _computeStudentEvalNoteB selon ev.weighting.
+function _explainStudentNoteB(ev, sid) {
+  if (!ev || ev.type !== 'B' || !Array.isArray(ev.passations) || ev.passations.length === 0) {
+    return '<span style="color:var(--pencil)">—</span>';
+  }
+  const pts = S.evalPrefs?.maitrisePoints || [5, 8, 15, 20];
+  const noteMax = ev.noteMax || 20;
+  const ptsMax  = pts[pts.length - 1] || 20;
+  const niveauToPts = (n) => {
+    if (n <= 1) return pts[0];
+    if (n >= pts.length) return pts[pts.length - 1];
+    const lo = Math.floor(n);
+    const t  = n - lo;
+    return pts[lo - 1] + t * (pts[lo] - pts[lo - 1]);
+  };
+  const weighting = ev.weighting || 'equal';
+  const niveauLabel = (n) => (S.evalPrefs?.niveauLabels?.[n - 1] || String(n));
+
+  if (weighting === 'perCompetence') {
+    // Liste par compétence : moyenne des niveaux saisis, puis moyenne globale.
+    const compIds = new Set();
+    for (const p of ev.passations) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+    const perComp = [];
+    for (const cid of compIds) {
+      const niv = _computeStudentCompetenceLevel(ev, sid, cid);
+      const c = S.competences?.[cid];
+      if (niv > 0) perComp.push({ code: c?.code || cid, niv });
+    }
+    if (perComp.length === 0) return '<span style="color:var(--pencil)">aucune saisie</span>';
+    const sum = perComp.reduce((s, x) => s + x.niv, 0);
+    const moy = sum / perComp.length;
+    const pp = niveauToPts(moy);
+    const finalNote = (pp / ptsMax) * noteMax;
+    const compsStr = perComp.map(x => `${x.code}=${x.niv.toFixed(2)}`).join(', ');
+    return `<strong>Compétences à égalité</strong><br>`
+         + `Niveau moyen par comp : ${compsStr}<br>`
+         + `Moy. des comp = (${perComp.map(x => x.niv.toFixed(2)).join(' + ')}) / ${perComp.length} = <strong>${moy.toFixed(2)}</strong><br>`
+         + `Pts = ${pp.toFixed(2)} (interp. sur [${pts.join(',')}])<br>`
+         + `Note = ${pp.toFixed(2)} / ${ptsMax} × ${noteMax} = <strong>${finalNote.toFixed(2)}</strong>`;
+  }
+
+  // weighting === 'equal' (ou 'coef') : agrège toutes les saisies passations × comps × niveaux
+  // Liste toutes les saisies sous forme niveau=valeur
+  const entries = []; // [{ pass, cid, niveau, pts }]
+  for (const p of ev.passations) {
+    for (const cid of (p.competenceIds || [])) {
+      const niv = p.niveaux?.[sid]?.[cid];
+      if (typeof niv !== 'number' || niv < 1 || niv > pts.length) continue;
+      const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
+      entries.push({ pass: p.code || '?', cid, niveau: niv, w, pts: niveauToPts(niv) });
+    }
+  }
+  if (entries.length === 0) return '<span style="color:var(--pencil)">aucune saisie</span>';
+  // Détail par saisie
+  const lines = entries.map(e => {
+    const c = S.competences?.[e.cid];
+    return `${e.pass}/${c?.code || '?'}: niv=${e.niveau}→${e.pts}pts`;
+  });
+  const sumPts = entries.reduce((s, e) => s + e.w * e.pts, 0);
+  const sumW   = entries.reduce((s, e) => s + e.w, 0);
+  const avgPts = sumPts / sumW;
+  const finalNote = (avgPts / ptsMax) * noteMax;
+  return `<strong>Pondérée par nb de saisies</strong><br>`
+       + lines.join(' · ') + `<br>`
+       + `Moy. pts = (${entries.map(e => e.pts).join(' + ')}) / ${entries.length} = <strong>${avgPts.toFixed(2)}</strong><br>`
+       + `Note = ${avgPts.toFixed(2)} / ${ptsMax} × ${noteMax} = <strong>${finalNote.toFixed(2)}</strong>`;
+}
+
 function _evalOpenBilanComps() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -23917,6 +23992,9 @@ function _evalRenderBilanComps() {
       html += `<th colspan="${g.span}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}">${_esc(g.label)}</th>`;
     }
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
+    if (ev.type === 'B') {
+      html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;font-size:.85em;min-width:280px">Calcul</th>`;
+    }
     html += '</tr>';
   }
 
@@ -23929,6 +24007,9 @@ function _evalRenderBilanComps() {
   }
   if (sortMode !== 'domain') {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
+    if (ev.type === 'B') {
+      html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;font-size:.85em;min-width:280px">Calcul</th>`;
+    }
   }
   html += '</tr></thead><tbody>';
 
@@ -23951,6 +24032,10 @@ function _evalRenderBilanComps() {
     const noteBg = _noteColor(note, ev.noteMax);
     const noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${noteDisp}</td>`;
+    if (ev.type === 'B') {
+      const calcul = _explainStudentNoteB(ev, sid);
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);background:${bgRow};font-family:var(--font-mono);font-size:.78em;color:var(--ink-deep);line-height:1.5">${calcul}</td>`;
+    }
     html += '</tr>';
   }
   html += '</tbody></table>';
