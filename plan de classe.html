@@ -3170,6 +3170,38 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Changement de compétences d'une passation : que faire des niveaux saisis ── -->
+<div id="meval-comp-change" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px;width:100%">
+    <h2>⚠ Compétences modifiées</h2>
+    <p style="margin:0 0 8px;font-size:.92em;line-height:1.5">Tu as <strong>retiré</strong> une ou plusieurs compétences de cette passation, alors que des niveaux y ont été saisis pour des élèves.</p>
+    <div id="meval-comp-change-detail" style="margin:0 0 12px;padding:10px;background:var(--paper-warm);border-radius:4px;font-size:.9em;line-height:1.5"></div>
+    <p style="margin:0 0 6px;font-size:.92em"><strong>Que faire de ces niveaux ?</strong></p>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:.92em">
+      <label style="display:block;padding:8px 10px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer" id="meval-comp-change-transfer-row">
+        <input type="radio" name="meval-comp-change-action" value="transfer">
+        <strong>Transférer vers</strong>
+        <select id="meval-comp-change-target" style="margin-left:6px;padding:3px 6px;font-family:var(--font-mono);font-size:.9em"></select>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Les niveaux saisis sont déplacés sur une compétence présente dans la passation.</div>
+      </label>
+      <label style="display:block;padding:8px 10px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
+        <input type="radio" name="meval-comp-change-action" value="keep" checked>
+        <strong>Garder en mémoire</strong> <span style="color:var(--pencil);font-size:.85em">(défaut)</span>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Les niveaux restent dans <code>pass.niveaux</code> mais ne sont plus visibles dans le tableur. Si tu rajoutes la compétence plus tard, ils réapparaissent.</div>
+      </label>
+      <label style="display:block;padding:8px 10px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
+        <input type="radio" name="meval-comp-change-action" value="erase">
+        <strong>Effacer</strong>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Suppression définitive des niveaux saisis sur les compétences retirées.</div>
+      </label>
+    </div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-g" onclick="_evalCompChangeCancel()">Annuler</button>
+      <button class="btn btn-p" onclick="_evalCompChangeApply()">✓ Appliquer et enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Bilan compétences évaluées par évaluation ── -->
 <div id="meval-bilan-comps" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:92vh;overflow:hidden;display:flex;flex-direction:column">
@@ -23877,7 +23909,9 @@ function _evalRenderBilanComps() {
     }
     const note = _computeStudentEvalNote(ev, sid);
     const noteDisp = (note == null) ? '—' : _fmtNote(note);
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;color:var(--ink-blue);background:${bgRow}">${noteDisp}</td>`;
+    const noteBg = _noteColor(note, ev.noteMax);
+    const noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${noteDisp}</td>`;
     html += '</tr>';
   }
   html += '</tbody></table>';
@@ -25195,6 +25229,9 @@ function _passNewToggle(cid, checked) {
   _evalPassNewRenderComps();
 }
 
+// État temporaire pour le flow "changement de compétences"
+let _evalPassPendingSave = null;
+
 function _evalPassNewSave() {
   const evalId = document.getElementById('meval-pass-new-evalid').value;
   const passId = document.getElementById('meval-pass-new-passid').value;
@@ -25207,6 +25244,42 @@ function _evalPassNewSave() {
   if (!code) { toast('⚠ Le code court est obligatoire', 'warn'); return; }
   if (!date) { toast('⚠ La date est obligatoire', 'warn'); return; }
   if (_passNewSelected.size === 0) { toast('⚠ Sélectionne au moins une compétence', 'warn'); return; }
+  // Édition d'une passation existante : détecte les compétences retirées qui ont des niveaux saisis
+  if (passId) {
+    const existing = ev.passations?.find(p => p.id === passId);
+    if (existing) {
+      const newSet = _passNewSelected;
+      const oldIds = existing.competenceIds || [];
+      const removed = oldIds.filter(cid => !newSet.has(cid));
+      const removedWithData = removed.filter(cid => {
+        return Object.values(existing.niveaux || {}).some(perStu => perStu && perStu[cid] != null);
+      });
+      if (removedWithData.length > 0) {
+        // Diffère la sauvegarde — ouvre la modale pour demander à l'utilisateur
+        _evalPassPendingSave = {
+          evalId, passId, code, name, date, slotId,
+          newCompIds: Array.from(newSet),
+          removedComps: removedWithData,
+        };
+        _evalCompChangeOpen(removedWithData, Array.from(newSet), existing.niveaux || {});
+        return;
+      }
+    }
+  }
+  _evalPassNewSaveFinalize();
+}
+
+function _evalPassNewSaveFinalize(transferAction) {
+  // transferAction: undefined (= aucun changement de comp problématique)
+  //              | { mode: 'keep' } | { mode: 'erase' } | { mode: 'transfer', target: cid }
+  const evalId = document.getElementById('meval-pass-new-evalid').value;
+  const passId = document.getElementById('meval-pass-new-passid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  const code = (document.getElementById('meval-pass-new-code').value || '').trim();
+  const name = (document.getElementById('meval-pass-new-name').value || '').trim();
+  const date = document.getElementById('meval-pass-new-date').value;
+  const slotId = document.getElementById('meval-pass-new-slot')?.value || '';
   pushUndo();
   ev.passations = ev.passations || [];
   let pass;
@@ -25217,6 +25290,28 @@ function _evalPassNewSave() {
       pass.code = code; pass.date = date;
       if (name) pass.name = name; else delete pass.name;
       if (slotId) pass.slotId = slotId; else delete pass.slotId;
+      // Avant de remplacer competenceIds : applique le choix transfer/erase si présent
+      if (transferAction) {
+        const removed = (pass.competenceIds || []).filter(cid => !_passNewSelected.has(cid));
+        for (const sid in (pass.niveaux || {})) {
+          const perStu = pass.niveaux[sid];
+          if (!perStu) continue;
+          for (const cidRemoved of removed) {
+            const v = perStu[cidRemoved];
+            if (v == null) continue;
+            if (transferAction.mode === 'erase') {
+              delete perStu[cidRemoved];
+            } else if (transferAction.mode === 'transfer') {
+              const tgt = transferAction.target;
+              if (tgt && perStu[tgt] == null) {
+                perStu[tgt] = v;
+              }
+              delete perStu[cidRemoved];
+            }
+            // mode 'keep' : on ne touche pas (le niveau reste dans perStu[cidRemoved])
+          }
+        }
+      }
       pass.competenceIds = Array.from(_passNewSelected);
     }
   } else {
@@ -25248,6 +25343,72 @@ function _evalPassNewSave() {
   renderEvalNotes();
   if (document.getElementById('meval-tableur').classList.contains('on')) _evalTableurRender();
   toast(`✓ Passation "${code}" ${passId ? 'mise à jour' : 'créée'}`);
+}
+
+// ─── Modale "Que faire des niveaux saisis ?" lors d'un changement de compétences ───
+function _evalCompChangeOpen(removedComps, newCompIds, niveaux) {
+  // Construit le détail (combien d'élèves ont saisi pour chaque comp retirée)
+  const detail = document.getElementById('meval-comp-change-detail');
+  let html = '';
+  for (const cid of removedComps) {
+    const c = S.competences?.[cid];
+    if (!c) continue;
+    const nb = Object.values(niveaux || {}).filter(perStu => perStu && perStu[cid] != null).length;
+    html += `<div>• <strong style="font-family:var(--font-mono)">${_esc(c.code)}</strong>${c.name ? ' — ' + _esc(c.name) : ''} : <strong>${nb}</strong> élève${nb > 1 ? 's' : ''} avec niveau saisi</div>`;
+  }
+  detail.innerHTML = html;
+  // Peuple le select de cibles de transfert (compétences encore présentes dans la passation)
+  const sel = document.getElementById('meval-comp-change-target');
+  sel.innerHTML = '';
+  for (const cid of newCompIds) {
+    const c = S.competences?.[cid];
+    if (!c) continue;
+    const opt = document.createElement('option');
+    opt.value = cid;
+    opt.textContent = `${c.code}${c.name ? ' — ' + c.name : ''}`;
+    sel.appendChild(opt);
+  }
+  // Si le transfert est ambigu (plusieurs comps retirées + plusieurs candidates) ou impossible
+  // (aucune nouvelle comp), désactive l'option transfer.
+  const transferRow = document.getElementById('meval-comp-change-transfer-row');
+  const transferRadio = transferRow.querySelector('input[type="radio"]');
+  const canTransfer = (newCompIds.length > 0 && removedComps.length === 1);
+  if (!canTransfer) {
+    transferRadio.disabled = true;
+    transferRow.style.opacity = '0.5';
+    transferRow.title = (newCompIds.length === 0)
+      ? 'Pas de compétence cible disponible'
+      : 'Transfert direct disponible uniquement si UNE seule compétence est retirée';
+  } else {
+    transferRadio.disabled = false;
+    transferRow.style.opacity = '';
+    transferRow.title = '';
+  }
+  // Cocher "keep" par défaut
+  document.querySelector('input[name="meval-comp-change-action"][value="keep"]').checked = true;
+  openMod('meval-comp-change');
+}
+
+function _evalCompChangeApply() {
+  const action = document.querySelector('input[name="meval-comp-change-action"]:checked')?.value || 'keep';
+  let transferAction;
+  if (action === 'transfer') {
+    const target = document.getElementById('meval-comp-change-target')?.value;
+    transferAction = { mode: 'transfer', target };
+  } else if (action === 'erase') {
+    transferAction = { mode: 'erase' };
+  } else {
+    transferAction = { mode: 'keep' };
+  }
+  closeMod2('meval-comp-change');
+  _evalPassPendingSave = null;
+  _evalPassNewSaveFinalize(transferAction);
+}
+
+function _evalCompChangeCancel() {
+  closeMod2('meval-comp-change');
+  _evalPassPendingSave = null;
+  // Laisse la modale "Nouvelle passation" ouverte pour que l'utilisateur revoie son choix
 }
 
 // Pour chaque classe de l'éval et chaque élève absent à la date+créneau de la
