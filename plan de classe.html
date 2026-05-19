@@ -23618,11 +23618,13 @@ function _evalTableurRender() {
   orderedMNs.forEach((mn) => {
     const tooltip = mn.name ? `${mn.label || '?'} — ${mn.name}` : (mn.label || '(sans nom)');
     // Type C : sommatif → pas de date par question (date globale uniquement, rattrapage = par élève)
-    const dateInput = isTypeC ? '' : `<input type="date" value="${_esc(mn.date || '')}" data-mnid="${_esc(mn.id)}" data-field="date"
+    // Type A : la date peut être propre à chaque classe en mode multi-classes (mn.dates[classId])
+    const mnDate = _mnDateFor(mn, cls.id);
+    const dateInput = isTypeC ? '' : `<input type="date" value="${_esc(mnDate)}" data-mnid="${_esc(mn.id)}" data-field="date" data-classid="${_esc(cls.id)}"
              onchange="_tableurEditMn(this)"
              style="width:118px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil)"
-             title="Date de cette mini-note (optionnelle)">`;
-    html += `<th class="meval-mn-head" style="padding:4px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:120px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative" title="${_esc(tooltip)}${mn.date ? ' · ' + _fmtDateFr(mn.date) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
+             title="Date de cette mini-note pour ${_esc(cls.nom)} (optionnelle)">`;
+    html += `<th class="meval-mn-head" style="padding:4px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:120px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative" title="${_esc(tooltip)}${mnDate ? ' · ' + _fmtDateFr(mnDate) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
       <input type="text" value="${_esc(mn.label || '')}" data-mnid="${_esc(mn.id)}" data-field="label" placeholder="Code"
              oninput="_tableurEditMn(this)"
              style="width:100%;max-width:110px;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:600;text-align:center;font-size:.95em"
@@ -25116,8 +25118,19 @@ function _tableurEditMn(inputEl) {
     });
   } else if (field === 'date') {
     const d = String(inputEl.value || '');
-    if (d) mn.date = d; else delete mn.date;
-    // Date globale = max des dates de mini-notes
+    const cid = inputEl.getAttribute('data-classid');
+    const isMulti = _evalClassIds(ev).length > 1;
+    if (isMulti && cid) {
+      mn.dates = mn.dates || {};
+      if (d) mn.dates[cid] = d; else delete mn.dates[cid];
+      // Recalcule la date "officielle" de la mini-note = la plus récente parmi les classes
+      const allDates = Object.values(mn.dates).filter(Boolean);
+      if (allDates.length > 0) mn.date = allDates.reduce((m, x) => x > m ? x : m, '');
+      else delete mn.date;
+    } else {
+      if (d) mn.date = d; else delete mn.date;
+    }
+    // Date globale de l'éval = max des dates de mini-notes
     const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
     if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
   }
@@ -25539,6 +25552,14 @@ function _passDateFor(pass, classId) {
 function _passSlotIdFor(pass, classId) {
   if (pass?.slotIds?.[classId]) return pass.slotIds[classId];
   return pass?.slotId || null;
+}
+
+// Date d'une mini-note (Type A) pour une classe donnée. Multi-classes peuvent
+// avoir des dates différentes (les classes ne font pas toutes l'éval en même
+// temps). Fallback : mn.date.
+function _mnDateFor(mn, classId) {
+  if (mn?.dates?.[classId]) return mn.dates[classId];
+  return mn?.date || '';
 }
 function _evalSlotIdFor(ev, classId) {
   if (ev?.slotIds?.[classId]) return ev.slotIds[classId];
