@@ -3074,6 +3074,33 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Menu mini-note / question (clic droit sur en-tête tableur) ── -->
+<div id="meval-mn-menu" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:480px;width:100%">
+    <h2 id="meval-mn-menu-title">📝 Mini-note</h2>
+    <input type="hidden" id="meval-mn-menu-mnid">
+    <div style="display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;font-size:.92em;margin-bottom:12px">
+      <label>Code court</label>
+      <input type="text" id="meval-mn-menu-label" maxlength="20" style="padding:5px 8px;font-family:var(--font-mono)">
+      <label>Nom complet</label>
+      <input type="text" id="meval-mn-menu-name" maxlength="80" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
+      <label>Maximum</label>
+      <div><input type="number" id="meval-mn-menu-max" min="0" max="100" step="0.5" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
+      <label>Date</label>
+      <input type="date" id="meval-mn-menu-date" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
+      <button class="btn btn-g btn-sm" onclick="_tableurMnInsert('before')" title="Insère une nouvelle mini-note juste avant celle-ci">⬅ Insérer avant</button>
+      <button class="btn btn-g btn-sm" onclick="_tableurMnInsert('after')" title="Insère une nouvelle mini-note juste après celle-ci">Insérer après ➡</button>
+      <button class="btn btn-r btn-sm" onclick="_tableurMnDelete()" title="Supprimer cette mini-note (et les saisies associées)" style="margin-left:auto">🗑 Supprimer</button>
+    </div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-mn-menu')">Annuler</button>
+      <button class="btn btn-p" onclick="_tableurMnMenuSave()">✓ Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Plan classe (overlay grand format Type B — saisie compétences sur plan visuel) ── -->
 <div id="meval-plan-overlay" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:none;width:96vw;height:94vh;max-height:none;display:flex;flex-direction:column;padding:14px">
@@ -3094,10 +3121,11 @@ kbd {
 
 <!-- ── MODAL Saisie mode tableur (élèves × mini-notes) ── -->
 <div id="meval-tableur" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
+  <div class="mb" id="meval-tableur-mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <h2 id="meval-tableur-title" style="margin:0">📊 Saisie en mode tableur</h2>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-g btn-sm" id="meval-tableur-fullscreen-btn" onclick="_tableurToggleFullscreen()" title="Plein écran / réduit (raccourci F11 indisponible — utilise ce bouton)">⛶</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-addmn-btn" onclick="_tableurAddMn()" title="Ajouter une mini-note (Type A) ou une question (Type C)" style="display:none">+ Q</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-addexo-btn" onclick="_tableurAddExo()" title="Ajouter un exercice (Type C uniquement)" style="display:none">+ Exo</button>
         <button class="btn btn-g btn-sm" onclick="_tableurOpenStructure()" title="Structure complète : compétences rattachées, gestion des exercices, passations…">🏗 Structure</button>
@@ -3888,7 +3916,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T08:00:00Z';
+const APP_VERSION   = '2026-05-20T08:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -22415,6 +22443,7 @@ function _evalSaisieUpdateNote(inputEl) {
   if (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax)) {
     inputEl.style.background = '#fee';
     inputEl.title = `Valeur hors barème (attendu : 0 – ${mnMax})`;
+    _toastHorsBareme(parsed, mnMax);
   } else {
     inputEl.style.background = '';
     inputEl.title = '';
@@ -22611,6 +22640,21 @@ function _evalOpenTableur(forcedId) {
       try { localStorage.setItem('planClasse_evalTableurEnter', enterSel.value); } catch (e) {}
     };
   }
+  // Restaure l'état plein écran si mémorisé
+  try {
+    const fs = localStorage.getItem('planClasse_evalTableurFs') === '1';
+    const mb = document.getElementById('meval-tableur-mb');
+    const fsBtn = document.getElementById('meval-tableur-fullscreen-btn');
+    if (mb) {
+      if (fs) {
+        mb.style.maxWidth = '99vw'; mb.style.maxHeight = '99vh'; mb.dataset.fs = '1';
+        if (fsBtn) { fsBtn.textContent = '🗗'; fsBtn.title = 'Réduire'; }
+      } else {
+        mb.style.maxWidth = 'min(96vw, 1100px)'; mb.style.maxHeight = '94vh'; mb.dataset.fs = '0';
+        if (fsBtn) { fsBtn.textContent = '⛶'; fsBtn.title = 'Plein écran'; }
+      }
+    }
+  } catch (e) {}
   _evalTableurRender();
   _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
   openMod('meval-tableur');
@@ -22771,6 +22815,7 @@ function _evalTableurUpdate(inputEl) {
   if (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax)) {
     inputEl.style.background = '#fee';
     inputEl.title = `Valeur hors barème (attendu : 0 – ${mnMax})`;
+    _toastHorsBareme(parsed, mnMax);
   } else {
     inputEl.style.background = '';
     inputEl.title = '';
@@ -22882,7 +22927,9 @@ function _evalTableurCopyAll() {
       const niv = pass.niveaux?.[sid] || {};
       for (const cid of (pass.competenceIds || [])) {
         const v = niv[cid];
-        cells.push(v >= 1 && v <= 4 ? `N${v}` : '');
+        if (v === 'A') cells.push('A');
+        else if (typeof v === 'number' && v >= 1 && v <= 4) cells.push(`N${v}`);
+        else cells.push('');
       }
       lines.push(cells.join('\t'));
     }
@@ -23116,16 +23163,12 @@ function _evalTableurRenderB(ev, cls) {
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
     (pass.competenceIds || []).forEach((cid, ci) => {
-      const cur = niv[cid] || 0;
-      let optsHTML = '<option value="0">—</option>';
-      for (let n = 1; n <= 4; n++) {
-        const selAttr = (cur === n) ? ' selected' : '';
-        optsHTML += `<option value="${n}"${selAttr}>N${n}</option>`;
-      }
-      const bg = (cur > 0) ? colors[cur - 1] : '';
-      const color = (cur > 0) ? '#fff' : '';
-      const fw = (cur > 0) ? '700' : '400';
-      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><select data-cid="${_esc(cid)}" data-ri="${ri}" data-ci="${ci}" onchange="_evalTableurBUpdate(this)" style="padding:3px 6px;font-family:var(--font-mono);text-align:center;background:${bg};color:${color};font-weight:${fw};border:1px solid var(--rule-line);border-radius:3px;min-width:60px;cursor:pointer">${optsHTML}</select></td>`;
+      const cur = niv[cid];
+      const dispVal = (cur === 'A') ? 'A' : (typeof cur === 'number' && cur >= 1 && cur <= 4 ? String(cur) : '');
+      const bg = (typeof cur === 'number' && cur >= 1) ? colors[cur - 1] : (cur === 'A' ? '#9ca3af' : '');
+      const color = (cur != null && cur !== 0 && cur !== '') ? '#fff' : '';
+      const fw = (cur != null && cur !== 0 && cur !== '') ? '700' : '400';
+      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><input type="text" data-cid="${_esc(cid)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" style="width:48px;padding:3px 4px;font-family:var(--font-mono);font-weight:${fw};text-align:center;background:${bg};color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
     });
     html += '</tr>';
   });
@@ -23138,34 +23181,82 @@ function _evalTableurBSelectPassation(passId) {
   _evalTableurRender();
 }
 
-function _evalTableurBUpdate(selEl) {
+// Parse une saisie texte de niveau. Retourne un nombre 1..nbMax, 'A', 0 (= retirer)
+// ou undefined si invalide (à signaler à l'utilisateur).
+function _parseNiveauInput(raw, nbMax) {
+  if (raw == null) return undefined;
+  const s = String(raw).trim().toUpperCase();
+  if (s === '') return 0;                  // vide = effacer
+  if (s === 'A' || s === 'ABS') return 'A';
+  if (s === '0') return 0;
+  const n = parseInt(s, 10);
+  if (Number.isFinite(n) && n >= 1 && n <= (nbMax || 4)) return n;
+  return undefined;
+}
+
+function _evalTableurBUpdate(inputEl) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev || ev.type !== 'B') return;
   const passId = document.getElementById('meval-tableur').dataset.passId;
   const pass = ev.passations?.find(p => p.id === passId);
   if (!pass) return;
-  const sid = selEl.closest('tr')?.getAttribute('data-sid');
-  const cid = selEl.getAttribute('data-cid');
+  const sid = inputEl.closest('tr')?.getAttribute('data-sid');
+  const cid = inputEl.getAttribute('data-cid');
   if (!sid || !cid) return;
-  const val = parseInt(selEl.value, 10);
+  const nbMax = S.evalPrefs?.nbLevels || 4;
+  const parsed = _parseNiveauInput(inputEl.value, nbMax);
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+
   pass.niveaux = pass.niveaux || {};
   pass.niveaux[sid] = pass.niveaux[sid] || {};
-  if (val >= 1 && val <= 4) pass.niveaux[sid][cid] = val;
-  else delete pass.niveaux[sid][cid];
+
+  if (parsed === undefined) {
+    // Valeur invalide — flag rouge + toast (rate-limité)
+    inputEl.style.background = '#fee';
+    inputEl.style.color = '';
+    inputEl.style.fontWeight = '700';
+    inputEl.title = `Valeur invalide. Tape 1–${nbMax}, 0 ou A (absent).`;
+    _toastNiveauInvalide(nbMax);
+    return; // ne sauve pas
+  }
+  inputEl.title = '';
+  if (parsed === 0) {
+    delete pass.niveaux[sid][cid];
+    inputEl.style.background = '';
+    inputEl.style.color = '';
+    inputEl.style.fontWeight = '400';
+  } else if (parsed === 'A') {
+    pass.niveaux[sid][cid] = 'A';
+    inputEl.style.background = '#9ca3af';
+    inputEl.style.color = '#fff';
+    inputEl.style.fontWeight = '700';
+  } else {
+    pass.niveaux[sid][cid] = parsed;
+    inputEl.style.background = colors[parsed - 1];
+    inputEl.style.color = '#fff';
+    inputEl.style.fontWeight = '700';
+  }
   ev.updatedAt = Date.now();
   save();
-  // Re-style la cellule sans re-render complet (perf)
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
-  if (val >= 1 && val <= 4) {
-    selEl.style.background = colors[val - 1];
-    selEl.style.color = '#fff';
-    selEl.style.fontWeight = '700';
-  } else {
-    selEl.style.background = '';
-    selEl.style.color = '';
-    selEl.style.fontWeight = '400';
-  }
+}
+
+// Toast warning niveau invalide (throttle 1500ms)
+let _lastNiveauToast = 0;
+function _toastNiveauInvalide(nbMax) {
+  const now = Date.now();
+  if (now - _lastNiveauToast < 1500) return;
+  _lastNiveauToast = now;
+  toast(`⚠ Niveau invalide — tape 1–${nbMax}, 0 (non évalué) ou A (absent)`, 'warn');
+}
+
+// Toast warning hors barème, throttle 1500ms pour ne pas spam pendant la frappe rapide
+let _lastHorsBaremeToast = 0;
+function _toastHorsBareme(val, max) {
+  const now = Date.now();
+  if (now - _lastHorsBaremeToast < 1500) return;
+  _lastHorsBaremeToast = now;
+  toast(`⚠ Valeur hors barème : ${_fmtNote(val)} — attendu entre 0 et ${max}`, 'warn');
 }
 
 // ─── Édition inline depuis l'en-tête du tableur Type A/C ───
@@ -23209,47 +23300,101 @@ function _tableurEditMn(inputEl) {
   save();
 }
 
-// Menu contextuel sur l'en-tête d'une mini-note (clic droit) : nom complet + supprimer
+// Menu contextuel sur l'en-tête d'une mini-note : ouvre une modale dédiée
+// avec champs (code, nom, max, date) + boutons (insérer avant/après, supprimer).
 function _tableurMnContextMenu(event, mnId) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
   const mn = ev.miniNotes?.find(m => m.id === mnId);
   if (!mn) return;
-  const action = window.prompt(
-    `Mini-note "${mn.label || '(sans nom)'}"\n\nLaisser le nom complet vide pour ne rien afficher (tooltip = code court seul).\n` +
-    `Pour SUPPRIMER cette mini-note, tape : SUPPRIMER\n\nNom complet :`,
-    mn.name || ''
-  );
-  if (action === null) return;
-  if (action.trim().toUpperCase() === 'SUPPRIMER') {
-    let usage = 0;
-    for (const sid in (ev.notes || {})) {
-      if (ev.notes[sid]?.values?.[mnId] != null) usage++;
-    }
-    const msg = usage > 0
-      ? `Supprimer "${mn.label || '(sans nom)'}" ? ${usage} saisie(s) perdue(s).`
-      : `Supprimer "${mn.label || '(sans nom)'}" ?`;
-    if (!confirm(msg)) return;
-    pushUndo();
-    ev.miniNotes = ev.miniNotes.filter(m => m.id !== mnId);
-    for (const sid in (ev.notes || {})) {
-      if (ev.notes[sid]?.values) delete ev.notes[sid].values[mnId];
-      if (ev.notes[sid]?.comments) delete ev.notes[sid].comments[mnId];
-    }
-    ev.updatedAt = Date.now();
-    save();
-    _evalTableurRender();
-    toast('🗑 Mini-note supprimée');
-    return;
-  }
+  document.getElementById('meval-mn-menu-mnid').value = mnId;
+  document.getElementById('meval-mn-menu-title').textContent = `📝 ${ev.type === 'C' ? 'Question' : 'Mini-note'} ${mn.label || '(sans nom)'}`;
+  document.getElementById('meval-mn-menu-label').value = mn.label || '';
+  document.getElementById('meval-mn-menu-name').value  = mn.name  || '';
+  document.getElementById('meval-mn-menu-max').value   = mn.max ?? 1;
+  document.getElementById('meval-mn-menu-date').value  = mn.date  || '';
+  _modalReturnTo['meval-mn-menu'] = () => _evalTableurRender();
+  openMod('meval-mn-menu');
+  setTimeout(() => document.getElementById('meval-mn-menu-name')?.focus(), 50);
+}
+
+function _tableurMnMenuSave() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const mnId = document.getElementById('meval-mn-menu-mnid').value;
+  const mn = ev.miniNotes?.find(m => m.id === mnId);
+  if (!mn) return;
+  const label = (document.getElementById('meval-mn-menu-label').value || '').trim();
+  const name  = (document.getElementById('meval-mn-menu-name').value  || '').trim();
+  const max   = parseFloat(document.getElementById('meval-mn-menu-max').value);
+  const date  = document.getElementById('meval-mn-menu-date').value;
+  if (!Number.isFinite(max) || max < 0) { toast('⚠ Maximum invalide', 'warn'); return; }
   pushUndo();
-  if (action.trim()) mn.name = action.trim();
-  else delete mn.name;
+  mn.label = label;
+  if (name) mn.name = name; else delete mn.name;
+  mn.max = max;
+  if (date) mn.date = date; else delete mn.date;
+  // Date globale = max des dates
+  const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
+  if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
   ev.updatedAt = Date.now();
   save();
+  closeMod2('meval-mn-menu');
+}
+
+function _tableurMnDelete() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const mnId = document.getElementById('meval-mn-menu-mnid').value;
+  const mn = ev.miniNotes?.find(m => m.id === mnId);
+  if (!mn) return;
+  let usage = 0;
+  for (const sid in (ev.notes || {})) {
+    if (ev.notes[sid]?.values?.[mnId] != null) usage++;
+  }
+  const msg = usage > 0
+    ? `Supprimer "${mn.label || '(sans nom)'}" ? ${usage} saisie(s) perdue(s).`
+    : `Supprimer "${mn.label || '(sans nom)'}" ?`;
+  if (!confirm(msg)) return;
+  pushUndo();
+  ev.miniNotes = ev.miniNotes.filter(m => m.id !== mnId);
+  for (const sid in (ev.notes || {})) {
+    if (ev.notes[sid]?.values) delete ev.notes[sid].values[mnId];
+    if (ev.notes[sid]?.comments) delete ev.notes[sid].comments[mnId];
+  }
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-mn-menu');
+  toast('🗑 Mini-note supprimée');
+}
+
+// Insère une nouvelle mini-note avant ou après celle ouverte dans le menu
+function _tableurMnInsert(position) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type === 'B') return;
+  const mnId = document.getElementById('meval-mn-menu-mnid').value;
+  const idx = ev.miniNotes.findIndex(m => m.id === mnId);
+  if (idx < 0) return;
+  const ref = ev.miniNotes[idx];
+  pushUndo();
+  const newMn = { id: _newMiniNoteId(), label: 'Q?', max: 1 };
+  // Pour Type C : hérite de l'exerciceId du voisin
+  if (ev.type === 'C' && ref.exerciceId) {
+    newMn.exerciceId = ref.exerciceId;
+    newMn.competenceIds = [];
+  }
+  const insertAt = (position === 'before') ? idx : idx + 1;
+  ev.miniNotes.splice(insertAt, 0, newMn);
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-mn-menu');
   _evalTableurRender();
-  toast('✓ Nom complet mis à jour');
+  // Ouvre la nouvelle pour édition immédiate
+  setTimeout(() => _tableurMnContextMenu(null, newMn.id), 100);
 }
 
 // Ajoute une mini-note à la fin (Type A) ou à la fin du dernier exercice (Type C)
@@ -23302,6 +23447,28 @@ function _tableurAddExo() {
   ev.updatedAt = Date.now();
   save();
   _evalTableurRender();
+}
+
+// Toggle plein écran du tableur (mémorisé entre sessions)
+function _tableurToggleFullscreen() {
+  const mb = document.getElementById('meval-tableur-mb');
+  if (!mb) return;
+  const isFs = mb.dataset.fs === '1';
+  if (isFs) {
+    mb.style.maxWidth = 'min(96vw, 1100px)';
+    mb.style.maxHeight = '94vh';
+    mb.dataset.fs = '0';
+    document.getElementById('meval-tableur-fullscreen-btn').textContent = '⛶';
+    document.getElementById('meval-tableur-fullscreen-btn').title = 'Plein écran';
+    try { localStorage.setItem('planClasse_evalTableurFs', '0'); } catch (e) {}
+  } else {
+    mb.style.maxWidth = '99vw';
+    mb.style.maxHeight = '99vh';
+    mb.dataset.fs = '1';
+    document.getElementById('meval-tableur-fullscreen-btn').textContent = '🗗';
+    document.getElementById('meval-tableur-fullscreen-btn').title = 'Réduire';
+    try { localStorage.setItem('planClasse_evalTableurFs', '1'); } catch (e) {}
+  }
 }
 
 // Ouvre la modale Structure depuis le tableur (l'eval id est déjà dans #meval-edit-id)
