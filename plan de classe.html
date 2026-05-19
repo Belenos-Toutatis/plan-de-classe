@@ -2649,14 +2649,34 @@ kbd {
 
     <div class="about-section">
       <h3>🔢 Nombre de niveaux de maîtrise</h3>
-      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Combien de niveaux de maîtrise distincts utiliser. Défaut : 4 (Insuffisant, Fragile, Satisfaisant, Très bonne maîtrise). Pour saisir une absence, utilise le code <code>A</code> (toujours disponible quel que soit le nombre de niveaux).</p>
-      <select id="evalprefs-nbLevels" style="padding:5px 8px;font-family:var(--font-mono)">
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Combien de niveaux de maîtrise distincts utiliser. Défaut : 4 (Insuffisant, Fragile, Satisfaisant, Très bonne maîtrise).</p>
+      <select id="evalprefs-nbLevels" onchange="_evalPrefsRebuildLabels()" style="padding:5px 8px;font-family:var(--font-mono)">
         <option value="2">2 niveaux</option>
         <option value="3">3 niveaux</option>
         <option value="4" selected>4 niveaux (défaut)</option>
         <option value="5">5 niveaux</option>
         <option value="6">6 niveaux</option>
       </select>
+    </div>
+
+    <div class="about-section">
+      <h3>🏷 Libellés des niveaux</h3>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Comment afficher chaque niveau dans la saisie tableur, les bilans, etc. (Tu peux taper <code>1</code> ou ton libellé, l'app accepte les deux.) Plus les codes des cas spéciaux.</p>
+      <div id="evalprefs-niveauLabels" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px"></div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;padding-top:8px;border-top:1px dashed var(--rule-line-soft)">
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:.85em">
+          <span><strong>Niveau 0</strong> <span style="color:var(--pencil)">(non évalué)</span></span>
+          <input type="text" id="evalprefs-zeroLabel" maxlength="6" style="width:60px;padding:4px 6px;font-family:var(--font-mono);text-align:center">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:.85em">
+          <span><strong>Absent</strong> <span style="color:var(--pencil)">(défaut <code>A</code>)</span></span>
+          <input type="text" id="evalprefs-codeAbsent" maxlength="6" style="width:60px;padding:4px 6px;font-family:var(--font-mono);text-align:center">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:.85em">
+          <span><strong>Non noté</strong> <span style="color:var(--pencil)">(défaut <code>NN</code>)</span></span>
+          <input type="text" id="evalprefs-codeNonNote" maxlength="6" style="width:60px;padding:4px 6px;font-family:var(--font-mono);text-align:center">
+        </label>
+      </div>
     </div>
 
     <div class="about-section">
@@ -3117,8 +3137,7 @@ kbd {
       <input type="date" id="meval-mn-menu-date" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
-      <button class="btn btn-g btn-sm" onclick="_tableurMnInsert('before')" title="Insère une nouvelle mini-note juste avant celle-ci">⬅ Insérer avant</button>
-      <button class="btn btn-g btn-sm" onclick="_tableurMnInsert('after')" title="Insère une nouvelle mini-note juste après celle-ci">Insérer après ➡</button>
+      <span style="font-size:.82em;color:var(--pencil);font-style:italic">💡 Insertion à un endroit précis : utilise <strong>🏗 Structure</strong> avec drag&drop</span>
       <button class="btn btn-r btn-sm" onclick="_tableurMnDelete()" title="Supprimer cette mini-note (et les saisies associées)" style="margin-left:auto">🗑 Supprimer</button>
     </div>
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
@@ -3158,11 +3177,10 @@ kbd {
     <h2 id="meval-pass-menu-title">🎯 Passation</h2>
     <input type="hidden" id="meval-pass-menu-passid">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
-      <button class="btn btn-g btn-sm" onclick="_tableurPassEdit()" title="Modifier code / date / compétences">✏ Éditer</button>
-      <button class="btn btn-g btn-sm" onclick="_tableurPassInsert('before')" title="Nouvelle passation à dater avant celle-ci">⬅ Insérer avant</button>
-      <button class="btn btn-g btn-sm" onclick="_tableurPassInsert('after')" title="Nouvelle passation à dater après celle-ci">Insérer après ➡</button>
+      <button class="btn btn-g btn-sm" onclick="_tableurPassEdit()" title="Modifier code / nom / date / créneau / compétences">✏ Éditer</button>
       <button class="btn btn-r btn-sm" onclick="_tableurPassDelete()" title="Supprimer cette passation (et ses niveaux saisis)" style="margin-left:auto">🗑 Supprimer</button>
     </div>
+    <p style="margin:0 0 10px;font-size:.82em;color:var(--pencil);font-style:italic">💡 Pour insérer une nouvelle passation et réordonner, passe par <strong>🏗 Structure</strong> (drag&drop).</p>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('meval-pass-menu')">Fermer</button>
     </div>
@@ -3175,12 +3193,12 @@ kbd {
     <h2 id="meval-exo-menu-title">📚 Exercice</h2>
     <input type="hidden" id="meval-exo-menu-exoid">
     <div style="display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;font-size:.92em;margin-bottom:12px">
-      <label>Nom</label>
-      <input type="text" id="meval-exo-menu-label" maxlength="60" placeholder="Exercice N" style="padding:5px 8px">
+      <label>Code court</label>
+      <input type="text" id="meval-exo-menu-label" maxlength="20" placeholder="Ex1" style="padding:5px 8px;font-family:var(--font-mono)">
+      <label>Descriptif</label>
+      <input type="text" id="meval-exo-menu-name" maxlength="120" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
-      <button class="btn btn-g btn-sm" onclick="_tableurExoInsert('before')" title="Insère un nouvel exercice avant celui-ci">⬅ Insérer avant</button>
-      <button class="btn btn-g btn-sm" onclick="_tableurExoInsert('after')" title="Insère un nouvel exercice après celui-ci">Insérer après ➡</button>
       <button class="btn btn-r btn-sm" onclick="_tableurExoDelete()" title="Supprimer cet exercice et toutes ses questions" style="margin-left:auto">🗑 Supprimer</button>
     </div>
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
@@ -4639,6 +4657,14 @@ const DEFAULT_EVAL_PREFS = {
   maxNoteDefault:   20,
   // Nombre de niveaux de maîtrise (saisie compétences) — défaut 4 (Type B + Type C)
   nbLevels:         4,
+  // Libellés affichés pour les niveaux (peuvent être personnalisés par l'enseignant).
+  // Index 0 = niveau 1, index 1 = niveau 2, etc. Doit avoir au moins nbLevels entrées.
+  niveauLabels:     ['1', '2', '3', '4'],
+  // Libellé du niveau "non évalué" (équivalent niveau 0 / cellule vide)
+  zeroLabel:        '0',
+  // Codes pour absent / non noté (saisis dans le tableur)
+  codeAbsent:       'A',
+  codeNonNote:      'NN',
 };
 
 function migrateEvalDefaults() {
@@ -4687,6 +4713,14 @@ function migrateEvalDefaults() {
   if (typeof ep.nbLevels !== 'number' || ep.nbLevels < 2 || ep.nbLevels > 6) {
     ep.nbLevels = 4;
   }
+  // Libellés des niveaux (personnalisables — par défaut '1','2','3','4',...)
+  if (!Array.isArray(ep.niveauLabels) || ep.niveauLabels.length < ep.nbLevels) {
+    ep.niveauLabels = [];
+    for (let i = 1; i <= ep.nbLevels; i++) ep.niveauLabels.push(String(i));
+  }
+  if (typeof ep.zeroLabel !== 'string' || !ep.zeroLabel) ep.zeroLabel = '0';
+  if (typeof ep.codeAbsent !== 'string' || !ep.codeAbsent) ep.codeAbsent = 'A';
+  if (typeof ep.codeNonNote !== 'string' || !ep.codeNonNote) ep.codeNonNote = 'NN';
   // Bibliothèque commentaires (regroupée positifs/négatifs ; liste plate dans chaque groupe)
   if (!S.evalCommentLibrary || typeof S.evalCommentLibrary !== 'object') {
     S.evalCommentLibrary = { positive: [], negative: [] };
@@ -21400,6 +21434,39 @@ function _evalPrefsRenderAll(prefs) {
   // ── Nombre de niveaux ──
   const wn = document.getElementById('evalprefs-nbLevels');
   if (wn) wn.value = String(prefs.nbLevels || 4);
+  // ── Libellés des niveaux 1..n + codes spéciaux ──
+  _evalPrefsRenderNiveauLabels(prefs);
+  const zl = document.getElementById('evalprefs-zeroLabel'); if (zl) zl.value = prefs.zeroLabel || '0';
+  const ca = document.getElementById('evalprefs-codeAbsent'); if (ca) ca.value = prefs.codeAbsent || 'A';
+  const cn = document.getElementById('evalprefs-codeNonNote'); if (cn) cn.value = prefs.codeNonNote || 'NN';
+}
+
+function _evalPrefsRenderNiveauLabels(prefs) {
+  const wrap = document.getElementById('evalprefs-niveauLabels');
+  if (!wrap) return;
+  const nb = parseInt(document.getElementById('evalprefs-nbLevels')?.value || prefs.nbLevels || 4, 10);
+  const labels = prefs.niveauLabels || [];
+  wrap.innerHTML = '';
+  for (let i = 0; i < nb; i++) {
+    const lab = document.createElement('label');
+    lab.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:.85em';
+    lab.innerHTML = `
+      <span><strong>Niveau ${i + 1}</strong></span>
+      <input type="text" data-idx="${i}" value="${_esc(labels[i] || String(i + 1))}" maxlength="8"
+             style="width:64px;padding:4px 6px;font-family:var(--font-mono);text-align:center">`;
+    wrap.appendChild(lab);
+  }
+}
+
+// Quand le nb de niveaux change, re-render la grille des labels en préservant les valeurs déjà saisies
+function _evalPrefsRebuildLabels() {
+  const wrap = document.getElementById('evalprefs-niveauLabels');
+  if (!wrap) return;
+  const current = Array.from(wrap.querySelectorAll('input[data-idx]')).map(i => i.value);
+  const nb = parseInt(document.getElementById('evalprefs-nbLevels')?.value || 4, 10);
+  const labels = [];
+  for (let i = 0; i < nb; i++) labels.push(current[i] || String(i + 1));
+  _evalPrefsRenderNiveauLabels({ niveauLabels: labels, nbLevels: nb });
 }
 
 // Toggle visibilité du bloc pourcentages selon le mode choisi
@@ -21499,8 +21566,21 @@ function _evalPrefsSave() {
   S.evalPrefs.maxNoteDefault    = maxNote;
   const nbLvl = parseInt(document.getElementById('evalprefs-nbLevels')?.value, 10);
   S.evalPrefs.nbLevels = (nbLvl >= 2 && nbLvl <= 6) ? nbLvl : 4;
+  // Libellés des niveaux + codes spéciaux
+  const nivInputs = Array.from(document.querySelectorAll('#evalprefs-niveauLabels input[data-idx]'));
+  const niveauLabels = [];
+  for (let i = 0; i < S.evalPrefs.nbLevels; i++) {
+    const inp = nivInputs.find(e => parseInt(e.getAttribute('data-idx'), 10) === i);
+    niveauLabels.push((inp?.value || String(i + 1)).trim() || String(i + 1));
+  }
+  S.evalPrefs.niveauLabels = niveauLabels;
+  S.evalPrefs.zeroLabel = (document.getElementById('evalprefs-zeroLabel')?.value || '0').trim() || '0';
+  S.evalPrefs.codeAbsent = (document.getElementById('evalprefs-codeAbsent')?.value || 'A').trim() || 'A';
+  S.evalPrefs.codeNonNote = (document.getElementById('evalprefs-codeNonNote')?.value || 'NN').trim() || 'NN';
   save();
   closeMod2('mevalprefs');
+  // Re-render le tableur courant si ouvert
+  if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
   toast('✓ Paramètres évaluation enregistrés');
 }
 
@@ -21677,8 +21757,11 @@ function _parseMiniNoteInput(raw) {
   if (raw == null) return null;
   const s = String(raw).trim().toUpperCase();
   if (s === '') return null;
-  if (s === 'NN' || s === 'N') return 'NN';
-  if (s === 'A' || s === 'ABS') return 'A';
+  const ep = S.evalPrefs || {};
+  const absCode = (ep.codeAbsent || 'A').toUpperCase();
+  const nnCode  = (ep.codeNonNote || 'NN').toUpperCase();
+  if (s === nnCode || s === 'NN' || s === 'N') return 'NN';
+  if (s === absCode || s === 'A' || s === 'ABS') return 'A';
   const n = parseFloat(s.replace(',', '.'));
   return Number.isFinite(n) ? n : null;
 }
@@ -22151,8 +22234,15 @@ function _evalEditRenderMiniNotes() {
     ev.miniNotes.forEach((mn, idx) => {
       totalPts += (mn.max || 0);
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px';
+      row.setAttribute('draggable', 'true');
+      row.setAttribute('data-structdrag', 'mn');
+      row.dataset.idx = idx;
+      row.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line);border-radius:3px;cursor:grab';
+      row.addEventListener('dragstart', e => _evalStructDragStart(e, 'mn', idx));
+      row.addEventListener('dragover', _evalStructDragOver);
+      row.addEventListener('drop', e => _evalStructDrop(e, 'mn', idx));
       row.innerHTML = `
+        <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:600;cursor:grab" title="Glisse pour réordonner">⋮⋮</span>
         <span style="font-family:var(--font-mono);color:var(--pencil);min-width:24px;text-align:right">${idx + 1}.</span>
         <input type="text" value="${_esc(mn.label || '')}" placeholder="Code court (Q1…)" maxlength="20"
                style="width:90px;padding:4px 6px;font-family:var(--font-mono)" title="Code court (affiché en en-tête de colonne)"
@@ -22170,6 +22260,8 @@ function _evalEditRenderMiniNotes() {
                onchange="_evalEditUpdateMiniNote(${idx}, 'date', this.value)">
         <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${idx})" title="Supprimer cette mini-note">✕</button>
       `;
+      // Empêche le drag depuis les inputs (sinon impossible de sélectionner du texte)
+      row.querySelectorAll('input, button').forEach(el => el.addEventListener('mousedown', e => e.stopPropagation()));
       wrap.appendChild(row);
     });
     actions.innerHTML = '<button class="btn btn-g btn-sm" onclick="_evalEditAddMiniNote()">+ Ajouter une mini-note</button>';
@@ -22188,23 +22280,38 @@ function _evalEditRenderMiniNotes() {
   let questionGlobalIdx = 0;
   ev.exercices.forEach((exo, exoIdx) => {
     const exoBlock = document.createElement('div');
-    exoBlock.style.cssText = 'background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--ink-blue);border-radius:3px;padding:8px';
+    exoBlock.setAttribute('draggable', 'true');
+    exoBlock.setAttribute('data-structdrag', 'exo');
+    exoBlock.style.cssText = 'background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--ink-blue);border-radius:3px;padding:8px;cursor:grab';
+    exoBlock.addEventListener('dragstart', e => _evalStructDragStart(e, 'exo', exoIdx));
+    exoBlock.addEventListener('dragover', _evalStructDragOver);
+    exoBlock.addEventListener('drop', e => _evalStructDrop(e, 'exo', exoIdx));
     // En-tête de l'exercice
-    let exoHeaderHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+    const exoTip = exo.name ? `${exo.label || ''} — ${exo.name}` : (exo.label || '');
+    let exoHeaderHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px" title="${_esc(exoTip)}">
+      <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:bold;cursor:grab" title="Glisse l'exercice pour réordonner">⋮⋮</span>
       <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:bold;font-size:.85em">EX.${exoIdx + 1}</span>
-      <input type="text" value="${_esc(exo.label || '')}" placeholder="Libellé de l'exercice (ex. Lecture du diagramme)" maxlength="60"
-             style="flex:1;padding:4px 8px;font-family:var(--font-serif);font-weight:600" oninput="_evalEditUpdateExo(${exoIdx}, this.value)">
+      <input type="text" value="${_esc(exo.label || '')}" placeholder="Code court (Ex1…)" maxlength="20"
+             style="width:90px;padding:4px 6px;font-family:var(--font-mono);font-weight:600" title="Code court (en-tête de groupe de colonnes)"
+             oninput="_evalEditUpdateExo(${exoIdx}, 'label', this.value)">
+      <input type="text" value="${_esc(exo.name || '')}" placeholder="Descriptif (tooltip — optionnel)" maxlength="120"
+             style="flex:1;padding:4px 8px;font-family:var(--font-serif)" title="Descriptif — affiché au survol"
+             oninput="_evalEditUpdateExo(${exoIdx}, 'name', this.value)">
       <button class="btn btn-r btn-sm" onclick="_evalEditRemoveExo(${exoIdx})" title="Supprimer cet exercice (et toutes ses questions)">✕ Exo</button>
     </div>`;
     // Questions de cet exercice
     const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
-    const qBlocks = [];
     qs.forEach((q, qIdxInExo) => {
       const globalIdx = ev.miniNotes.indexOf(q);
       totalPts += (q.max || 0);
       questionGlobalIdx++;
       const compChips = _renderCompetenceChips(q.competenceIds || [], globalIdx);
-      qBlocks.push(`<div style="display:flex;gap:6px;align-items:center;padding:4px 6px;padding-left:24px;border-top:1px dashed var(--rule-line-soft)">
+      exoHeaderHTML += `<div draggable="true" data-structdrag="q"
+            ondragstart="event.stopPropagation();_evalStructDragStart(event,'q',${qIdxInExo},'${_esc(exo.id)}')"
+            ondragover="_evalStructDragOver(event)"
+            ondrop="_evalStructDrop(event,'q',${qIdxInExo},'${_esc(exo.id)}')"
+            style="display:flex;gap:6px;align-items:center;padding:4px 6px;padding-left:14px;border-top:1px dashed var(--rule-line-soft);cursor:grab">
+        <span style="font-family:var(--font-mono);color:var(--pencil);font-weight:600;cursor:grab" title="Glisse pour réordonner les questions de cet exercice">⋮⋮</span>
         <span style="font-family:var(--font-mono);color:var(--pencil);font-size:.85em;min-width:36px">Q${exoIdx + 1}.${qIdxInExo + 1}</span>
         <input type="text" value="${_esc(q.label || '')}" placeholder="Libellé question" maxlength="50"
                style="flex:1;padding:3px 6px;font-size:.92em" oninput="_evalEditUpdateMiniNote(${globalIdx}, 'label', this.value)">
@@ -22216,11 +22323,12 @@ function _evalEditRenderMiniNotes() {
         ${compChips}
         <button class="btn btn-g btn-sm" onclick="_evalEditPickCompetences(${globalIdx})" title="Rattacher / détacher des compétences" style="padding:2px 8px;font-size:.85em">🎯</button>
         <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${globalIdx})" title="Supprimer cette question" style="padding:2px 6px">✕</button>
-      </div>`);
+      </div>`;
     });
-    exoHeaderHTML += '<div style="display:flex;flex-direction:column">' + qBlocks.join('') + '</div>';
     exoHeaderHTML += `<div style="margin-top:6px;text-align:right"><button class="btn btn-g btn-sm" onclick="_evalEditAddQuestion('${_esc(exo.id)}')">+ Question dans Ex.${exoIdx + 1}</button></div>`;
     exoBlock.innerHTML = exoHeaderHTML;
+    // Empêche le drag depuis les inputs (sinon impossible de sélectionner du texte)
+    exoBlock.querySelectorAll('input, button').forEach(el => el.addEventListener('mousedown', e => e.stopPropagation()));
     wrap.appendChild(exoBlock);
   });
   // Questions orphelines (sans exerciceId valide) — peut arriver si on supprime un exo
@@ -22278,11 +22386,19 @@ function _evalEditAddExo() {
   _evalEditRenderMiniNotes();
 }
 
-function _evalEditUpdateExo(idx, label) {
+function _evalEditUpdateExo(idx, fieldOrLabel, maybeVal) {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev || !ev.exercices?.[idx]) return;
-  ev.exercices[idx].label = String(label || '');
+  // Rétro-compat : si signature à 2 args (idx, label), c'est l'ancien appel "label only"
+  if (arguments.length === 2) {
+    ev.exercices[idx].label = String(fieldOrLabel || '');
+  } else {
+    const field = fieldOrLabel;
+    const val = String(maybeVal || '');
+    if (field === 'label') ev.exercices[idx].label = val;
+    else if (field === 'name') { if (val) ev.exercices[idx].name = val; else delete ev.exercices[idx].name; }
+  }
   _evalEditDirty = true;
 }
 
@@ -23130,7 +23246,10 @@ function _evalTableurRender() {
     for (const g of exoGroups) {
       const ctxAttr = g.id ? ` oncontextmenu="event.preventDefault();_tableurExoContextMenu(event,'${_esc(g.id)}')"` : '';
       const cur = g.id ? 'cursor:context-menu;' : '';
-      html += `<th colspan="${g.span}"${ctxAttr} style="${cur}padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}${g.id ? ' — clic droit : éditer / insérer / supprimer' : ''}">${_esc(g.label)}</th>`;
+      // Récupère le descriptif optionnel
+      const exo = g.id ? ev.exercices?.find(e => e.id === g.id) : null;
+      const tip = exo?.name ? `${g.label} — ${exo.name}` : g.label;
+      html += `<th colspan="${g.span}"${ctxAttr} style="${cur}padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(tip)}${g.id ? ' — clic droit : éditer / supprimer' : ''}">${_esc(g.label)}</th>`;
     }
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
     html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
@@ -23183,7 +23302,9 @@ function _evalTableurRender() {
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
     mnOrder.forEach((mn, ci) => {
       const v = values[mn.id];
-      const dispVal = (v === 'NN' || v === 'A') ? v : (v != null && v !== '' ? String(v).replace('.', ',') : '');
+      const dispVal = (v === 'NN') ? (S.evalPrefs?.codeNonNote || 'NN')
+                    : (v === 'A')  ? (S.evalPrefs?.codeAbsent  || 'A')
+                    : (v != null && v !== '' ? String(v).replace('.', ',') : '');
       // Indicateur commentaires : si présents, montre un mini badge cliquable + clic droit sur la cellule
       const stuComments = ev.notes?.[sid]?.comments?.[mn.id] || [];
       const nbCom = stuComments.length;
@@ -23535,7 +23656,7 @@ function _evalRenderBilanComps() {
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
-      const dispVal = (niv == null) ? '—' : `N${Math.round(niv)}`;
+      const dispVal = (niv == null) ? '—' : _formatNiveau(Math.round(niv));
       const bg = (niv != null) ? colors[Math.max(0, Math.min(3, Math.round(niv) - 1))] : '';
       const color = (niv != null) ? '#fff' : 'var(--pencil)';
       html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${niv != null ? 700 : 400};background:${bg};color:${color}">${dispVal}</td>`;
@@ -23566,7 +23687,7 @@ function _evalBilanCopy() {
     const cells = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
-      cells.push(niv == null ? '' : `N${Math.round(niv)}`);
+      cells.push(niv == null ? '' : _formatNiveau(Math.round(niv)));
     }
     const note = _computeStudentEvalNote(ev, sid);
     cells.push(note == null ? '' : _fmtNote(note));
@@ -23602,8 +23723,8 @@ function _evalTableurCopyAll() {
       const niv = pass.niveaux?.[sid] || {};
       for (const cid of (pass.competenceIds || [])) {
         const v = niv[cid];
-        if (v === 'A') cells.push('A');
-        else if (typeof v === 'number' && v >= 1 && v <= 4) cells.push(`N${v}`);
+        if (v === 'A') cells.push(_formatNiveau('A'));
+        else if (typeof v === 'number' && v >= 1 && v <= 4) cells.push(_formatNiveau(v));
         else cells.push('');
       }
       lines.push(cells.join('\t'));
@@ -23888,7 +24009,10 @@ function _evalTableurRenderB(ev, cls) {
       }
       compIds.forEach((cid, kIdx) => {
         const cur = niv[cid];
-        const dispVal = (cur === 'A') ? 'A' : (typeof cur === 'number' && cur >= 1 && cur <= 4 ? String(cur) : '');
+        const dispVal = (cur === 'A') ? (S.evalPrefs?.codeAbsent || 'A')
+                       : (typeof cur === 'number' && cur >= 1 && cur <= 4
+                          ? (S.evalPrefs?.niveauLabels?.[cur - 1] || String(cur))
+                          : '');
         const bg = (typeof cur === 'number' && cur >= 1) ? colors[cur - 1] : (cur === 'A' ? '#9ca3af' : '');
         const color = (cur != null && cur !== 0 && cur !== '') ? '#fff' : '';
         const fw = (cur != null && cur !== 0 && cur !== '') ? '700' : '400';
@@ -23912,16 +24036,36 @@ function _evalTableurBSelectPassation(passId) {
 }
 
 // Parse une saisie texte de niveau. Retourne un nombre 1..nbMax, 'A', 0 (= retirer)
-// ou undefined si invalide (à signaler à l'utilisateur).
+// ou undefined si invalide. Accepte les codes personnalisés via S.evalPrefs (et leurs alias).
 function _parseNiveauInput(raw, nbMax) {
   if (raw == null) return undefined;
-  const s = String(raw).trim().toUpperCase();
-  if (s === '') return 0;                  // vide = effacer
-  if (s === 'A' || s === 'ABS') return 'A';
-  if (s === '0') return 0;
+  const s = String(raw).trim();
+  if (s === '') return 0;
+  const sUp = s.toUpperCase();
+  const ep = S.evalPrefs || {};
+  const absLabel = (ep.codeAbsent || 'A').toUpperCase();
+  const zeroLabel = (ep.zeroLabel || '0').toUpperCase();
+  if (sUp === absLabel || sUp === 'A' || sUp === 'ABS') return 'A';
+  if (sUp === zeroLabel || sUp === '0') return 0;
+  // Vérifie aussi les labels personnalisés des niveaux 1..nbMax
+  const labels = Array.isArray(ep.niveauLabels) ? ep.niveauLabels : [];
+  for (let i = 0; i < (nbMax || 4); i++) {
+    if (labels[i] && sUp === String(labels[i]).toUpperCase()) return i + 1;
+  }
   const n = parseInt(s, 10);
   if (Number.isFinite(n) && n >= 1 && n <= (nbMax || 4)) return n;
   return undefined;
+}
+
+// Renvoie le label à afficher pour un niveau (1..n, 'A', 0, null/undefined)
+function _formatNiveau(v) {
+  const ep = S.evalPrefs || {};
+  if (v === 'A') return ep.codeAbsent || 'A';
+  if (v === 0 || v == null) return ep.zeroLabel || '';
+  if (typeof v === 'number' && v >= 1) {
+    return (ep.niveauLabels && ep.niveauLabels[v - 1]) || String(v);
+  }
+  return String(v);
 }
 
 function _evalTableurBUpdate(inputEl) {
@@ -24222,6 +24366,7 @@ function _tableurExoContextMenu(event, exoId) {
   document.getElementById('meval-exo-menu-exoid').value = exoId;
   document.getElementById('meval-exo-menu-title').textContent = `📚 ${exo.label || '(sans nom)'}`;
   document.getElementById('meval-exo-menu-label').value = exo.label || '';
+  document.getElementById('meval-exo-menu-name').value = exo.name || '';
   _modalReturnTo['meval-exo-menu'] = () => _evalTableurRender();
   openMod('meval-exo-menu');
   setTimeout(() => document.getElementById('meval-exo-menu-label')?.focus(), 50);
@@ -24235,8 +24380,10 @@ function _tableurExoMenuSave() {
   const exo = ev.exercices?.find(e => e.id === exoId);
   if (!exo) return;
   const label = (document.getElementById('meval-exo-menu-label').value || '').trim();
+  const name = (document.getElementById('meval-exo-menu-name').value || '').trim();
   pushUndo();
   exo.label = label;
+  if (name) exo.name = name; else delete exo.name;
   ev.updatedAt = Date.now();
   save();
   closeMod2('meval-exo-menu');
@@ -24548,6 +24695,66 @@ function _computeStudentEvalNoteB(ev, sid) {
   if (sumW === 0) return null;
   const avgPts = sumPts / sumW;
   return (avgPts / ptsMax) * noteMax;
+}
+
+// ─── Drag & drop générique pour la Structure (mini-notes, questions, exercices) ───
+let _evalStructDrag = { kind: null, idx: null, exoId: null };
+
+function _evalStructDragStart(e, kind, idx, exoId) {
+  _evalStructDrag = { kind, idx, exoId: exoId || null };
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.style.opacity = '0.4';
+  e.stopPropagation();
+}
+function _evalStructDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.stopPropagation();
+}
+function _evalStructDrop(e, kind, idx, exoId) {
+  e.preventDefault();
+  e.stopPropagation();
+  const src = { ..._evalStructDrag };
+  _evalStructDrag = { kind: null, idx: null, exoId: null };
+  document.querySelectorAll('[data-structdrag]').forEach(el => el.style.opacity = '');
+  if (!src.kind || src.kind !== kind) return;
+  // Pour les questions : drop accepté uniquement dans le même exo
+  if (kind === 'q' && src.exoId !== exoId) return;
+  if (src.idx === idx) return;
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  pushUndo();
+  if (kind === 'mn') {
+    const [m] = ev.miniNotes.splice(src.idx, 1);
+    ev.miniNotes.splice(idx, 0, m);
+  } else if (kind === 'exo') {
+    const [x] = ev.exercices.splice(src.idx, 1);
+    ev.exercices.splice(idx, 0, x);
+  } else if (kind === 'q') {
+    // Réordonner les questions de cet exo : src.idx et idx sont les positions
+    // DANS LA LISTE FILTRÉE qs de cet exo. On manipule ev.miniNotes directement.
+    const qs = ev.miniNotes.filter(mn => mn.exerciceId === exoId);
+    const movedQ = qs[src.idx];
+    if (!movedQ) return;
+    const srcGlobal = ev.miniNotes.indexOf(movedQ);
+    ev.miniNotes.splice(srcGlobal, 1);
+    // Trouve la cible globale après suppression
+    const qsAfter = ev.miniNotes.filter(mn => mn.exerciceId === exoId);
+    const tgtQ = qsAfter[idx];
+    let insertGlobal;
+    if (tgtQ) insertGlobal = ev.miniNotes.indexOf(tgtQ);
+    else {
+      // Fin de section : insère après la dernière question de l'exo (ou à la fin)
+      const lastQ = qsAfter[qsAfter.length - 1];
+      insertGlobal = lastQ ? ev.miniNotes.indexOf(lastQ) + 1 : ev.miniNotes.length;
+    }
+    ev.miniNotes.splice(insertGlobal, 0, movedQ);
+  }
+  ev.updatedAt = Date.now();
+  save();
+  _evalEditRenderMiniNotes();
+  if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
 }
 
 // ─── Drag & drop pour réordonner les passations dans la modale Structure ───
