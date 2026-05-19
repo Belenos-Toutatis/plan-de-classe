@@ -24585,23 +24585,53 @@ function _evalTableurRenderB(ev, cls) {
     const passSlot = _passSlotIdFor(p, cls.id);
     const slotLbl = _slotLabelFromId(ev, passSlot);
     const tip = (p.name ? `${p.code || '?'} — ${p.name}\n` : '')
-              + `${p.code || '?'} · ${_fmtDateFr(passDate)}${slotLbl ? ' · ' + slotLbl : ''} · ${nbComps} compétence${nbComps > 1 ? 's' : ''}`;
-    html += `<th colspan="${nbComps}" oncontextmenu="event.preventDefault();_tableurPassContextMenu(event,'${_esc(p.id)}')" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper);cursor:context-menu;border-left:2px solid var(--ink-blue-soft)" title="${_esc(tip)} (clic droit = menu)">
-        ${_esc(p.code || '?')} <span style="font-weight:400;font-size:.82em;color:var(--pencil)">${_fmtDateFr(passDate)}${slotLbl ? ' · ' + _esc(slotLbl) : ''}</span>
+              + `clic droit pour les autres options`;
+    // Inputs inline : code court + date (de la classe active) + créneau
+    // (le descriptif et la liste des compétences restent éditables via clic droit / Structure)
+    const isMulti = _evalClassIds(ev).length > 1;
+    html += `<th colspan="${nbComps}" oncontextmenu="event.preventDefault();_tableurPassContextMenu(event,'${_esc(p.id)}')" style="padding:5px 6px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper);cursor:context-menu;border-left:2px solid var(--ink-blue-soft)" title="${_esc(tip)}">
+        <input type="text" value="${_esc(p.code || '')}" data-passid="${_esc(p.id)}" data-field="code"
+               oninput="_evalTableurEditPass(this)"
+               style="width:80px;max-width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:700;text-align:center;color:var(--ink-blue);font-size:.95em"
+               title="Code court (édition directe)">
+        <div style="display:flex;align-items:center;justify-content:center;gap:3px;margin-top:2px">
+          <input type="date" value="${_esc(passDate)}" data-passid="${_esc(p.id)}" data-field="date"
+                 data-classid="${_esc(cls.id)}"
+                 onchange="_evalTableurEditPass(this)"
+                 style="width:108px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.78em;color:var(--pencil)"
+                 title="Date (${isMulti ? 'pour la classe ' + _esc(cls.nom) : 'classe unique'})">
+        </div>
+        ${slotLbl ? `<div style="font-weight:400;font-size:.76em;color:var(--pencil);margin-top:1px">${_esc(slotLbl)}</div>` : ''}
       </th>`;
   }
   // Colonne Remarque (facultative, par élève) — rowspan 2 pour aligner sur les deux lignes
   html += `<th rowspan="2" style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
   html += '</tr>';
 
-  // Ligne 2 : codes de compétence par passation
+  // Ligne 2 : codes de compétence par passation (éditables via <select>)
+  // Précompute la liste des compétences disponibles (tri par code)
+  const allComps = Object.values(S.competences || {}).slice()
+    .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
   html += '<tr>';
   for (const p of sortedPass) {
-    for (const cid of (p.competenceIds || [])) {
+    const compIds = p.competenceIds || [];
+    for (const cid of compIds) {
       const c = S.competences?.[cid];
-      html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:60px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);cursor:help;border-left:1px solid var(--rule-line-soft)" title="${_esc(c?.name || '')}">${_esc(c?.code || '?')}</th>`;
+      let opts = '';
+      for (const cc of allComps) {
+        // Ne propose pas les comps déjà choisies dans CETTE passation (sauf la courante)
+        if (cc.id !== cid && compIds.includes(cc.id)) continue;
+        const sel = (cc.id === cid) ? ' selected' : '';
+        opts += `<option value="${_esc(cc.id)}"${sel} title="${_esc(cc.name || '')}">${_esc(cc.code)}${cc.name ? ' — ' + _esc(cc.name) : ''}</option>`;
+      }
+      html += `<th style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:60px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c?.name || '')}">
+        <select data-passid="${_esc(p.id)}" data-cid="${_esc(cid)}"
+                onchange="_evalTableurChangeComp(this)"
+                style="padding:2px 4px;font-family:var(--font-mono);font-weight:600;border:1px solid transparent;background:transparent;font-size:.92em;max-width:100%"
+                title="Changer la compétence (les niveaux saisis seront proposés en transfert / suppression)">${opts}</select>
+      </th>`;
     }
-    if ((p.competenceIds || []).length === 0) {
+    if (compIds.length === 0) {
       html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-style:italic;color:var(--pencil);font-size:.82em">—</th>`;
     }
   }
@@ -24899,6 +24929,119 @@ function _toastHorsBareme(val, max) {
 // Met à jour une mini-note quand l'utilisateur édite un champ en en-tête
 // (label / max / date). Pour `max` : recalcule les totaux des lignes sans
 // re-render. Pour `date` : met à jour ev.date = max des dates.
+// Édition inline d'une passation Type B depuis le tableur (code court, date).
+// Pour la date, on écrit dans pass.dates[classId] si l'éval est multi-classes,
+// sinon directement dans pass.date.
+let _evalTableurPassEditTimer = null;
+function _evalTableurEditPass(inputEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  const passId = inputEl.getAttribute('data-passid');
+  const field  = inputEl.getAttribute('data-field');
+  const cid    = inputEl.getAttribute('data-classid');
+  const pass   = ev.passations?.find(p => p.id === passId);
+  if (!pass) return;
+  if (field === 'code') {
+    pass.code = (inputEl.value || '').trim();
+  } else if (field === 'date') {
+    const d = inputEl.value || '';
+    const isMulti = _evalClassIds(ev).length > 1;
+    if (isMulti && cid) {
+      pass.dates = pass.dates || {};
+      if (d) pass.dates[cid] = d; else delete pass.dates[cid];
+      // Re-calcule la date "officielle" = la plus récente parmi les classes
+      const allDates = Object.values(pass.dates).filter(Boolean);
+      pass.date = allDates.reduce((m, x) => (x > m ? x : m), '');
+    } else {
+      pass.date = d;
+    }
+  }
+  ev.updatedAt = Date.now();
+  // Date globale de l'éval = max des dates des passations
+  ev.date = (ev.passations || []).reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  if (_evalTableurPassEditTimer) clearTimeout(_evalTableurPassEditTimer);
+  _evalTableurPassEditTimer = setTimeout(() => save(), 600);
+}
+
+// Édition inline de la compétence affectée à une cellule (Type B).
+// Si la nouvelle comp est déjà présente dans la passation : annule (UI déjà filtrée).
+// Si des niveaux sont saisis sur l'ancienne comp : propose transfer/keep/erase.
+function _evalTableurChangeComp(selectEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  const passId = selectEl.getAttribute('data-passid');
+  const oldCid = selectEl.getAttribute('data-cid');
+  const newCid = selectEl.value;
+  const pass = ev.passations?.find(p => p.id === passId);
+  if (!pass || !oldCid || !newCid || oldCid === newCid) return;
+  // Si la nouvelle comp est déjà dans la passation, refuse silencieusement
+  if ((pass.competenceIds || []).includes(newCid)) {
+    selectEl.value = oldCid;
+    toast('⚠ Cette compétence est déjà dans la passation', 'warn');
+    return;
+  }
+  // Détecte si des niveaux sont déjà saisis sur l'ancienne comp
+  const hasData = Object.values(pass.niveaux || {}).some(perStu => perStu && perStu[oldCid] != null);
+  const doSwap = (action) => {
+    pushUndo();
+    // Remplace l'ancienne comp par la nouvelle (préserve l'ordre)
+    pass.competenceIds = (pass.competenceIds || []).map(c => c === oldCid ? newCid : c);
+    if (action === 'transfer') {
+      // Déplace tous les niveaux de oldCid vers newCid (sans écraser si déjà présent)
+      for (const sid in (pass.niveaux || {})) {
+        const perStu = pass.niveaux[sid];
+        if (!perStu) continue;
+        const v = perStu[oldCid];
+        if (v == null) continue;
+        if (perStu[newCid] == null) perStu[newCid] = v;
+        delete perStu[oldCid];
+      }
+    } else if (action === 'erase') {
+      for (const sid in (pass.niveaux || {})) {
+        if (pass.niveaux[sid]) delete pass.niveaux[sid][oldCid];
+      }
+    }
+    // 'keep' : on laisse les niveaux orphelins sur oldCid (le nouveau cid démarre vide)
+    ev.updatedAt = Date.now();
+    save();
+    _evalTableurRender();
+  };
+  if (!hasData) { doSwap('erase'); return; }
+  // Ouvre la modale "Que faire des niveaux saisis ?"
+  // Réutilise meval-comp-change en mode mono-comp (1 retirée + 1 ajoutée → transfer dispo)
+  const detail = document.getElementById('meval-comp-change-detail');
+  const oldC = S.competences?.[oldCid], newC = S.competences?.[newCid];
+  const nb = Object.values(pass.niveaux || {}).filter(perStu => perStu && perStu[oldCid] != null).length;
+  detail.innerHTML = `<div>Remplacement de <strong style="font-family:var(--font-mono)">${_esc(oldC?.code || oldCid)}</strong>${oldC?.name ? ' — ' + _esc(oldC.name) : ''} par <strong style="font-family:var(--font-mono)">${_esc(newC?.code || newCid)}</strong>${newC?.name ? ' — ' + _esc(newC.name) : ''}.</div><div style="margin-top:6px"><strong>${nb}</strong> élève${nb > 1 ? 's' : ''} avec un niveau saisi sur ${_esc(oldC?.code || oldCid)}.</div>`;
+  const tgt = document.getElementById('meval-comp-change-target');
+  tgt.innerHTML = `<option value="${_esc(newCid)}">${_esc(newC?.code || newCid)}${newC?.name ? ' — ' + _esc(newC.name) : ''}</option>`;
+  // Active le radio "transfer" (1 retirée + 1 ajoutée → transfert possible)
+  const transferRow = document.getElementById('meval-comp-change-transfer-row');
+  const transferRadio = transferRow.querySelector('input[type="radio"]');
+  transferRadio.disabled = false;
+  transferRow.style.opacity = '';
+  document.querySelector('input[name="meval-comp-change-action"][value="keep"]').checked = true;
+  // Sauvegarde les handlers originaux pour restauration après le swap
+  const origApply = _evalCompChangeApply;
+  const origCancel = _evalCompChangeCancel;
+  _evalCompChangeApply = function() {
+    const action = document.querySelector('input[name="meval-comp-change-action"]:checked')?.value || 'keep';
+    closeMod2('meval-comp-change');
+    _evalCompChangeApply = origApply;
+    _evalCompChangeCancel = origCancel;
+    doSwap(action);
+  };
+  _evalCompChangeCancel = function() {
+    selectEl.value = oldCid;
+    closeMod2('meval-comp-change');
+    _evalCompChangeApply = origApply;
+    _evalCompChangeCancel = origCancel;
+  };
+  openMod('meval-comp-change');
+}
+
 function _tableurEditMn(inputEl) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -26743,7 +26886,9 @@ function _evalExportBuildRows(ev) {
     const stu = S.eleves[sid];
     if (!stu) continue;
     const name = `${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim();
-    const note = _computeStudentEvalNote(ev, sid);
+    // Note finale arrondie à la granulométrie configurée pour l'éval (ou défaut global)
+    const noteRaw = _computeStudentEvalNote(ev, sid);
+    const note = (noteRaw == null) ? null : _roundNoteToGranularity(noteRaw, ev);
     const compLevels = comps.map(c => {
       const niv = _evalStudentCompetenceLevel(ev, sid, c.id);
       return { cid: c.id, code: c.code, name: c.name, level: niv > 0 ? niv : null };
