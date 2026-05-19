@@ -3356,6 +3356,7 @@ kbd {
         <button class="btn btn-g btn-sm" onclick="_evalPasteOpen()" title="Coller une colonne de notes depuis une autre source (QCMCam, tableur…) dans l'ordre du tri actuel">📥 Coller des notes</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="Copie le tableau complet (élève + mini-notes + total) au format TSV, prêt à coller dans un tableur ou un ENT">📋 Copier tout</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-bilan-btn" onclick="_evalOpenBilanComps()" title="Bilan par compétence : niveau atteint par chaque élève, plus la note /20" style="display:none">📊 Bilan compétences</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="Tableau croisé : comparer les classes (moyenne, écart-type) par civilité — disponible quand l'évaluation est partagée entre plusieurs classes" style="display:none">🔀 Comparer classes</button>
       </div>
     </div>
     <input type="hidden" id="meval-tableur-evalid">
@@ -22146,8 +22147,12 @@ function renderEvalNotes() {
       summaryInfo = `${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${totalMax} pts)`;
     }
     // Stats essentielles : moyenne / min / max / σ des notes finales (classe active uniquement)
+    // — arrondies à la granulométrie pour cohérence avec l'affichage utilisateur.
     const allNotes = (cls.eleves || [])
-      .map(sid => _computeStudentEvalNote(ev, sid))
+      .map(sid => {
+        const raw = _computeStudentEvalNote(ev, sid);
+        return raw == null ? null : _roundNoteToGranularity(raw, ev);
+      })
       .filter(v => typeof v === 'number' && Number.isFinite(v));
     let statsHTML = '';
     if (allNotes.length > 0) {
@@ -23394,6 +23399,9 @@ function _evalOpenTableur(forcedId) {
                   || (ev.type === 'C' && (ev.miniNotes || []).some(mn => (mn.competenceIds || []).length > 0));
     bilanBtn.style.display = hasComps ? '' : 'none';
   }
+  // Bouton "🔀 Comparer classes" : visible si l'éval est partagée entre plusieurs classes
+  const xtBtn = document.getElementById('meval-tableur-crosstab-btn');
+  if (xtBtn) xtBtn.style.display = (_evalClassIds(ev).length > 1) ? '' : 'none';
   // Peuple le select avec les options de tri (incluant patterns de la salle active)
   const sortSel = document.getElementById('meval-tableur-sort');
   sortSel.innerHTML = '<option value="nom-prenom">Nom Prénom (défaut ENT)</option><option value="prenom-nom">Prénom Nom</option>';
@@ -23690,7 +23698,12 @@ function _evalTableurRender() {
     html += `<td style="padding:4px 6px;text-align:center;vertical-align:top">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
   });
   // Colonne Total : stats complètes
-  const totals = sids.map(sid => _computeStudentEvalNote(ev, sid)).filter(v => v != null);
+  // Notes finales arrondies à la granulométrie configurée pour cohérence avec
+  // l'affichage de la colonne Total
+  const totals = sids.map(sid => {
+    const raw = _computeStudentEvalNote(ev, sid);
+    return raw == null ? null : _roundNoteToGranularity(raw, ev);
+  }).filter(v => v != null);
   html += `<td style="padding:4px 8px;vertical-align:top">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
   if (isTypeC) {
     // Pas de stats pour la colonne Rattrapage (dates)
@@ -23998,8 +24011,10 @@ function _evalCrossTabBuild(ev) {
     const byCiv = { F: [], M: [], total: [] };
     for (const sid of (cls.eleves || [])) {
       const stu = S.eleves[sid];
-      const note = _computeStudentEvalNote(ev, sid);
-      if (note == null || !Number.isFinite(note)) continue;
+      const raw = _computeStudentEvalNote(ev, sid);
+      if (raw == null || !Number.isFinite(raw)) continue;
+      // Granulométrie appliquée pour cohérence avec l'affichage
+      const note = _roundNoteToGranularity(raw, ev);
       byCiv.total.push(note);
       if (stu?.civilite === 'F') byCiv.F.push(note);
       else if (stu?.civilite === 'M') byCiv.M.push(note);
@@ -24272,7 +24287,10 @@ function _evalRenderBilanComps() {
     const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, c.id)).filter(v => typeof v === 'number');
     html += `<td style="padding:4px 6px;text-align:center;vertical-align:top">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
   }
-  const notes = sids.map(sid => _computeStudentEvalNote(ev, sid)).filter(v => v != null);
+  const notes = sids.map(sid => {
+    const raw = _computeStudentEvalNote(ev, sid);
+    return raw == null ? null : _roundNoteToGranularity(raw, ev);
+  }).filter(v => v != null);
   html += `<td style="padding:4px 8px;vertical-align:top">${_statsCellHTML(notes, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
   // Colonne Rang : pas de stats (l'info est déjà résumée dans n=)
   html += '<td></td>';
