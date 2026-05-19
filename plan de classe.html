@@ -3186,8 +3186,8 @@ kbd {
       </label>
       <label style="display:block;padding:8px 10px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
         <input type="radio" name="meval-comp-change-action" value="keep" checked>
-        <strong>Garder en mémoire</strong> <span style="color:var(--pencil);font-size:.85em">(défaut)</span>
-        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Les niveaux restent dans <code>pass.niveaux</code> mais ne sont plus visibles dans le tableur. Si tu rajoutes la compétence plus tard, ils réapparaissent.</div>
+        <strong>Ne plus évaluer cette compétence</strong> <span style="color:var(--pencil);font-size:.85em">(défaut — garde les niveaux en mémoire)</span>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">La compétence est retirée de la passation et n'apparaît plus dans le tableur ni dans le bilan. Les niveaux saisis restent stockés et réapparaissent si tu rajoutes la compétence plus tard. Aucune perte de données.</div>
       </label>
       <label style="display:block;padding:8px 10px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
         <input type="radio" name="meval-comp-change-action" value="erase">
@@ -3213,6 +3213,13 @@ kbd {
           <option value="code" selected>Code court</option>
           <option value="domain">Par domaine</option>
         </select>
+        <span id="meval-bilan-weighting-wrap" style="display:none;align-items:center;gap:6px;border-left:1px solid var(--rule-line);padding-left:10px;margin-left:4px">
+          <label style="font-size:.85em;color:var(--pencil)" title="Mode de calcul de la note finale (Type B uniquement)">Note finale :</label>
+          <select id="meval-bilan-weighting" onchange="_evalBilanSetWeighting(this.value)" style="padding:4px 8px;font-size:.88em">
+            <option value="equal" title="Chaque saisie compte pour 1 — une compétence évaluée 3 fois pèse 3 fois plus qu'une évaluée 1 fois">Pondérée par nb de saisies</option>
+            <option value="perCompetence" title="Moyenne par compétence puis moyenne des compétences — toutes les compétences pèsent autant">Compétences à égalité</option>
+          </select>
+        </span>
         <button class="btn btn-g btn-sm" onclick="_evalBilanCopy()" title="Copie le tableau au format TSV">📋 Copier</button>
       </div>
     </div>
@@ -23515,7 +23522,7 @@ function _evalTableurRender() {
       <input type="text" value="${_esc(mn.label || '')}" data-mnid="${_esc(mn.id)}" data-field="label" placeholder="Code"
              oninput="_tableurEditMn(this)"
              style="width:100%;max-width:110px;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:600;text-align:center;font-size:.95em"
-             title="Code court (clic droit = nom complet / suppression)">
+             title="${_esc(mn.name ? mn.name + '\n\n(Clic droit pour éditer)' : 'Code court (clic droit = descriptif / suppression)')}">
       <div style="display:flex;align-items:center;justify-content:center;gap:2px;margin-top:2px">
         <span style="font-size:.8em;color:var(--pencil);font-weight:normal">/</span>
         <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}" data-mnid="${_esc(mn.id)}" data-field="max"
@@ -23834,8 +23841,40 @@ function _evalOpenBilanComps() {
   if (!ev) return;
   document.getElementById('meval-bilan-title').textContent = `📊 Bilan compétences — ${ev.nomCourt}`;
   document.getElementById('meval-bilan-sort').value = 'code';
+  // Toggle pondération visible seulement pour Type B
+  const wWrap = document.getElementById('meval-bilan-weighting-wrap');
+  if (wWrap) {
+    if (ev.type === 'B') {
+      wWrap.style.display = 'inline-flex';
+      const cur = ev.weighting || 'equal';
+      // 'coef' (pondéré par coef de passation) reste valide mais on n'expose ici que les 2 modes demandés.
+      // Si la valeur est 'coef', on l'affiche en équivalent visuel 'equal' (le plus proche).
+      document.getElementById('meval-bilan-weighting').value = (cur === 'perCompetence') ? 'perCompetence' : 'equal';
+    } else {
+      wWrap.style.display = 'none';
+    }
+  }
   _evalRenderBilanComps();
   openMod('meval-bilan-comps');
+}
+
+// Bascule le mode de pondération de la note finale pour l'éval courante.
+// Modifie ev.weighting et re-render le bilan + le tableur si ouvert.
+function _evalBilanSetWeighting(mode) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  if (!['equal', 'perCompetence'].includes(mode)) return;
+  if (ev.weighting === mode) return;
+  pushUndo();
+  ev.weighting = mode;
+  ev.updatedAt = Date.now();
+  save();
+  _evalRenderBilanComps();
+  if (document.getElementById('meval-tableur').classList.contains('on')) _evalTableurRender();
+  toast(mode === 'perCompetence'
+    ? '✓ Note finale : compétences à égalité'
+    : '✓ Note finale : pondérée par nb de saisies');
 }
 
 function _evalRenderBilanComps() {
