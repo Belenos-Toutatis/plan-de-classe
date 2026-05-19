@@ -21854,26 +21854,103 @@ function _evalOpenEditor(evalId) {
 function _evalEditRenderClasses(ev) {
   const wrap = document.getElementById('meval-edit-classes');
   if (!wrap) return;
-  const primaryCls = S.classes?.[ev.classId];
-  const primaryLvl = primaryCls ? classLevelOrder(primaryCls.nom) : 999;
-  const sameLevelClasses = Object.values(S.classes || {}).filter(c => classLevelOrder(c.nom) === primaryLvl);
+  // Niveau de référence : niveau de la 1re classe de l'éval (n'importe laquelle)
+  const refCls = S.classes?.[_evalClassIds(ev)[0]] || S.classes?.[ev.classId];
+  const refLvl = refCls ? classLevelOrder(refCls.nom) : 999;
+  const sameLevelClasses = Object.values(S.classes || {}).filter(c => classLevelOrder(c.nom) === refLvl);
   sameLevelClasses.sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
   const currentIds = new Set(_evalClassIds(ev));
   let html = '';
   for (const c of sameLevelClasses) {
-    const checked = currentIds.has(c.id) ? 'checked' : '';
-    const isPrimary = c.id === ev.classId;
-    const dis = isPrimary ? 'disabled' : '';
-    const lbl = isPrimary ? ` <span style="color:var(--pencil);font-size:.85em;font-style:italic">(classe primaire — décochage impossible)</span>` : '';
-    html += `<label style="display:flex;align-items:center;gap:6px;cursor:${isPrimary ? 'not-allowed' : 'pointer'};font-size:.92em;padding:3px 6px;background:${checked ? '#e6f0fa' : 'transparent'};border-radius:3px">
-      <input type="checkbox" data-cid="${_esc(c.id)}" ${checked} ${dis} onchange="_evalEditToggleClass(this)">
-      <strong>${_esc(c.nom)}</strong> <span style="color:var(--pencil);font-size:.88em">${_esc(c.année || '')}</span>${lbl}
-    </label>`;
+    const checked = currentIds.has(c.id);
+    const dateCur = _evalDateFor(ev, c.id);
+    const slotCur = _evalSlotIdFor(ev, c.id);
+    html += `<div data-cid="${_esc(c.id)}" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px;background:${checked ? '#e6f0fa' : 'transparent'};border-radius:3px;border:1px solid ${checked ? 'var(--ink-blue-soft)' : 'transparent'}">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.92em">
+        <input type="checkbox" data-cid="${_esc(c.id)}" ${checked ? 'checked' : ''} onchange="_evalEditToggleClass(this)">
+        <strong>${_esc(c.nom)}</strong> <span style="color:var(--pencil);font-size:.88em">${_esc(c.année || '')}</span>
+      </label>`;
+    if (checked) {
+      html += `<span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
+        <input type="date" value="${_esc(dateCur)}" data-cid="${_esc(c.id)}" data-field="date" oninput="_evalEditPerClass(this)"
+          style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe">
+        <span style="font-size:.85em;color:var(--pencil)">⏰</span>
+        <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalEditPerClass(this)" style="padding:3px 6px;font-size:.85em">
+          ${_evalEditSlotOpts(c, dateCur, slotCur)}
+        </select>`;
+    }
+    html += `</div>`;
   }
-  if (sameLevelClasses.length === 1) {
-    html += '<p style="color:var(--pencil);font-style:italic;font-size:.85em;margin:6px 0 0">Aucune autre classe du même niveau dans tes classes pour l\'instant.</p>';
+  if (sameLevelClasses.length === 1 && currentIds.size <= 1) {
+    html += '<p style="color:var(--pencil);font-style:italic;font-size:.85em;margin:6px 0 0">Aucune autre classe du même niveau pour l\'instant.</p>';
   }
   wrap.innerHTML = html;
+  // Quand multi-classes : masque la date/créneau globale du haut (chaque classe a les siens)
+  _evalEditAdjustGlobalDateVisibility(ev);
+}
+
+// Construit les options du <select> de créneau pour une classe + date donnée
+function _evalEditSlotOpts(cls, dateStr, slotIdCur) {
+  let html = '<option value="">— Pendant la journée —</option>';
+  if (!cls || !dateStr) return html;
+  const salle = S.salles?.[cls.activeRoom];
+  const schedule = salle?.schedule;
+  if (!schedule) return html;
+  const days = ['sun','mon','tue','wed','thu','fri','sat'];
+  const d = new Date(dateStr + 'T12:00:00');
+  const dayKey = days[d.getDay()];
+  const slots = schedule[dayKey] || [];
+  for (const s of slots) {
+    const sel = (s.id === slotIdCur) ? ' selected' : '';
+    html += `<option value="${_esc(s.id)}"${sel}>${_esc(s.label || s.id)} (${_esc(s.start)}–${_esc(s.end)})</option>`;
+  }
+  return html;
+}
+
+// Cache date/créneau globaux dans l'en-tête quand multi-classes (≥2 classes cochées)
+function _evalEditAdjustGlobalDateVisibility(ev) {
+  const ids = _evalClassIds(ev);
+  const multi = ids.length > 1;
+  const dateField = document.getElementById('meval-edit-date');
+  const slotField = document.getElementById('meval-edit-slot');
+  if (!dateField || !slotField) return;
+  // Masque les <label> et <input> de date/créneau quand multi
+  const dateRow = dateField.parentElement;        // le <input> est seul dans le grid → on doit cacher l'élément + son label
+  const slotRow = slotField.parentElement;
+  // En grid 130px+1fr, chaque label/champ est un descendant direct du grid wrapper.
+  const grid = dateField.closest('div[style*="grid-template-columns"]');
+  if (!grid) return;
+  // Trouve label "Date" et "Créneau" en récupérant les frères directs
+  const children = Array.from(grid.children);
+  const idxDate = children.indexOf(dateField);
+  const idxSlot = children.indexOf(slotField);
+  const setDisplay = (i, val) => {
+    if (i < 0) return;
+    if (children[i]) children[i].style.display = val;            // input
+    if (children[i - 1]) children[i - 1].style.display = val;    // label
+  };
+  setDisplay(idxDate, multi ? 'none' : '');
+  setDisplay(idxSlot, multi ? 'none' : '');
+}
+
+// Édition d'une date ou d'un créneau spécifique à une classe (dans Réglages)
+function _evalEditPerClass(inputEl) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cid = inputEl.getAttribute('data-cid');
+  const field = inputEl.getAttribute('data-field');
+  if (field === 'date') {
+    _evalSetDateFor(ev, cid, inputEl.value);
+    // Re-render pour rafraîchir les options de créneau
+    _evalEditRenderClasses(ev);
+  } else if (field === 'slot') {
+    _evalSetSlotIdFor(ev, cid, inputEl.value);
+  }
+  ev.updatedAt = Date.now();
+  _evalEditDirty = true;
+  // Auto-save léger (les autres champs gardent leur flag dirty + bouton Enregistrer)
+  save();
 }
 
 function _evalEditToggleClass(checkbox) {
@@ -21893,10 +21970,32 @@ function _evalEditToggleClass(checkbox) {
         ev.seatingHashes[cid] = hash;
       }
     }
+    // Initialise la date pour cette classe au niveau de la date globale si pas définie
+    if (!ev.dates?.[cid] && ev.date) {
+      ev.dates = ev.dates || {};
+      ev.dates[cid] = ev.date;
+    }
   } else {
+    // Empêche de tout décocher : au moins une classe doit rester
+    if (ev.classIds.length <= 1) {
+      checkbox.checked = true;
+      toast('⚠ Une évaluation doit concerner au moins une classe', 'warn');
+      return;
+    }
     ev.classIds = ev.classIds.filter(x => x !== cid);
+    // Si on décoche ev.classId (ancien "primaire"), réassigne sur la 1re restante
+    if (ev.classId === cid) {
+      ev.classId = ev.classIds[0];
+    }
+    // Nettoie les date/slot/seatingHash de la classe retirée
+    if (ev.dates) delete ev.dates[cid];
+    if (ev.slotIds) delete ev.slotIds[cid];
+    if (ev.seatingHashes) delete ev.seatingHashes[cid];
   }
   _evalEditDirty = true;
+  // Re-render la section pour afficher / cacher les champs date+créneau par classe
+  _evalEditRenderClasses(ev);
+  save();
 }
 
 // Peuple le select de créneau selon la salle active et la date saisie.
@@ -22367,8 +22466,7 @@ function _evalEditSave() {
   _evalEditDirty = false;
   save();
   renderEvalNotes();
-  // Met à jour le titre de l'éditeur sans le fermer (l'utilisateur veut peut-être saisir ensuite)
-  document.getElementById('meval-edit-title').textContent = `📊 ${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}`;
+  closeMod2('meval-edit');
   toast('✓ Évaluation enregistrée');
 }
 
@@ -22841,8 +22939,7 @@ function _evalTableurRenderClassPicker(ev, activeCls) {
     const c = S.classes?.[cid];
     if (!c) continue;
     const isActive = (c.id === activeCls.id);
-    const isPrimary = (c.id === ev.classId);
-    html += `<button class="btn ${isActive ? 'btn-p' : 'btn-g'} btn-sm" onclick="_evalTableurSwitchClass('${_esc(c.id)}')" style="font-family:var(--font-mono)" title="${isPrimary ? 'Classe primaire (créatrice)' : ''}">${_esc(c.nom)}${isPrimary ? ' ★' : ''}</button>`;
+    html += `<button class="btn ${isActive ? 'btn-p' : 'btn-g'} btn-sm" onclick="_evalTableurSwitchClass('${_esc(c.id)}')" style="font-family:var(--font-mono)">${_esc(c.nom)}</button>`;
   }
   // Date + créneau spécifiques à la classe active
   html += `<span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>`;
@@ -23319,20 +23416,30 @@ function _evalPlanOverlayRender() {
         html += `<div style="min-height:${cellMinH}px;background:#fff;border:1px dashed var(--rule-line-soft);border-radius:4px"></div>`;
         continue;
       }
-      // Élève : nom + compétences
+      // Élève : nom + compétences. Pastilles : A · 0 · 1 · 2 · 3 · 4
       const niv = pass.niveaux[sid] || {};
       let compsHTML = '';
+      const buttons = [
+        { v: 'A', label: 'A', bgActive: '#9ca3af', fgActive: '#fff' },
+        { v: 0,   label: '0', bgActive: '#fff', fgActive: 'var(--ink-deep)' }, // 0 = retirer
+        { v: 1,   label: '1', bgActive: colors[0], fgActive: '#fff' },
+        { v: 2,   label: '2', bgActive: colors[1], fgActive: '#fff' },
+        { v: 3,   label: '3', bgActive: colors[2], fgActive: '#fff' },
+        { v: 4,   label: '4', bgActive: colors[3], fgActive: '#fff' },
+      ];
       for (const cid of compIds) {
         const c = S.competences?.[cid];
         if (!c) continue;
-        const cur = niv[cid] || 0;
+        const cur = niv[cid];
         let pills = '';
-        for (let n = 1; n <= 4; n++) {
-          const active = (cur === n);
-          const bg = active ? colors[n - 1] : '#fff';
-          const fg = active ? '#fff' : 'var(--ink-deep)';
-          const bd = active ? colors[n - 1] : 'var(--rule-line)';
-          pills += `<button data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-niveau="${n}" onclick="_evalPlanOverlayPill(this)" style="flex:1;min-width:30px;height:30px;border-radius:50%;background:${bg};color:${fg};border:2px solid ${bd};font-family:var(--font-mono);font-weight:bold;font-size:.85em;cursor:pointer;padding:0">N${n}</button>`;
+        for (const b of buttons) {
+          const active = (b.v === 0)
+            ? (cur == null || cur === 0)
+            : (cur === b.v);
+          const bg = active ? b.bgActive : '#fff';
+          const fg = active ? b.fgActive : 'var(--ink-deep)';
+          const bd = active ? (b.v === 0 ? 'var(--ink-blue)' : b.bgActive) : 'var(--rule-line)';
+          pills += `<button data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-niveau="${b.v}" onclick="_evalPlanOverlayPill(this)" style="flex:1;min-width:26px;height:30px;border-radius:50%;background:${bg};color:${fg};border:2px solid ${bd};font-family:var(--font-mono);font-weight:bold;font-size:.85em;cursor:pointer;padding:0">${b.label}</button>`;
         }
         compsHTML += `<div style="display:flex;align-items:center;gap:5px;margin-top:4px">
           <span style="font-family:var(--font-mono);font-weight:600;font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);padding:1px 5px;border-radius:3px;min-width:24px;text-align:center" title="${_esc(c.name || '')}">${_esc(c.code)}</span>
@@ -23358,25 +23465,40 @@ function _evalPlanOverlayPill(btn) {
   if (!pass) return;
   const sid = btn.getAttribute('data-sid');
   const cid = btn.getAttribute('data-cid');
-  const niveau = parseInt(btn.getAttribute('data-niveau'), 10);
+  const raw = btn.getAttribute('data-niveau');
+  // Valeurs possibles : 'A' (absent), '0' (effacer), '1'..'4'
+  let val;
+  if (raw === 'A') val = 'A';
+  else if (raw === '0') val = 0;
+  else val = parseInt(raw, 10);
   pass.niveaux = pass.niveaux || {};
   pass.niveaux[sid] = pass.niveaux[sid] || {};
-  const cur = pass.niveaux[sid][cid] || 0;
-  if (cur === niveau) delete pass.niveaux[sid][cid];
-  else pass.niveaux[sid][cid] = niveau;
+  if (val === 0) {
+    delete pass.niveaux[sid][cid];
+  } else {
+    pass.niveaux[sid][cid] = val;
+  }
   ev.updatedAt = Date.now();
   save();
-  // Met à jour les pastilles de cette compétence dans la cellule (perf : pas tout re-render)
+  // Met à jour les 6 pastilles A/0/1/2/3/4 dans la cellule (perf : pas tout re-render)
   const cellPills = btn.parentElement;
   if (cellPills) {
     const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
-    const newCur = pass.niveaux[sid][cid] || 0;
+    const cur = pass.niveaux[sid][cid];
+    const buttons = [
+      { v: 'A', bgActive: '#9ca3af', fgActive: '#fff' },
+      { v: 0,   bgActive: '#fff',    fgActive: 'var(--ink-deep)' },
+      { v: 1,   bgActive: colors[0], fgActive: '#fff' },
+      { v: 2,   bgActive: colors[1], fgActive: '#fff' },
+      { v: 3,   bgActive: colors[2], fgActive: '#fff' },
+      { v: 4,   bgActive: colors[3], fgActive: '#fff' },
+    ];
     cellPills.querySelectorAll('button').forEach((b, i) => {
-      const n = i + 1;
-      const active = (newCur === n);
-      b.style.background = active ? colors[n - 1] : '#fff';
-      b.style.color = active ? '#fff' : 'var(--ink-deep)';
-      b.style.borderColor = active ? colors[n - 1] : 'var(--rule-line)';
+      const def = buttons[i];
+      const active = (def.v === 0) ? (cur == null || cur === 0) : (cur === def.v);
+      b.style.background = active ? def.bgActive : '#fff';
+      b.style.color = active ? def.fgActive : 'var(--ink-deep)';
+      b.style.borderColor = active ? (def.v === 0 ? 'var(--ink-blue)' : def.bgActive) : 'var(--rule-line)';
     });
   }
 }
