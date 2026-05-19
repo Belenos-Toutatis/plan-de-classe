@@ -3026,7 +3026,9 @@ kbd {
       <label for="meval-pass-new-code">Code court</label>
       <input type="text" id="meval-pass-new-code" maxlength="12" placeholder="ex. A9, TP3" style="padding:5px 8px;font-family:var(--font-mono);max-width:160px">
       <label for="meval-pass-new-date">Date</label>
-      <input type="date" id="meval-pass-new-date" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
+      <input type="date" id="meval-pass-new-date" oninput="_evalPassNewUpdateSlots()" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
+      <label for="meval-pass-new-slot">Créneau <span style="color:var(--pencil);font-weight:normal;font-size:.85em">(optionnel)</span></label>
+      <select id="meval-pass-new-slot" style="padding:5px 8px;font-family:var(--font-mono);font-size:.9em;max-width:280px"><option value="">— Pendant la journée —</option></select>
       <label style="align-self:flex-start;padding-top:4px">Compétences évaluées <span style="color:var(--margin-red)">*</span></label>
       <div>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;font-size:.85em">
@@ -3106,7 +3108,7 @@ kbd {
       <input type="text" id="meval-mn-menu-name" maxlength="80" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
       <label>Maximum</label>
       <div><input type="number" id="meval-mn-menu-max" min="0" max="100" step="0.5" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
-      <label>Date</label>
+      <label id="meval-mn-menu-date-label">Date</label>
       <input type="date" id="meval-mn-menu-date" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
@@ -23541,9 +23543,10 @@ function _evalTableurRenderB(ev, cls) {
   html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
   for (const p of sortedPass) {
     const nbComps = (p.competenceIds || []).length || 1;
-    const tip = `${p.code || '?'} — ${_fmtDateFr(p.date)} · ${nbComps} compétence${nbComps > 1 ? 's' : ''}`;
+    const slotLbl = _slotLabelFromId(ev, p.slotId);
+    const tip = `${p.code || '?'} — ${_fmtDateFr(p.date)}${slotLbl ? ' · ' + slotLbl : ''} · ${nbComps} compétence${nbComps > 1 ? 's' : ''}`;
     html += `<th colspan="${nbComps}" oncontextmenu="event.preventDefault();_tableurPassContextMenu(event,'${_esc(p.id)}')" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper);cursor:context-menu;border-left:2px solid var(--ink-blue-soft)" title="${_esc(tip)} (clic droit = menu)">
-        ${_esc(p.code || '?')} <span style="font-weight:400;font-size:.82em;color:var(--pencil)">${_fmtDateFr(p.date)}</span>
+        ${_esc(p.code || '?')} <span style="font-weight:400;font-size:.82em;color:var(--pencil)">${_fmtDateFr(p.date)}${slotLbl ? ' · ' + _esc(slotLbl) : ''}</span>
       </th>`;
   }
   html += '</tr>';
@@ -23734,6 +23737,10 @@ function _tableurMnContextMenu(event, mnId) {
   document.getElementById('meval-mn-menu-name').value  = mn.name  || '';
   document.getElementById('meval-mn-menu-max').value   = mn.max ?? 1;
   document.getElementById('meval-mn-menu-date').value  = mn.date  || '';
+  // Type C : sommatif → la date est globale à l'éval (pas par question)
+  const isC = (ev.type === 'C');
+  document.getElementById('meval-mn-menu-date').style.display = isC ? 'none' : '';
+  document.getElementById('meval-mn-menu-date-label').style.display = isC ? 'none' : '';
   _modalReturnTo['meval-mn-menu'] = () => _evalTableurRender();
   openMod('meval-mn-menu');
   setTimeout(() => document.getElementById('meval-mn-menu-name')?.focus(), 50);
@@ -23749,16 +23756,26 @@ function _tableurMnMenuSave() {
   const label = (document.getElementById('meval-mn-menu-label').value || '').trim();
   const name  = (document.getElementById('meval-mn-menu-name').value  || '').trim();
   const max   = parseFloat(document.getElementById('meval-mn-menu-max').value);
-  const date  = document.getElementById('meval-mn-menu-date').value;
+  const isC = (ev.type === 'C');
+  const date  = isC ? '' : document.getElementById('meval-mn-menu-date').value;
   if (!Number.isFinite(max) || max < 0) { toast('⚠ Maximum invalide', 'warn'); return; }
   pushUndo();
   mn.label = label;
   if (name) mn.name = name; else delete mn.name;
   mn.max = max;
-  if (date) mn.date = date; else delete mn.date;
-  // Date globale = max des dates
-  const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
-  if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
+  if (isC) {
+    // Type C : pas de date par question, retire toute date legacy
+    delete mn.date;
+  } else if (date) {
+    mn.date = date;
+  } else {
+    delete mn.date;
+  }
+  // Date globale = max des dates (Type A uniquement)
+  if (!isC) {
+    const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
+    if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
+  }
   ev.updatedAt = Date.now();
   save();
   closeMod2('meval-mn-menu');
@@ -24079,6 +24096,23 @@ function _evalClassIds(ev) {
   if (Array.isArray(ev?.classIds) && ev.classIds.length > 0) return ev.classIds;
   return ev?.classId ? [ev.classId] : [];
 }
+// Retrouve le libellé d'un créneau à partir de son id, en cherchant dans la
+// salle active de la classe primaire (suffit pour Type B mono-classe ; pour
+// multi-classes, on retombe sur l'id brut si introuvable).
+function _slotLabelFromId(ev, slotId) {
+  if (!slotId || !ev) return '';
+  for (const cid of _evalClassIds(ev)) {
+    const cls = S.classes?.[cid];
+    const salle = cls ? S.salles?.[cls.activeRoom] : null;
+    if (!salle?.schedule) continue;
+    for (const day of ['mon','tue','wed','thu','fri','sat','sun']) {
+      const slot = (salle.schedule[day] || []).find(s => s.id === slotId);
+      if (slot) return slot.label || slot.id;
+    }
+  }
+  return slotId;
+}
+
 function _evalSeatingHashFor(ev, classId) {
   if (ev?.seatingHashes?.[classId]) return ev.seatingHashes[classId];
   if (ev?.classId === classId && ev.seatingHash) return ev.seatingHash;
@@ -24217,8 +24251,38 @@ function _evalAddPassation(passId) {
   document.getElementById('meval-pass-new-date').value = pass?.date || new Date().toISOString().slice(0, 10);
   _passNewSelected = new Set(pass?.competenceIds || []);
   _evalPassNewRenderComps();
+  _evalPassNewUpdateSlots(pass?.slotId || '');
   openMod('meval-pass-new');
   setTimeout(() => document.getElementById('meval-pass-new-code')?.focus(), 50);
+}
+
+// Peuple le <select> de créneau d'après la date saisie + le planning de la salle
+// de la classe active (cf. _evalTableurActiveCls / classe primaire fallback).
+function _evalPassNewUpdateSlots(preselect) {
+  const sel = document.getElementById('meval-pass-new-slot');
+  if (!sel) return;
+  const dateStr = document.getElementById('meval-pass-new-date').value || '';
+  const evalId = document.getElementById('meval-pass-new-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const cur = (preselect != null) ? preselect : sel.value;
+  sel.innerHTML = '<option value="">— Pendant la journée —</option>';
+  if (!ev || !dateStr) return;
+  const cls = _evalTableurActiveCls(ev) || S.classes?.[ev.classId];
+  if (!cls) return;
+  const salle = S.salles?.[cls.activeRoom];
+  const schedule = salle?.schedule;
+  if (!schedule) return;
+  const days = ['sun','mon','tue','wed','thu','fri','sat'];
+  const d = new Date(dateStr + 'T12:00:00');
+  const dayKey = days[d.getDay()];
+  const slots = schedule[dayKey] || [];
+  for (const s of slots) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.label || s.id} (${s.start}–${s.end})`;
+    if (s.id === cur) opt.selected = true;
+    sel.appendChild(opt);
+  }
 }
 
 // Sélection en cours de compétences dans la modale "Nouvelle passation"
@@ -24272,35 +24336,77 @@ function _evalPassNewSave() {
   if (!ev || ev.type !== 'B') return;
   const code = (document.getElementById('meval-pass-new-code').value || '').trim();
   const date = document.getElementById('meval-pass-new-date').value;
+  const slotId = document.getElementById('meval-pass-new-slot')?.value || '';
   if (!code) { toast('⚠ Le code court est obligatoire', 'warn'); return; }
   if (!date) { toast('⚠ La date est obligatoire', 'warn'); return; }
   if (_passNewSelected.size === 0) { toast('⚠ Sélectionne au moins une compétence', 'warn'); return; }
   pushUndo();
   ev.passations = ev.passations || [];
+  let pass;
   if (passId) {
     // Édition
-    const p = ev.passations.find(p => p.id === passId);
-    if (p) {
-      p.code = code; p.date = date;
-      p.competenceIds = Array.from(_passNewSelected);
+    pass = ev.passations.find(p => p.id === passId);
+    if (pass) {
+      pass.code = code; pass.date = date;
+      if (slotId) pass.slotId = slotId; else delete pass.slotId;
+      pass.competenceIds = Array.from(_passNewSelected);
     }
   } else {
     // Nouvelle
-    ev.passations.push({
+    pass = {
       id: _newPassationId(),
       code, date,
       competenceIds: Array.from(_passNewSelected),
       niveaux: {},
-    });
+    };
+    if (slotId) pass.slotId = slotId;
+    ev.passations.push(pass);
   }
-  // Date globale de l'éval = max des dates des passations
-  ev.date = ev.passations.reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  // Date/créneau "officiels" de l'éval = ceux de la passation la plus récente
+  const sortedDesc = ev.passations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const latest = sortedDesc[0];
+  ev.date = latest?.date || '';
+  if (latest?.slotId) ev.slotId = latest.slotId; else delete ev.slotId;
+  // Pré-remplir 'A' (absent) pour chaque élève absent au créneau de cette passation
+  if (pass && slotId) {
+    const prefilled = _prefillAbsencesForPassation(ev, pass);
+    if (prefilled > 0) toast(`📅 ${prefilled} absent(s) pré-marqué(s) "A" d'après l'appel du créneau`);
+  }
   ev.updatedAt = Date.now();
   save();
   closeMod2('meval-pass-new');
   _evalEditRenderSaisieSection(ev);
   renderEvalNotes();
+  if (document.getElementById('meval-tableur').classList.contains('on')) _evalTableurRender();
   toast(`✓ Passation "${code}" ${passId ? 'mise à jour' : 'créée'}`);
+}
+
+// Pour chaque classe de l'éval et chaque élève absent à la date+créneau de la
+// passation (selon S.attendance), pré-marque niveau 'A' sur les compétences de
+// la passation — sauf si déjà saisi. Retourne le nombre de marquages effectués.
+function _prefillAbsencesForPassation(ev, pass) {
+  if (!ev || !pass || !pass.date || !pass.slotId) return 0;
+  let count = 0;
+  const compIds = pass.competenceIds || [];
+  if (compIds.length === 0) return 0;
+  for (const cid of _evalClassIds(ev)) {
+    const records = S.attendance?.[cid] || {};
+    for (const rid in records) {
+      const r = records[rid];
+      if (r.date !== pass.date || r.slotId !== pass.slotId) continue;
+      for (const sid of (r.absents || [])) {
+        pass.niveaux = pass.niveaux || {};
+        pass.niveaux[sid] = pass.niveaux[sid] || {};
+        for (const compId of compIds) {
+          if (pass.niveaux[sid][compId] == null) {
+            pass.niveaux[sid][compId] = 'A';
+            count++;
+          }
+        }
+      }
+    }
+  }
+  return count;
 }
 
 function _evalRemovePassation(passId) {
