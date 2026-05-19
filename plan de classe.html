@@ -23593,10 +23593,19 @@ function _evalTableurRender() {
       html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;background:transparent">${badge}</td>`;
     });
     const total = _computeStudentEvalNote(ev, sid);
-    const totalDisp = total == null ? '—' : _fmtNote(total);
-    const totalBg = _noteColor(total, ev.noteMax);
-    const totalColor = totalBg ? '#fff' : 'var(--ink-blue)';
-    html += `<td class="meval-row-total" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${totalColor};background:${totalBg || bgRow}" data-sid="${_esc(sid)}">${totalDisp}</td>`;
+    const disp = _studentNoteDisplay(ev, sid);
+    let totalBg, totalColor;
+    if (disp.kind === 'num') {
+      totalBg = _noteColor(total, ev.noteMax);
+      totalColor = totalBg ? '#fff' : 'var(--ink-blue)';
+    } else if (disp.kind === 'A') {
+      totalBg = '#9ca3af'; totalColor = '#fff';
+    } else if (disp.kind === 'NN') {
+      totalBg = 'var(--paper-warm)'; totalColor = 'var(--pencil)';
+    } else {
+      totalBg = ''; totalColor = 'var(--ink-blue)';
+    }
+    html += `<td class="meval-row-total" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${totalColor};background:${totalBg || bgRow}" data-sid="${_esc(sid)}">${disp.text}</td>`;
     // Type C : cellule Date rattrapage par élève
     if (isTypeC) {
       const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
@@ -23690,14 +23699,31 @@ function _evalTableurUpdate(inputEl) {
   _evalTableurDirty = true;
 
   // Met à jour le total de la ligne uniquement (perf : pas de re-render complet)
-  const total = _computeStudentEvalNote(ev, sid);
   const cellTotal = row.querySelector('.meval-row-total');
-  if (cellTotal) cellTotal.textContent = total == null ? '—' : _fmtNote(total);
+  if (cellTotal) _evalTableurUpdateTotalCell(cellTotal, ev, sid);
 
   if (_evalTableurSaveTimer) clearTimeout(_evalTableurSaveTimer);
   _evalTableurSaveTimer = setTimeout(() => {
     if (_evalTableurDirty) { save(); _evalTableurDirty = false; }
   }, 800);
+}
+
+// Met à jour le contenu + le style d'une cellule "Total" selon _studentNoteDisplay.
+function _evalTableurUpdateTotalCell(cellTotal, ev, sid) {
+  const disp = _studentNoteDisplay(ev, sid);
+  cellTotal.textContent = disp.text;
+  let bg = '', color = 'var(--ink-blue)';
+  if (disp.kind === 'num') {
+    bg = _noteColor(disp.value, ev.noteMax);
+    color = bg ? '#fff' : 'var(--ink-blue)';
+  } else if (disp.kind === 'A') {
+    bg = '#9ca3af'; color = '#fff';
+  } else if (disp.kind === 'NN') {
+    bg = 'var(--paper-warm)'; color = 'var(--pencil)';
+  }
+  if (bg) cellTotal.style.background = bg;
+  else cellTotal.style.background = '';
+  cellTotal.style.color = color;
 }
 
 // Au blur sur une cellule de saisie Type A/C : si la valeur est hors barème,
@@ -23739,9 +23765,8 @@ function _evalTableurConfirmIfOutOfRange(inputEl) {
     inputEl.title = `⚠ Hors barème (conservé sciemment — attendu 0–${mnMax})`;
     // Recalcule total
     const row = inputEl.closest('tr');
-    const total = _computeStudentEvalNote(ev, sid);
     const cellTotal = row?.querySelector('.meval-row-total');
-    if (cellTotal) cellTotal.textContent = total == null ? '—' : _fmtNote(total);
+    if (cellTotal) _evalTableurUpdateTotalCell(cellTotal, ev, sid);
     save();
   } else {
     // Restaure la valeur précédemment enregistrée
@@ -24153,10 +24178,19 @@ function _evalRenderBilanComps() {
       html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};background:${bg};color:${color}">${dispVal}</td>`;
     }
     const note = _computeStudentEvalNote(ev, sid);
-    const noteDisp = (note == null) ? '—' : _fmtNote(note);
-    const noteBg = _noteColor(note, ev.noteMax);
-    const noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${noteDisp}</td>`;
+    const disp = _studentNoteDisplay(ev, sid);
+    let noteBg, noteColor;
+    if (disp.kind === 'num') {
+      noteBg = _noteColor(note, ev.noteMax);
+      noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
+    } else if (disp.kind === 'A') {
+      noteBg = '#9ca3af'; noteColor = '#fff';
+    } else if (disp.kind === 'NN') {
+      noteBg = 'var(--paper-warm)'; noteColor = 'var(--pencil)';
+    } else {
+      noteBg = ''; noteColor = 'var(--ink-blue)';
+    }
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${disp.text}</td>`;
     // Rang dans la classe (ex æquo = même rang)
     const rang = ranks[sid];
     const rangDisp = (rang == null) ? '—' : `${rang}<span style="color:var(--pencil);font-size:.78em">/${totalRanked}</span>`;
@@ -24199,8 +24233,8 @@ function _evalBilanCopy() {
       // Non évaluée → 0 (cohérent avec l'affichage du bilan)
       cells.push(niv == null ? _formatNiveau(0) : _formatNiveau(Math.round(niv)));
     }
-    const note = _computeStudentEvalNote(ev, sid);
-    cells.push(note == null ? '' : _fmtNote(note));
+    const disp = _studentNoteDisplay(ev, sid);
+    cells.push(disp.kind === 'none' ? '' : disp.text);
     lines.push(cells.join('\t'));
   }
   const tsv = lines.join('\n');
@@ -24676,6 +24710,57 @@ function _noteColor(note, noteMax) {
   return thresholds[thresholds.length - 1].color || '';
 }
 
+// Inspecte les saisies d'un élève pour une éval et détermine pourquoi (le cas
+// échéant) sa note finale est nulle :
+//   - 'A'    : toutes les saisies sont 'A' (absent) — pas une seule note numérique
+//   - 'NN'   : toutes les saisies sont 'NN' (non noté) — Type A/C uniquement
+//   - 'none' : aucune saisie du tout
+//   - null   : il y a au moins une saisie numérique (la note est calculable)
+function _studentNoteAbsenceReason(ev, sid) {
+  if (!ev) return 'none';
+  if (ev.type === 'B') {
+    let nA = 0, nNum = 0;
+    for (const p of (ev.passations || [])) {
+      const perStu = p.niveaux?.[sid];
+      if (!perStu) continue;
+      for (const cid of (p.competenceIds || [])) {
+        const v = perStu[cid];
+        if (v === 'A') nA++;
+        else if (typeof v === 'number' && v >= 1) nNum++;
+      }
+    }
+    if (nNum > 0) return null;
+    if (nA > 0) return 'A';
+    return 'none';
+  }
+  // Type A / C
+  const values = ev.notes?.[sid]?.values || {};
+  const mns = ev.miniNotes || [];
+  let nA = 0, nNN = 0, nNum = 0;
+  for (const mn of mns) {
+    const v = values[mn.id];
+    if (v === 'A') nA++;
+    else if (v === 'NN') nNN++;
+    else if (typeof v === 'number') nNum++;
+  }
+  if (nNum > 0) return null;
+  if (nA > 0 && nNN === 0) return 'A';
+  if (nNN > 0 && nA === 0) return 'NN';
+  if (nA > 0 || nNN > 0) return 'A';  // mix de A+NN sans note → on privilégie 'A'
+  return 'none';
+}
+
+// Renvoie l'affichage à mettre dans la colonne "Note finale" pour un élève :
+// soit la note numérique formatée, soit le code A/NN, soit '—'.
+function _studentNoteDisplay(ev, sid) {
+  const note = _computeStudentEvalNote(ev, sid);
+  if (note != null) return { text: _fmtNote(note), kind: 'num', value: note };
+  const reason = _studentNoteAbsenceReason(ev, sid);
+  if (reason === 'A')    return { text: (S.evalPrefs?.codeAbsent  || 'A'),  kind: 'A' };
+  if (reason === 'NN')   return { text: (S.evalPrefs?.codeNonNote || 'NN'), kind: 'NN' };
+  return { text: '—', kind: 'none' };
+}
+
 // Renvoie le label à afficher pour un niveau (1..n, 'A', 0, null/undefined)
 function _formatNiveau(v) {
   const ep = S.evalPrefs || {};
@@ -24782,9 +24867,8 @@ function _tableurEditMn(inputEl) {
     document.querySelectorAll('#meval-tableur-tbl tbody tr').forEach(tr => {
       const sid = tr.getAttribute('data-sid');
       if (!sid) return;
-      const total = _computeStudentEvalNote(ev, sid);
       const cellTotal = tr.querySelector('.meval-row-total');
-      if (cellTotal) cellTotal.textContent = total == null ? '—' : _fmtNote(total);
+      if (cellTotal) _evalTableurUpdateTotalCell(cellTotal, ev, sid);
     });
   } else if (field === 'date') {
     const d = String(inputEl.value || '');
