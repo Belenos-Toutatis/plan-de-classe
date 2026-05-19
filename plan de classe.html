@@ -24627,8 +24627,9 @@ function _evalTableurRenderB(ev, cls) {
       html += `<th style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:60px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c?.name || '')}">
         <select data-passid="${_esc(p.id)}" data-cid="${_esc(cid)}"
                 onchange="_evalTableurChangeComp(this)"
-                style="padding:2px 4px;font-family:var(--font-mono);font-weight:600;border:1px solid transparent;background:transparent;font-size:.92em;max-width:100%"
-                title="Changer la compétence (les niveaux saisis seront proposés en transfert / suppression)">${opts}</select>
+                class="meval-comp-select"
+                style="padding:2px 4px;font-family:var(--font-mono);font-weight:600;border:1px solid transparent;background:transparent;font-size:.92em;width:64px"
+                title="${_esc(c?.name || c?.code || '')} — changer la compétence (les niveaux saisis seront proposés en transfert)">${opts}</select>
       </th>`;
     }
     if (compIds.length === 0) {
@@ -26886,15 +26887,17 @@ function _evalExportBuildRows(ev) {
     const stu = S.eleves[sid];
     if (!stu) continue;
     const name = `${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim();
-    // Note finale arrondie à la granulométrie configurée pour l'éval (ou défaut global)
-    const noteRaw = _computeStudentEvalNote(ev, sid);
-    const note = (noteRaw == null) ? null : _roundNoteToGranularity(noteRaw, ev);
+    // Note finale = display unifié (arrondi granulométrie + codes A / NN si pas de note numérique)
+    const disp = _studentNoteDisplay(ev, sid);
+    const noteCell = (disp.kind === 'none') ? '' : disp.text;
+    // On garde aussi la valeur numérique brute (pour usage éventuel — non utilisée actuellement)
+    const note = (disp.kind === 'num') ? disp.value : null;
     const compLevels = comps.map(c => {
       const niv = _evalStudentCompetenceLevel(ev, sid, c.id);
       return { cid: c.id, code: c.code, name: c.name, level: niv > 0 ? niv : null };
     });
     const remarque = ev.notes?.[sid]?.remarque || '';
-    rows.push({ sid, name, note, comps: compLevels, remarque });
+    rows.push({ sid, name, note, noteCell, comps: compLevels, remarque });
   }
   return { rows, comps };
 }
@@ -26930,7 +26933,7 @@ function _evalExportRender() {
     html += `<tr style="background:${bg}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_esc(r.name)}</td>`;
     if (_evalExportColsState.note) {
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600">${r.note != null ? _fmtNote(r.note) : ''}</td>`;
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600">${_esc(r.noteCell || '')}</td>`;
     }
     if (_evalExportColsState.comps) {
       for (const c of r.comps) {
@@ -26960,7 +26963,7 @@ function _evalExportToTSV(ev) {
   const lines = [headers.join('\t')];
   for (const r of rows) {
     const cells = [r.name];
-    if (_evalExportColsState.note)     cells.push(r.note != null ? _fmtNote(r.note) : '');
+    if (_evalExportColsState.note)     cells.push(r.noteCell || '');
     if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? _formatNiveau(0) : _formatNiveau(Math.round(c.level)));
     if (_evalExportColsState.remarque) cells.push((r.remarque || '').replace(/\t|\n/g, ' '));
     lines.push(cells.join('\t'));
@@ -26996,7 +26999,7 @@ function _evalExportDownloadCsv() {
   const lines = [headers.map(csvEsc).join(';')];
   for (const r of rows) {
     const cells = [r.name];
-    if (_evalExportColsState.note)     cells.push(r.note != null ? _fmtNote(r.note) : '');
+    if (_evalExportColsState.note)     cells.push(r.noteCell || '');
     if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? _formatNiveau(0) : _formatNiveau(Math.round(c.level)));
     if (_evalExportColsState.remarque) cells.push(r.remarque || '');
     lines.push(cells.map(csvEsc).join(';'));
