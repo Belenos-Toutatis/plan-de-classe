@@ -3204,6 +3204,25 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Tableau croisé : stats par classe × civilité ── -->
+<div id="meval-crosstab" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,900px);width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 id="meval-crosstab-title" style="margin:0">🔀 Comparaison des classes</h2>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-g btn-sm" onclick="_evalCrossTabCopy()" title="Copie le tableau au format TSV">📋 Copier</button>
+      </div>
+    </div>
+    <div id="meval-crosstab-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
+    <p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
+      Note finale /noteMax agrégée par <strong>classe</strong> (ligne) × <strong>civilité</strong> (colonnes <em>Filles</em>, <em>Garçons</em>, <em>Total</em>). Élèves sans civilité saisie inclus uniquement dans la colonne Total.
+    </p>
+    <div class="ma" style="margin-top:10px">
+      <button class="btn btn-p" onclick="closeMod2('meval-crosstab')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Bilan compétences évaluées par évaluation ── -->
 <div id="meval-bilan-comps" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:92vh;overflow:hidden;display:flex;flex-direction:column">
@@ -3223,6 +3242,7 @@ kbd {
           </select>
         </span>
         <button class="btn btn-g btn-sm" onclick="_evalBilanCopy()" title="Copie le tableau au format TSV">📋 Copier</button>
+        <button class="btn btn-g btn-sm" id="meval-bilan-crosstab-btn" onclick="_evalOpenCrossTab()" title="Comparer les classes (multi-classes) : moyenne, écart-type et effectif par classe et civilité" style="display:none">🔀 Comparer classes</button>
       </div>
     </div>
     <div id="meval-bilan-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
@@ -23874,12 +23894,135 @@ function _evalStudentLevelForComp(ev, sid, cid) {
   return null;
 }
 
+// ─── Tableau croisé : moyenne / écart-type / n par classe × civilité ───
+function _evalCrossTabBuild(ev) {
+  const classIds = _evalClassIds(ev);
+  const rows = []; // [{ classNom, classId, F, M, total }] où F/M/total = { values, count, mean, std }
+  const allValues = { F: [], M: [], total: [] };
+  for (const cid of classIds) {
+    const cls = S.classes?.[cid];
+    if (!cls) continue;
+    const byCiv = { F: [], M: [], total: [] };
+    for (const sid of (cls.eleves || [])) {
+      const stu = S.eleves[sid];
+      const note = _computeStudentEvalNote(ev, sid);
+      if (note == null || !Number.isFinite(note)) continue;
+      byCiv.total.push(note);
+      if (stu?.civilite === 'F') byCiv.F.push(note);
+      else if (stu?.civilite === 'M') byCiv.M.push(note);
+      // sans civilité → uniquement dans total
+    }
+    rows.push({
+      classNom: cls.nom,
+      classId: cid,
+      F: _statsForNumbers(byCiv.F),
+      M: _statsForNumbers(byCiv.M),
+      total: _statsForNumbers(byCiv.total),
+    });
+    allValues.F.push(...byCiv.F);
+    allValues.M.push(...byCiv.M);
+    allValues.total.push(...byCiv.total);
+  }
+  // Ligne "Toutes classes confondues"
+  const grand = {
+    classNom: 'Toutes classes',
+    classId: '__all',
+    F: _statsForNumbers(allValues.F),
+    M: _statsForNumbers(allValues.M),
+    total: _statsForNumbers(allValues.total),
+  };
+  return { rows, grand };
+}
+
+function _evalCrossTabCellHTML(stats) {
+  if (!stats) return '<span style="color:var(--pencil);font-style:italic">—</span>';
+  return `<div style="font-family:var(--font-mono);line-height:1.5"><strong>${_fmtNote(stats.avg)}</strong> <span style="color:var(--pencil);font-size:.82em">(n=${stats.count})</span><br><span style="color:var(--pencil);font-size:.82em">σ ${_fmtNote(stats.std)}</span></div>`;
+}
+
+function _evalOpenCrossTab() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  if (_evalClassIds(ev).length <= 1) {
+    toast('💡 Évaluation mono-classe — pas de comparaison à faire', 'info');
+    return;
+  }
+  document.getElementById('meval-crosstab-title').textContent = `🔀 ${ev.nomCourt} — comparaison classes × civilité`;
+  _evalRenderCrossTab();
+  openMod('meval-crosstab');
+}
+
+function _evalRenderCrossTab() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const { rows, grand } = _evalCrossTabBuild(ev);
+  const wrap = document.getElementById('meval-crosstab-wrap');
+  if (!wrap) return;
+  let html = `<table style="border-collapse:collapse;width:100%;font-size:.92em">`;
+  html += `<thead><tr style="background:var(--paper-warm);border-bottom:2px solid var(--rule-line)">
+    <th style="padding:6px 10px;text-align:left;font-family:var(--font-serif)">Classe</th>
+    <th style="padding:6px 10px;text-align:center;font-family:var(--font-serif)">👧 Filles<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">moy (n) · σ</span></th>
+    <th style="padding:6px 10px;text-align:center;font-family:var(--font-serif)">👦 Garçons<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">moy (n) · σ</span></th>
+    <th style="padding:6px 10px;text-align:center;font-family:var(--font-serif);background:var(--paper)">Total<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">moy (n) · σ</span></th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const bg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
+    html += `<tr style="background:${bg};border-bottom:1px solid var(--rule-line-soft)">
+      <td style="padding:6px 10px;font-family:var(--font-serif);font-weight:600">${_esc(r.classNom)}</td>
+      <td style="padding:6px 10px;text-align:center;vertical-align:top">${_evalCrossTabCellHTML(r.F)}</td>
+      <td style="padding:6px 10px;text-align:center;vertical-align:top">${_evalCrossTabCellHTML(r.M)}</td>
+      <td style="padding:6px 10px;text-align:center;vertical-align:top;background:${bg};font-weight:600">${_evalCrossTabCellHTML(r.total)}</td>
+    </tr>`;
+  });
+  // Ligne de grand total
+  html += `<tr style="background:var(--ink-blue);color:#fff;border-top:2px solid var(--ink-blue)">
+    <td style="padding:6px 10px;font-family:var(--font-serif);font-weight:700">${_esc(grand.classNom)}</td>
+    <td style="padding:6px 10px;text-align:center;vertical-align:top;color:#fff">${_evalCrossTabCellHTML(grand.F).replace(/var\(--pencil\)/g, 'rgba(255,255,255,0.7)')}</td>
+    <td style="padding:6px 10px;text-align:center;vertical-align:top;color:#fff">${_evalCrossTabCellHTML(grand.M).replace(/var\(--pencil\)/g, 'rgba(255,255,255,0.7)')}</td>
+    <td style="padding:6px 10px;text-align:center;vertical-align:top;color:#fff;font-weight:700">${_evalCrossTabCellHTML(grand.total).replace(/var\(--pencil\)/g, 'rgba(255,255,255,0.7)')}</td>
+  </tr>`;
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+function _evalCrossTabCopy() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const { rows, grand } = _evalCrossTabBuild(ev);
+  const header = ['Classe', 'F moy', 'F n', 'F σ', 'M moy', 'M n', 'M σ', 'Total moy', 'Total n', 'Total σ'];
+  const lines = [header.join('\t')];
+  const fmt = v => v == null ? '' : _fmtNote(v).replace('.', ',');
+  for (const r of rows) {
+    lines.push([
+      r.classNom,
+      fmt(r.F?.avg), r.F?.count ?? '', fmt(r.F?.std),
+      fmt(r.M?.avg), r.M?.count ?? '', fmt(r.M?.std),
+      fmt(r.total?.avg), r.total?.count ?? '', fmt(r.total?.std),
+    ].join('\t'));
+  }
+  lines.push([
+    grand.classNom,
+    fmt(grand.F?.avg), grand.F?.count ?? '', fmt(grand.F?.std),
+    fmt(grand.M?.avg), grand.M?.count ?? '', fmt(grand.M?.std),
+    fmt(grand.total?.avg), grand.total?.count ?? '', fmt(grand.total?.std),
+  ].join('\t'));
+  navigator.clipboard.writeText(lines.join('\n')).then(
+    () => toast('📋 Tableau croisé copié — colle dans Excel/LibreOffice'),
+    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
+  );
+}
+
 function _evalOpenBilanComps() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
   document.getElementById('meval-bilan-title').textContent = `📊 Bilan compétences — ${ev.nomCourt}`;
   document.getElementById('meval-bilan-sort').value = 'code';
+  // Bouton "Comparer classes" visible uniquement si éval multi-classes
+  const ctBtn = document.getElementById('meval-bilan-crosstab-btn');
+  if (ctBtn) ctBtn.style.display = (_evalClassIds(ev).length > 1) ? '' : 'none';
   // Toggle pondération visible seulement pour Type B
   const wWrap = document.getElementById('meval-bilan-weighting-wrap');
   if (wWrap) {
@@ -23933,6 +24076,26 @@ function _evalRenderBilanComps() {
   const sids = _evalTableurSortedSids(cls);
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
 
+  // Pré-calcul des rangs : tri par note décroissante, gestion des ex æquo (rang "min")
+  const notesBySid = {};
+  for (const sid of sids) {
+    const n = _computeStudentEvalNote(ev, sid);
+    if (n != null) notesBySid[sid] = n;
+  }
+  const sortedNotes = Object.entries(notesBySid).sort((a, b) => b[1] - a[1]);
+  const ranks = {};
+  let lastNote = null, lastRank = 0;
+  sortedNotes.forEach(([sid, n], i) => {
+    if (lastNote != null && Math.abs(n - lastNote) < 0.001) {
+      ranks[sid] = lastRank;
+    } else {
+      ranks[sid] = i + 1;
+      lastRank = i + 1;
+      lastNote = n;
+    }
+  });
+  const totalRanked = sortedNotes.length;
+
   let html = '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
 
@@ -23956,6 +24119,7 @@ function _evalRenderBilanComps() {
       html += `<th colspan="${g.span}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}">${_esc(g.label)}</th>`;
     }
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
+    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
     html += '</tr>';
   }
 
@@ -23968,6 +24132,7 @@ function _evalRenderBilanComps() {
   }
   if (sortMode !== 'domain') {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax || 20}</span></th>`;
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
   }
   html += '</tr></thead><tbody>';
 
@@ -23980,16 +24145,22 @@ function _evalRenderBilanComps() {
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
-      const dispVal = (niv == null) ? '—' : _formatNiveau(Math.round(niv));
-      const bg = (niv != null) ? colors[Math.max(0, Math.min(3, Math.round(niv) - 1))] : '';
-      const color = (niv != null) ? '#fff' : 'var(--pencil)';
-      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${niv != null ? 700 : 400};background:${bg};color:${color}">${dispVal}</td>`;
+      // Comp non évaluée → afficher "0" (niveau "non évalué"), pas "—"
+      const isNull = (niv == null);
+      const dispVal = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
+      const bg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
+      const color = isNull ? 'var(--pencil)' : '#fff';
+      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};background:${bg};color:${color}">${dispVal}</td>`;
     }
     const note = _computeStudentEvalNote(ev, sid);
     const noteDisp = (note == null) ? '—' : _fmtNote(note);
     const noteBg = _noteColor(note, ev.noteMax);
     const noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${noteDisp}</td>`;
+    // Rang dans la classe (ex æquo = même rang)
+    const rang = ranks[sid];
+    const rangDisp = (rang == null) ? '—' : `${rang}<span style="color:var(--pencil);font-size:.78em">/${totalRanked}</span>`;
+    html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:${bgRow}">${rangDisp}</td>`;
     html += '</tr>';
   }
   // ─── Pied de tableau : moyenne de niveau par compétence + stats complètes pour la note ───
@@ -24001,6 +24172,8 @@ function _evalRenderBilanComps() {
   }
   const notes = sids.map(sid => _computeStudentEvalNote(ev, sid)).filter(v => v != null);
   html += `<td style="padding:4px 8px;vertical-align:top">${_statsCellHTML(notes, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
+  // Colonne Rang : pas de stats (l'info est déjà résumée dans n=)
+  html += '<td></td>';
   html += '</tr>';
   html += '</tbody></table>';
   wrap.innerHTML = html;
@@ -24023,7 +24196,8 @@ function _evalBilanCopy() {
     const cells = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
-      cells.push(niv == null ? '' : _formatNiveau(Math.round(niv)));
+      // Non évaluée → 0 (cohérent avec l'affichage du bilan)
+      cells.push(niv == null ? _formatNiveau(0) : _formatNiveau(Math.round(niv)));
     }
     const note = _computeStudentEvalNote(ev, sid);
     cells.push(note == null ? '' : _fmtNote(note));
