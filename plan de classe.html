@@ -1470,10 +1470,10 @@ kbd {
     <button class="nb" onclick="showTab('qcmcam',this)">📷 QCMCam</button>
   </div>
   <div class="tab-group">
-    <span class="group-label">Évaluation <em>· en construction</em></span>
-    <button class="nb" onclick="showTab('notes',this)" title="Évaluations : création, saisie, notes /20">📊 Notes</button>
-    <button class="nb" onclick="showTab('comp',this)" title="Bilan par compétence : vue transverse classe + niveau moyen par élève sur chaque compétence évaluée">🎯 Compétences</button>
-    <button class="nb" onclick="showTab('bilan',this)" title="Bilan semestre / trimestre par élève : moyenne /20 et moyenne par domaine du socle, prêt à coller dans le bulletin">📜 Bilan</button>
+    <span class="group-label">Évaluations <em>· en construction</em></span>
+    <button class="nb" onclick="showTab('notes',this)" title="Devoirs : création des évaluations, saisie des notes /20">📊 Devoirs</button>
+    <button class="nb" onclick="showTab('comp',this)" title="Bilan par compétences : vue transverse classe + niveau moyen par élève sur chaque compétence évaluée">🎯 Bilan par compétences</button>
+    <button class="nb" onclick="showTab('bilan',this)" title="Bilan des évaluations : moyenne /20 par élève et moyenne par domaine du socle, prêt à coller dans le bulletin">📜 Bilan des évaluations</button>
   </div>
 </nav>
 </div>
@@ -1989,7 +1989,7 @@ kbd {
   <!-- ── TAB: Notes (volet Évaluation — phase 1 : évaluations Type A) ── -->
   <div id="tab-notes" class="tab">
     <div class="sh">
-      <h2>📊 Évaluations</h2>
+      <h2>📊 Devoirs</h2>
       <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation pour la classe active">+ Nouvelle évaluation</button>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
@@ -2007,7 +2007,7 @@ kbd {
   <!-- ── TAB: Bilan (volet Évaluation — phase 12 : agrégation semestrielle) ── -->
   <div id="tab-bilan" class="tab">
     <div class="sh">
-      <h2>📜 Bilan</h2>
+      <h2>📜 Bilan des évaluations</h2>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="bilan-period-filter" onchange="renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
@@ -2024,7 +2024,7 @@ kbd {
   <!-- ── TAB: Compétences (volet Évaluation — phase 11 : bilan transverse) ── -->
   <div id="tab-comp" class="tab">
     <div class="sh">
-      <h2>🎯 Bilan compétences</h2>
+      <h2>🎯 Bilan par compétences</h2>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="comp-period-filter" onchange="renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
@@ -3082,6 +3082,7 @@ kbd {
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-g btn-sm" onclick="_tableurOpenStructure()" title="Modifier la structure : ajouter/supprimer des mini-notes ou questions, gérer les compétences rattachées">🏗 Structure</button>
         <button class="btn btn-g btn-sm" onclick="_tableurOpenReglages()" title="Réglages : nom, date, période, coefficient, options avancées (facultative, diagnostique, règle de moyenne)">⚙ Réglages</button>
+        <button class="btn btn-p btn-sm" id="meval-tableur-plan-btn" onclick="_evalPlanOverlayOpen()" style="display:none" title="Saisir les niveaux sur un plan de classe agrandi : pastilles N1-N4 grandes et cliquables">🪑 Plan de classe</button>
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 2px"></span>
         <label style="font-size:.85em;color:var(--pencil)">Tri :</label>
         <select id="meval-tableur-sort" onchange="_evalTableurRender()" style="padding:4px 8px;font-size:.88em">
@@ -3866,7 +3867,7 @@ kbd {
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T05:30:00Z';
+const APP_VERSION   = '2026-05-20T06:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -8858,16 +8859,33 @@ function openMod(id) {
     }
     sel.innerHTML = html;
   }
-  document.getElementById(id).classList.add('on');
+  const el = document.getElementById(id);
+  if (el) {
+    // Si une autre modale est déjà ouverte, on bump le z-index pour stacker au-dessus.
+    // Le z-index par défaut des .mo est 1000. Chaque nouvelle modale ajoute +10.
+    const alreadyOpen = document.querySelectorAll('.mo.on');
+    if (alreadyOpen.length > 0 && !el.classList.contains('on')) {
+      // Compte le nombre de modales déjà au-dessus (z-index custom > 1000)
+      let maxZ = 1000;
+      alreadyOpen.forEach(m => {
+        const z = parseInt(m.style.zIndex || '0', 10);
+        if (z > maxZ) maxZ = z;
+      });
+      el.style.zIndex = String(maxZ + 10);
+    }
+    el.classList.add('on');
+  }
 }
 function closeMod(overlay, e) {
   if (e.target === overlay) {
     overlay.classList.remove('on');
+    overlay.style.zIndex = '';  // reset le bump éventuel (stack modal)
     _afterModalClose(overlay.id);
   }
 }
 function closeMod2(id) {
-  document.getElementById(id).classList.remove('on');
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('on'); el.style.zIndex = ''; }
   _afterModalClose(id);
 }
 
