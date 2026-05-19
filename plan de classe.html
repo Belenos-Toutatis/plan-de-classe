@@ -3368,6 +3368,7 @@ kbd {
     <p style="margin:10px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
       <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
       <br><strong>Codes :</strong> <code>NN</code> non noté, <code>A</code> ou <code>ABS</code> absent (exclus du total).
+      <br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote, copie d'un autre tableur). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.
       <br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).
     </p>
 
@@ -23866,6 +23867,53 @@ function _evalTableurConfirmIfOutOfRange(inputEl) {
     inputEl.style.background = '';
     inputEl.title = '';
   }
+}
+
+// ─── Coller multi-colonnes / multi-lignes directement dans le tableur ───
+// Quand l'utilisateur a une cellule focusée et colle un bloc (TSV, copie depuis
+// Excel/LibreOffice/Pronote), on intercepte et on remplit les cellules à partir
+// de la position du curseur. Marche pour Type A/C (notes) et Type B (niveaux).
+function _evalTableurPasteMulti(e) {
+  const tgt = e.target;
+  if (!tgt || !tgt.matches || !tgt.matches('#meval-tableur-tbl tbody input[data-ri][data-ci]')) return;
+  const text = (e.clipboardData || window.clipboardData)?.getData('text');
+  if (!text) return;
+  // Découpe en lignes et retire les lignes vides en queue (clipboard Excel ajoute souvent un \n final)
+  const rawLines = text.split(/\r?\n/);
+  while (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') rawLines.pop();
+  if (rawLines.length === 0) return;
+  // Détecte un bloc multi-colonnes/lignes (au moins 1 tab OU plusieurs lignes)
+  const hasTab = rawLines.some(l => l.includes('\t'));
+  if (!hasTab && rawLines.length === 1) return; // valeur unique → laisse le paste natif
+  e.preventDefault();
+  e.stopPropagation();
+  const matrix = rawLines.map(l => l.split('\t'));
+  const startRi = parseInt(tgt.getAttribute('data-ri'), 10);
+  const startCi = parseInt(tgt.getAttribute('data-ci'), 10);
+  let lastInput = tgt;
+  let filled = 0, skipped = 0;
+  for (let dr = 0; dr < matrix.length; dr++) {
+    const row = matrix[dr];
+    for (let dc = 0; dc < row.length; dc++) {
+      const ri = startRi + dr;
+      const ci = startCi + dc;
+      const inp = document.querySelector(`#meval-tableur-tbl tbody input[data-ri="${ri}"][data-ci="${ci}"]`);
+      if (!inp) { skipped++; continue; }
+      const v = (row[dc] || '').trim();
+      inp.value = v;
+      // Déclenche oninput pour que la valeur soit traitée par _evalTableurUpdate / _evalTableurBUpdate
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      lastInput = inp;
+      filled++;
+    }
+  }
+  if (lastInput) { lastInput.focus(); lastInput.select(); }
+  toast(`📋 ${filled} valeur${filled > 1 ? 's' : ''} collée${filled > 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} hors limites)` : ''}`);
+}
+// Attache une seule fois le handler global de paste pour le tableur
+if (!window._evalTableurPasteAttached) {
+  document.addEventListener('paste', _evalTableurPasteMulti, true);
+  window._evalTableurPasteAttached = true;
 }
 
 function _evalTableurKey(e, inputEl) {
