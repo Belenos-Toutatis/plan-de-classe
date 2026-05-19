@@ -951,6 +951,9 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--ink-blue) !important;
   box-shadow: 0 0 0 3px rgba(26, 37, 47, 0.08) !important;
 }
+/* Cellule de saisie niveau (tableur Type B) : transparent — la couleur vit sur le <td> parent */
+input[type="text"].meval-niveau-input { background: transparent !important; }
+input[type="text"].meval-niveau-input:focus { background: rgba(255,255,255,0.85) !important; color: var(--ink-deep) !important; }
 
 /* ─── Cellules de plan (.cell) ─── */
 .cell {
@@ -23586,7 +23589,10 @@ function _evalTableurRenderB(ev, cls) {
         const color = (cur != null && cur !== 0 && cur !== '') ? '#fff' : '';
         const fw = (cur != null && cur !== 0 && cur !== '') ? '700' : '400';
         const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
-        html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" style="width:42px;padding:3px 4px;font-family:var(--font-mono);font-weight:${fw};text-align:center;background:${bg};color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
+        // Couleur sur la <td> (le style global input[type=text]{background:!important} écrase les inline styles sur l'input).
+        // L'input est transparent → laisse voir le fond de la cellule.
+        const tdBg = bg ? `;background:${bg}` : '';
+        html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" class="meval-niveau-input" style="width:42px;padding:3px 4px;font-family:var(--font-mono);font-weight:${fw};text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
         ci++;
       });
     }
@@ -23634,9 +23640,10 @@ function _evalTableurBUpdate(inputEl) {
   pass.niveaux = pass.niveaux || {};
   pass.niveaux[sid] = pass.niveaux[sid] || {};
 
+  const td = inputEl.closest('td');
   if (parsed === undefined) {
     // Valeur invalide — flag rouge + toast (rate-limité)
-    inputEl.style.background = '#fee';
+    if (td) td.style.background = '#fee';
     inputEl.style.color = '';
     inputEl.style.fontWeight = '700';
     inputEl.title = `Valeur invalide. Tape 1–${nbMax}, 0 ou A (absent).`;
@@ -23646,17 +23653,17 @@ function _evalTableurBUpdate(inputEl) {
   inputEl.title = '';
   if (parsed === 0) {
     delete pass.niveaux[sid][cid];
-    inputEl.style.background = '';
+    if (td) td.style.background = '';
     inputEl.style.color = '';
     inputEl.style.fontWeight = '400';
   } else if (parsed === 'A') {
     pass.niveaux[sid][cid] = 'A';
-    inputEl.style.background = '#9ca3af';
+    if (td) td.style.background = '#9ca3af';
     inputEl.style.color = '#fff';
     inputEl.style.fontWeight = '700';
   } else {
     pass.niveaux[sid][cid] = parsed;
-    inputEl.style.background = colors[parsed - 1];
+    if (td) td.style.background = colors[parsed - 1];
     inputEl.style.color = '#fff';
     inputEl.style.fontWeight = '700';
   }
