@@ -22168,7 +22168,7 @@ function renderEvalNotes() {
       <div style="flex:1">
         <div>${typeBadge}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
         <div style="font-size:.85em;color:var(--pencil);margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
-          <span>📅 ${ev.date ? _fmtDateFr(ev.date) : '—'}${ev.slotId ? ' · ' + _esc(ev.slotId) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
+          <span>📅 ${(() => { const d = _evalDateFor(ev, cls.id); return d ? _fmtDateFr(d) : '—'; })()}${_evalSlotIdFor(ev, cls.id) ? ' · ' + _esc(_evalSlotIdFor(ev, cls.id)) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
           · ${summaryInfo}
           · <strong>${nbStudents}/${totalStudents}</strong> saisi${nbStudents > 1 ? 's' : ''}</span>
           ${statsHTML}
@@ -25537,10 +25537,41 @@ function _evalSeatingHashFor(ev, classId) {
   return null;
 }
 
-// Date/créneau par classe : fallback sur ev.date / ev.slotId (legacy / classe primaire)
+// Date d'une éval pour une classe donnée.
+// Priorité :
+//   1. ev.dates[classId] si explicitement renseigné (Réglages multi-classes)
+//   2. Max des dates par classe des constituants (mn.dates[classId] / pass.dates[classId])
+//      — seuls les items qui ont une date pour CETTE classe comptent. Une mn faite
+//      seulement par la classe B n'est PAS comptée pour la classe A.
+//   3. Si aucune date par-classe n'est définie sur les constituants, fallback sur la date
+//      globale des constituants (mn.date / pass.date) : ancien comportement mono-classe.
+//   4. ev.date global en dernier recours.
 function _evalDateFor(ev, classId) {
   if (ev?.dates?.[classId]) return ev.dates[classId];
-  return ev?.date || '';
+  if (!ev || !classId) return ev?.date || '';
+  // Étape 2 : dates par-classe explicites sur les constituants
+  const perClass = [];
+  if (ev.type === 'A' || ev.type === 'C') {
+    for (const mn of (ev.miniNotes || [])) {
+      const d = mn?.dates?.[classId];
+      if (d) perClass.push(d);
+    }
+  } else if (ev.type === 'B') {
+    for (const p of (ev.passations || [])) {
+      const d = p?.dates?.[classId];
+      if (d) perClass.push(d);
+    }
+  }
+  if (perClass.length > 0) return perClass.reduce((m, d) => d > m ? d : m, '');
+  // Étape 3 : fallback sur les dates globales des constituants
+  const fallback = [];
+  if (ev.type === 'A' || ev.type === 'C') {
+    for (const mn of (ev.miniNotes || [])) { if (mn?.date) fallback.push(mn.date); }
+  } else if (ev.type === 'B') {
+    for (const p of (ev.passations || [])) { if (p?.date) fallback.push(p.date); }
+  }
+  if (fallback.length > 0) return fallback.reduce((m, d) => d > m ? d : m, '');
+  return ev.date || '';
 }
 
 // Date/créneau d'une passation pour une classe donnée.
