@@ -1007,6 +1007,29 @@ html[data-theme="dark"] #mlinks-list > div[style*="background:#fafafa"] { backgr
 .pass-code-chip { background: var(--ink-blue); color: var(--paper); }
 html[data-theme="dark"] .pass-code-chip { background: #3b5a8c !important; color: var(--ink-deep) !important; }
 
+/* Type B saisie sur plan : pastilles de niveau (.evp-pill) */
+.evp-pill { flex: 1; min-width: 26px; height: 30px; border-radius: 50%; border: 2px solid var(--rule-line);
+            background: var(--paper); color: var(--ink-deep);
+            font-family: var(--font-mono); font-weight: bold; font-size: .85em;
+            cursor: pointer; padding: 0; transition: transform .1s; }
+.evp-pill:hover { transform: scale(1.1); }
+html[data-theme="dark"] .evp-pill:not(.on) { background: var(--paper-deep) !important; color: var(--ink-blue-soft) !important; border-color: var(--rule-line) !important; }
+
+/* Icônes preset liens externes (.mlinks-preset) */
+.mlinks-preset { cursor: pointer; padding: 3px 6px; border: 1px solid #e0e0e0; border-radius: 4px;
+                 background: #fafafa; line-height: 1.2; user-select: none; transition: background .12s; }
+.mlinks-preset:hover { background: #eef3f7; }
+html[data-theme="dark"] .mlinks-preset { background: var(--paper-deep) !important; border-color: var(--rule-line) !important; }
+html[data-theme="dark"] .mlinks-preset:hover { background: var(--paper-warm) !important; }
+
+/* Diagramme paires — cluster card (Groupe 1, Groupe 2…) */
+.pdiag-cluster { background: #fdfafa; border: 1px solid #f5b7b1; }
+.pdiag-cluster-title { color: #7d2017; }
+.pdiag-cluster-sub { color: #999; }
+html[data-theme="dark"] .pdiag-cluster { background: #2a1b1b !important; border-color: #6b3a3a !important; }
+html[data-theme="dark"] .pdiag-cluster-title { color: var(--margin-red) !important; }
+html[data-theme="dark"] .pdiag-cluster-sub { color: var(--ink-blue-soft) !important; }
+
 /* Devoirs — badges Type A/B/C + pastille de stats */
 .eval-type-badge {
   display: inline-block; padding: 1px 6px; color: #fff;
@@ -7515,7 +7538,7 @@ function _renderMlinksIconPresets() {
   const wrap = document.getElementById('mlinks-icon-presets');
   if (!wrap) return;
   wrap.innerHTML = _LINK_ICON_PRESETS.map(e =>
-    `<span class="mlinks-preset" style="cursor:pointer;padding:3px 6px;border:1px solid #e0e0e0;border-radius:4px;background:#fafafa;line-height:1.2;user-select:none;transition:background .12s" title="Utiliser cet emoji">${e}</span>`
+    `<span class="mlinks-preset" title="Utiliser cet emoji">${e}</span>`
   ).join('');
   // Délégation : clic sur un chip → met l'emoji dans l'input
   wrap.onclick = (ev) => {
@@ -13949,9 +13972,17 @@ function _renderPairsDiagram(cls) {
       const nomShort = stu && stu.nom ? stu.nom : '';
       const fullName = stu ? `${stu.prenom} ${stu.nom}` : '(supprimé)';
       const degree = (adj.get(sid) || new Set()).size;
-      // Plus l'élève est un "hub" (beaucoup de paires), plus son cercle est foncé
-      const shade = degree >= 3 ? '#c0392b' : degree === 2 ? '#e74c3c' : '#fadbd8';
-      const txtColor = degree >= 2 ? '#fff' : '#7d2017';
+      // Plus l'élève est un "hub" (beaucoup de paires), plus son cercle est foncé.
+      // En thème sombre on utilise des tons de margin-red plus profonds pour rester lisibles
+      // avec le texte ink-deep cream qui surcharge via CSS .pdiag-node text.
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const shade = degree >= 3
+        ? (isDark ? '#8a2f24' : '#c0392b')
+        : degree === 2
+          ? (isDark ? '#a83432' : '#e74c3c')
+          : (isDark ? '#3a1f1f' : '#fadbd8');
+      const txtColor = isDark ? 'var(--ink-deep)' : (degree >= 2 ? '#fff' : '#7d2017');
+      const labelColor = isDark ? 'var(--ink-deep)' : '#5b2c0e';
       // Le nom de famille est placé en-dessous du cercle (libellé extérieur)
       // pour ne pas écraser le prénom à l'intérieur. Décalage selon position
       // du nœud (au-dessus ou en-dessous du centre) pour aller "vers l'extérieur"
@@ -13962,13 +13993,13 @@ function _renderPairsDiagram(cls) {
         <title>${_escAttr(fullName)} — ${degree} paire${degree>1?'s':''}</title>
         <circle cx="${p.x}" cy="${p.y}" r="${NODE_R}" fill="${shade}" stroke="#7d2017" stroke-width="2"/>
         <text x="${p.x}" y="${p.y + 4}" text-anchor="middle" font-size="${fontSize}" font-weight="700" fill="${txtColor}" pointer-events="none">${_escAttr(prenom)}</text>
-        <text x="${p.x}" y="${labelY}" text-anchor="middle" font-size="${fontSizeName}" font-weight="600" fill="#5b2c0e" pointer-events="none">${_escAttr(nomShort)}</text>
+        <text x="${p.x}" y="${labelY}" text-anchor="middle" font-size="${fontSizeName}" font-weight="600" fill="${labelColor}" pointer-events="none">${_escAttr(nomShort)}</text>
       </g>`;
     }).join('');
 
     const subtitle = `${N} élève${N > 1 ? 's' : ''} · ${seenPairs.size} paire${seenPairs.size > 1 ? 's' : ''}`;
-    return `<div style="display:inline-block;margin:0 10px 10px 0;padding:6px 8px;background:#fdfafa;border:1px solid #f5b7b1;border-radius:6px;vertical-align:top">
-      <div style="font-size:.78em;color:#7d2017;margin-bottom:2px;font-weight:600">Groupe ${idx + 1} <span style="color:#999;font-weight:normal">— ${subtitle}</span></div>
+    return `<div class="pdiag-cluster" style="display:inline-block;margin:0 10px 10px 0;padding:6px 8px;border-radius:6px;vertical-align:top">
+      <div class="pdiag-cluster-title" style="font-size:.78em;margin-bottom:2px;font-weight:600">Groupe ${idx + 1} <span class="pdiag-cluster-sub" style="font-weight:normal">— ${subtitle}</span></div>
       <svg width="${W}" height="${H}" style="display:block">${lines}${nodes}</svg>
     </div>`;
   }).join('');
@@ -25345,10 +25376,14 @@ function _evalPlanOverlayRender() {
           const active = (b.v === 0)
             ? (cur == null || cur === 0)
             : (cur === b.v);
-          const bg = active ? b.bgActive : 'var(--paper)';
-          const fg = active ? b.fgActive : 'var(--ink-deep)';
-          const bd = active ? (b.v === 0 ? 'var(--ink-blue)' : b.bgActive) : 'var(--rule-line)';
-          pills += `<button data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-passid="${_esc(pass.id)}" data-niveau="${b.v}" onclick="_evalPlanOverlayPill(this)" style="flex:1;min-width:26px;height:30px;border-radius:50%;background:${bg};color:${fg};border:2px solid ${bd};font-family:var(--font-mono);font-weight:bold;font-size:.85em;cursor:pointer;padding:0">${b.label}</button>`;
+          const cls = active ? 'evp-pill on' : 'evp-pill';
+          // Pour les états ACTIFS, on garde les couleurs signifiantes (rouge/orange/vert/bleu/gris).
+          // Pour les états INACTIFS, on délègue au CSS pour qu'il s'adapte light/dark.
+          if (active) {
+            pills += `<button class="${cls}" data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-passid="${_esc(pass.id)}" data-niveau="${b.v}" onclick="_evalPlanOverlayPill(this)" style="background:${b.bgActive};color:${b.fgActive};border-color:${b.v === 0 ? 'var(--ink-blue)' : b.bgActive}">${b.label}</button>`;
+          } else {
+            pills += `<button class="${cls}" data-sid="${_esc(sid)}" data-cid="${_esc(cid)}" data-passid="${_esc(pass.id)}" data-niveau="${b.v}" onclick="_evalPlanOverlayPill(this)">${b.label}</button>`;
+          }
         }
         // Si plusieurs passations à cette date, préfixe la compétence par son code de passation
         const compLabel = multiPass ? `${pass.code}/${c.code}` : c.code;
