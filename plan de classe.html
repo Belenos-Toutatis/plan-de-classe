@@ -2482,7 +2482,7 @@ kbd {
       <h2>📜 Bilan des évaluations</h2>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
-        <select id="bilan-period-filter" onchange="renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
+        <select id="bilan-period-filter" onchange="renderBilanTab();_syncBilanPeriode('bilan-period-filter')" style="padding:4px 8px;font-size:.9em"></select>
         <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">📋 Copier tout</button>
         <button class="btn btn-g btn-sm" onclick="_bilanDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
       </div>
@@ -2497,10 +2497,14 @@ kbd {
   <div id="tab-comp" class="tab">
     <div class="sh">
       <h2>🎯 Bilan par compétences</h2>
-      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+        <button class="btn btn-g btn-sm" onclick="_bilanCompCopy()" title="Copier le tableau au format TSV (collable dans Excel/LibreOffice/ENT)">📋 Copier</button>
+        <button class="btn btn-g btn-sm" onclick="_bilanCompCsv()" title="Télécharger un fichier CSV">💾 CSV</button>
+        <button class="btn btn-g btn-sm" onclick="_bilanCompExportEnt()" title="Export prêt pour l'ENT : ligne par élève, colonnes = compétences uniquement (niveau atteint)">📤 Export ENT</button>
+        <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
         <button class="btn btn-g btn-sm" onclick="openCompetencesManager()" title="Gérer les compétences : codes courts, noms complets, domaines du socle">⚙ Gérer les compétences</button>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
-        <select id="comp-period-filter" onchange="renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
+        <select id="comp-period-filter" onchange="renderCompetencesTab();_syncBilanPeriode('comp-period-filter')" style="padding:4px 8px;font-size:.9em"></select>
       </div>
     </div>
     <p class="al al-i" style="margin-bottom:8px">
@@ -27704,7 +27708,10 @@ function renderBilanTab() {
   if (!wrap) return;
   const sel = document.getElementById('bilan-period-filter');
   if (sel) {
-    const cur = sel.value || _currentPeriode();
+    // Restaure la période persistée (synchronisée avec l'onglet Bilan par compétences)
+    let saved = null;
+    try { saved = localStorage.getItem('planClasse_bilanPeriode'); } catch (e) {}
+    const cur = (saved != null && saved !== '') ? saved : (sel.value || _currentPeriode());
     sel.innerHTML = '';
     for (const o of _periodeOptions()) {
       const opt = document.createElement('option');
@@ -27930,16 +27937,47 @@ function _aggregateStudentCompetence(classId, sid, cid, periode) {
 }
 
 // Rendu de l'onglet Compétences
+// Sync de la période sélectionnée entre l'onglet "Bilan par compétences" et
+// "Bilan des évaluations" : si l'utilisateur change la période sur un onglet,
+// l'autre suit. Persisté dans localStorage pour survivre aux F5.
+function _syncBilanPeriode(sourceId) {
+  const src = document.getElementById(sourceId);
+  if (!src) return;
+  const value = src.value || '';
+  try { localStorage.setItem('planClasse_bilanPeriode', value); } catch (e) {}
+  // Réplique sur l'autre sélecteur (s'il existe et a une option correspondante)
+  const targetIds = ['comp-period-filter', 'bilan-period-filter'].filter(id => id !== sourceId);
+  for (const tid of targetIds) {
+    const tgt = document.getElementById(tid);
+    if (!tgt) continue;
+    if ([...tgt.options].some(o => o.value === value)) tgt.value = value;
+  }
+}
+
+// À l'ouverture d'un onglet bilan, restaure la période depuis localStorage si présente
+function _restoreBilanPeriode(selectId) {
+  let saved = '';
+  try { saved = localStorage.getItem('planClasse_bilanPeriode') || ''; } catch (e) {}
+  const sel = document.getElementById(selectId);
+  if (sel && saved !== null && [...sel.options].some(o => o.value === saved)) {
+    sel.value = saved;
+  }
+}
+
 function renderCompetencesTab() {
   const cls = getCls();
   const wrap = document.getElementById('comp-wrap');
   if (!wrap) return;
   const sel = document.getElementById('comp-period-filter');
   if (sel) {
-    const cur = sel.value || _currentPeriode();
+    // Restaure la période persistée (synchronisée avec l'autre onglet bilan)
+    let saved = null;
+    try { saved = localStorage.getItem('planClasse_bilanPeriode'); } catch (e) {}
+    const cur = (saved != null) ? saved : (sel.value || _currentPeriode());
     sel.innerHTML = '';
     const optAll = document.createElement('option');
     optAll.value = ''; optAll.textContent = 'Toutes';
+    if (cur === '') optAll.selected = true;
     sel.appendChild(optAll);
     for (const o of _periodeOptions()) {
       const opt = document.createElement('option');
@@ -28024,7 +28062,45 @@ function renderCompetencesTab() {
     }
     html += '</tr>';
   }
-  html += '</tbody></table></div>';
+  // ─── Pied de tableau : moyenne et nb d'évaluations par compétence ───
+  html += '<tfoot style="position:sticky;bottom:0;z-index:2;background:var(--paper-warm)">';
+  // Ligne moyenne par compétence
+  html += '<tr style="border-top:2px solid var(--rule-line)">';
+  html += `<td style="padding:6px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600">μ classe</td>`;
+  const compMeans = [];
+  for (const c of comps) {
+    let sumL = 0, nL = 0;
+    for (const sid of sids) {
+      const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
+      if (agg.levelMean != null) { sumL += agg.levelMean; nL++; }
+    }
+    if (nL === 0) {
+      compMeans.push({ comp: c, mean: null, n: 0 });
+      html += '<td style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm)">—</td>';
+    } else {
+      const m = sumL / nL;
+      const mIdx = Math.max(1, Math.min(4, Math.round(m))) - 1;
+      compMeans.push({ comp: c, mean: m, n: nL });
+      html += `<td style="padding:6px 6px;text-align:center;background:var(--paper-warm)" title="Moyenne classe sur ${nL} élève${nL>1?'s':''} évalué${nL>1?'s':''}">
+        <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m)}</span>
+      </td>`;
+    }
+  }
+  // Cellule moyenne globale (vide)
+  html += '<td style="background:var(--paper-warm)"></td>';
+  html += '</tr>';
+  // Ligne nb d'évaluations par compétence
+  html += '<tr>';
+  html += `<td style="padding:4px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil)">éval(s)</td>`;
+  for (const c of comps) {
+    const nEvals = _countCompEvaluations(cls.id, c.id, periode);
+    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm)" title="${nEvals} évaluation${nEvals>1?'s':''} contenant ${c.code}">${nEvals}</td>`;
+  }
+  html += '<td style="background:var(--paper-warm)"></td>';
+  html += '</tr>';
+  html += '</tfoot>';
+
+  html += '</table></div>';
 
   // Mini-légende
   html += '<div style="margin-top:8px;font-size:.85em;color:var(--pencil);display:flex;gap:14px;flex-wrap:wrap"><strong>Légende :</strong>';
@@ -28034,6 +28110,115 @@ function renderCompetencesTab() {
   html += '</div>';
 
   wrap.innerHTML = html;
+  // Stocke l'état pour les exports
+  _bilanCompState = { cls, periode, comps, sids, compMeans };
+}
+
+// Compte le nombre d'évaluations (toutes confondues : A/B/C) qui contiennent cette
+// compétence dans leur structure, pour la classe et la période données.
+function _countCompEvaluations(classId, cid, periode) {
+  let n = 0;
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!ev || !_evalIncludesClass(ev, classId)) continue;
+    if (periode && ev.periode !== periode) continue;
+    if (ev.type === 'B') {
+      if ((ev.passations || []).some(p => Array.isArray(p.competenceIds) && p.competenceIds.includes(cid))) n++;
+    } else {
+      if ((ev.miniNotes || []).some(mn => Array.isArray(mn.competenceIds) && mn.competenceIds.includes(cid))) n++;
+    }
+  }
+  return n;
+}
+
+// État du dernier rendu du bilan compétences (pour les exports)
+let _bilanCompState = null;
+
+// Construit le tableau TSV/CSV : header + lignes + moyenne classe + nb évals
+function _bilanCompBuildRows(sep) {
+  if (!_bilanCompState) return '';
+  const { cls, periode, comps, sids, compMeans } = _bilanCompState;
+  const fmt = v => v == null ? '' : _fmtNote(v).replace('.', ',');
+  const header = ['Élève', ...comps.map(c => c.code), 'Moyenne'];
+  const lines = [header.join(sep)];
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    const row = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
+    let sumM = 0, nM = 0;
+    for (const c of comps) {
+      const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
+      if (agg.levelMean == null) row.push('');
+      else { row.push(fmt(agg.levelMean)); sumM += agg.levelMean; nM++; }
+    }
+    row.push(nM > 0 ? fmt(sumM / nM) : '');
+    lines.push(row.join(sep));
+  }
+  // Pied : moyennes classe
+  const footMean = ['μ classe'];
+  for (const m of compMeans) footMean.push(m.mean == null ? '' : fmt(m.mean));
+  footMean.push('');
+  lines.push(footMean.join(sep));
+  // Pied : nb évaluations
+  const footN = ['Nb évals'];
+  for (const c of comps) footN.push(String(_countCompEvaluations(cls.id, c.id, periode)));
+  footN.push('');
+  lines.push(footN.join(sep));
+  return lines.join('\n');
+}
+
+function _bilanCompCopy() {
+  const tsv = _bilanCompBuildRows('\t');
+  if (!tsv) { toast('⚠ Pas de bilan à copier', 'warn'); return; }
+  navigator.clipboard.writeText(tsv).then(
+    () => toast('📋 Bilan compétences copié — colle dans Excel/LibreOffice'),
+    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
+  );
+}
+
+function _bilanCompCsv() {
+  const csv = _bilanCompBuildRows(';');
+  if (!csv) { toast('⚠ Pas de bilan à exporter', 'warn'); return; }
+  const cls = _bilanCompState?.cls;
+  const periode = _bilanCompState?.periode;
+  const filename = `bilan-comp-${(cls?.nom || 'classe').replace(/\s+/g, '_')}${periode ? '-' + periode : ''}.csv`;
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });  // BOM pour Excel
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  toast(`💾 ${filename} téléchargé`);
+}
+
+// Export ENT compétences uniquement : 1 ligne par élève, colonnes = codes courts
+// de compétences, valeurs = niveau atteint (1..4 ou '—'). Format compact, sans
+// moyenne ni stats — destiné au copier-coller dans un système qui n'a besoin
+// que des niveaux par compétence.
+function _bilanCompExportEnt() {
+  if (!_bilanCompState) { toast('⚠ Pas de bilan à exporter', 'warn'); return; }
+  const { cls, periode, comps, sids } = _bilanCompState;
+  const fmt = v => v == null ? '—' : _fmtNote(v).replace('.', ',');
+  // Tri Nom Prénom (défaut ENT)
+  const sortedSids = sids.slice().sort((a, b) => {
+    const sa = S.eleves[a], sb = S.eleves[b];
+    return ((sa?.nom || '') + (sa?.prenom || '')).localeCompare((sb?.nom || '') + (sb?.prenom || ''), 'fr');
+  });
+  const header = ['Élève', ...comps.map(c => c.code)];
+  const lines = [header.join('\t')];
+  for (const sid of sortedSids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    const row = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
+    for (const c of comps) {
+      const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
+      row.push(fmt(agg.levelMean));
+    }
+    lines.push(row.join('\t'));
+  }
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(
+    () => toast(`📤 Export ENT compétences copié (${comps.length} comp × ${sortedSids.length} élèves)`),
+    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
+  );
 }
 
 // ═══════════════ EXPORT ENT (phase 10) ═══════════════
