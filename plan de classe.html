@@ -4689,6 +4689,9 @@ kbd {
   try { saved = localStorage.getItem('planClasse_theme') || 'light'; } catch (e) {}
   document.documentElement.dataset.theme = saved;
 })();
+// State globaux requis AVANT init() (sinon TDZ — init() est appelée au milieu du
+// fichier et déclenche déjà certains renderXxxTab qui lisent ces variables).
+var _bilanHiddenCols = new Set();
 // ═══════════════════════════════════════════════════════════
 // VERSION (à incrémenter manuellement à chaque commit qu'on veut considérer comme nouvelle version)
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
@@ -28038,7 +28041,7 @@ function renderBilanTab() {
       const counterClass = remLen > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${rowBg};position:relative">
-        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
         <span class="${counterClass}" title="Nombre de caractères (limite ENT : 600)">${remLen}/600</span>
       </td>`;
     });
@@ -28264,7 +28267,9 @@ function _aggregateStudentCompetence(classId, sid, cid, periode) {
 // Quand la période est "Toutes", l'utilisateur voit N×(Moy/Rang/Remarque). Il peut
 // masquer individuellement chaque colonne en cliquant sur son en-tête. Les colonnes
 // masquées restent cachées jusqu'au reload de la page (Set en mémoire, pas persisté).
-const _bilanHiddenCols = new Set();
+// ⚠️ La Set elle-même est déclarée en haut du script via var (cf. plus bas) pour
+// éviter une TDZ violation : init() est appelé bien avant cette section et déclenche
+// déjà renderBilanTab qui lit cette Set.
 function _toggleBilanCol(key) {
   if (_bilanHiddenCols.has(key)) _bilanHiddenCols.delete(key);
   else _bilanHiddenCols.add(key);
@@ -28333,6 +28338,41 @@ function _initBilanRemarques(rootEl) {
       t.style.height = t.scrollHeight + 'px';
     }
   });
+}
+
+// Colle un bloc multi-lignes (depuis Excel/LibreOffice/un tableur) dans une colonne
+// de remarques : la 1re ligne va dans la cellule courante, la 2e dans celle de
+// l'élève suivant, etc. Une remarque pouvant LÉGITIMEMENT contenir un retour à la
+// ligne, on n'active la distribution que si le bloc collé contient ≥ 2 lignes ET
+// que la cellule cible était soit vide, soit on est en focus initial (paste sur
+// sélection ALL ou paste sur cellule vide).
+function _onBilanRemarquePaste(e, textarea) {
+  const cd = e.clipboardData || window.clipboardData;
+  if (!cd) return;
+  const text = cd.getData('text');
+  if (!text) return;
+  // Normalise les fins de ligne (Excel utilise \r\n)
+  const lines = text.split(/\r\n|\r|\n/);
+  // Retire les lignes vides EN QUEUE (clipboard ajoute souvent un \n final)
+  while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  if (lines.length < 2) return; // 1 seule ligne → paste natif (l'utilisateur peut vouloir un retour à la ligne)
+  e.preventDefault();
+  // Récupère toutes les textareas de la MÊME colonne (même data-periode + même data-cls),
+  // dans l'ordre DOM.
+  const cls = textarea.getAttribute('data-cls');
+  const periode = textarea.getAttribute('data-periode');
+  const all = Array.from(document.querySelectorAll(`.bilan-rem-textarea[data-cls="${CSS.escape(cls)}"][data-periode="${CSS.escape(periode)}"]`));
+  const startIdx = all.indexOf(textarea);
+  if (startIdx < 0) return;
+  let filled = 0;
+  for (let i = 0; i < lines.length && startIdx + i < all.length; i++) {
+    const target = all[startIdx + i];
+    target.value = lines[i];
+    // Déclenche le handler oninput pour persistance + autogrow + compteur
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+    filled++;
+  }
+  toast(`📋 ${filled} remarque${filled > 1 ? 's' : ''} collée${filled > 1 ? 's' : ''}${lines.length > filled ? ' (' + (lines.length - filled) + ' ignorée(s), pas assez d\'élèves)' : ''}`);
 }
 
 // Sync de la période sélectionnée entre l'onglet "Bilan par compétences" et
@@ -28514,7 +28554,7 @@ function renderCompetencesTab() {
       const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = compMulti ? ' (' + perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${bg};position:relative">
-        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
         <span class="${counterClsC}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
       </td>`;
     });
