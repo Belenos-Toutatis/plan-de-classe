@@ -27868,22 +27868,32 @@ function renderBilanTab() {
     .filter(e => e.countsForMean !== false)
     .sort((a, b) => (_evalDateFor(a, cls.id) || '').localeCompare(_evalDateFor(b, cls.id) || ''));
 
-  // Cache des notes /20 par (sid × evalId) + des moyennes par élève
+  // Cache des notes /20 par (sid × evalId)
   const noteSur20 = (ev, sid) => {
     const n = _computeStudentEvalNote(ev, sid);
     if (n == null) return null;
     return (n / (ev.noteMax || 20)) * 20;
   };
-  const studentMoy = new Map();   // sid → moyenne /20
-  for (const sid of sids) {
-    const m = _computeStudentMeanForPeriod(cls.id, sid, periode);
-    if (m != null) studentMoy.set(sid, m);
-  }
-  // Calcule le rang de chaque élève d'après sa moyenne (rang 1 = meilleure)
-  const ranking = [...studentMoy.entries()].sort((a, b) => b[1] - a[1]);
-  const rankMap = new Map();
-  ranking.forEach(([sid, _moy], i) => rankMap.set(sid, i + 1));
-  const totalRanked = ranking.length;
+  // Liste des "périodes de synthèse" : si periode == '' (Toutes), on affiche
+  // une colonne Moyenne + Rang + Remarque PAR PÉRIODE (S1, S2 ou T1/T2/T3).
+  // Sinon, une seule colonne pour la période active.
+  const synthPeriodes = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
+  // Pour chaque période : { studentMoy: Map<sid, moy>, rankMap: Map<sid, rang>, total }
+  const synthData = synthPeriodes.map(perCode => {
+    const studentMoy = new Map();
+    for (const sid of sids) {
+      const m = _computeStudentMeanForPeriod(cls.id, sid, perCode);
+      if (m != null) studentMoy.set(sid, m);
+    }
+    const ranking = [...studentMoy.entries()].sort((a, b) => b[1] - a[1]);
+    const rankMap = new Map();
+    ranking.forEach(([sid], i) => rankMap.set(sid, i + 1));
+    return { perCode, studentMoy, rankMap, total: ranking.length };
+  });
+  // Référence "principale" pour les bandeaux d'info — quand periode est défini,
+  // c'est cette période ; sinon, la dernière (S2 ou T3) à titre indicatif.
+  const _refSynth = synthData[synthData.length - 1] || { studentMoy: new Map(), rankMap: new Map(), total: 0 };
+  const totalRanked = _refSynth.total;
 
   let html = '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
   html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
@@ -27903,29 +27913,32 @@ function renderBilanTab() {
       ${dateFr ? `<div style="font-size:.74em;color:var(--pencil-soft);font-weight:normal;font-family:var(--font-mono)">${_esc(dateFr)}</div>` : ''}
     </th>`;
   }
-  // Moyenne et Rang APRÈS les colonnes éval (ordre chronologique)
-  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:80px;border-left:2px solid var(--ink-blue-soft);background:var(--paper-warm)">Moyenne /20</th>';
-  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px;background:var(--paper-warm)" title="Rang de l'élève dans la classe selon la moyenne /20 (sur ${totalRanked} élève${totalRanked > 1 ? 's' : ''} noté${totalRanked > 1 ? 's' : ''})">Rang</th>`;
-  // Colonne Remarque
-  html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Brouillon de remarque pour le bulletin de cette période. Partagée avec l'onglet Bilan par compétences.">📝 Remarque ${periode ? '(' + periode + ')' : ''}</th>`;
+  // Moyenne + Rang + Remarque — 1 colonne de chaque par période de synthèse
+  // (1 seule période sélectionnée OU N périodes si "Toutes")
+  synthData.forEach((sd, sdIdx) => {
+    const suffix = synthData.length > 1 ? ` ${sd.perCode}` : '';
+    const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:80px;${sep}background:var(--paper-warm)">Moyenne${suffix}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/20</span></th>`;
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px;background:var(--paper-warm)" title="Rang sur ${sd.total} élève${sd.total > 1 ? 's' : ''} noté${sd.total > 1 ? 's' : ''}${suffix ? ' en' + suffix : ''}">Rang${suffix}</th>`;
+  });
+  // Remarque(s) — 1 par période de synthèse aussi
+  synthData.forEach((sd, sdIdx) => {
+    const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : (periode ? ' (' + periode + ')' : '');
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan par compétences.">📝 Remarque${suffix}</th>`;
+  });
   html += '</tr>';
   html += '</thead><tbody>';
 
   // Stockage pour stats footer (par colonne)
   const evValues = evs.map(() => []);
-  const moyValues = [];
-
-  // Helper : couleur du rang (dégradé bleu → vert → rouge, comme dans les notes
-  // par évaluation). Utilise _rankGradientColor (HSL hue 240° → 0°).
-  const rankColor = rank => (rank == null) ? null : _rankGradientColor(rank, totalRanked);
+  // moyValues par période de synthèse : moyValuesByPer[perIdx] = [moy1, moy2, ...]
+  const moyValuesByPer = synthData.map(() => []);
 
   for (let i = 0; i < sids.length; i++) {
     const sid = sids[i];
     const stu = S.eleves[sid];
     if (!stu) continue;
-    const moy = studentMoy.get(sid);
-    const rank = rankMap.get(sid);
-    if (moy != null) moyValues.push(moy);
     const rowBg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${rowBg}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
@@ -27943,30 +27956,41 @@ function renderBilanTab() {
         html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg};color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
       }
     }
-    // Moyenne /20 colorée (séparateur visuel à gauche)
-    if (moy != null) {
-      const moyBg = _noteColor(moy, 20);
-      const moyColor = moyBg ? _contrastTextColor(moyBg) : 'var(--ink-blue)';
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};border-left:2px solid var(--ink-blue-soft)">${_fmtNote(moy)}</td>`;
-    } else {
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);border-left:2px solid var(--ink-blue-soft)">—</td>`;
-    }
-    // Rang coloré en dégradé bleu → vert → rouge (comme les autres rangs de l'app)
-    if (rank != null) {
-      const rBg = rankColor(rank);
-      const rCol = rBg ? _contrastTextColor(rBg) : 'var(--ink-blue)';
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;background:${rBg};color:${rCol}" title="Rang ${rank}/${totalRanked}">${rank}/${totalRanked}</td>`;
-    } else {
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)" title="Non classé (pas de note)">—</td>`;
-    }
-    // Remarque (textarea auto-grow + compteur 600 caractères pour ENT)
-    const remarque = _getBulletinRemarque(cls.id, sid, periode);
-    const remLen = remarque.length;
-    const counterClass = remLen > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
-    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${rowBg};position:relative">
-      <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(periode || '')}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
-      <span class="${counterClass}" data-counter-for="${_esc(sid)}" title="Nombre de caractères (limite ENT : 600)">${remLen}/600</span>
-    </td>`;
+    // Moyenne + Rang par période de synthèse
+    synthData.forEach((sd, sdIdx) => {
+      const moy = sd.studentMoy.get(sid);
+      const rank = sd.rankMap.get(sid);
+      if (moy != null) moyValuesByPer[sdIdx].push(moy);
+      const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+      // Moyenne
+      if (moy != null) {
+        const moyBg = _noteColor(moy, 20);
+        const moyColor = moyBg ? _contrastTextColor(moyBg) : 'var(--ink-blue)';
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};${sep}">${_fmtNote(moy)}</td>`;
+      } else {
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
+      }
+      // Rang coloré
+      if (rank != null) {
+        const rBg = _rankGradientColor(rank, sd.total);
+        const rCol = rBg ? _contrastTextColor(rBg) : 'var(--ink-blue)';
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;background:${rBg};color:${rCol}" title="Rang ${rank}/${sd.total}${sd.perCode ? ' en ' + sd.perCode : ''}">${rank}/${sd.total}</td>`;
+      } else {
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)" title="Non classé (pas de note${sd.perCode ? ' en ' + sd.perCode : ''})">—</td>`;
+      }
+    });
+    // Remarque(s) — 1 par période de synthèse
+    synthData.forEach((sd, sdIdx) => {
+      const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+      const remarque = _getBulletinRemarque(cls.id, sid, sd.perCode);
+      const remLen = remarque.length;
+      const counterClass = remLen > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
+      const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : '';
+      html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${rowBg};position:relative">
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
+        <span class="${counterClass}" title="Nombre de caractères (limite ENT : 600)">${remLen}/600</span>
+      </td>`;
+    });
     html += '</tr>';
   }
 
@@ -27997,19 +28021,27 @@ function renderBilanTab() {
       html += `<td style="padding:4px 6px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:600;font-size:.85em;cursor:help" title="${_esc(_statsTip(vals, evs[k].nomCourt))}">${_fmtNote(s.avg)}</td>`;
     }
   }
-  // Stats Moyenne classe (séparateur)
-  if (moyValues.length === 0) {
-    html += '<td style="background:var(--paper-warm);text-align:center;color:var(--pencil-soft);border-left:2px solid var(--ink-blue-soft)">—</td>';
-  } else {
-    const s = _statsForNumbers(moyValues);
-    const bg = _noteColor(s.avg, 20);
-    const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
-    html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;border-left:2px solid var(--ink-blue-soft)" title="${_esc(_statsTip(moyValues, 'Moyenne classe'))}">${_fmtNote(s.avg)}</td>`;
-  }
-  // Cellule Rang vide en footer (pas de stat utile sur le rang)
-  html += '<td style="background:var(--paper-warm)"></td>';
-  // Cellule remarque vide en footer
-  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
+  // Stats Moyenne classe + cellules Rang vides — 1 paire par période de synthèse
+  synthData.forEach((sd, sdIdx) => {
+    const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    const vals = moyValuesByPer[sdIdx];
+    if (!vals.length) {
+      html += `<td style="background:var(--paper-warm);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
+    } else {
+      const s = _statsForNumbers(vals);
+      const bg = _noteColor(s.avg, 20);
+      const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+      const lbl = 'Moyenne classe' + (synthData.length > 1 ? ' ' + sd.perCode : '');
+      html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;${sep}" title="${_esc(_statsTip(vals, lbl))}">${_fmtNote(s.avg)}</td>`;
+    }
+    // Cellule Rang vide en footer (pas de stat utile sur le rang)
+    html += '<td style="background:var(--paper-warm)"></td>';
+  });
+  // Cellules remarque vides — 1 par période de synthèse
+  synthData.forEach((sd, sdIdx) => {
+    const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    html += `<td style="background:var(--paper-warm);${sep}"></td>`;
+  });
   html += '</tr></tfoot>';
   html += '</table></div>';
 
@@ -28255,7 +28287,8 @@ function renderCompetencesTab() {
   if (!wrap) return;
   const sel = document.getElementById('comp-period-filter');
   if (sel) {
-    // Restaure la période persistée (synchronisée avec l'autre onglet bilan)
+    // Restaure la période persistée (synchronisée avec l'autre onglet bilan).
+    // ⚠️ `saved === ''` est une valeur explicite (= "Toutes"), différente de `saved == null`.
     let saved = null;
     try { saved = localStorage.getItem('planClasse_bilanPeriode'); } catch (e) {}
     const cur = (saved != null) ? saved : (sel.value || _currentPeriode());
@@ -28271,7 +28304,7 @@ function renderCompetencesTab() {
       sel.appendChild(opt);
     }
   }
-  const periode = sel?.value || _currentPeriode();
+  const periode = sel?.value ?? '';
   if (!cls) {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir le bilan compétences.</p>';
     return;
@@ -28313,9 +28346,19 @@ function renderCompetencesTab() {
     const tip = `${c.code} — ${c.name || ''}${dom ? ' (' + dom.code + ')' : ''}`;
     html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(tip)}">${_esc(c.code)}</th>`;
   }
-  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Moyenne</th>';
-  // Colonne Remarque partagée avec le bilan des évaluations
-  html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Brouillon de remarque pour le bulletin de cette période. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque ${periode ? '(' + periode + ')' : ''}</th>`;
+  // Moyenne(s) — 1 colonne quand une période, N quand "Toutes"
+  const compSynthPeriodes = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
+  compSynthPeriodes.forEach((perCode, idx) => {
+    const suffix = compSynthPeriodes.length > 1 ? ' ' + perCode : '';
+    const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);${sep}">Moyenne${suffix}</th>`;
+  });
+  // Remarque(s) — 1 par période de synthèse
+  compSynthPeriodes.forEach((perCode, idx) => {
+    const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    const suffix = compSynthPeriodes.length > 1 ? ' (' + perCode + ')' : (periode ? ' (' + periode + ')' : '');
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque${suffix}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   for (let _si = 0; _si < sids.length; _si++) {
@@ -28341,21 +28384,42 @@ function renderCompetencesTab() {
         <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span>
       </td>`;
     }
-    if (nbMean > 0) {
-      const moy = sumMean / nbMean;
-      const moyIdx = Math.max(1, Math.min(4, Math.round(moy))) - 1;
-      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><span style="display:inline-block;padding:2px 8px;background:${colors[moyIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(moy)}</span></td>`;
-    } else {
-      html += '<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
-    }
-    // Colonne Remarque (textarea auto-grow + compteur 600 caractères pour ENT)
-    const remarqueC = _getBulletinRemarque(cls.id, sid, periode);
-    const remLenC = remarqueC.length;
-    const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
-    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bg};position:relative">
-      <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(periode || '')}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
-      <span class="${counterClsC}" data-counter-for="${_esc(sid)}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
-    </td>`;
+    // Moyenne(s) : si "Toutes", 1 par période ; sinon 1 globale sur les niveaux affichés
+    compSynthPeriodes.forEach((perCode, idx) => {
+      const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+      // Si periode === '' (Toutes), on recalcule la moyenne par période ;
+      // sinon la moyenne agrège ce qu'on affiche déjà → sumMean/nbMean global.
+      let perMoy = null;
+      if (periode === '') {
+        // Moyenne sur cette période : agrège uniquement les comps dont l'éval est dans cette periode
+        let s = 0, n = 0;
+        for (const c of comps) {
+          const agg = _aggregateStudentCompetence(cls.id, sid, c.id, perCode);
+          if (agg.levelMean != null) { s += agg.levelMean; n++; }
+        }
+        if (n > 0) perMoy = s / n;
+      } else {
+        if (nbMean > 0) perMoy = sumMean / nbMean;
+      }
+      if (perMoy != null) {
+        const moyIdx = Math.max(1, Math.min(4, Math.round(perMoy))) - 1;
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${sep}"><span style="display:inline-block;padding:2px 8px;background:${colors[moyIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(perMoy)}</span></td>`;
+      } else {
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
+      }
+    });
+    // Remarque(s) — 1 par période de synthèse
+    compSynthPeriodes.forEach((perCode, idx) => {
+      const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+      const remarqueC = _getBulletinRemarque(cls.id, sid, perCode);
+      const remLenC = remarqueC.length;
+      const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
+      const suffix = compSynthPeriodes.length > 1 ? ' (' + perCode + ')' : '';
+      html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${bg};position:relative">
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+        <span class="${counterClsC}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
+      </td>`;
+    });
     html += '</tr>';
   }
   // ─── Pied de tableau : stats par compétence + nb d'évaluations ───
@@ -28421,25 +28485,42 @@ function renderCompetencesTab() {
       </td>`;
     }
   });
-  // Cellule moyenne globale (avec stats sur les moyennes individuelles)
-  if (studentMoy.length === 0) {
-    html += '<td style="background:var(--paper-warm)"></td>';
-  } else {
-    const sGlobal = _statsForNumbers(studentMoy);
-    const tipGlobal = [
-      `Moyenne globale : ${_fmtNote(sGlobal.avg)}`,
-      `Effectif : ${sGlobal.count} élève${sGlobal.count > 1 ? 's' : ''}`,
-      `Médiane : ${_fmtNote(sGlobal.median)}`,
-      `Min : ${_fmtNote(sGlobal.min)} · Max : ${_fmtNote(sGlobal.max)}`,
-      `Écart-type : ${_fmtNote(sGlobal.std)}`,
-    ].join('\n');
-    const mIdx = Math.max(1, Math.min(4, Math.round(sGlobal.avg))) - 1;
-    html += `<td style="padding:6px 10px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tipGlobal)}">
-      <span style="display:inline-block;padding:2px 8px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(sGlobal.avg)}</span>
-    </td>`;
-  }
-  // Cellule Remarque vide en footer
-  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
+  // Cellule moyenne globale par période de synthèse
+  compSynthPeriodes.forEach((perCode, idx) => {
+    const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    // Calcule la liste des moyennes par élève pour CETTE période
+    const perStudentMoy = [];
+    for (const sid of sids) {
+      let s = 0, n = 0;
+      for (const c of comps) {
+        const agg = _aggregateStudentCompetence(cls.id, sid, c.id, perCode);
+        if (agg.levelMean != null) { s += agg.levelMean; n++; }
+      }
+      if (n > 0) perStudentMoy.push(s / n);
+    }
+    if (perStudentMoy.length === 0) {
+      html += `<td style="background:var(--paper-warm);${sep}"></td>`;
+    } else {
+      const sG = _statsForNumbers(perStudentMoy);
+      const lbl = 'Moyenne globale' + (compSynthPeriodes.length > 1 ? ' ' + perCode : '');
+      const tipG = [
+        `${lbl} : ${_fmtNote(sG.avg)}`,
+        `Effectif : ${sG.count} élève${sG.count > 1 ? 's' : ''}`,
+        `Médiane : ${_fmtNote(sG.median)}`,
+        `Min : ${_fmtNote(sG.min)} · Max : ${_fmtNote(sG.max)}`,
+        `Écart-type : ${_fmtNote(sG.std)}`,
+      ].join('\n');
+      const mIdx = Math.max(1, Math.min(4, Math.round(sG.avg))) - 1;
+      html += `<td style="padding:6px 10px;text-align:center;background:var(--paper-warm);cursor:help;${sep}" title="${_esc(tipG)}">
+        <span style="display:inline-block;padding:2px 8px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(sG.avg)}</span>
+      </td>`;
+    }
+  });
+  // Cellules Remarque vides — 1 par période de synthèse
+  compSynthPeriodes.forEach((perCode, idx) => {
+    const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    html += `<td style="background:var(--paper-warm);${sep}"></td>`;
+  });
   html += '</tr>';
   // Ligne nb d'évaluations par compétence (tooltip listant les évals)
   html += '<tr>';
@@ -28452,9 +28533,15 @@ function renderCompetencesTab() {
       : `${nEvals} évaluation${nEvals > 1 ? 's' : ''} contenant ${c.code} :\n\n` + evalList.map(e => `• ${e.nomCourt}${e.nomLong ? ' — ' + e.nomLong : ''}${e.date ? ' (' + _fmtDateFr(e.date) + ')' : ''}`).join('\n');
     html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">${nEvals}</td>`;
   }
-  // Cellule Moyenne globale (vide) + cellule Remarque (vide)
-  html += '<td style="background:var(--paper-warm)"></td>';
-  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
+  // Cellules Moyenne + Remarque vides (footer "éval(s)") — 1 par période × 2 colonnes
+  compSynthPeriodes.forEach((perCode, idx) => {
+    const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    html += `<td style="background:var(--paper-warm);${sep}"></td>`;
+  });
+  compSynthPeriodes.forEach((perCode, idx) => {
+    const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
+    html += `<td style="background:var(--paper-warm);${sep}"></td>`;
+  });
   html += '</tr>';
   html += '</tfoot>';
 
