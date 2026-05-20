@@ -23712,29 +23712,30 @@ function _evalTableurRender() {
       else if (typeof v === 'number' && mn.max > 0) {
         cellBg = _noteColor(v, mn.max) || '';
       }
-      const cellColor = cellBg && cellBg !== '' ? '#fff' : '';
+      // Texte adapté au fond (luminance)
+      const cellColor = _contrastTextColor(cellBg);
       // Indicateur commentaires : si présents, montre un mini badge cliquable + clic droit sur la cellule
       const stuComments = ev.notes?.[sid]?.comments?.[mn.id] || [];
       const nbCom = stuComments.length;
       const badge = nbCom > 0
         ? `<span class="tab-com-badge" onclick="event.stopPropagation();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')" title="${nbCom} commentaire${nbCom > 1 ? 's' : ''} — clic pour éditer" style="position:absolute;top:1px;right:1px;background:var(--margin-red);color:#fff;font-size:.65em;font-family:var(--font-mono);padding:0 4px;border-radius:8px;cursor:pointer;line-height:1.3">💬${nbCom > 1 ? nbCom : ''}</span>`
         : '';
-      html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" class="meval-niveau-input" style="width:60px;padding:3px 4px;font-family:var(--font-mono);text-align:right;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      html += `<td style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" class="meval-niveau-input" style="width:46px;padding:2px 3px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     const total = _computeStudentEvalNote(ev, sid);
     const disp = _studentNoteDisplay(ev, sid);
     let totalBg, totalColor;
     if (disp.kind === 'num') {
       totalBg = _noteColor(total, ev.noteMax);
-      totalColor = totalBg ? '#fff' : 'var(--ink-blue)';
     } else if (disp.kind === 'A') {
-      totalBg = '#9ca3af'; totalColor = '#fff';
+      totalBg = '#9ca3af';
     } else if (disp.kind === 'NN') {
-      totalBg = 'var(--paper-warm)'; totalColor = 'var(--pencil)';
+      totalBg = 'var(--paper-warm)';
     } else {
-      totalBg = ''; totalColor = 'var(--ink-blue)';
+      totalBg = '';
     }
-    html += `<td class="meval-row-total" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${totalColor};background:${totalBg || bgRow}" data-sid="${_esc(sid)}">${disp.text}</td>`;
+    totalColor = totalBg ? _contrastTextColor(totalBg) : 'var(--ink-blue)';
+    html += `<td class="meval-row-total" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow}" data-sid="${_esc(sid)}">${disp.text}</td>`;
     // Type C : cellule Date rattrapage par élève
     if (isTypeC) {
       const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
@@ -23751,8 +23752,8 @@ function _evalTableurRender() {
         const isNull = (niv == null);
         const dispVal = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
         const cellBg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
-        const cellColor = isNull ? 'var(--pencil)' : '#fff';
-        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispVal}</td>`;
+        const cellColor = _contrastTextColor(cellBg);
+        html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispVal}</td>`;
       }
     }
     html += '</tr>';
@@ -23904,18 +23905,12 @@ function _evalTableurUpdate(inputEl) {
 function _evalTableurUpdateTotalCell(cellTotal, ev, sid) {
   const disp = _studentNoteDisplay(ev, sid);
   cellTotal.textContent = disp.text;
-  let bg = '', color = 'var(--ink-blue)';
-  if (disp.kind === 'num') {
-    bg = _noteColor(disp.value, ev.noteMax);
-    color = bg ? '#fff' : 'var(--ink-blue)';
-  } else if (disp.kind === 'A') {
-    bg = '#9ca3af'; color = '#fff';
-  } else if (disp.kind === 'NN') {
-    bg = 'var(--paper-warm)'; color = 'var(--pencil)';
-  }
-  if (bg) cellTotal.style.background = bg;
-  else cellTotal.style.background = '';
-  cellTotal.style.color = color;
+  let bg = '';
+  if (disp.kind === 'num') bg = _noteColor(disp.value, ev.noteMax);
+  else if (disp.kind === 'A') bg = '#9ca3af';
+  else if (disp.kind === 'NN') bg = 'var(--paper-warm)';
+  cellTotal.style.background = bg || '';
+  cellTotal.style.color = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
 }
 
 // Au blur sur une cellule de saisie Type A/C : si la valeur est hors barème,
@@ -24415,29 +24410,25 @@ function _evalRenderBilanComps() {
       const isNull = (niv == null);
       const dispVal = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
       const bg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
-      const color = isNull ? 'var(--pencil)' : '#fff';
+      const color = _contrastTextColor(bg);
       html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};background:${bg};color:${color}">${dispVal}</td>`;
     }
     const note = _computeStudentEvalNote(ev, sid);
     const disp = _studentNoteDisplay(ev, sid);
-    let noteBg, noteColor;
-    if (disp.kind === 'num') {
-      noteBg = _noteColor(note, ev.noteMax);
-      noteColor = noteBg ? '#fff' : 'var(--ink-blue)';
-    } else if (disp.kind === 'A') {
-      noteBg = '#9ca3af'; noteColor = '#fff';
-    } else if (disp.kind === 'NN') {
-      noteBg = 'var(--paper-warm)'; noteColor = 'var(--pencil)';
-    } else {
-      noteBg = ''; noteColor = 'var(--ink-blue)';
-    }
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${disp.text}</td>`;
-    // Rang dans la classe (ex æquo = même rang). Couleur en dégradé vert→rouge.
+    let noteBg;
+    if (disp.kind === 'num') noteBg = _noteColor(note, ev.noteMax);
+    else if (disp.kind === 'A') noteBg = '#9ca3af';
+    else if (disp.kind === 'NN') noteBg = 'var(--paper-warm)';
+    else noteBg = '';
+    const noteColor = noteBg ? _contrastTextColor(noteBg) : 'var(--ink-blue)';
+    html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${noteColor};background:${noteBg || bgRow}">${disp.text}</td>`;
+    // Rang dans la classe (ex æquo = même rang). Couleur en dégradé bleu→vert→rouge.
     const rang = ranks[sid];
     const rgBg = _rankGradientColor(rang, totalRanked);
-    const rangDisp = (rang == null) ? '—' : `${rang}<span style="color:rgba(255,255,255,0.75);font-size:.78em">/${totalRanked}</span>`;
-    const rangColor = rgBg ? '#fff' : 'var(--ink-blue)';
-    html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${rangColor};background:${rgBg || bgRow}">${rangDisp}</td>`;
+    const rangColor = rgBg ? _contrastTextColor(rgBg) : 'var(--ink-blue)';
+    const denomColor = rangColor === '#fff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.55)';
+    const rangDisp = (rang == null) ? '—' : `${rang}<span style="color:${denomColor};font-size:.78em">/${totalRanked}</span>`;
+    html += `<td style="padding:3px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;color:${rangColor};background:${rgBg || bgRow}">${rangDisp}</td>`;
     html += '</tr>';
   }
   // ─── Pied de tableau : moyenne de niveau par compétence + stats complètes pour la note ───
@@ -24866,13 +24857,11 @@ function _evalTableurRenderB(ev, cls) {
                           ? (S.evalPrefs?.niveauLabels?.[cur - 1] || String(cur))
                           : '');
         const bg = (typeof cur === 'number' && cur >= 1) ? colors[cur - 1] : (cur === 'A' ? '#9ca3af' : '');
-        const color = (cur != null && cur !== 0 && cur !== '') ? '#fff' : '';
         const fw = (cur != null && cur !== 0 && cur !== '') ? '700' : '400';
+        const color = bg ? _contrastTextColor(bg) : '';
         const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
-        // Couleur sur la <td> (le style global input[type=text]{background:!important} écrase les inline styles sur l'input).
-        // L'input est transparent → laisse voir le fond de la cellule.
         const tdBg = bg ? `;background:${bg}` : '';
-        html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" class="meval-niveau-input" style="width:42px;padding:3px 4px;font-family:var(--font-mono);font-weight:${fw};text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
+        html += `<td style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${fw};font-size:.88em;text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
         ci++;
       });
     }
@@ -24971,6 +24960,37 @@ function _statsCellHTML(values, opts) {
           + `<div style="color:var(--margin-red)">&lt;${fmt(halfMax)} : <strong>${below}</strong></div>`
           : '')
        + `</div>`;
+}
+
+// Renvoie la couleur de texte (blanc ou ink-deep) la plus lisible sur un fond donné.
+// Supporte hex (#abc, #aabbcc), rgb(...), hsl(...), 'var(--paper-warm)', '' (no bg).
+function _contrastTextColor(bg) {
+  if (!bg) return '';
+  if (bg === 'var(--paper-warm)' || bg === 'var(--paper)') return 'var(--ink-deep)';
+  let r, g, b;
+  if (bg.startsWith('#')) {
+    const hex = bg.length === 4
+      ? bg.slice(1).split('').map(c => c + c).join('')
+      : bg.slice(1);
+    r = parseInt(hex.slice(0, 2), 16);
+    g = parseInt(hex.slice(2, 4), 16);
+    b = parseInt(hex.slice(4, 6), 16);
+  } else if (bg.startsWith('hsl')) {
+    // Décision basée sur la lightness (approximation rapide, suffisante en pratique)
+    const m = bg.match(/hsl\(\s*\d+\s*,\s*\d+%\s*,\s*(\d+)%/);
+    if (!m) return '#fff';
+    const l = parseInt(m[1], 10);
+    return l < 60 ? '#fff' : 'var(--ink-deep)';
+  } else if (bg.startsWith('rgb')) {
+    const m = bg.match(/rgb\w*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (!m) return '#fff';
+    r = +m[1]; g = +m[2]; b = +m[3];
+  } else {
+    return '';
+  }
+  // Luminance perçue (YIQ) — > 150 = clair, < 150 = sombre
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150 ? 'var(--ink-deep)' : '#fff';
 }
 
 // Renvoie une couleur en dégradé bleu pur (rang 1) → vert pur (médiane) → rouge pur (dernier rang).
@@ -25113,12 +25133,13 @@ function _evalTableurBUpdate(inputEl) {
   } else if (parsed === 'A') {
     pass.niveaux[sid][cid] = 'A';
     if (td) td.style.background = '#9ca3af';
-    inputEl.style.color = '#fff';
+    inputEl.style.color = _contrastTextColor('#9ca3af');
     inputEl.style.fontWeight = '700';
   } else {
     pass.niveaux[sid][cid] = parsed;
-    if (td) td.style.background = colors[parsed - 1];
-    inputEl.style.color = '#fff';
+    const bg = colors[parsed - 1];
+    if (td) td.style.background = bg;
+    inputEl.style.color = _contrastTextColor(bg);
     inputEl.style.fontWeight = '700';
   }
   ev.updatedAt = Date.now();
