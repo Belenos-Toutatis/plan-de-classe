@@ -1044,10 +1044,14 @@ html[data-theme="dark"] .meval-niveau-input:focus {
 /* Bilan — wrapper scrollable : seules les lignes élèves scrollent, en-têtes et
    pied de stats restent visibles grâce à position:sticky. Le fond du tfoot
    est légèrement décalé du tbody pour bien le différencier visuellement. */
+/* tfoot : sticky en bas + filet supérieur pour bien séparer du tbody. Pas de
+   fond forcé : les cellules stats reçoivent un fond inline coloré (note color)
+   pour rester lisibles, l'!important écrasait ce fond et donnait texte blanc
+   sur gris clair. Le séparateur visuel passe désormais par le box-shadow. */
 .bilan-table-scroll tfoot td,
-.bilan-table-scroll tfoot th { background: var(--paper-deep) !important; box-shadow: inset 0 2px 0 var(--ink-blue-soft); }
+.bilan-table-scroll tfoot th { box-shadow: inset 0 2px 0 var(--ink-blue-soft); }
 html[data-theme="dark"] .bilan-table-scroll tfoot td,
-html[data-theme="dark"] .bilan-table-scroll tfoot th { background: #1f2630 !important; box-shadow: inset 0 2px 0 var(--ink-blue) !important; }
+html[data-theme="dark"] .bilan-table-scroll tfoot th { box-shadow: inset 0 2px 0 var(--ink-blue); }
 
 /* Bilan — section sous le tableau (remarque classe + éléments travaillés) */
 .bilan-bottom-card {
@@ -2537,7 +2541,7 @@ kbd {
       <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation pour la classe active">+ Nouvelle évaluation</button>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
-        <select id="eval-period-filter" onchange="renderEvalNotes()" style="padding:4px 8px;font-size:.9em"></select>
+        <select id="eval-period-filter" onchange="_syncBilanPeriode('eval-period-filter');renderEvalNotes()" style="padding:4px 8px;font-size:.9em" title="Période affichée. Partagée entre les onglets Devoirs, Bilan par compétences et Bilan des évaluations."></select>
         <button class="btn btn-g btn-sm" onclick="openEvalPrefs()" title="Paramètres globaux : couleurs des niveaux, points par niveau, période, règle de moyenne…">⚙ Paramètres</button>
       </div>
     </div>
@@ -4726,7 +4730,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T22:30:00Z';
+const APP_VERSION   = '2026-05-20T23:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -23554,10 +23558,18 @@ function renderEvalNotes() {
   // Sélecteur de période — distingue "pas encore initialisé" de "Toutes" (vide explicite)
   const sel = document.getElementById('eval-period-filter');
   if (sel) {
-    // Premier rendu : pas d'attribut data-init, on prend la période courante par défaut.
+    // Premier rendu : on hydrate depuis la période partagée (planClasse_bilanPeriode)
+    // qui est synchronisée avec les onglets Bilan par compétences / Bilan des évaluations.
     // Rendus suivants : on respecte la valeur courante du select (y compris '' = Toutes).
     const initialised = sel.hasAttribute('data-init');
-    const cur = initialised ? sel.value : _currentPeriode();
+    let cur;
+    if (initialised) {
+      cur = sel.value;
+    } else {
+      let saved = null;
+      try { saved = localStorage.getItem('planClasse_bilanPeriode'); } catch (e) {}
+      cur = (saved != null) ? saved : _currentPeriode();
+    }
     sel.setAttribute('data-init', '1');
     sel.innerHTML = '';
     const optAll = document.createElement('option');
@@ -23652,6 +23664,7 @@ function renderEvalNotes() {
       </div>
       <div style="display:flex;gap:4px;flex-wrap:nowrap" onclick="event.stopPropagation()">
         <button class="btn btn-g btn-sm" onclick="_evalOpenEditor('${_esc(ev.id)}')" title="Réglages : nom, date, période, coefficient, options avancées">⚙</button>
+        <button class="btn btn-g btn-sm" onclick="_evalDuplicate('${_esc(ev.id)}')" title="Dupliquer cette évaluation (même structure, notes vides)">📋</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV">💾</button>
         <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">✕</button>
       </div>
@@ -24975,6 +24988,59 @@ function _evalOpenExportFor(evalId) {
   if (!ev) return;
   document.getElementById('meval-edit-id').value = evalId;
   _evalExportOpen();
+}
+
+// Duplique une évaluation : conserve la structure (miniNotes, passations,
+// exercices, compétences, classIds, coef, noteMax, périodicité…) mais vide
+// les saisies (notes, niveaux, studentRemarks). Nouvelle id, date = aujourd'hui,
+// nomCourt suffixé " (copie)".
+function _evalDuplicate(evalId) {
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  pushUndo();
+  const now = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+  const newId = _newEvalId();
+  const copy = JSON.parse(JSON.stringify(ev));
+  copy.id = newId;
+  copy.nomCourt = (ev.nomCourt || '') + ' (copie)';
+  copy.date = today;
+  copy.createdAt = now;
+  copy.updatedAt = now;
+  // Régénère les IDs internes pour éviter toute collision (mn, exo, pass)
+  if (Array.isArray(copy.miniNotes)) {
+    for (const mn of copy.miniNotes) mn.id = _newMiniNoteId();
+  }
+  if (Array.isArray(copy.exercices)) {
+    for (const exo of copy.exercices) {
+      const oldId = exo.id;
+      exo.id = 'exo_' + Math.random().toString(36).slice(2, 9);
+      // Re-câble les miniNotes qui référencent cet exo
+      if (Array.isArray(copy.miniNotes)) {
+        for (const mn of copy.miniNotes) {
+          if (mn.exerciceId === oldId) mn.exerciceId = exo.id;
+        }
+      }
+    }
+  }
+  if (Array.isArray(copy.passations)) {
+    for (const p of copy.passations) {
+      p.id = _newPassationId();
+      p.niveaux = {};
+    }
+  }
+  // Vide les saisies tout en gardant la structure
+  copy.notes = (ev.type === 'B') ? undefined : {};
+  delete copy.studentRemarks;
+  // Vide les dates par-classe (à re-saisir) — la date globale `today` couvre le cas mono-classe
+  delete copy.dates;
+  delete copy.slotIds;
+  delete copy.seatingHash;
+  delete copy.seatingHashes;
+  S.evaluations[newId] = copy;
+  save();
+  renderEvalNotes();
+  toast(`✓ Évaluation dupliquée : "${copy.nomCourt}"`);
 }
 
 function _evalDeleteFromList(evalId) {
@@ -28616,7 +28682,12 @@ function renderBilanTab() {
         evValues[k].push(n);
         const bg = _noteColor(n, 20);
         const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
-        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})`;
+        // Position de l'élève dans la salle active de la classe affichée (numéro QCMcam).
+        const _pos = getPos(sid, cls);
+        const _posLbl = _pos
+          ? String(qcmNumForCell(cls, cls.activeRoom, _pos.r, _pos.c) ?? seatLabelQCM(_pos.r, _pos.c, S.salles[cls.activeRoom]?.cols || 0))
+          : '';
+        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl : ' · non placé(e)'}`;
         html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg};color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
       }
     }
@@ -29161,7 +29232,7 @@ function _syncBilanPeriode(sourceId) {
   const value = src.value || '';
   try { localStorage.setItem('planClasse_bilanPeriode', value); } catch (e) {}
   // Réplique sur l'autre sélecteur (s'il existe et a une option correspondante)
-  const targetIds = ['comp-period-filter', 'bilan-period-filter'].filter(id => id !== sourceId);
+  const targetIds = ['comp-period-filter', 'bilan-period-filter', 'eval-period-filter'].filter(id => id !== sourceId);
   for (const tid of targetIds) {
     const tgt = document.getElementById(tid);
     if (!tgt) continue;
