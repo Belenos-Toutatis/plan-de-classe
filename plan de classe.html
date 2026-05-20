@@ -2485,7 +2485,7 @@ kbd {
       <h2>📜 Bilan des évaluations</h2>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
-        <select id="bilan-period-filter" onchange="renderBilanTab();_syncBilanPeriode('bilan-period-filter')" style="padding:4px 8px;font-size:.9em"></select>
+        <select id="bilan-period-filter" onchange="_syncBilanPeriode('bilan-period-filter');renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
         <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">📋 Copier tout</button>
         <button class="btn btn-g btn-sm" onclick="_bilanDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
       </div>
@@ -2507,7 +2507,7 @@ kbd {
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
         <button class="btn btn-g btn-sm" onclick="openCompetencesManager()" title="Gérer les compétences : codes courts, noms complets, domaines du socle">⚙ Gérer les compétences</button>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
-        <select id="comp-period-filter" onchange="renderCompetencesTab();_syncBilanPeriode('comp-period-filter')" style="padding:4px 8px;font-size:.9em"></select>
+        <select id="comp-period-filter" onchange="_syncBilanPeriode('comp-period-filter');renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
       </div>
     </div>
     <p class="al al-i" style="margin-bottom:8px">
@@ -27198,7 +27198,7 @@ function _evalPassNewRenderComps() {
   if (all.length === 0) { wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic">Aucune compétence disponible.</p>'; return; }
   const chip = c => {
     const sel = _passNewSelected.has(c.id);
-    return `<label style="display:inline-flex;align-items:center;gap:4px;padding:3px 7px;background:${sel ? '#e6f0fa' : 'var(--paper-warm)'};border:1px solid ${sel ? 'var(--ink-blue)' : 'var(--rule-line)'};border-radius:12px;cursor:pointer;font-size:.85em;margin:2px" title="${_esc(c.name || '')}">
+    return `<label class="comp-chip${sel ? ' on' : ''}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:12px;cursor:pointer;font-size:.85em;margin:2px" title="${_esc(c.name || '')}">
       <input type="checkbox" ${sel ? 'checked' : ''} onchange="_passNewToggle('${_esc(c.id)}', this.checked)" style="margin:0">
       <strong style="font-family:var(--font-mono)">${_esc(c.code)}</strong>
     </label>`;
@@ -27758,34 +27758,172 @@ function renderBilanTab() {
   });
 
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+
+  // Évals de la classe + période (incluses dans la moyenne)
+  const evs = Object.values(S.evaluations || {})
+    .filter(e => _evalIncludesClass(e, cls.id))
+    .filter(e => !periode || e.periode === periode)
+    .filter(e => e.countsForMean !== false)
+    .sort((a, b) => (_evalDateFor(a, cls.id) || '').localeCompare(_evalDateFor(b, cls.id) || ''));
+
+  // Cache des notes /20 par (sid × evalId) + des moyennes par élève
+  const noteSur20 = (ev, sid) => {
+    const n = _computeStudentEvalNote(ev, sid);
+    if (n == null) return null;
+    return (n / (ev.noteMax || 20)) * 20;
+  };
+  const studentMoy = new Map();   // sid → moyenne /20
+  for (const sid of sids) {
+    const m = _computeStudentMeanForPeriod(cls.id, sid, periode);
+    if (m != null) studentMoy.set(sid, m);
+  }
+  // Calcule le rang de chaque élève d'après sa moyenne (rang 1 = meilleure)
+  const ranking = [...studentMoy.entries()].sort((a, b) => b[1] - a[1]);
+  const rankMap = new Map();
+  ranking.forEach(([sid, _moy], i) => rankMap.set(sid, i + 1));
+  const totalRanked = ranking.length;
+
   let html = '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
   html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
-  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
-  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Moyenne /20</th>';
-  for (const d of domains) {
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px;cursor:help" title="${_esc(d.code + ' — ' + d.name)}">${_esc(d.code)}</th>`;
+  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px">Élève</th>';
+  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:80px">Moyenne /20</th>';
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px" title="Rang de l'élève dans la classe selon la moyenne /20 (sur ${totalRanked} élève${totalRanked > 1 ? 's' : ''} noté${totalRanked > 1 ? 's' : ''})">Rang</th>`;
+  // 1 colonne par éval
+  for (const ev of evs) {
+    const tip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}\nCoef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}${ev.date ? ' · ' + _fmtDateFr(ev.date) : ''}`;
+    html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:64px;cursor:help" title="${_esc(tip)}">${_esc(ev.nomCourt)}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">×${ev.coef ?? 1}</span></th>`;
   }
-  html += '</tr></thead><tbody>';
+  // Cols domaines (séparateur)
+  if (domains.length > 0) {
+    html += `<th colspan="${domains.length}" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.78em;color:var(--pencil);background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)">Niveaux par domaine</th>`;
+  }
+  // Colonne Remarque
+  html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Brouillon de remarque pour le bulletin de cette période. Partagée avec l'onglet Bilan par compétences.">📝 Remarque ${periode ? '(' + periode + ')' : ''}</th>`;
+  html += '</tr>';
+  // Sous-ligne domaines : codes individuels
+  if (domains.length > 0) {
+    html += `<tr><th colspan="3" style="position:sticky;left:0;background:var(--paper-warm);z-index:3"></th>`;
+    for (let i = 0; i < evs.length; i++) html += '<th style="background:var(--paper-warm)"></th>';
+    for (const d of domains) {
+      html += `<th style="padding:3px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.82em;min-width:54px;background:var(--paper-warm);cursor:help" title="${_esc(d.code + ' — ' + d.name)}">${_esc(d.code)}</th>`;
+    }
+    html += '<th style="background:var(--paper-warm)"></th></tr>';
+  }
+  html += '</thead><tbody>';
 
-  for (const sid of sids) {
+  // Stockage pour stats footer (par colonne)
+  const evValues = evs.map(() => []);
+  const domValues = domains.map(() => []);
+  const moyValues = [];
+
+  for (let i = 0; i < sids.length; i++) {
+    const sid = sids[i];
     const stu = S.eleves[sid];
     if (!stu) continue;
-    const moy = _computeStudentMeanForPeriod(cls.id, sid, periode);
-    html += `<tr><td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:var(--paper);font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700">${moy != null ? _fmtNote(moy) : '—'}</td>`;
-    for (const d of domains) {
-      const lvl = _computeStudentDomainLevel(cls.id, sid, d.id, periode);
-      if (lvl == null) {
-        html += '<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
+    const moy = studentMoy.get(sid);
+    const rank = rankMap.get(sid);
+    if (moy != null) moyValues.push(moy);
+    const rowBg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
+    html += `<tr style="background:${rowBg}">`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    // Moyenne /20 colorée
+    if (moy != null) {
+      const moyBg = _noteColor(moy, 20);
+      const moyColor = moyBg ? _contrastTextColor(moyBg) : 'var(--ink-blue)';
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor}">${_fmtNote(moy)}</td>`;
+    } else {
+      html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>`;
+    }
+    // Rang
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);color:var(--ink-blue)" title="${rank ? `Rang ${rank}/${totalRanked}` : 'Non classé (pas de note)'}">${rank ? rank + '/' + totalRanked : '—'}</td>`;
+    // Notes par éval
+    for (let k = 0; k < evs.length; k++) {
+      const ev = evs[k];
+      const n = noteSur20(ev, sid);
+      if (n == null) {
+        html += '<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em">—</td>';
       } else {
-        const idx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
-        html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center"><span style="display:inline-block;padding:2px 7px;background:${colors[idx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span></td>`;
+        evValues[k].push(n);
+        const bg = _noteColor(n, 20);
+        const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})`;
+        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg};color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
       }
     }
+    // Niveaux par domaine
+    for (let k = 0; k < domains.length; k++) {
+      const d = domains[k];
+      const lvl = _computeStudentDomainLevel(cls.id, sid, d.id, periode);
+      if (lvl == null) {
+        const borderLeft = (k === 0) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+        html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${borderLeft}">—</td>`;
+      } else {
+        domValues[k].push(lvl);
+        const idx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
+        const borderLeft = (k === 0) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+        html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}"><span style="display:inline-block;padding:2px 7px;background:${colors[idx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span></td>`;
+      }
+    }
+    // Remarque
+    const remarque = _getBulletinRemarque(cls.id, sid, periode);
+    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${rowBg}">
+      <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(periode || '')}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" style="width:100%;min-width:200px;padding:3px 6px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.3;resize:vertical;min-height:24px" title="Brouillon de remarque pour le bulletin (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
+    </td>`;
     html += '</tr>';
   }
-  html += '</tbody></table></div>';
+
+  // ─── Pied de tableau : stats par colonne (μ avec tooltip détaillé) ───
+  const _statsTip = (vals, label) => {
+    if (!vals.length) return 'Aucune valeur';
+    const stats = _statsForNumbers(vals);
+    return [
+      `${label} — μ : ${_fmtNote(stats.avg)}`,
+      `n : ${stats.count}`,
+      `min : ${_fmtNote(stats.min)} · max : ${_fmtNote(stats.max)}`,
+      `médiane : ${_fmtNote(stats.median)}`,
+      `σ : ${_fmtNote(stats.std)}`,
+    ].join('\n');
+  };
+  html += '<tfoot style="position:sticky;bottom:0;z-index:2;background:var(--paper-warm)">';
+  html += '<tr style="border-top:2px solid var(--rule-line)">';
+  html += `<td style="padding:6px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600">μ classe</td>`;
+  if (moyValues.length === 0) {
+    html += '<td colspan="2" style="background:var(--paper-warm);text-align:center;color:var(--pencil-soft)">—</td>';
+  } else {
+    const s = _statsForNumbers(moyValues);
+    const bg = _noteColor(s.avg, 20);
+    const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+    html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help" title="${_esc(_statsTip(moyValues, 'Moyenne classe'))}">${_fmtNote(s.avg)}</td>`;
+    html += '<td style="background:var(--paper-warm)"></td>';
+  }
+  for (let k = 0; k < evs.length; k++) {
+    const vals = evValues[k];
+    if (!vals.length) {
+      html += '<td style="padding:4px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em">—</td>';
+    } else {
+      const s = _statsForNumbers(vals);
+      const bg = _noteColor(s.avg, 20);
+      const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+      html += `<td style="padding:4px 6px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:600;font-size:.85em;cursor:help" title="${_esc(_statsTip(vals, evs[k].nomCourt))}">${_fmtNote(s.avg)}</td>`;
+    }
+  }
+  // Stats par domaine
+  for (let k = 0; k < domains.length; k++) {
+    const vals = domValues[k];
+    const borderLeft = (k === 0) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+    if (!vals.length) {
+      html += `<td style="padding:4px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);${borderLeft}">—</td>`;
+    } else {
+      const s = _statsForNumbers(vals);
+      const idx = Math.max(1, Math.min(4, Math.round(s.avg))) - 1;
+      html += `<td style="padding:4px 6px;text-align:center;background:var(--paper-warm);${borderLeft};cursor:help" title="${_esc(_statsTip(vals, domains[k].code))}"><span style="display:inline-block;padding:2px 7px;background:${colors[idx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.82em">${_fmtNote(s.avg)}</span></td>`;
+    }
+  }
+  // Cellule remarque vide en footer
+  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
+  html += '</tr></tfoot>';
+  html += '</table></div>';
 
   // Légende
   html += '<div style="margin-top:8px;font-size:.85em;color:var(--pencil);display:flex;gap:14px;flex-wrap:wrap"><strong>Légende :</strong>';
@@ -27796,7 +27934,6 @@ function renderBilanTab() {
 
   // Stocker l'état pour copy/csv
   wrap.dataset.periode = periode;
-  wrap.innerHTML += '<div></div>';
   wrap.innerHTML = html + '<div id="bilan-extra"></div>';
 }
 
@@ -27941,6 +28078,33 @@ function _aggregateStudentCompetence(classId, sid, cid, periode) {
 }
 
 // Rendu de l'onglet Compétences
+// ═══════════════ Remarques de bulletin (par classe × élève × période) ═══════════════
+// Partagées entre les onglets 🎯 Bilan par compétences et 📜 Bilan des évaluations
+// pour servir de brouillon à la remarque finale du bulletin.
+// Stocké dans S.bulletinRemarques[classId][sid][periode] = "texte"
+function _getBulletinRemarque(classId, sid, periode) {
+  return S.bulletinRemarques?.[classId]?.[sid]?.[periode || ''] || '';
+}
+function _setBulletinRemarque(classId, sid, periode, text) {
+  if (!S.bulletinRemarques) S.bulletinRemarques = {};
+  if (!S.bulletinRemarques[classId]) S.bulletinRemarques[classId] = {};
+  if (!S.bulletinRemarques[classId][sid]) S.bulletinRemarques[classId][sid] = {};
+  const v = (text || '').trim();
+  if (v) S.bulletinRemarques[classId][sid][periode || ''] = v;
+  else delete S.bulletinRemarques[classId][sid][periode || ''];
+  // Debounce save pour ne pas spammer
+  if (_bulletinRemarqueSaveTimer) clearTimeout(_bulletinRemarqueSaveTimer);
+  _bulletinRemarqueSaveTimer = setTimeout(() => save(), 600);
+}
+let _bulletinRemarqueSaveTimer = null;
+// Handler appelé depuis l'oninput d'une cellule remarque dans les bilans
+function _onBilanRemarqueInput(input) {
+  const classId = input.getAttribute('data-cls');
+  const sid     = input.getAttribute('data-sid');
+  const periode = input.getAttribute('data-periode');
+  _setBulletinRemarque(classId, sid, periode, input.value);
+}
+
 // Sync de la période sélectionnée entre l'onglet "Bilan par compétences" et
 // "Bilan des évaluations" : si l'utilisateur change la période sur un onglet,
 // l'autre suit. Persisté dans localStorage pour survivre aux F5.
@@ -28033,12 +28197,15 @@ function renderCompetencesTab() {
     html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(tip)}">${_esc(c.code)}</th>`;
   }
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Moyenne</th>';
+  // Colonne Remarque partagée avec le bilan des évaluations
+  html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Brouillon de remarque pour le bulletin de cette période. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque ${periode ? '(' + periode + ')' : ''}</th>`;
   html += '</tr></thead><tbody>';
 
-  for (const sid of sids) {
+  for (let _si = 0; _si < sids.length; _si++) {
+    const sid = sids[_si];
     const stu = S.eleves[sid];
     if (!stu) continue;
-    const bg = 'var(--paper)';
+    const bg = _si % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${bg}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
     let sumMean = 0, nbMean = 0;
@@ -28064,43 +28231,110 @@ function renderCompetencesTab() {
     } else {
       html += '<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
     }
+    // Colonne Remarque
+    const remarqueC = _getBulletinRemarque(cls.id, sid, periode);
+    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bg}">
+      <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(periode || '')}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" style="width:100%;min-width:200px;padding:3px 6px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.3;resize:vertical;min-height:24px" title="Brouillon de remarque pour le bulletin (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+    </td>`;
     html += '</tr>';
   }
-  // ─── Pied de tableau : moyenne et nb d'évaluations par compétence ───
-  html += '<tfoot style="position:sticky;bottom:0;z-index:2;background:var(--paper-warm)">';
-  // Ligne moyenne par compétence
-  html += '<tr style="border-top:2px solid var(--rule-line)">';
-  html += `<td style="padding:6px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600">μ classe</td>`;
+  // ─── Pied de tableau : stats par compétence + nb d'évaluations ───
+  // Calcule pour chaque comp : la liste des niveaux saisis (par tous les élèves)
+  // pour pouvoir afficher μ + tooltip détaillé.
   const compMeans = [];
+  const compLevels = [];   // tableau de listes : niveaux saisis par comp
+  const studentMoy = [];    // moyenne par élève (pour la colonne Moyenne globale)
   for (const c of comps) {
-    let sumL = 0, nL = 0;
+    const lvls = [];
     for (const sid of sids) {
       const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
-      if (agg.levelMean != null) { sumL += agg.levelMean; nL++; }
+      if (agg.levelMean != null) lvls.push(agg.levelMean);
     }
-    if (nL === 0) {
-      compMeans.push({ comp: c, mean: null, n: 0 });
-      html += '<td style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm)">—</td>';
-    } else {
-      const m = sumL / nL;
-      const mIdx = Math.max(1, Math.min(4, Math.round(m))) - 1;
-      compMeans.push({ comp: c, mean: m, n: nL });
-      html += `<td style="padding:6px 6px;text-align:center;background:var(--paper-warm)" title="Moyenne classe sur ${nL} élève${nL>1?'s':''} évalué${nL>1?'s':''}">
-        <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m)}</span>
-      </td>`;
+    compLevels.push(lvls);
+    if (lvls.length === 0) compMeans.push({ comp: c, mean: null, n: 0 });
+    else {
+      const m = lvls.reduce((a,b) => a+b, 0) / lvls.length;
+      compMeans.push({ comp: c, mean: m, n: lvls.length });
     }
   }
-  // Cellule moyenne globale (vide)
-  html += '<td style="background:var(--paper-warm)"></td>';
+  for (const sid of sids) {
+    let s = 0, n = 0;
+    for (const c of comps) {
+      const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
+      if (agg.levelMean != null) { s += agg.levelMean; n++; }
+    }
+    if (n > 0) studentMoy.push(s / n);
+  }
+
+  // Helper : construit le tooltip pour une distribution de niveaux 1..4
+  const _compStatsTooltip = (lvls) => {
+    if (!lvls.length) return 'Aucune saisie';
+    const stats = _statsForNumbers(lvls);
+    const dist = [1,2,3,4].map(L => {
+      const k = lvls.filter(v => Math.round(v) === L).length;
+      return `N${L} : ${k}`;
+    });
+    return [
+      `Moyenne : ${_fmtNote(stats.avg)}`,
+      `Effectif : ${stats.count}`,
+      `Médiane : ${_fmtNote(stats.median)}`,
+      `Min : ${_fmtNote(stats.min)} · Max : ${_fmtNote(stats.max)}`,
+      `Écart-type : ${_fmtNote(stats.std)}`,
+      '',
+      'Distribution :',
+      ...dist,
+    ].join('\n');
+  };
+
+  html += '<tfoot style="position:sticky;bottom:0;z-index:2;background:var(--paper-warm)">';
+  // Ligne moyenne par compétence (avec tooltip détaillé)
+  html += '<tr style="border-top:2px solid var(--rule-line)">';
+  html += `<td style="padding:6px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600">μ classe</td>`;
+  compMeans.forEach((m, i) => {
+    const tip = _compStatsTooltip(compLevels[i]);
+    if (m.mean == null) {
+      html += `<td style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">—</td>`;
+    } else {
+      const mIdx = Math.max(1, Math.min(4, Math.round(m.mean))) - 1;
+      html += `<td style="padding:6px 6px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tip)}">
+        <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m.mean)}</span>
+      </td>`;
+    }
+  });
+  // Cellule moyenne globale (avec stats sur les moyennes individuelles)
+  if (studentMoy.length === 0) {
+    html += '<td style="background:var(--paper-warm)"></td>';
+  } else {
+    const sGlobal = _statsForNumbers(studentMoy);
+    const tipGlobal = [
+      `Moyenne globale : ${_fmtNote(sGlobal.avg)}`,
+      `Effectif : ${sGlobal.count} élève${sGlobal.count > 1 ? 's' : ''}`,
+      `Médiane : ${_fmtNote(sGlobal.median)}`,
+      `Min : ${_fmtNote(sGlobal.min)} · Max : ${_fmtNote(sGlobal.max)}`,
+      `Écart-type : ${_fmtNote(sGlobal.std)}`,
+    ].join('\n');
+    const mIdx = Math.max(1, Math.min(4, Math.round(sGlobal.avg))) - 1;
+    html += `<td style="padding:6px 10px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tipGlobal)}">
+      <span style="display:inline-block;padding:2px 8px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(sGlobal.avg)}</span>
+    </td>`;
+  }
+  // Cellule Remarque vide en footer
+  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
   html += '</tr>';
-  // Ligne nb d'évaluations par compétence
+  // Ligne nb d'évaluations par compétence (tooltip listant les évals)
   html += '<tr>';
   html += `<td style="padding:4px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil)">éval(s)</td>`;
   for (const c of comps) {
-    const nEvals = _countCompEvaluations(cls.id, c.id, periode);
-    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm)" title="${nEvals} évaluation${nEvals>1?'s':''} contenant ${c.code}">${nEvals}</td>`;
+    const evalList = _listEvaluationsForComp(cls.id, c.id, periode);
+    const nEvals = evalList.length;
+    const tip = evalList.length === 0
+      ? `Aucune évaluation contenant ${c.code}`
+      : `${nEvals} évaluation${nEvals > 1 ? 's' : ''} contenant ${c.code} :\n\n` + evalList.map(e => `• ${e.nomCourt}${e.nomLong ? ' — ' + e.nomLong : ''}${e.date ? ' (' + _fmtDateFr(e.date) + ')' : ''}`).join('\n');
+    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">${nEvals}</td>`;
   }
+  // Cellule Moyenne globale (vide) + cellule Remarque (vide)
   html += '<td style="background:var(--paper-warm)"></td>';
+  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
   html += '</tr>';
   html += '</tfoot>';
 
@@ -28121,17 +28355,26 @@ function renderCompetencesTab() {
 // Compte le nombre d'évaluations (toutes confondues : A/B/C) qui contiennent cette
 // compétence dans leur structure, pour la classe et la période données.
 function _countCompEvaluations(classId, cid, periode) {
-  let n = 0;
+  return _listEvaluationsForComp(classId, cid, periode).length;
+}
+
+// Liste les évals (objet { id, nomCourt, nomLong, date }) contenant la compétence
+function _listEvaluationsForComp(classId, cid, periode) {
+  const out = [];
   for (const ev of Object.values(S.evaluations || {})) {
     if (!ev || !_evalIncludesClass(ev, classId)) continue;
     if (periode && ev.periode !== periode) continue;
+    let has = false;
     if (ev.type === 'B') {
-      if ((ev.passations || []).some(p => Array.isArray(p.competenceIds) && p.competenceIds.includes(cid))) n++;
+      has = (ev.passations || []).some(p => Array.isArray(p.competenceIds) && p.competenceIds.includes(cid));
     } else {
-      if ((ev.miniNotes || []).some(mn => Array.isArray(mn.competenceIds) && mn.competenceIds.includes(cid))) n++;
+      has = (ev.miniNotes || []).some(mn => Array.isArray(mn.competenceIds) && mn.competenceIds.includes(cid));
     }
+    if (has) out.push({ id: ev.id, nomCourt: ev.nomCourt || '?', nomLong: ev.nomLong || '', date: _evalDateFor(ev, classId) });
   }
-  return n;
+  // Tri par date desc
+  out.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return out;
 }
 
 // État du dernier rendu du bilan compétences (pour les exports)
