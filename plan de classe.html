@@ -2686,6 +2686,7 @@ kbd {
         <input type="checkbox" id="evalprefs-colorsAuto" onchange="_evalPrefsToggleColorsAuto()">
         <strong>Mode auto</strong> <span style="color:var(--pencil);font-size:.88em">— palette générée selon le nombre de niveaux (rouge → bleu)</span>
       </label>
+      <div id="evalprefs-colorsAuto-hint" style="display:none;font-size:.82em;color:var(--ink-blue-soft);font-style:italic;margin:0 0 6px;padding:4px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue-soft);border-radius:3px">↳ Les couleurs sont recalculées automatiquement quand tu changes le nombre de niveaux.</div>
       <div id="evalprefs-colors" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center"></div>
     </div>
 
@@ -2773,6 +2774,7 @@ kbd {
         <input type="checkbox" id="evalprefs-thresholdsAuto" onchange="_evalPrefsToggleThresholdsAuto()">
         <strong>Mode auto</strong> <span style="color:var(--pencil);font-size:.88em">— seuils = milieux entre les points par niveau · couleurs = palette des niveaux</span>
       </label>
+      <div id="evalprefs-thresholdsAuto-hint" style="display:none;font-size:.82em;color:var(--ink-blue-soft);font-style:italic;margin:0 0 6px;padding:4px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue-soft);border-radius:3px">↳ Les seuils suivent automatiquement les <em>points par niveau</em> et la <em>palette niveau</em>.</div>
       <div id="evalprefs-noteThresholds" style="display:flex;flex-direction:column;gap:6px"></div>
       <button class="btn btn-g btn-sm" id="evalprefs-addNoteThreshold-btn" onclick="_evalPrefsAddNoteThreshold()" style="margin-top:8px">+ Ajouter une plage</button>
     </div>
@@ -3367,7 +3369,7 @@ kbd {
     </div>
     <input type="hidden" id="meval-tableur-evalid">
 
-    <div id="meval-tableur-classpicker" style="display:none;margin:0 0 8px;padding:6px 10px;background:#e6f0fa;border:1px solid var(--ink-blue-soft);border-radius:4px;font-size:.9em;align-items:center;gap:8px;flex-wrap:wrap"></div>
+    <div id="meval-tableur-classpicker" style="display:none;margin:0 0 8px;padding:6px 10px;background:var(--paper-warm);border:1px solid var(--ink-blue-soft);border-radius:4px;font-size:.9em;align-items:center;gap:8px;flex-wrap:wrap"></div>
 
     <div id="meval-tableur-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
 
@@ -21735,6 +21737,8 @@ function _evalPrefsRenderAll(prefs) {
   // ── Toggle auto couleurs ──
   const wcAuto = document.getElementById('evalprefs-colorsAuto');
   if (wcAuto) wcAuto.checked = !!prefs.maitriseColorsAuto;
+  const wcHint = document.getElementById('evalprefs-colorsAuto-hint');
+  if (wcHint) wcHint.style.display = prefs.maitriseColorsAuto ? '' : 'none';
   // ── Couleurs ──
   const wc = document.getElementById('evalprefs-colors');
   if (wc) {
@@ -21816,6 +21820,8 @@ function _evalPrefsRenderAll(prefs) {
   // ── Seuils de couleur note ──
   const wtAuto = document.getElementById('evalprefs-thresholdsAuto');
   if (wtAuto) wtAuto.checked = !!prefs.noteThresholdsAuto;
+  const wtHint = document.getElementById('evalprefs-thresholdsAuto-hint');
+  if (wtHint) wtHint.style.display = prefs.noteThresholdsAuto ? '' : 'none';
   const thresholds = prefs.noteThresholdsAuto ? _autoNoteThresholds(prefs) : (prefs.noteThresholds || []);
   _evalPrefsRenderNoteThresholds(thresholds, !!prefs.noteThresholdsAuto);
   const addBtn = document.getElementById('evalprefs-addNoteThreshold-btn');
@@ -22492,8 +22498,12 @@ function _evalNewSave() {
   const periode = document.getElementById('meval-new-periode').value;
   const noteMax = parseFloat(document.getElementById('meval-new-notemax').value);
   const coef    = parseFloat(document.getElementById('meval-new-coef').value);
-  if (!Number.isFinite(noteMax) || noteMax <= 0) { toast('⚠ Note maximale invalide', 'warn'); return; }
-  if (!Number.isFinite(coef) || coef < 0) { toast('⚠ Coefficient invalide', 'warn'); return; }
+  if (!Number.isFinite(noteMax) || noteMax <= 0 || noteMax > 1000) {
+    toast('⚠ Note maximale invalide (entre 0,1 et 1000)', 'warn'); return;
+  }
+  if (!Number.isFinite(coef) || coef < 0 || coef > 100) {
+    toast('⚠ Coefficient invalide (entre 0 et 100)', 'warn'); return;
+  }
 
   const type = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
   pushUndo();
@@ -23186,7 +23196,8 @@ function _evalEditUpdateMiniNote(idx, field, raw) {
   }
   else if (field === 'max') {
     const n = parseFloat(raw);
-    if (Number.isFinite(n) && n >= 0) ev.miniNotes[idx].max = n;
+    // F5 : max > 0 et plafonné à 1000 pour éviter NaN/Infinity dans les calculs
+    if (Number.isFinite(n) && n > 0 && n <= 1000) ev.miniNotes[idx].max = n;
   }
   _evalEditDirty = true;
   // Met à jour seulement la ligne du total (évite de re-render et perdre le focus)
@@ -23228,9 +23239,13 @@ function _evalEditSave() {
   const nomCourt = (document.getElementById('meval-edit-nomcourt').value || '').trim();
   if (!nomCourt) { toast('⚠ Le nom court est obligatoire', 'warn'); return; }
   const noteMax = parseFloat(document.getElementById('meval-edit-notemax').value);
-  if (!Number.isFinite(noteMax) || noteMax <= 0) { toast('⚠ Note maximale invalide', 'warn'); return; }
+  if (!Number.isFinite(noteMax) || noteMax <= 0 || noteMax > 1000) {
+    toast('⚠ Note maximale invalide (entre 0,1 et 1000)', 'warn'); return;
+  }
   const coef = parseFloat(document.getElementById('meval-edit-coef').value);
-  if (!Number.isFinite(coef) || coef < 0) { toast('⚠ Coefficient invalide', 'warn'); return; }
+  if (!Number.isFinite(coef) || coef < 0 || coef > 100) {
+    toast('⚠ Coefficient invalide (entre 0 et 100)', 'warn'); return;
+  }
 
   pushUndo();
   ev.nomCourt = nomCourt;
@@ -24023,7 +24038,7 @@ function _evalTableurRender() {
     // Type C : cellule Date rattrapage par élève
     if (isTypeC) {
       const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
-      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><input type="date" value="${_esc(dateIndiv)}" data-sid="${_esc(sid)}" onchange="_evalSetDateIndiv(this)" style="padding:2px 4px;font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:#fff;border-radius:3px" title="Date individuelle pour cet élève (rattrapage après absence). Vide = date globale de l'éval."></td>`;
+      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><input type="date" value="${_esc(dateIndiv)}" data-sid="${_esc(sid)}" onchange="_evalSetDateIndiv(this)" style="padding:2px 4px;font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px" title="Date individuelle pour cet élève (rattrapage après absence). Vide = date globale de l'éval."></td>`;
     }
     // Cellule Remarque (par élève — Type A et Type C)
     const remark = ev.studentRemarks?.[sid] || '';
@@ -25532,11 +25547,14 @@ function _tableurEditMn(inputEl) {
     mn.label = String(inputEl.value || '');
   } else if (field === 'max') {
     const n = parseFloat(inputEl.value);
-    if (!Number.isFinite(n) || n < 0) {
+    // F5 : max strictement > 0 (max=0 fait diviser par 0 dans le calcul du total)
+    if (!Number.isFinite(n) || n <= 0 || n > 1000) {
       inputEl.style.background = '#fee';
+      inputEl.title = 'Max doit être > 0 et ≤ 1000';
       return;
     }
     inputEl.style.background = '';
+    inputEl.title = '';
     mn.max = n;
     // Recalcule tous les totaux de ligne
     document.querySelectorAll('#meval-tableur-tbl tbody tr').forEach(tr => {
@@ -25942,6 +25960,15 @@ function _evalIncludesClass(ev, classId) {
 function _evalClassIds(ev) {
   if (Array.isArray(ev?.classIds) && ev.classIds.length > 0) return ev.classIds;
   return ev?.classId ? [ev.classId] : [];
+}
+// F7 — Retourne la 1re classe encore présente dans S.classes parmi les classes
+// référencées par l'éval. Évite que les lectures de S.classes[ev.classId]
+// retournent undefined quand l'utilisateur a supprimé la classe primaire.
+function _evalPrimaryAliveClassId(ev) {
+  for (const cid of _evalClassIds(ev)) {
+    if (S.classes?.[cid]) return cid;
+  }
+  return null;
 }
 // Retrouve le libellé d'un créneau à partir de son id, en cherchant dans la
 // salle active de la classe primaire (suffit pour Type B mono-classe ; pour
@@ -27818,14 +27845,17 @@ function _evalCommentsRender() {
   if (lib.positive.length === 0 && lib.negative.length === 0) {
     libHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Bibliothèque vide. Clique sur <strong>⚙ Bibliothèque…</strong> pour en ajouter.</p>';
   } else {
+    // S3 — délégation par data-text : plus robuste que JSON.stringify().replace()
+    // pour les commentaires contenant des apostrophes, backslashes ou caractères
+    // unicode spéciaux. Le handler lit this.dataset.text au moment du clic.
     if (lib.positive.length > 0) {
       libHTML += '<div style="margin-bottom:4px"><span style="color:#16a34a;font-family:var(--font-mono);font-size:.78em;margin-right:4px">+</span>';
-      libHTML += lib.positive.map(c => `<button onclick="_evalCommentsAddFromLib(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += lib.positive.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
       libHTML += '</div>';
     }
     if (lib.negative.length > 0) {
       libHTML += '<div><span style="color:#dc2626;font-family:var(--font-mono);font-size:.78em;margin-right:4px">−</span>';
-      libHTML += lib.negative.map(c => `<button onclick="_evalCommentsAddFromLib(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += lib.negative.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
       libHTML += '</div>';
     }
   }
