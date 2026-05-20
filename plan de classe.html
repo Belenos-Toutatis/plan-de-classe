@@ -1030,6 +1030,14 @@ html[data-theme="dark"] .pdiag-cluster { background: #2a1b1b !important; border-
 html[data-theme="dark"] .pdiag-cluster-title { color: var(--margin-red) !important; }
 html[data-theme="dark"] .pdiag-cluster-sub { color: var(--ink-blue-soft) !important; }
 
+/* Comparer classes — ligne grand total (Toutes les classes) */
+.crosstab-total-row { background: var(--ink-blue); color: #fff; border-top: 2px solid var(--ink-blue); }
+.crosstab-total-row td { color: #fff; }
+.crosstab-total-row .stats-half-ge { color: rgba(255,255,255,0.85) !important; }
+.crosstab-total-row .stats-half-lt { color: rgba(255,255,255,0.7) !important; }
+html[data-theme="dark"] .crosstab-total-row { background: var(--paper-deep) !important; border-top-color: var(--ink-blue-soft) !important; color: var(--ink-deep) !important; }
+html[data-theme="dark"] .crosstab-total-row td { color: var(--ink-deep) !important; }
+
 /* Devoirs — badges Type A/B/C + pastille de stats */
 .eval-type-badge {
   display: inline-block; padding: 1px 6px; color: #fff;
@@ -24951,12 +24959,13 @@ function _evalRenderCrossTab() {
       <td style="padding:6px 10px;text-align:center;vertical-align:top;background:${bg};font-weight:600">${_evalCrossTabCellHTML(r.total)}</td>
     </tr>`;
   });
-  // Ligne de grand total
-  html += `<tr style="background:var(--ink-blue);color:#fff;border-top:2px solid var(--ink-blue)">
+  // Ligne de grand total — classe CSS pour adapter au thème (clair : fond ink-blue
+  // sombre + texte blanc ; sombre : fond paper-deep + texte ink-deep cream)
+  html += `<tr class="crosstab-total-row">
     <td style="padding:6px 10px;font-family:var(--font-serif);font-weight:700">${_esc(grand.classNom)}</td>
-    <td style="padding:6px 10px;text-align:center;vertical-align:top;color:#fff">${_evalCrossTabCellHTML(grand.F).replace(/var\(--pencil\)/g, 'rgba(255,255,255,0.7)')}</td>
-    <td style="padding:6px 10px;text-align:center;vertical-align:top;color:#fff">${_evalCrossTabCellHTML(grand.M).replace(/var\(--pencil\)/g, 'rgba(255,255,255,0.7)')}</td>
-    <td style="padding:6px 10px;text-align:center;vertical-align:top;color:#fff;font-weight:700">${_evalCrossTabCellHTML(grand.total).replace(/var\(--pencil\)/g, 'rgba(255,255,255,0.7)')}</td>
+    <td style="padding:6px 10px;text-align:center;vertical-align:top">${_evalCrossTabCellHTML(grand.F)}</td>
+    <td style="padding:6px 10px;text-align:center;vertical-align:top">${_evalCrossTabCellHTML(grand.M)}</td>
+    <td style="padding:6px 10px;text-align:center;vertical-align:top;font-weight:700">${_evalCrossTabCellHTML(grand.total)}</td>
   </tr>`;
   html += `</tbody></table>`;
   wrap.innerHTML = html;
@@ -25552,13 +25561,18 @@ function _evalTableurRenderB(ev, cls) {
         // Ne propose pas les comps déjà choisies dans CETTE passation (sauf la courante)
         if (cc.id !== cid && compIds.includes(cc.id)) continue;
         const sel = (cc.id === cid) ? ' selected' : '';
-        opts += `<option value="${_esc(cc.id)}"${sel} title="${_esc(cc.name || '')}">${_esc(cc.code)}${cc.name ? ' — ' + _esc(cc.name) : ''}</option>`;
+        // Sélectionnée : code seul (affichage compact dans la zone fermée du <select>)
+        // Autres : code + nom (visible quand le dropdown est ouvert)
+        const labelText = (cc.id === cid)
+          ? _esc(cc.code)
+          : `${_esc(cc.code)}${cc.name ? ' — ' + _esc(cc.name) : ''}`;
+        opts += `<option value="${_esc(cc.id)}"${sel} title="${_esc(cc.name || '')}">${labelText}</option>`;
       }
-      html += `<th style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:60px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c?.name || '')}">
+      html += `<th style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;width:54px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c?.name || '')}">
         <select data-passid="${_esc(p.id)}" data-cid="${_esc(cid)}"
                 onchange="_evalTableurChangeComp(this)"
                 class="meval-comp-select"
-                style="padding:2px 4px;font-family:var(--font-mono);font-weight:600;border:1px solid transparent;background:transparent;font-size:.92em;width:64px"
+                style="padding:2px 4px;font-family:var(--font-mono);font-weight:600;border:1px solid transparent;background:transparent;font-size:.92em;width:54px"
                 title="${_esc(c?.name || c?.code || '')} — changer la compétence (les niveaux saisis seront proposés en transfert)">${opts}</select>
       </th>`;
     }
@@ -25683,17 +25697,16 @@ function _statsCellHTML(values, opts) {
   if (!fullStats) {
     return `<div title="Moyenne sur ${stats.count} valeur(s)"><span style="color:var(--pencil);font-size:.82em">moy</span> ${fmt(stats.avg)}</div>`;
   }
-  // Mode complet : avg, min, med, max, σ, n≥half, n<half
+  // Mode complet : avg, min, med, max, σ, n≥half, n<half — condensé sur 2 lignes
+  // (avant : 5 lignes → hauteur excessive en colonne étroite avec wrapping)
   const above = (halfMax != null) ? values.filter(v => typeof v === 'number' && v >= halfMax).length : null;
   const below = (halfMax != null) ? values.filter(v => typeof v === 'number' && v < halfMax).length : null;
-  return `<div style="font-size:.78em;line-height:1.45;text-align:left;font-family:var(--font-mono)">`
-       + `<div><strong>moy</strong> ${fmt(stats.avg)} · <strong>n=</strong>${stats.count}</div>`
-       + `<div>min ${fmt(stats.min)} · méd ${fmt(stats.median)} · max ${fmt(stats.max)}</div>`
-       + `<div>σ ${fmt(stats.std)}</div>`
-       + (halfMax != null
-          ? `<div style="color:var(--ink-blue)">≥${fmt(halfMax)} : <strong>${above}</strong></div>`
-          + `<div style="color:var(--margin-red)">&lt;${fmt(halfMax)} : <strong>${below}</strong></div>`
-          : '')
+  const halfHTML = (halfMax != null)
+    ? ` · <span style="color:var(--ink-blue)" title="Élèves avec note ≥ ${fmt(halfMax)}">≥${fmt(halfMax)} <strong>${above}</strong></span><span style="color:var(--margin-red)" title="Élèves avec note < ${fmt(halfMax)}"> · &lt;${fmt(halfMax)} <strong>${below}</strong></span>`
+    : '';
+  return `<div style="font-size:.78em;line-height:1.5;text-align:left;font-family:var(--font-mono);white-space:nowrap">`
+       + `<div><strong>μ</strong> ${fmt(stats.avg)} · <strong>n</strong>=${stats.count} · <strong>σ</strong> ${fmt(stats.std)}</div>`
+       + `<div title="min / médiane / max">${fmt(stats.min)} · ${fmt(stats.median)} · ${fmt(stats.max)}${halfHTML}</div>`
        + `</div>`;
 }
 
