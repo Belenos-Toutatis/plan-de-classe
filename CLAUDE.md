@@ -97,17 +97,21 @@ La nav `#nav` est structurée en **deux groupes** séparés par un filet vertica
 5. **Tablettes** — récap tablettes avec sélecteur de salle + bouton "Affecter automatiquement", génération PDF "Fiche de prêt"
 6. **QCMCam** — plan visuel vue prof + export CSV multi-salles avec identifiant `classe-salle`
 
-### Groupe 2 — "Évaluation · bientôt" (placeholders, désactivés)
-- 📊 **Notes** · 🎯 **Compétences** · 📜 **Bilan** — onglets `disabled` qui annoncent le 2e volet de l'app. Aucune logique métier derrière, ce sont des boutons inactifs avec tooltips explicatifs.
+### Groupe 2 — "Évaluations · bilans en brouillon" (3 onglets actifs)
+1. **📊 Devoirs** (`tab-notes`) — création/édition d'évaluations Type A (mini-notes /20), Type B (compétences par passations), Type C (sommative avec exercices). Saisie en tableur ou en fiche par élève. Multi-classes. Tableau d'évaluations avec stats.
+2. **🎯 Bilan par compétences** (`tab-comp`) — vue transverse classe : niveau moyen par élève sur chaque compétence évaluée. **Au stade de brouillon.**
+3. **📜 Bilan des évaluations** (`tab-bilan`) — agrégation période : moyenne /20 par élève, moyenne par domaine du socle, prêt à coller dans le bulletin. **Au stade de brouillon.**
 
-Le design système anticipe ce 2e volet :
-- Primitive `.gridtable` (préparée dans l'onglet Élèves) — fondations pour la saisie type tableur (sélection multi-cellules, copier-coller)
-- Variables `--maitrise-1..4` réservées (4 niveaux du référentiel cycle 4)
-- Police mono `JetBrains Mono` pour chiffres tabulaires et codes courts de compétences
+Le label "*· bilans en brouillon*" sous le titre du groupe signale que les types A/B/C de saisie sont opérationnels mais que les deux vues d'agrégation (compétences, bilan) restent à finaliser. **Type D (sommative par compétence sans questions intermédiaires) à venir.**
+
+Le design système supporte ce volet :
+- Primitive `.gridtable` (préparée dans l'onglet Élèves, réutilisée dans le tableur d'éval)
+- Variables `--maitrise-1..N` (palette de couleurs adaptée à `nbLevels`, mode auto disponible)
+- Police mono `JetBrains Mono` pour chiffres tabulaires, codes de compétences, codes mini-notes
 
 Onglets sortis de la navigation principale (accessibles via bouton) :
 - **Vue Élève** — bouton **"🔄 Vue Élève"** dans Plan Prof (et inversement)
-- **Export positions** (`tab-notes`) — bouton **"📊 Export positions"** dans la toolbar de l'onglet Élèves. Tableau triable Position · Groupe · Nom · Prénom + bouton 💾 Export CSV. Le bouton **"↩ Retour Élèves"** dans le header de l'onglet ramène à Élèves. Au démarrage, si `localStorage.planClasse_tab === 'notes'`, on retombe sur 'eleves'.
+- **Export positions** (`tab-export-pos`, renommé depuis `tab-notes` libéré par Évaluation) — bouton **"📊 Export positions"** dans la toolbar de l'onglet Élèves. Tableau triable Position · Groupe · Nom · Prénom + bouton 💾 Export CSV. Le bouton **"↩ Retour Élèves"** dans le header de l'onglet ramène à Élèves. Au démarrage, si `localStorage.planClasse_tab === 'notes'` ou `'export-pos'`, on retombe sur `'eleves'`.
 
 **Filtre de groupe persistant** : `groupFilter` (0=Tous, 1=G1, 2=G2) est sauvegardé dans `localStorage.planClasse_groupFilter` à chaque appel de `setGroupFilter()`. Restauré dans `init()` avant le 1er render, et le chip correspondant est activé. Évite de devoir re-cliquer sur G1/G2 après un F5 en plein cours.
 
@@ -1070,6 +1074,58 @@ Toujours visible (même si aucun surlignage actif → opacité .35 + grayscale).
 
 ### CSS
 `.moved-cell` (sélecteur générique, fonctionne sur `.cell` ET `.svcell`) : `outline: 5px solid #ff1493 !important; z-index: 10; animation: cellMovedPulse 0.9s ease-in-out infinite`. Le `!important` sur l'outline-color est nécessaire pour battre les autres animations CSS qui surchargent `outline-color` (rappels, violations).
+
+## Évaluations (Types A / B / C)
+
+Volet ouvert via les 3 onglets du groupe 2 de la nav. Le modèle vit dans `S.evaluations`, `S.competences`, `S.competenceDomains`, `S.evalPrefs`, `S.evalCommentLibrary`. Les prefs sont initialisées dans `DEFAULT_EVAL_PREFS` (haut du `<script>`) et migrées par `migrateEvalDefaults()`.
+
+### Types d'évaluation
+- **Type A** — somme de mini-notes, total proportionné à `ev.noteMax` (souvent /20). Saisie au tableur `meval-tableur` ou en fiche `meval-saisie`. Modèle : `ev.miniNotes[] = { id, label, max, name?, date?, dates? }`, `ev.notes[sid] = { values: { [mnId]: number | 'NN' | 'A' | null }, comments?, excluded?, dateIndiv?, remarque? }`.
+- **Type B** — suivi de compétences par passations. Modèle : `ev.passations[] = { id, code, date|dates, competenceIds[], niveaux: { [sid]: { [cid]: niveau|0|'A' } } }`. Pas de mini-notes ; le bilan agrège les niveaux via `S.evalPrefs.meanRule` (override possible par éval via `ev.meanRule`).
+- **Type C** — sommative avec exercices + questions. Comme Type A mais les `miniNotes` sont regroupées par `exerciceId`. `ev.exercices[] = { id, label, name? }`. Le bilan compétences inline (colonnes à droite du tableur) calcule automatiquement le niveau atteint sur chaque compétence évaluée.
+- **Type D (à venir)** — sommative par compétence sans questions intermédiaires.
+
+### Multi-classes
+`ev.classIds[]` (liste) prime sur `ev.classId` (legacy). Dates et créneaux peuvent être par classe : `ev.dates[classId]`, `ev.slotIds[classId]` (de même `mn.dates[classId]`, `pass.dates[classId]`). Helpers :
+- `_evalClassIds(ev)` — renvoie toujours un tableau, fallback `[ev.classId]`
+- `_evalIncludesClass(ev, classId)` — appartenance
+- **`_evalPrimaryAliveClassId(ev)`** — 1re classe encore présente dans `S.classes`. À utiliser à la place de `S.classes?.[ev.classId]` direct (évite undefined si la classe primaire a été supprimée)
+- `_evalTableurActiveCls(ev)` — résout la classe affichée dans le tableur
+
+### Undo pendant la saisie (commit f3e1371)
+Saisir une note ne fait PAS `pushUndo()` à chaque frappe (la pile saturerait). À la place, utiliser **`_evalArmUndo()`** : capture un snapshot une seule fois par salve, puis libère le verrou 2 s après la dernière mutation → 1 entrée d'undo par salve de frappe. `_evalFlushUndo()` force la fermeture d'une salve (appelé par `undoLast`/`redoLast`).
+
+**Convention** :
+- Saisie continue de note/niveau/code/date inline → `_evalArmUndo()`
+- Mutation ponctuelle (suppression mn, ajout passation, toggle classe…) → `pushUndo()` direct
+
+Cf. les ~15 callsites dans `_evalTableurUpdate`, `_evalSaisieUpdateNote`, `_evalTableurBUpdate`, `_evalPassSaisieSetLevel`, `_tableurEditMn`, `_evalTableurEditPass`, `_evalEditUpdateMiniNote/UpdateExo`, `_evalSetStudentRemark`, `_evalSaisieToggleExcluded/SaveAmen`, `_evalEditPerClass`.
+
+### Prefs : couleurs niveaux et seuils note (commit c8e2139)
+`S.evalPrefs.maitriseColors[]` (palette N1..Nn) et `S.evalPrefs.noteThresholds[]` (couleurs de fond pour la colonne Total) ont chacun un **toggle "Mode auto"** dans Réglages :
+- `maitriseColorsAuto` → palette `_defaultColorsForNb(nb)` regénérée à chaque save (suit `nbLevels`)
+- `noteThresholdsAuto` → seuils = midpoints entre `maitrisePoints`, couleurs = palette niveau
+
+Helper `_autoNoteThresholds(prefs)` renvoie le tableau dérivé. En mode auto, les pickers UI sont désactivés et un encart `↳` explique la dérivation.
+
+### Contraste texte / fond
+Helper **`_contrastTextColor(bg)`** (formule YIQ, threshold 150) renvoie `'var(--ink-deep)'` ou `'#fff'` selon la luminance. À utiliser dès qu'on pose un fond coloré (cellules tableur, badges, chips, total) pour rester lisible quel que soit la palette.
+
+### Sécurité (commit 8c881de)
+- `_validateImport` couvre désormais les sections `evaluations`, `competences`, `competenceDomains`, `evalCommentLibrary` + rejette explicitement `__proto__`, `constructor`, `prototype` (évite prototype pollution via JSON.parse).
+- `autoReloadCheck` passe le JSON rechargé depuis disque par `_validateImport` avant d'écraser `S` (cohérent avec l'import manuel).
+- `_deleteStudentInternal` nettoie `ev.notes[id]`, `ev.studentRemarks[id]` et `pass.niveaux[id]` dans toutes les évals → plus de saisies orphelines.
+
+### Fiabilité saisie
+- `migrateEvalDefaults` scrub chaque `ev` : type ∈ {A,B,C}, `miniNotes`/`passations`/`exercices` array, `notes` objet (évite crash 1er render sur JSON corrompu).
+- `beforeunload` flush les timers debouncés d'éval (`_evalTableurSaveTimer`, `_evalSaisieSaveTimer`, `_evalRemarkSaveTimer`, `_evalEditPerClassSaveTimer`, `_evalTableurPassEditTimer`) avant `save()`.
+- `autoReloadCheck` flush ces mêmes timers si `_evalTableurDirty || _evalSaisieDirty` AVANT de mesurer le pendingWarn.
+
+### A11y modales (commit 8c881de)
+`openMod` installe automatiquement `role="dialog"`, `aria-modal="true"` et un focus trap (Tab/Shift+Tab boucle sur les éléments focusables visibles de la modale). `closeMod`/`closeMod2` démontent le trap. Les inputs de saisie (tableur Type A/C/B), badges 💬, boutons icônes de la toolbar tableur ont un `aria-label` explicite.
+
+### Hors barème (commit f3e1371)
+Plus de `confirm()` bloquant : une note hors `[0, max]` est conservée d'office avec fond rose persistant + toast non-bloquant. Ctrl+Z l'annule grâce au système d'undo armé. `_evalTableurConfirmIfOutOfRange` est désormais un no-op (gardé pour compat HTML rendu).
 
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
