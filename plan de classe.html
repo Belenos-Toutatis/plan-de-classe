@@ -24646,7 +24646,7 @@ function _evalTableurRender() {
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
 
   // En-tête supplémentaire pour Type C avec exos : ligne des exercices avec colspan.
-  // Pour chaque exo : colspan = nb questions + 1 (le total exo dans la 2e ligne).
+  // Les Σ totaux d'exos sont REGROUPÉS APRÈS toutes les questions (pas interleavés).
   if (isTypeC && exoGroups.length > 0) {
     html += '<tr>';
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
@@ -24655,8 +24655,10 @@ function _evalTableurRender() {
       const cur = g.id ? 'cursor:context-menu;' : '';
       const exo = g.id ? ev.exercices?.find(e => e.id === g.id) : null;
       const tip = exo?.name ? `${g.label} — ${exo.name}` : g.label;
-      html += `<th colspan="${g.span + 1}"${ctxAttr} style="${cur}padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(tip)}${g.id ? ' — clic droit : éditer / supprimer' : ''}">${_esc(g.label)}</th>`;
+      html += `<th colspan="${g.span}"${ctxAttr} style="${cur}padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(tip)}${g.id ? ' — clic droit : éditer / supprimer' : ''}">${_esc(g.label)}</th>`;
     }
+    // Bandeau "Totaux exercices" regroupant tous les Σ
+    html += `<th colspan="${exoGroups.length}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);background:var(--paper-deep);border-left:2px solid var(--ink-blue-soft)" title="Total brut par exercice">Totaux exercices</th>`;
     if (showBruteCol) {
       html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;border-left:2px solid var(--ink-blue-soft)" title="Total brut (somme des exercices) sur le barème additionné">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${maxBrut}</span></th>`;
     }
@@ -24697,16 +24699,15 @@ function _evalTableurRender() {
       ${dateInput}
       ${isTypeC ? _evalTableurCompPickerHTML(mn) : ''}
     </th>`;
-    // Type C avec exos : injecter une colonne Σ "Total exo" après la dernière question
-    // de chaque exo (séparateur visuel léger à gauche).
-    if (isTypeC && exoGroups.length > 0) {
-      const next = orderedMNs[ci + 1];
-      if (!next || next.exerciceId !== mn.exerciceId) {
-        const exoMax = exoMaxes[mn.exerciceId || '__orphans__'] || 0;
-        html += `<th class="meval-exo-total-head" style="padding:4px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-deep);border-left:1px dashed var(--rule-line);font-size:.85em" title="Total de l'exercice (sur ${exoMax})">Σ<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/${exoMax}</span></th>`;
-      }
-    }
   });
+  // Type C avec exos : colonnes Σ regroupées APRÈS toutes les questions
+  if (isTypeC && exoGroups.length > 0) {
+    exoGroups.forEach((g, gi) => {
+      const exoMax = exoMaxes[g.id || '__orphans__'] || 0;
+      const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
+      html += `<th class="meval-exo-total-head" style="padding:4px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-deep);${borderLeft}font-size:.85em" title="Total ${_esc(g.label)} (sur ${exoMax})">Σ ${_esc(g.label)}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/${exoMax}</span></th>`;
+    });
+  }
   if (!isTypeC || exoGroups.length === 0) {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
     // Compétences inline (Type C sans exos)
@@ -24748,20 +24749,20 @@ function _evalTableurRender() {
         : '';
       const ariaLbl = `Note de ${stu.prenom || ''} ${stu.nom || ''} sur ${_esc(mn.label || '')} (sur ${mn.max})`;
       html += `<td style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="width:46px;padding:2px 3px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
-      // Type C avec exos : Σ exo après la dernière question de chaque exo
-      if (isTypeC && exoGroups.length > 0) {
-        const next = mnOrder[ci + 1];
-        if (!next || next.exerciceId !== mn.exerciceId) {
-          const sum = _computeStudentExoSum(ev, sid, mn.exerciceId);
-          const max = exoMaxes[mn.exerciceId || '__orphans__'] || 0;
-          const sbg = (sum != null && max > 0) ? _noteColor(sum, max) : '';
-          const sCol = sbg ? _contrastTextColor(sbg) : 'var(--ink-blue)';
-          const txt = sum == null ? '—' : _fmtNote(sum);
-          const exoLabel = mn.exerciceId ? `de l’exercice` : 'des questions orphelines';
-          html += `<td class="meval-exo-total-cell" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;font-size:.88em;background:${sbg || 'var(--paper-deep)'};color:${sCol};border-left:1px dashed var(--rule-line)" title="Total ${exoLabel} : ${txt}/${max}">${txt}</td>`;
-        }
-      }
     });
+    // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
+    if (isTypeC && exoGroups.length > 0) {
+      exoGroups.forEach((g, gi) => {
+        const sum = _computeStudentExoSum(ev, sid, g.id);
+        const max = exoMaxes[g.id || '__orphans__'] || 0;
+        const sbg = (sum != null && max > 0) ? _noteColor(sum, max) : '';
+        const sCol = sbg ? _contrastTextColor(sbg) : 'var(--ink-blue)';
+        const txt = sum == null ? '—' : _fmtNote(sum);
+        const exoLabel = g.id ? `de ${_esc(g.label)}` : 'des questions orphelines';
+        const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
+        html += `<td class="meval-exo-total-cell" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;font-size:.88em;background:${sbg || 'var(--paper-deep)'};color:${sCol};${borderLeft}" title="Total ${exoLabel} : ${txt}/${max}">${txt}</td>`;
+      });
+    }
     // Total brut (somme sur tous les exos) — colonne séparée si maxBrut !== noteMax
     if (showBruteCol) {
       const brut = _computeStudentNoteBrut(ev, sid);
@@ -24806,19 +24807,19 @@ function _evalTableurRender() {
   html += '</tbody><tfoot>';
   html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line);position:sticky;bottom:0;z-index:2">';
   html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
-  mnOrder.forEach((mn, ci) => {
+  mnOrder.forEach((mn) => {
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mn.id])
                      .filter(v => typeof v === 'number');
     html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm)">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
-    // Cellule Σ exo correspondante en footer (stats sur les totaux d'exo)
-    if (isTypeC && exoGroups.length > 0) {
-      const next = mnOrder[ci + 1];
-      if (!next || next.exerciceId !== mn.exerciceId) {
-        const sumsExo = sids.map(sid => _computeStudentExoSum(ev, sid, mn.exerciceId)).filter(v => typeof v === 'number');
-        html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);border-left:1px dashed var(--rule-line)">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v) })}</td>`;
-      }
-    }
   });
+  // Type C avec exos : stats Σ par exo regroupées en footer
+  if (isTypeC && exoGroups.length > 0) {
+    exoGroups.forEach((g, gi) => {
+      const sumsExo = sids.map(sid => _computeStudentExoSum(ev, sid, g.id)).filter(v => typeof v === 'number');
+      const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
+      html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);${borderLeft}">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v) })}</td>`;
+    });
+  }
   // Total brut (si colonne visible)
   if (showBruteCol) {
     const brutVals = sids.map(sid => _computeStudentNoteBrut(ev, sid)).filter(v => typeof v === 'number');
@@ -26052,14 +26053,19 @@ function _contrastTextColor(bg) {
   return yiq >= 150 ? 'var(--ink-deep)' : '#fff';
 }
 
-// Renvoie une couleur en dégradé bleu pur (rang 1) → vert pur (médiane) → rouge pur (dernier rang).
-// Interpolation linéaire en HSL : hue 240° (#0000ff) → 120° (#00ff00) → 0° (#ff0000).
+// Renvoie une couleur en dégradé bleu (rang 1) → vert (médiane) → rouge (dernier rang).
+// En thème CLAIR : couleurs vives (saturation 100%, lightness 42%).
+// En thème SOMBRE : couleurs assourdies pour rester harmonieuses avec le fond
+// bleu nuit (saturation 50%, lightness 32%).
 function _rankGradientColor(rang, total) {
   if (rang == null || total == null || total <= 0) return '';
-  if (total <= 1) return 'hsl(240, 100%, 45%)';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const s = isDark ? 50 : 100;
+  const l = isDark ? 32 : 42;
+  if (total <= 1) return `hsl(240, ${s}%, ${l}%)`;
   const ratio = Math.max(0, Math.min(1, (rang - 1) / (total - 1)));
   const hue = 240 * (1 - ratio); // 240 → 0 en passant par 120 à ratio=0.5
-  return `hsl(${hue.toFixed(0)}, 100%, 42%)`;
+  return `hsl(${hue.toFixed(0)}, ${s}%, ${l}%)`;
 }
 
 // Renvoie la couleur de fond pour une note donnée, selon S.evalPrefs.noteThresholds.
@@ -28334,10 +28340,13 @@ function renderCompetencesTab() {
     } else {
       html += '<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
     }
-    // Colonne Remarque
+    // Colonne Remarque (textarea auto-grow + compteur 600 caractères pour ENT)
     const remarqueC = _getBulletinRemarque(cls.id, sid, periode);
-    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bg}">
-      <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(periode || '')}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" style="width:100%;min-width:200px;padding:3px 6px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.3;resize:vertical;min-height:24px" title="Brouillon de remarque pour le bulletin (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+    const remLenC = remarqueC.length;
+    const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
+    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bg};position:relative">
+      <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(periode || '')}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+      <span class="${counterClsC}" data-counter-for="${_esc(sid)}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
     </td>`;
     html += '</tr>';
   }
