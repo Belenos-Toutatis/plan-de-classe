@@ -1007,24 +1007,27 @@ html[data-theme="dark"] #mlinks-list > div[style*="background:#fafafa"] { backgr
 .pass-code-chip { background: var(--ink-blue); color: var(--paper); }
 html[data-theme="dark"] .pass-code-chip { background: #3b5a8c !important; color: var(--ink-deep) !important; }
 
-/* Tableur Type B — select de compétence : compact en mode fermé, le navigateur
-   tronque visuellement le "— nom long" qui reste visible quand le dropdown s'ouvre.
-   Largeur calibrée pour afficher au moins le code court (3-4 caractères + flèche)
-   et qu'on ne tronque pas accidentellement le code lui-même en "c.". */
-.meval-comp-select {
-  padding: 2px 2px;
+/* Tableur Type B — chip code court compétence : clic = ouvre le picker
+   multi-sélection (comme Type C) via la modale Passation. */
+.meval-comp-chip {
+  display: inline-block;
+  padding: 2px 8px;
   font-family: var(--font-mono);
-  font-weight: 600;
-  border: 1px solid transparent;
-  background: transparent;
-  font-size: .92em;
-  width: 70px;
-  max-width: 70px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 700;
+  color: var(--ink-blue);
+  background: var(--paper);
+  border: 1px solid var(--rule-line);
+  border-radius: 10px;
+  font-size: .88em;
+  cursor: pointer;
+  min-width: 36px;
+  transition: background .12s, border-color .12s, transform .08s;
 }
-html[data-theme="dark"] .meval-comp-select { color: var(--ink-blue) !important; }
-html[data-theme="dark"] .meval-comp-select option { background: var(--paper-warm); color: var(--ink-deep); }
+.meval-comp-chip:hover { background: var(--paper-warm); border-color: var(--ink-blue); transform: translateY(-1px); }
+.meval-comp-chip:active { transform: translateY(0); }
+.meval-comp-chip.empty { color: var(--pencil); border-style: dashed; }
+html[data-theme="dark"] .meval-comp-chip { background: var(--paper-deep) !important; color: #9fc8d8 !important; border-color: var(--rule-line) !important; }
+html[data-theme="dark"] .meval-comp-chip:hover { background: #1c2e4a !important; border-color: #3b5a8c !important; }
 
 /* Cellule du tableur d'éval focus — bordure intérieure sans changer le fond.
    La couleur de texte reste calculée par _contrastTextColor (set inline JS) pour
@@ -25758,36 +25761,23 @@ function _evalTableurRenderB(ev, cls) {
   html += `<th rowspan="2" style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
   html += '</tr>';
 
-  // Ligne 2 : codes de compétence par passation (éditables via <select>)
-  // Précompute la liste des compétences disponibles (tri par code)
-  const allComps = Object.values(S.competences || {}).slice()
-    .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
+  // Ligne 2 : codes de compétence par passation (clic = ouvre la modale Passation
+  // qui contient le picker multi-sélection identique au Type C — chips avec cases
+  // à cocher, tri par code ou par domaine).
   html += '<tr>';
   for (const p of sortedPass) {
     const compIds = p.competenceIds || [];
     for (const cid of compIds) {
       const c = S.competences?.[cid];
-      let opts = '';
-      for (const cc of allComps) {
-        // Ne propose pas les comps déjà choisies dans CETTE passation (sauf la courante)
-        if (cc.id !== cid && compIds.includes(cc.id)) continue;
-        const sel = (cc.id === cid) ? ' selected' : '';
-        // TOUTES les options affichent "code — nom" pour qu'à l'ouverture du dropdown
-        // on voie aussi le descriptif de la compétence ACTUELLEMENT sélectionnée. Le
-        // <select> fermé tronque visuellement à 54px via CSS (overflow:hidden côté
-        // navigateur), donc on n'a que le code visible en mode compact.
-        const labelText = `${_esc(cc.code)}${cc.name ? ' — ' + _esc(cc.name) : ''}`;
-        opts += `<option value="${_esc(cc.id)}"${sel} title="${_esc(cc.name || '')}">${labelText}</option>`;
-      }
-      html += `<th style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;width:54px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c?.name || '')}">
-        <select data-passid="${_esc(p.id)}" data-cid="${_esc(cid)}"
-                onchange="_evalTableurChangeComp(this)"
-                class="meval-comp-select"
-                title="${_esc(c?.name || c?.code || '')} — changer la compétence (les niveaux saisis seront proposés en transfert)">${opts}</select>
+      const compTip = c ? `${c.code}${c.name ? ' — ' + c.name : ''}\n\nClic pour ouvrir le picker multi-sélection de la passation` : 'Clic pour modifier les compétences de la passation';
+      html += `<th class="meval-comp-chip-cell" style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;width:54px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">
+        <button type="button" class="meval-comp-chip" onclick="_evalTableurOpenPassPicker('${_esc(p.id)}')" title="${_escAttr(compTip)}">${_esc(c?.code || '?')}</button>
       </th>`;
     }
     if (compIds.length === 0) {
-      html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-style:italic;color:var(--pencil);font-size:.82em">—</th>`;
+      html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-style:italic;color:var(--pencil);font-size:.82em">
+        <button type="button" class="meval-comp-chip empty" onclick="_evalTableurOpenPassPicker('${_esc(p.id)}')" title="Aucune compétence — clic pour en ajouter">+</button>
+      </th>`;
     }
   }
   html += '</tr></thead><tbody>';
@@ -26171,6 +26161,20 @@ function _evalTableurEditPass(inputEl) {
   ev.date = (ev.passations || []).reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
   if (_evalTableurPassEditTimer) clearTimeout(_evalTableurPassEditTimer);
   _evalTableurPassEditTimer = setTimeout(() => save(), 600);
+}
+
+// Type B : ouverture du picker multi-sélection des compétences d'une passation
+// depuis le tableur (clic sur un code court de comp). Réutilise la modale
+// meval-pass-new en mode édition (qui embarque le picker à chips comme Type C).
+// Si à la fermeture, des compétences ont été retirées et avaient des niveaux
+// saisis, on prévient l'utilisateur (les niveaux orphelins sont conservés en
+// base mais cachés — réapparaissent si la comp est re-ajoutée).
+function _evalTableurOpenPassPicker(passId) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || ev.type !== 'B') return;
+  if (!ev.passations?.some(p => p.id === passId)) return;
+  _evalAddPassation(passId);
 }
 
 // Édition inline de la compétence affectée à une cellule (Type B).
