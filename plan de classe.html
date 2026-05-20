@@ -24628,29 +24628,46 @@ function _evalTableurRender() {
   } else {
     orderedMNs = ev.miniNotes;
   }
+  // Type C avec exos : total brut sur barème additionné, affiché en colonne séparée
+  // SEULEMENT si différent de ev.noteMax (sinon la colonne ferait doublon avec Note /20)
+  const exoMaxes = {};
+  let maxBrut = 0;
+  if (isTypeC && exoGroups.length > 0) {
+    for (const g of exoGroups) {
+      let sum = 0;
+      for (const mn of orderedMNs) { if (mn.exerciceId === g.id) sum += (mn.max || 0); }
+      exoMaxes[g.id || '__orphans__'] = sum;
+      maxBrut += sum;
+    }
+  }
+  const showBruteCol = isTypeC && exoGroups.length > 0 && maxBrut !== (ev.noteMax || 20) && maxBrut > 0;
 
   let html = '<table id="meval-tableur-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
 
-  // En-tête supplémentaire pour Type C : ligne des exercices avec colspan
+  // En-tête supplémentaire pour Type C avec exos : ligne des exercices avec colspan.
+  // Pour chaque exo : colspan = nb questions + 1 (le total exo dans la 2e ligne).
   if (isTypeC && exoGroups.length > 0) {
     html += '<tr>';
     html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
     for (const g of exoGroups) {
       const ctxAttr = g.id ? ` oncontextmenu="event.preventDefault();_tableurExoContextMenu(event,'${_esc(g.id)}')"` : '';
       const cur = g.id ? 'cursor:context-menu;' : '';
-      // Récupère le descriptif optionnel
       const exo = g.id ? ev.exercices?.find(e => e.id === g.id) : null;
       const tip = exo?.name ? `${g.label} — ${exo.name}` : g.label;
-      html += `<th colspan="${g.span}"${ctxAttr} style="${cur}padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(tip)}${g.id ? ' — clic droit : éditer / supprimer' : ''}">${_esc(g.label)}</th>`;
+      html += `<th colspan="${g.span + 1}"${ctxAttr} style="${cur}padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(tip)}${g.id ? ' — clic droit : éditer / supprimer' : ''}">${_esc(g.label)}</th>`;
     }
-    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
-    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
-    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève">📝 Remarque</th>`;
+    if (showBruteCol) {
+      html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;border-left:2px solid var(--ink-blue-soft)" title="Total brut (somme des exercices) sur le barème additionné">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${maxBrut}</span></th>`;
+    }
+    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600${showBruteCol ? '' : ';border-left:2px solid var(--ink-blue-soft)'}" title="Note finale ramenée sur ${ev.noteMax}">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
     // Compétences inline (Type C avec exos)
     for (const c of inlineComps) {
       html += `<th rowspan="2" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${_esc(c.code)}</th>`;
     }
+    // Remarque puis Rattrapage (en derniers)
+    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève">📝 Remarque</th>`;
+    html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
     html += '</tr>';
   }
 
@@ -24658,10 +24675,8 @@ function _evalTableurRender() {
   if (!isTypeC || exoGroups.length === 0) {
     html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
   }
-  orderedMNs.forEach((mn) => {
+  orderedMNs.forEach((mn, ci) => {
     const tooltip = mn.name ? `${mn.label || '?'} — ${mn.name}` : (mn.label || '(sans nom)');
-    // Type C : sommatif → pas de date par question (date globale uniquement, rattrapage = par élève)
-    // Type A : la date peut être propre à chaque classe en mode multi-classes (mn.dates[classId])
     const mnDate = _mnDateFor(mn, cls.id);
     const dateInput = isTypeC ? '' : `<input type="date" value="${_esc(mnDate)}" data-mnid="${_esc(mn.id)}" data-field="date" data-classid="${_esc(cls.id)}"
              onchange="_tableurEditMn(this)"
@@ -24682,18 +24697,26 @@ function _evalTableurRender() {
       ${dateInput}
       ${isTypeC ? _evalTableurCompPickerHTML(mn) : ''}
     </th>`;
+    // Type C avec exos : injecter une colonne Σ "Total exo" après la dernière question
+    // de chaque exo (séparateur visuel léger à gauche).
+    if (isTypeC && exoGroups.length > 0) {
+      const next = orderedMNs[ci + 1];
+      if (!next || next.exerciceId !== mn.exerciceId) {
+        const exoMax = exoMaxes[mn.exerciceId || '__orphans__'] || 0;
+        html += `<th class="meval-exo-total-head" style="padding:4px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-deep);border-left:1px dashed var(--rule-line);font-size:.85em" title="Total de l'exercice (sur ${exoMax})">Σ<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/${exoMax}</span></th>`;
+      }
+    }
   });
   if (!isTypeC || exoGroups.length === 0) {
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
-    // Type C sans exos : ajoute la colonne Rattrapage à droite du Total
-    if (isTypeC) {
-      html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
-    }
-    // Colonne Remarque (facultative, par élève — Type A et Type C)
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
-    // Type C : colonnes inline pour chaque compétence évaluée
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+    // Compétences inline (Type C sans exos)
     for (const c of inlineComps) {
       html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${_esc(c.code)}</th>`;
+    }
+    // Remarque puis Rattrapage (Type C : avec rattrapage en dernier)
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
+    if (isTypeC) {
+      html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
     }
   }
   html += '</tr></thead><tbody>';
@@ -24712,16 +24735,12 @@ function _evalTableurRender() {
       const dispVal = (v === 'NN') ? (S.evalPrefs?.codeNonNote || 'NN')
                     : (v === 'A')  ? (S.evalPrefs?.codeAbsent  || 'A')
                     : (v != null && v !== '' ? String(v).replace('.', ',') : '');
-      // Couleur de fond selon le ratio v/mn.max ramené sur /20, via les seuils
-      // configurés (S.evalPrefs.noteThresholds). 'NN' = neutre, 'A' = gris.
       let cellBg = '';
       if (v === 'A') cellBg = '#9ca3af';
       else if (typeof v === 'number' && mn.max > 0) {
         cellBg = _noteColor(v, mn.max) || '';
       }
-      // Texte adapté au fond (luminance)
       const cellColor = _contrastTextColor(cellBg);
-      // Indicateur commentaires : si présents, montre un mini badge cliquable + clic droit sur la cellule
       const stuComments = ev.notes?.[sid]?.comments?.[mn.id] || [];
       const nbCom = stuComments.length;
       const badge = nbCom > 0
@@ -24729,78 +24748,139 @@ function _evalTableurRender() {
         : '';
       const ariaLbl = `Note de ${stu.prenom || ''} ${stu.nom || ''} sur ${_esc(mn.label || '')} (sur ${mn.max})`;
       html += `<td style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="width:46px;padding:2px 3px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      // Type C avec exos : Σ exo après la dernière question de chaque exo
+      if (isTypeC && exoGroups.length > 0) {
+        const next = mnOrder[ci + 1];
+        if (!next || next.exerciceId !== mn.exerciceId) {
+          const sum = _computeStudentExoSum(ev, sid, mn.exerciceId);
+          const max = exoMaxes[mn.exerciceId || '__orphans__'] || 0;
+          const sbg = (sum != null && max > 0) ? _noteColor(sum, max) : '';
+          const sCol = sbg ? _contrastTextColor(sbg) : 'var(--ink-blue)';
+          const txt = sum == null ? '—' : _fmtNote(sum);
+          const exoLabel = mn.exerciceId ? `de l’exercice` : 'des questions orphelines';
+          html += `<td class="meval-exo-total-cell" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;font-size:.88em;background:${sbg || 'var(--paper-deep)'};color:${sCol};border-left:1px dashed var(--rule-line)" title="Total ${exoLabel} : ${txt}/${max}">${txt}</td>`;
+        }
+      }
     });
+    // Total brut (somme sur tous les exos) — colonne séparée si maxBrut !== noteMax
+    if (showBruteCol) {
+      const brut = _computeStudentNoteBrut(ev, sid);
+      const bbg = (brut != null) ? _noteColor(brut, maxBrut) : '';
+      const bCol = bbg ? _contrastTextColor(bbg) : 'var(--ink-blue)';
+      html += `<td style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bbg || 'var(--paper-warm)'};color:${bCol};border-left:2px solid var(--ink-blue-soft)" title="Total brut sur ${maxBrut}">${brut != null ? _fmtNote(brut) : '—'}</td>`;
+    }
+    // Note finale (proportionnée à ev.noteMax)
     const total = _computeStudentEvalNote(ev, sid);
     const disp = _studentNoteDisplay(ev, sid);
     let totalBg, totalColor;
-    if (disp.kind === 'num') {
-      totalBg = _noteColor(total, ev.noteMax);
-    } else if (disp.kind === 'A') {
-      totalBg = '#9ca3af';
-    } else if (disp.kind === 'NN') {
-      totalBg = 'var(--paper-warm)';
-    } else {
-      totalBg = '';
-    }
+    if (disp.kind === 'num') totalBg = _noteColor(total, ev.noteMax);
+    else if (disp.kind === 'A') totalBg = '#9ca3af';
+    else if (disp.kind === 'NN') totalBg = 'var(--paper-warm)';
+    else totalBg = '';
     totalColor = totalBg ? _contrastTextColor(totalBg) : 'var(--ink-blue)';
-    html += `<td class="meval-row-total" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow}" data-sid="${_esc(sid)}">${disp.text}</td>`;
-    // Type C : cellule Date rattrapage par élève
-    if (isTypeC) {
-      const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
-      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><input type="date" value="${_esc(dateIndiv)}" data-sid="${_esc(sid)}" onchange="_evalSetDateIndiv(this)" style="padding:2px 4px;font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px" title="Date individuelle pour cet élève (rattrapage après absence). Vide = date globale de l'éval."></td>`;
-    }
-    // Cellule Remarque (par élève — Type A et Type C)
-    const remark = ev.studentRemarks?.[sid] || '';
-    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="Remarque facultative pour cet élève"></td>`;
-    // Type C : cellules inline niveau par compétence (calculées automatiquement depuis les saisies)
+    const noteBorderLeft = showBruteCol ? '' : 'border-left:2px solid var(--ink-blue-soft);';
+    html += `<td class="meval-row-total" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${noteBorderLeft}" data-sid="${_esc(sid)}">${disp.text}</td>`;
+    // Compétences inline (Type C : niveau atteint par compétence évaluée)
     if (isTypeC && inlineComps.length > 0) {
       const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
       for (const c of inlineComps) {
         const niv = _evalStudentLevelForComp(ev, sid, c.id);
         const isNull = (niv == null);
-        const dispVal = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
+        const dispNiv = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
         const cellBg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
         const cellColor = _contrastTextColor(cellBg);
-        html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispVal}</td>`;
+        html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
       }
+    }
+    // Remarque (Type A et Type C)
+    const remark = ev.studentRemarks?.[sid] || '';
+    html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="Remarque facultative pour cet élève"></td>`;
+    // Rattrapage (Type C — en dernier, après les compétences et la remarque)
+    if (isTypeC) {
+      const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
+      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><input type="date" value="${_esc(dateIndiv)}" data-sid="${_esc(sid)}" onchange="_evalSetDateIndiv(this)" style="padding:2px 4px;font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px" title="Date individuelle pour cet élève (rattrapage après absence). Vide = date globale de l'éval."></td>`;
     }
     html += '</tr>';
   });
   // ─── Pied de tableau : statistiques par colonne (sticky en bas) ───
-  // tfoot avec position:sticky pour rester visible au scroll long.
   html += '</tbody><tfoot>';
   html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line);position:sticky;bottom:0;z-index:2">';
   html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
-  mnOrder.forEach((mn) => {
+  mnOrder.forEach((mn, ci) => {
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mn.id])
                      .filter(v => typeof v === 'number');
     html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm)">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
+    // Cellule Σ exo correspondante en footer (stats sur les totaux d'exo)
+    if (isTypeC && exoGroups.length > 0) {
+      const next = mnOrder[ci + 1];
+      if (!next || next.exerciceId !== mn.exerciceId) {
+        const sumsExo = sids.map(sid => _computeStudentExoSum(ev, sid, mn.exerciceId)).filter(v => typeof v === 'number');
+        html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);border-left:1px dashed var(--rule-line)">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v) })}</td>`;
+      }
+    }
   });
-  // Colonne Total : stats complètes
-  // Notes finales arrondies à la granulométrie configurée pour cohérence avec
-  // l'affichage de la colonne Total
+  // Total brut (si colonne visible)
+  if (showBruteCol) {
+    const brutVals = sids.map(sid => _computeStudentNoteBrut(ev, sid)).filter(v => typeof v === 'number');
+    html += `<td style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)">${_statsCellHTML(brutVals, { fullStats: true, halfMax: maxBrut / 2 })}</td>`;
+  }
+  // Note finale /noteMax : stats complètes
   const totals = sids.map(sid => {
     const raw = _computeStudentEvalNote(ev, sid);
     return raw == null ? null : _roundNoteToGranularity(raw, ev);
   }).filter(v => v != null);
-  html += `<td style="padding:4px 8px;vertical-align:top;background:var(--paper-warm)">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
-  if (isTypeC) {
-    // Pas de stats pour la colonne Rattrapage (dates) + Remarque
-    html += '<td style="background:var(--paper-warm)"></td>';
-    html += '<td style="background:var(--paper-warm)"></td>';
-    // Stats pour chaque compétence inline (niveau moyen)
+  const noteFootBorder = showBruteCol ? '' : 'border-left:2px solid var(--ink-blue-soft);';
+  html += `<td style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);${noteFootBorder}">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
+  // Compétences inline (Type C)
+  if (isTypeC && inlineComps.length > 0) {
     for (const c of inlineComps) {
       const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, c.id))
                        .filter(v => typeof v === 'number');
       html += `<td style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
     }
-  } else if (ev.type === 'A') {
-    // Remarque (Type A)
-    html += '<td style="background:var(--paper-warm)"></td>';
   }
+  // Remarque (Type A et Type C)
+  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
+  // Rattrapage (Type C)
+  if (isTypeC) html += '<td style="background:var(--paper-warm)"></td>';
   html += '</tr>';
   html += '</tfoot></table>';
   wrap.innerHTML = html;
+}
+
+// Helpers Type C : somme brute par exo + somme brute totale (toutes mn confondues).
+// Exclut les saisies 'NN', 'A', vides, et les questions explicitement exclues par
+// l'élève (ev.notes[sid].excluded[]).
+function _computeStudentExoSum(ev, sid, exoId) {
+  const values = ev.notes?.[sid]?.values || {};
+  const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+  let sum = 0, hasValue = false;
+  for (const mn of (ev.miniNotes || [])) {
+    if (mn.exerciceId !== exoId) continue;
+    if (excluded.has(mn.id)) continue;
+    const v = values[mn.id];
+    if (v === 'NN' || v === 'A' || v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) continue;
+    sum += n;
+    hasValue = true;
+  }
+  return hasValue ? sum : null;
+}
+function _computeStudentNoteBrut(ev, sid) {
+  const values = ev.notes?.[sid]?.values || {};
+  const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+  let sum = 0, hasValue = false;
+  for (const mn of (ev.miniNotes || [])) {
+    if (excluded.has(mn.id)) continue;
+    const v = values[mn.id];
+    if (v === 'NN' || v === 'A' || v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) continue;
+    sum += n;
+    hasValue = true;
+  }
+  return hasValue ? sum : null;
 }
 
 // HTML d'un mini-picker de compétence à afficher sous chaque en-tête de
