@@ -1041,6 +1041,35 @@ html[data-theme="dark"] .meval-niveau-input:focus {
   box-shadow: inset 0 0 0 2px #88c8ff;
 }
 
+/* Bilan — wrapper scrollable : seules les lignes élèves scrollent, en-têtes et
+   pied de stats restent visibles grâce à position:sticky. Le fond du tfoot
+   est légèrement décalé du tbody pour bien le différencier visuellement. */
+.bilan-table-scroll tfoot td,
+.bilan-table-scroll tfoot th { background: var(--paper-deep) !important; box-shadow: inset 0 2px 0 var(--ink-blue-soft); }
+html[data-theme="dark"] .bilan-table-scroll tfoot td,
+html[data-theme="dark"] .bilan-table-scroll tfoot th { background: #1f2630 !important; box-shadow: inset 0 2px 0 var(--ink-blue) !important; }
+
+/* Bilan — section sous le tableau (remarque classe + éléments travaillés) */
+.bilan-bottom-card {
+  padding: 10px 14px;
+  background: var(--paper-warm);
+  border: 1px solid var(--rule-line);
+  border-radius: 4px;
+}
+.bilan-bottom-title {
+  font-family: var(--font-serif);
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--ink-blue);
+  margin-bottom: 8px;
+}
+.bilan-class-rem-textarea { color: var(--ink-deep); }
+html[data-theme="dark"] .bilan-class-rem-textarea {
+  background: var(--paper-deep) !important;
+  border-color: var(--rule-line) !important;
+  color: var(--ink-deep) !important;
+}
+
 /* Bilan — bandeau "Colonnes masquées" + chips pour réafficher */
 .bilan-hidden-banner {
   background: var(--paper-warm);
@@ -27934,7 +27963,9 @@ function renderBilanTab() {
       return `${lbl} ${per}`;
     });
   }
-  html += '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
+  // Wrapper avec max-height : permet aux thead/tfoot sticky de fonctionner.
+  // Le tableau seul scrolle verticalement, les titres et stats restent visibles.
+  html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
   html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px">Élève</th>';
@@ -28103,10 +28134,15 @@ function renderBilanTab() {
   html += '</tr></tfoot>';
   html += '</table></div>';
 
+  // Bloc "Remarque classe + Éléments travaillés" en bas du tableau
+  // (1 paire par période si "Toutes", sinon 1 paire)
+  const _periodesForBottom = synthData.map(sd => sd.perCode);
+  html += _renderBilanBottomSection(cls.id, _periodesForBottom);
   // Stocker l'état pour copy/csv
   wrap.dataset.periode = periode;
   wrap.innerHTML = html + '<div id="bilan-extra"></div>';
   _initBilanRemarques(wrap);
+  _initBilanClassRemarques(wrap);
 }
 
 // Coef d'une évaluation édité depuis le pied du Bilan évaluations (header de
@@ -28340,6 +28376,165 @@ function _initBilanRemarques(rootEl) {
   });
 }
 
+// ═══════════════ Remarque générale CLASSE (par période) ═══════════════
+// Différente de la remarque par élève. Texte de synthèse de niveau classe partagée
+// par les 2 onglets bilan.
+// Stocké dans S.bulletinClassRemarques[classId][periode] = "texte"
+function _getBulletinClassRemarque(classId, periode) {
+  return S.bulletinClassRemarques?.[classId]?.[periode || ''] || '';
+}
+function _setBulletinClassRemarque(classId, periode, text) {
+  if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
+  if (!S.bulletinClassRemarques[classId]) S.bulletinClassRemarques[classId] = {};
+  const v = (text || '').trim();
+  if (v) S.bulletinClassRemarques[classId][periode || ''] = v;
+  else delete S.bulletinClassRemarques[classId][periode || ''];
+  if (_bulletinClassRemarqueSaveTimer) clearTimeout(_bulletinClassRemarqueSaveTimer);
+  _bulletinClassRemarqueSaveTimer = setTimeout(() => save(), 600);
+}
+let _bulletinClassRemarqueSaveTimer = null;
+function _onBilanClassRemarqueInput(input) {
+  _setBulletinClassRemarque(input.getAttribute('data-cls'), input.getAttribute('data-periode'), input.value);
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+  const counter = input.parentElement?.querySelector('.bilan-rem-count');
+  if (counter) {
+    const len = input.value.length;
+    counter.textContent = `${len}/600`;
+    counter.classList.toggle('over', len > 600);
+  }
+}
+function _initBilanClassRemarques(rootEl) {
+  if (!rootEl) return;
+  rootEl.querySelectorAll('.bilan-class-rem-textarea').forEach(t => {
+    if (t.value) {
+      t.style.height = 'auto';
+      t.style.height = t.scrollHeight + 'px';
+    }
+  });
+}
+
+// ═══════════════ Éléments travaillés (par classe × période) ═══════════════
+// Liste éditable d'items (chapitres, séquences, thèmes…) cumulés au fil de la
+// période. Partagée par les 2 onglets bilan.
+// Stocké dans S.bulletinWorkedItems[classId][periode] = [item1, item2, ...]
+function _getBulletinWorkedItems(classId, periode) {
+  const arr = S.bulletinWorkedItems?.[classId]?.[periode || ''];
+  return Array.isArray(arr) ? arr : [];
+}
+function _setBulletinWorkedItems(classId, periode, items) {
+  if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
+  if (!S.bulletinWorkedItems[classId]) S.bulletinWorkedItems[classId] = {};
+  S.bulletinWorkedItems[classId][periode || ''] = items.slice();
+  if (_bulletinWorkedSaveTimer) clearTimeout(_bulletinWorkedSaveTimer);
+  _bulletinWorkedSaveTimer = setTimeout(() => save(), 400);
+}
+let _bulletinWorkedSaveTimer = null;
+function _bilanWorkedAdd(classId, periode) {
+  const items = _getBulletinWorkedItems(classId, periode);
+  pushUndo();
+  items.push('');
+  _setBulletinWorkedItems(classId, periode, items);
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+  if (typeof renderCompetencesTab === 'function') renderCompetencesTab();
+  // Focus le nouvel item
+  setTimeout(() => {
+    const tab = document.querySelector('.tab.on');
+    const inputs = tab?.querySelectorAll(`.bilan-worked-item input[data-cls="${CSS.escape(classId)}"][data-periode="${CSS.escape(periode || '')}"]`);
+    if (inputs && inputs.length > 0) inputs[inputs.length - 1].focus();
+  }, 50);
+}
+function _bilanWorkedUpdate(classId, periode, idx, value) {
+  const items = _getBulletinWorkedItems(classId, periode);
+  if (idx < 0 || idx >= items.length) return;
+  items[idx] = value;
+  _setBulletinWorkedItems(classId, periode, items);
+}
+function _bilanWorkedDelete(classId, periode, idx) {
+  const items = _getBulletinWorkedItems(classId, periode);
+  if (idx < 0 || idx >= items.length) return;
+  pushUndo();
+  items.splice(idx, 1);
+  _setBulletinWorkedItems(classId, periode, items);
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+  if (typeof renderCompetencesTab === 'function') renderCompetencesTab();
+}
+function _bilanWorkedCopy(classId, periode) {
+  const items = _getBulletinWorkedItems(classId, periode).filter(s => (s || '').trim());
+  if (!items.length) { toast('⚠ Aucun élément à copier', 'warn'); return; }
+  navigator.clipboard.writeText(items.join('\n')).then(
+    () => toast(`📋 ${items.length} élément${items.length > 1 ? 's' : ''} copié${items.length > 1 ? 's' : ''} (1 ligne par item, collable dans un tableur)`),
+    () => toast('⚠ Copie auto impossible', 'warn')
+  );
+}
+// Coller multi-lignes dans l'input d'un item travaillé
+function _onBilanWorkedPaste(e, input) {
+  const cd = e.clipboardData || window.clipboardData;
+  if (!cd) return;
+  const text = cd.getData('text');
+  if (!text) return;
+  const lines = text.split(/\r\n|\r|\n/);
+  while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  if (lines.length < 2) return;
+  e.preventDefault();
+  const classId = input.getAttribute('data-cls');
+  const periode = input.getAttribute('data-periode');
+  const idx = parseInt(input.getAttribute('data-idx'), 10);
+  if (isNaN(idx)) return;
+  const items = _getBulletinWorkedItems(classId, periode);
+  pushUndo();
+  // Replace from idx with N lines (étendre si besoin)
+  for (let i = 0; i < lines.length; i++) {
+    items[idx + i] = lines[i];
+  }
+  _setBulletinWorkedItems(classId, periode, items);
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+  if (typeof renderCompetencesTab === 'function') renderCompetencesTab();
+  toast(`📋 ${lines.length} élément${lines.length > 1 ? 's' : ''} collé${lines.length > 1 ? 's' : ''}`);
+}
+
+// Construit l'HTML du bloc "Remarque générale classe + Éléments travaillés"
+// pour une période donnée. Réutilisé par les 2 onglets bilan.
+function _renderBilanBottomSection(classId, periodes) {
+  let html = '<div class="bilan-bottom-section" style="margin-top:14px;display:flex;flex-direction:column;gap:14px">';
+  for (const per of periodes) {
+    const perLbl = per ? ` (${per})` : '';
+    // Remarque générale classe
+    const classRem = _getBulletinClassRemarque(classId, per);
+    const remLen = classRem.length;
+    const counterCls = remLen > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
+    html += `<div class="bilan-bottom-card">
+      <div class="bilan-bottom-title">📋 Remarque générale classe${perLbl}</div>
+      <div style="position:relative">
+        <textarea rows="2" data-cls="${_esc(classId)}" data-periode="${_esc(per || '')}" oninput="_onBilanClassRemarqueInput(this)" placeholder="Synthèse de niveau classe (climat, dynamique, points d'attention…) — partagée entre les 2 onglets bilan." class="bilan-class-rem-textarea" style="width:100%;padding:8px 12px;padding-right:60px;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);font-family:var(--font-sans);font-size:.92em;line-height:1.45;resize:none;min-height:48px;overflow:hidden" title="Brouillon de remarque générale pour la classe${perLbl}">${_esc(classRem)}</textarea>
+        <span class="${counterCls}" style="bottom:6px;right:8px">${remLen}/600</span>
+      </div>
+    </div>`;
+    // Éléments travaillés
+    const items = _getBulletinWorkedItems(classId, per);
+    let itemsHTML = '';
+    items.forEach((it, idx) => {
+      itemsHTML += `<div class="bilan-worked-item" style="display:flex;align-items:center;gap:6px">
+        <span style="color:var(--pencil);font-family:var(--font-mono);font-size:.82em;min-width:24px;text-align:right">${idx + 1}.</span>
+        <input type="text" data-cls="${_esc(classId)}" data-periode="${_esc(per || '')}" data-idx="${idx}" value="${_escAttr(it)}" oninput="_bilanWorkedUpdate('${_esc(classId)}','${_esc(per || '')}',${idx},this.value)" onpaste="_onBilanWorkedPaste(event,this)" placeholder="ex. Chapitre 3 — Énergie cinétique" style="flex:1;padding:4px 8px;border:1px solid var(--rule-line);border-radius:3px;font-family:var(--font-sans);font-size:.88em;background:var(--paper);color:var(--ink-deep)">
+        <button class="btn btn-d btn-sm" onclick="_bilanWorkedDelete('${_esc(classId)}','${_esc(per || '')}',${idx})" title="Supprimer cet élément" style="padding:2px 8px">✕</button>
+      </div>`;
+    });
+    html += `<div class="bilan-bottom-card">
+      <div class="bilan-bottom-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <span>📚 Éléments travaillés${perLbl} <span style="color:var(--pencil);font-weight:normal;font-size:.85em">(${items.length})</span></span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-g btn-sm" onclick="_bilanWorkedCopy('${_esc(classId)}','${_esc(per || '')}')" title="Copier la liste (1 ligne par item)">📋 Copier</button>
+          <button class="btn btn-p btn-sm" onclick="_bilanWorkedAdd('${_esc(classId)}','${_esc(per || '')}')">+ Ajouter</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">${itemsHTML || '<p style="color:var(--pencil);font-style:italic;font-size:.85em;margin:0">Aucun élément. Clique sur <strong>+ Ajouter</strong> ou colle une liste depuis un tableur (1 ligne par item).</p>'}</div>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
 // Colle un bloc multi-lignes (depuis Excel/LibreOffice/un tableur) dans une colonne
 // de remarques : la 1re ligne va dans la cellule courante, la 2e dans celle de
 // l'élève suivant, etc. Une remarque pouvant LÉGITIMEMENT contenir un retour à la
@@ -28469,7 +28664,7 @@ function renderCompetencesTab() {
       return `${lbl} ${per}`;
     });
   }
-  html += '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
+  html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
   html += '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
@@ -28695,8 +28890,13 @@ function renderCompetencesTab() {
   });
   html += '</div>';
 
+  // Bloc "Remarque classe + Éléments travaillés" en bas du tableau
+  // (1 paire par période si "Toutes", sinon 1 paire)
+  const _periodesForBottomC = compSynthPeriodes;
+  html += _renderBilanBottomSection(cls.id, _periodesForBottomC);
   wrap.innerHTML = html;
   _initBilanRemarques(wrap);
+  _initBilanClassRemarques(wrap);
   // Stocke l'état pour les exports
   _bilanCompState = { cls, periode, comps, sids, compMeans };
 }
