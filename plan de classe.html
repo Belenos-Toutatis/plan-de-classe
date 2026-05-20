@@ -1041,6 +1041,27 @@ html[data-theme="dark"] .meval-niveau-input:focus {
   box-shadow: inset 0 0 0 2px #88c8ff;
 }
 
+/* Bilan — bandeau "Colonnes masquées" + chips pour réafficher */
+.bilan-hidden-banner {
+  background: var(--paper-warm);
+  border: 1px dashed var(--rule-line);
+  border-radius: 4px;
+}
+.bilan-show-chip {
+  background: #e6f0fa;
+  color: var(--ink-blue);
+  border: 1px solid var(--ink-blue-soft);
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: .85em;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: background .12s;
+}
+.bilan-show-chip:hover { background: var(--ink-blue); color: var(--paper); }
+html[data-theme="dark"] .bilan-show-chip { background: #1c2e4a !important; color: var(--ink-deep) !important; border-color: #3b5a8c !important; }
+html[data-theme="dark"] .bilan-show-chip:hover { background: #3b5a8c !important; }
+
 /* Bilan évaluations — input coef sans spinner (saisie clavier directe) */
 .no-spinner::-webkit-outer-spin-button,
 .no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -24754,9 +24775,14 @@ function _evalTableurRender() {
         ? `<span class="tab-com-badge" role="button" tabindex="0" onclick="event.stopPropagation();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')}" title="${nbCom} commentaire${nbCom > 1 ? 's' : ''} — clic pour éditer" aria-label="${nbCom} commentaire${nbCom > 1 ? 's' : ''} sur cette note (Entrée pour éditer)" style="position:absolute;top:1px;right:1px;background:var(--margin-red);color:#fff;font-size:.65em;font-family:var(--font-mono);padding:0 4px;border-radius:8px;cursor:pointer;line-height:1.3">💬${nbCom > 1 ? nbCom : ''}</span>`
         : '';
       const ariaLbl = `Note de ${stu.prenom || ''} ${stu.nom || ''} sur ${_esc(mn.label || '')} (sur ${mn.max})`;
-      // Cellule saisie note : largeur compacte 36px en Type C (input + 1ch suffit)
-      const cellInpW = isTypeC ? '36px' : '46px';
-      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="width:${cellInpW};padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      // Cellule saisie note :
+      // - Type C : l'input remplit toute la largeur de la cellule (qui fait 70px max)
+      //   pour ne PAS tronquer les notes à virgule (ex. "12,5") quand on tape vite.
+      // - Type A : largeur fixe 46px (cellule peut être plus large à cause de la date).
+      const cellInpStyle = isTypeC
+        ? 'width:100%;min-width:0;box-sizing:border-box;'
+        : 'width:46px;';
+      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
     if (isTypeC && exoGroups.length > 0) {
@@ -27895,7 +27921,17 @@ function renderBilanTab() {
   const _refSynth = synthData[synthData.length - 1] || { studentMoy: new Map(), rankMap: new Map(), total: 0 };
   const totalRanked = _refSynth.total;
 
-  let html = '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
+  // Bandeau "Colonnes masquées" si applicable
+  let html = '';
+  if (synthData.length > 1) {
+    const allKeys = synthData.flatMap(sd => [`bilan:moy:${sd.perCode}`, `bilan:rang:${sd.perCode}`, `bilan:rem:${sd.perCode}`]);
+    html += _bilanHiddenBanner(allKeys, k => {
+      const [_, type, per] = k.split(':');
+      const lbl = ({ moy: 'Moyenne', rang: 'Rang', rem: 'Remarque' })[type] || type;
+      return `${lbl} ${per}`;
+    });
+  }
+  html += '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
   html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px">Élève</th>';
@@ -27913,19 +27949,31 @@ function renderBilanTab() {
       ${dateFr ? `<div style="font-size:.74em;color:var(--pencil-soft);font-weight:normal;font-family:var(--font-mono)">${_esc(dateFr)}</div>` : ''}
     </th>`;
   }
+  // Liste des clés de colonnes potentiellement masquables (uniquement en multi-période)
+  const isMulti = synthData.length > 1;
+  const moyKey = sd => `bilan:moy:${sd.perCode}`;
+  const rangKey = sd => `bilan:rang:${sd.perCode}`;
+  const remKey = sd => `bilan:rem:${sd.perCode}`;
   // Moyenne + Rang + Remarque — 1 colonne de chaque par période de synthèse
-  // (1 seule période sélectionnée OU N périodes si "Toutes")
   synthData.forEach((sd, sdIdx) => {
-    const suffix = synthData.length > 1 ? ` ${sd.perCode}` : '';
+    const suffix = isMulti ? ` ${sd.perCode}` : '';
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:80px;${sep}background:var(--paper-warm)">Moyenne${suffix}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/20</span></th>`;
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px;background:var(--paper-warm)" title="Rang sur ${sd.total} élève${sd.total > 1 ? 's' : ''} noté${sd.total > 1 ? 's' : ''}${suffix ? ' en' + suffix : ''}">Rang${suffix}</th>`;
+    if (!_isBilanColHidden(moyKey(sd))) {
+      const moyAttr = isMulti ? `onclick="_toggleBilanCol('${moyKey(sd)}')" style="cursor:pointer;` : 'style="';
+      html += `<th ${moyAttr}padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:80px;${sep}background:var(--paper-warm)" title="${isMulti ? 'Cliquer pour masquer cette colonne · ' : ''}Moyenne classe sur 20${suffix}">Moyenne${suffix}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/20</span></th>`;
+    }
+    if (!_isBilanColHidden(rangKey(sd))) {
+      const rngAttr = isMulti ? `onclick="_toggleBilanCol('${rangKey(sd)}')" style="cursor:pointer;` : 'style="';
+      html += `<th ${rngAttr}padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:60px;background:var(--paper-warm)" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Rang sur ${sd.total} élève${sd.total > 1 ? 's' : ''} noté${sd.total > 1 ? 's' : ''}${suffix ? ' en' + suffix : ''}">Rang${suffix}</th>`;
+    }
   });
   // Remarque(s) — 1 par période de synthèse aussi
   synthData.forEach((sd, sdIdx) => {
+    if (_isBilanColHidden(remKey(sd))) return;
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-    const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : (periode ? ' (' + periode + ')' : '');
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan par compétences.">📝 Remarque${suffix}</th>`;
+    const suffix = isMulti ? ' (' + sd.perCode + ')' : (periode ? ' (' + periode + ')' : '');
+    const remAttr = isMulti ? `onclick="_toggleBilanCol('${remKey(sd)}')" style="cursor:pointer;` : 'style="';
+    html += `<th ${remAttr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan par compétences.">📝 Remarque${suffix}</th>`;
   });
   html += '</tr>';
   html += '</thead><tbody>';
@@ -27956,31 +28004,34 @@ function renderBilanTab() {
         html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg};color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
       }
     }
-    // Moyenne + Rang par période de synthèse
+    // Moyenne + Rang par période de synthèse (skip si col masquée)
     synthData.forEach((sd, sdIdx) => {
       const moy = sd.studentMoy.get(sid);
       const rank = sd.rankMap.get(sid);
       if (moy != null) moyValuesByPer[sdIdx].push(moy);
       const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-      // Moyenne
-      if (moy != null) {
-        const moyBg = _noteColor(moy, 20);
-        const moyColor = moyBg ? _contrastTextColor(moyBg) : 'var(--ink-blue)';
-        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};${sep}">${_fmtNote(moy)}</td>`;
-      } else {
-        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
+      if (!_isBilanColHidden(moyKey(sd))) {
+        if (moy != null) {
+          const moyBg = _noteColor(moy, 20);
+          const moyColor = moyBg ? _contrastTextColor(moyBg) : 'var(--ink-blue)';
+          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};${sep}">${_fmtNote(moy)}</td>`;
+        } else {
+          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
+        }
       }
-      // Rang coloré
-      if (rank != null) {
-        const rBg = _rankGradientColor(rank, sd.total);
-        const rCol = rBg ? _contrastTextColor(rBg) : 'var(--ink-blue)';
-        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;background:${rBg};color:${rCol}" title="Rang ${rank}/${sd.total}${sd.perCode ? ' en ' + sd.perCode : ''}">${rank}/${sd.total}</td>`;
-      } else {
-        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)" title="Non classé (pas de note${sd.perCode ? ' en ' + sd.perCode : ''})">—</td>`;
+      if (!_isBilanColHidden(rangKey(sd))) {
+        if (rank != null) {
+          const rBg = _rankGradientColor(rank, sd.total);
+          const rCol = rBg ? _contrastTextColor(rBg) : 'var(--ink-blue)';
+          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;background:${rBg};color:${rCol}" title="Rang ${rank}/${sd.total}${sd.perCode ? ' en ' + sd.perCode : ''}">${rank}/${sd.total}</td>`;
+        } else {
+          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)" title="Non classé (pas de note${sd.perCode ? ' en ' + sd.perCode : ''})">—</td>`;
+        }
       }
     });
-    // Remarque(s) — 1 par période de synthèse
+    // Remarque(s) — 1 par période de synthèse (skip si col masquée)
     synthData.forEach((sd, sdIdx) => {
+      if (_isBilanColHidden(remKey(sd))) return;
       const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
       const remarque = _getBulletinRemarque(cls.id, sid, sd.perCode);
       const remLen = remarque.length;
@@ -28024,21 +28075,25 @@ function renderBilanTab() {
   // Stats Moyenne classe + cellules Rang vides — 1 paire par période de synthèse
   synthData.forEach((sd, sdIdx) => {
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-    const vals = moyValuesByPer[sdIdx];
-    if (!vals.length) {
-      html += `<td style="background:var(--paper-warm);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
-    } else {
-      const s = _statsForNumbers(vals);
-      const bg = _noteColor(s.avg, 20);
-      const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
-      const lbl = 'Moyenne classe' + (synthData.length > 1 ? ' ' + sd.perCode : '');
-      html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;${sep}" title="${_esc(_statsTip(vals, lbl))}">${_fmtNote(s.avg)}</td>`;
+    if (!_isBilanColHidden(moyKey(sd))) {
+      const vals = moyValuesByPer[sdIdx];
+      if (!vals.length) {
+        html += `<td style="background:var(--paper-warm);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
+      } else {
+        const s = _statsForNumbers(vals);
+        const bg = _noteColor(s.avg, 20);
+        const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+        const lbl = 'Moyenne classe' + (synthData.length > 1 ? ' ' + sd.perCode : '');
+        html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;${sep}" title="${_esc(_statsTip(vals, lbl))}">${_fmtNote(s.avg)}</td>`;
+      }
     }
-    // Cellule Rang vide en footer (pas de stat utile sur le rang)
-    html += '<td style="background:var(--paper-warm)"></td>';
+    if (!_isBilanColHidden(rangKey(sd))) {
+      html += '<td style="background:var(--paper-warm)"></td>';
+    }
   });
   // Cellules remarque vides — 1 par période de synthèse
   synthData.forEach((sd, sdIdx) => {
+    if (_isBilanColHidden(remKey(sd))) return;
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     html += `<td style="background:var(--paper-warm);${sep}"></td>`;
   });
@@ -28205,6 +28260,32 @@ function _aggregateStudentCompetence(classId, sid, cid, periode) {
 }
 
 // Rendu de l'onglet Compétences
+// ═══════════════ Colonnes bilan masquables (mémoire session uniquement) ═══════════════
+// Quand la période est "Toutes", l'utilisateur voit N×(Moy/Rang/Remarque). Il peut
+// masquer individuellement chaque colonne en cliquant sur son en-tête. Les colonnes
+// masquées restent cachées jusqu'au reload de la page (Set en mémoire, pas persisté).
+const _bilanHiddenCols = new Set();
+function _toggleBilanCol(key) {
+  if (_bilanHiddenCols.has(key)) _bilanHiddenCols.delete(key);
+  else _bilanHiddenCols.add(key);
+  // Re-render les deux onglets pour propager
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+  if (typeof renderCompetencesTab === 'function') renderCompetencesTab();
+}
+function _showBilanCol(key) {
+  _bilanHiddenCols.delete(key);
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+  if (typeof renderCompetencesTab === 'function') renderCompetencesTab();
+}
+function _isBilanColHidden(key) { return _bilanHiddenCols.has(key); }
+// Bandeau "Réafficher : …" en haut du tableau si des cols sont masquées (pour cette catégorie)
+function _bilanHiddenBanner(keys, labelFn) {
+  const hidden = keys.filter(k => _bilanHiddenCols.has(k));
+  if (hidden.length === 0) return '';
+  const chips = hidden.map(k => `<button onclick="_showBilanCol('${_esc(k)}')" class="bilan-show-chip" title="Cliquer pour réafficher cette colonne">+ ${_esc(labelFn(k))}</button>`).join(' ');
+  return `<div class="bilan-hidden-banner" style="margin:0 0 8px;padding:5px 10px;font-size:.85em;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="color:var(--pencil)">Colonnes masquées :</span>${chips}</div>`;
+}
+
 // ═══════════════ Remarques de bulletin (par classe × élève × période) ═══════════════
 // Partagées entre les onglets 🎯 Bilan par compétences et 📜 Bilan des évaluations
 // pour servir de brouillon à la remarque finale du bulletin.
@@ -28337,7 +28418,18 @@ function renderCompetencesTab() {
   });
 
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
-  let html = '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
+  // Bandeau "Colonnes masquées" si applicable
+  let html = '';
+  const compPeriodesForBanner = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
+  if (compPeriodesForBanner.length > 1) {
+    const allKeys = compPeriodesForBanner.flatMap(p => [`comp:moy:${p}`, `comp:rem:${p}`]);
+    html += _bilanHiddenBanner(allKeys, k => {
+      const [_, type, per] = k.split(':');
+      const lbl = ({ moy: 'Moyenne', rem: 'Remarque' })[type] || type;
+      return `${lbl} ${per}`;
+    });
+  }
+  html += '<div style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)">';
   html += '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
@@ -28346,18 +28438,25 @@ function renderCompetencesTab() {
     const tip = `${c.code} — ${c.name || ''}${dom ? ' (' + dom.code + ')' : ''}`;
     html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(tip)}">${_esc(c.code)}</th>`;
   }
-  // Moyenne(s) — 1 colonne quand une période, N quand "Toutes"
+  // Moyenne(s) — 1 colonne quand une période, N quand "Toutes" (cliquable pour masquer en multi)
   const compSynthPeriodes = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
+  const compMulti = compSynthPeriodes.length > 1;
+  const cMoyKey = per => `comp:moy:${per}`;
+  const cRemKey = per => `comp:rem:${per}`;
   compSynthPeriodes.forEach((perCode, idx) => {
-    const suffix = compSynthPeriodes.length > 1 ? ' ' + perCode : '';
+    if (_isBilanColHidden(cMoyKey(perCode))) return;
+    const suffix = compMulti ? ' ' + perCode : '';
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);${sep}">Moyenne${suffix}</th>`;
+    const attr = compMulti ? `onclick="_toggleBilanCol('${cMoyKey(perCode)}')" style="cursor:pointer;` : 'style="';
+    html += `<th ${attr}padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Moyenne globale${suffix}">Moyenne${suffix}</th>`;
   });
   // Remarque(s) — 1 par période de synthèse
   compSynthPeriodes.forEach((perCode, idx) => {
+    if (_isBilanColHidden(cRemKey(perCode))) return;
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-    const suffix = compSynthPeriodes.length > 1 ? ' (' + perCode + ')' : (periode ? ' (' + periode + ')' : '');
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque${suffix}</th>`;
+    const suffix = compMulti ? ' (' + perCode + ')' : (periode ? ' (' + periode + ')' : '');
+    const attr = compMulti ? `onclick="_toggleBilanCol('${cRemKey(perCode)}')" style="cursor:pointer;` : 'style="';
+    html += `<th ${attr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque${suffix}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -28384,14 +28483,12 @@ function renderCompetencesTab() {
         <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span>
       </td>`;
     }
-    // Moyenne(s) : si "Toutes", 1 par période ; sinon 1 globale sur les niveaux affichés
+    // Moyenne(s) : skip si col masquée
     compSynthPeriodes.forEach((perCode, idx) => {
+      if (_isBilanColHidden(cMoyKey(perCode))) return;
       const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-      // Si periode === '' (Toutes), on recalcule la moyenne par période ;
-      // sinon la moyenne agrège ce qu'on affiche déjà → sumMean/nbMean global.
       let perMoy = null;
       if (periode === '') {
-        // Moyenne sur cette période : agrège uniquement les comps dont l'éval est dans cette periode
         let s = 0, n = 0;
         for (const c of comps) {
           const agg = _aggregateStudentCompetence(cls.id, sid, c.id, perCode);
@@ -28408,13 +28505,14 @@ function renderCompetencesTab() {
         html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
       }
     });
-    // Remarque(s) — 1 par période de synthèse
+    // Remarque(s) — 1 par période de synthèse (skip si col masquée)
     compSynthPeriodes.forEach((perCode, idx) => {
+      if (_isBilanColHidden(cRemKey(perCode))) return;
       const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
       const remarqueC = _getBulletinRemarque(cls.id, sid, perCode);
       const remLenC = remarqueC.length;
       const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
-      const suffix = compSynthPeriodes.length > 1 ? ' (' + perCode + ')' : '';
+      const suffix = compMulti ? ' (' + perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${bg};position:relative">
         <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
         <span class="${counterClsC}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
@@ -28485,10 +28583,10 @@ function renderCompetencesTab() {
       </td>`;
     }
   });
-  // Cellule moyenne globale par période de synthèse
+  // Cellule moyenne globale par période de synthèse (skip si col masquée)
   compSynthPeriodes.forEach((perCode, idx) => {
+    if (_isBilanColHidden(cMoyKey(perCode))) return;
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
-    // Calcule la liste des moyennes par élève pour CETTE période
     const perStudentMoy = [];
     for (const sid of sids) {
       let s = 0, n = 0;
@@ -28502,7 +28600,7 @@ function renderCompetencesTab() {
       html += `<td style="background:var(--paper-warm);${sep}"></td>`;
     } else {
       const sG = _statsForNumbers(perStudentMoy);
-      const lbl = 'Moyenne globale' + (compSynthPeriodes.length > 1 ? ' ' + perCode : '');
+      const lbl = 'Moyenne globale' + (compMulti ? ' ' + perCode : '');
       const tipG = [
         `${lbl} : ${_fmtNote(sG.avg)}`,
         `Effectif : ${sG.count} élève${sG.count > 1 ? 's' : ''}`,
@@ -28516,8 +28614,9 @@ function renderCompetencesTab() {
       </td>`;
     }
   });
-  // Cellules Remarque vides — 1 par période de synthèse
+  // Cellules Remarque vides — 1 par période de synthèse (skip si col masquée)
   compSynthPeriodes.forEach((perCode, idx) => {
+    if (_isBilanColHidden(cRemKey(perCode))) return;
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     html += `<td style="background:var(--paper-warm);${sep}"></td>`;
   });
@@ -28533,12 +28632,14 @@ function renderCompetencesTab() {
       : `${nEvals} évaluation${nEvals > 1 ? 's' : ''} contenant ${c.code} :\n\n` + evalList.map(e => `• ${e.nomCourt}${e.nomLong ? ' — ' + e.nomLong : ''}${e.date ? ' (' + _fmtDateFr(e.date) + ')' : ''}`).join('\n');
     html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">${nEvals}</td>`;
   }
-  // Cellules Moyenne + Remarque vides (footer "éval(s)") — 1 par période × 2 colonnes
+  // Cellules Moyenne + Remarque vides (footer "éval(s)") — skip si col masquée
   compSynthPeriodes.forEach((perCode, idx) => {
+    if (_isBilanColHidden(cMoyKey(perCode))) return;
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     html += `<td style="background:var(--paper-warm);${sep}"></td>`;
   });
   compSynthPeriodes.forEach((perCode, idx) => {
+    if (_isBilanColHidden(cRemKey(perCode))) return;
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     html += `<td style="background:var(--paper-warm);${sep}"></td>`;
   });
