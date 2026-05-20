@@ -2014,7 +2014,7 @@ kbd {
     <button class="nb" onclick="showTab('qcmcam',this)">📷 QCMCam</button>
   </div>
   <div class="tab-group">
-    <span class="group-label">Évaluations <em>· bilans en brouillon</em></span>
+    <span class="group-label" title="Volet fonctionnel mais encore en cours de finalisation">Évaluations</span>
     <button class="nb" onclick="showTab('notes',this)" title="Devoirs : création des évaluations, saisie des notes /20">📊 Devoirs</button>
     <button class="nb" onclick="showTab('comp',this)" title="Bilan par compétences : vue transverse classe + niveau moyen par élève sur chaque compétence évaluée">🎯 Bilan par compétences</button>
     <button class="nb" onclick="showTab('bilan',this)" title="Bilan des évaluations : moyenne /20 par élève et moyenne par domaine du socle, prêt à coller dans le bulletin">📜 Bilan des évaluations</button>
@@ -4726,7 +4726,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T10:00:00Z';
+const APP_VERSION   = '2026-05-20T22:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21642,6 +21642,14 @@ function createDemo(opts) {
   //    + tags de places (réservation places taggées pour groupes DNL/DF/LV2)
   _seedDemoConstraints();
 
+  // 10) Évaluations (Types A/B/C) + bulletin remarques + éléments travaillés
+  //     Montre toutes les capacités du module : mini-notes /20, passations de
+  //     compétences, exercices avec questions, commentaires, exclusions, dates
+  //     individuelles (rattrapage), valeurs A/NN, multi-périodes (S1+S2), coef
+  //     et noteMax variés, studentRemarks, bulletinRemarques (par élève × période),
+  //     bulletinClassRemarques (par classe × période), bulletinWorkedItems.
+  _seedDemoEvaluations();
+
   S.cur = '6A';
   save();
   localStorage.setItem('planClasse_demoInstalled', '1');
@@ -21948,6 +21956,570 @@ function _seedDemoConstraints() {
       ['0,0','0,1','1,0','1,1'].forEach(k => { room.posTagId[k] = tDf.id; });
     }
   }
+}
+
+// ── Seed démo : évaluations + bulletin ──────────────────────────────────
+// Construit un jeu d'évaluations réaliste pour 4 classes (6A, 6B, 5A, 5B) +
+// 1 éval simple sur 4A. La 3A reste sans éval (état vide démontré).
+// Couvre : Types A/B/C, multi-périodes (S1+S2), commentaires, exclusions,
+// dateIndiv (rattrapage), valeurs A/NN, coef/noteMax variés, studentRemarks,
+// bulletinRemarques par (sid×période), bulletinClassRemarques, bulletinWorkedItems.
+function _seedDemoEvaluations() {
+  const now = Date.now();
+  const _id = () => 'ev_' + Math.random().toString(36).slice(2, 9) + '_' + (now % 100000).toString(36);
+  const _mnId = () => 'mn_' + Math.random().toString(36).slice(2, 8);
+  const _exoId = () => 'exo_' + Math.random().toString(36).slice(2, 7);
+  const _passId = () => 'pass_' + Math.random().toString(36).slice(2, 8);
+
+  // Helper pseudo-aléatoire déterministe par classe + index (pour générer
+  // des notes variées mais reproductibles).
+  const _rng = (seed) => {
+    let s = seed | 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) | 0;
+      return ((s >>> 0) % 10000) / 10000;
+    };
+  };
+
+  // Compétences disponibles (préchargées : C1..C8)
+  const compIds = Object.keys(S.competences || {}).slice(0, 8);
+
+  // Helper : construit ev.notes pour Type A/C (mini-notes ou exercices avec questions)
+  // - Notes numériques aléatoires (clampées sur [0, mn.max])
+  // - Quelques A (absent) sur ~1 élève par éval
+  // - Quelques NN (non noté) sur ~1 élève
+  // - Quelques commentaires (~2-3 par éval)
+  // - Quelques exclusions (~1 par éval — élève dispensé)
+  // - Une dateIndiv (rattrapage) sur ~1 élève par éval
+  const _seedNotes = (ev, sids, seed, level) => {
+    const r = _rng(seed);
+    ev.notes = ev.notes || {};
+    const mns = ev.miniNotes || [];
+    for (let i = 0; i < sids.length; i++) {
+      const sid = sids[i];
+      // 5% des élèves : absent (toutes mini-notes = 'A')
+      if (i === Math.floor(sids.length * 0.10)) {
+        ev.notes[sid] = { values: {} };
+        for (const mn of mns) ev.notes[sid].values[mn.id] = 'A';
+        if (ev.type === 'A' || ev.type === 'C') ev.notes[sid].dateIndiv = ev.date ? _shiftDate(ev.date, 7) : null;
+        continue;
+      }
+      // 3% des élèves : non noté
+      if (i === Math.floor(sids.length * 0.20)) {
+        ev.notes[sid] = { values: {} };
+        for (const mn of mns) ev.notes[sid].values[mn.id] = 'NN';
+        continue;
+      }
+      // 3% des élèves : exclu
+      if (i === Math.floor(sids.length * 0.30)) {
+        ev.notes[sid] = { values: {}, excluded: true };
+        continue;
+      }
+      // Notes numériques
+      const values = {};
+      // Niveau global de l'élève (faible/moyen/fort) — déterministe
+      const lvl = (i % 7 < 2) ? 0.45 : (i % 7 < 5 ? 0.70 : 0.88);
+      for (const mn of mns) {
+        const v = Math.max(0, Math.min(mn.max, +(lvl * mn.max * (0.7 + r() * 0.6)).toFixed(1)));
+        values[mn.id] = v;
+      }
+      ev.notes[sid] = { values };
+      // Quelques commentaires
+      if (i % 11 === 3) {
+        ev.notes[sid].comments = ev.notes[sid].comments || {};
+        ev.notes[sid].comments[mns[0].id] = 'A confondu deux notions — à revoir.';
+      }
+      if (i % 13 === 7) {
+        ev.notes[sid].comments = ev.notes[sid].comments || {};
+        ev.notes[sid].comments[mns[Math.min(2, mns.length - 1)].id] = 'Démarche très claire 👍';
+      }
+    }
+  };
+
+  // Décale une date ISO de N jours
+  const _shiftDate = (iso, days) => {
+    const d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // Helper : peuple ev.studentRemarks pour quelques élèves d'une classe
+  const _seedStudentRemarks = (ev, sids, remarks) => {
+    ev.studentRemarks = ev.studentRemarks || {};
+    for (let i = 0; i < remarks.length && i < sids.length; i++) {
+      const r = remarks[i];
+      ev.studentRemarks[sids[r.idx]] = r.txt;
+    }
+  };
+
+  // Helper : peuple les niveaux d'une passation Type B
+  // niveaux : 1..4, 0 = non évalué, 'A' = absent
+  const _seedPassationLevels = (pass, sids, seed) => {
+    const r = _rng(seed);
+    pass.niveaux = {};
+    for (let i = 0; i < sids.length; i++) {
+      const sid = sids[i];
+      // 1 absent par passation
+      if (i === Math.floor(sids.length * 0.12)) {
+        pass.niveaux[sid] = {};
+        for (const cid of pass.competenceIds) pass.niveaux[sid][cid] = 'A';
+        continue;
+      }
+      // Niveau global de l'élève
+      const baseLvl = (i % 5 < 1) ? 1.5 : (i % 5 < 3 ? 2.5 : 3.5);
+      const m = {};
+      for (const cid of pass.competenceIds) {
+        const v = Math.max(1, Math.min(4, Math.round(baseLvl + (r() - 0.5) * 1.8)));
+        m[cid] = v;
+      }
+      pass.niveaux[sid] = m;
+    }
+  };
+
+  // ─── 6e A — set riche : 2 Type A, 1 Type B, 1 Type C, sur S1 et S2 ───
+  const cls6A = S.classes['6A'];
+  if (cls6A) {
+    const sids = cls6A.eleves;
+
+    // 1) Type A — "Mesures" (S1, 2025-09-15)
+    const evA1 = {
+      id: _id(), type: 'A',
+      classId: '6A', classIds: ['6A'],
+      nomCourt: 'Mesures', nomLong: 'Mesures et unités SI',
+      date: '2025-09-15', periode: 'S1',
+      coef: 1, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 4 },
+        { id: _mnId(), label: 'Q2', max: 4 },
+        { id: _mnId(), label: 'Q3', max: 6 },
+        { id: _mnId(), label: 'Q4', max: 6 },
+      ],
+      notes: {},
+      createdAt: now - 200 * 86400000, updatedAt: now - 150 * 86400000,
+    };
+    _seedNotes(evA1, sids, 1001, 0.7);
+    _seedStudentRemarks(evA1, sids, [
+      { idx: 4, txt: 'Très bonne maîtrise des conversions.' },
+      { idx: 12, txt: 'Difficultés persistantes en notation scientifique.' },
+    ]);
+    S.evaluations[evA1.id] = evA1;
+
+    // 2) Type B — "Démarche scientifique" (S1, 2 passations + 1 S2)
+    const evB1 = {
+      id: _id(), type: 'B',
+      classId: '6A', classIds: ['6A'],
+      nomCourt: 'Démarche', nomLong: 'Démarche scientifique — suivi compétences',
+      date: '2025-12-05', periode: 'S1',
+      coef: 2, noteMax: 20,
+      weighting: 'equal',
+      passations: [],
+      createdAt: now - 180 * 86400000, updatedAt: now - 60 * 86400000,
+    };
+    const pass1 = { id: _passId(), code: 'P1', date: '2025-10-12', competenceIds: compIds.slice(0, 3), niveaux: {} };
+    const pass2 = { id: _passId(), code: 'P2', date: '2025-12-05', competenceIds: compIds.slice(0, 4), niveaux: {} };
+    const pass3 = { id: _passId(), code: 'P3', date: '2026-03-08', competenceIds: compIds.slice(0, 3), niveaux: {} };
+    _seedPassationLevels(pass1, sids, 2001);
+    _seedPassationLevels(pass2, sids, 2002);
+    _seedPassationLevels(pass3, sids, 2003);
+    evB1.passations.push(pass1, pass2, pass3);
+    S.evaluations[evB1.id] = evB1;
+
+    // 3) Type C — "Contrôle volume/masse" (S1, exos + questions)
+    const evC1 = {
+      id: _id(), type: 'C',
+      classId: '6A', classIds: ['6A'],
+      nomCourt: 'DS Vol/Masse', nomLong: 'Contrôle — volume, masse, masse volumique',
+      date: '2025-11-20', periode: 'S1',
+      coef: 2, noteMax: 20,
+      exercices: [],
+      miniNotes: [],
+      notes: {},
+      createdAt: now - 170 * 86400000, updatedAt: now - 120 * 86400000,
+    };
+    const exo1 = { id: _exoId(), label: 'Ex.1', name: 'Mesures de volume' };
+    const exo2 = { id: _exoId(), label: 'Ex.2', name: 'Masse volumique' };
+    const exo3 = { id: _exoId(), label: 'Ex.3', name: 'Application' };
+    evC1.exercices.push(exo1, exo2, exo3);
+    evC1.miniNotes = [
+      { id: _mnId(), label: 'Q1', max: 2, exerciceId: exo1.id },
+      { id: _mnId(), label: 'Q2', max: 3, exerciceId: exo1.id },
+      { id: _mnId(), label: 'Q1', max: 2, exerciceId: exo2.id },
+      { id: _mnId(), label: 'Q2', max: 4, exerciceId: exo2.id },
+      { id: _mnId(), label: 'Q1', max: 4, exerciceId: exo3.id },
+      { id: _mnId(), label: 'Q2', max: 5, exerciceId: exo3.id },
+    ];
+    // Ajoute compétences liées sur quelques mini-notes (Type C : compétences inline)
+    if (compIds[0]) evC1.miniNotes[0].competenceIds = [compIds[0]];
+    if (compIds[1]) evC1.miniNotes[2].competenceIds = [compIds[1]];
+    if (compIds[2]) evC1.miniNotes[4].competenceIds = [compIds[2], compIds[1]];
+    _seedNotes(evC1, sids, 3001, 0.65);
+    _seedStudentRemarks(evC1, sids, [
+      { idx: 0, txt: 'Excellent contrôle, méthode rigoureuse.' },
+      { idx: 8, txt: 'Erreurs de calcul à corriger absolument.' },
+      { idx: 19, txt: 'Très en progrès depuis le diagnostic.' },
+    ]);
+    S.evaluations[evC1.id] = evC1;
+
+    // 4) Type A — "Éval finale" (S2, 2026-04-10)
+    const evA2 = {
+      id: _id(), type: 'A',
+      classId: '6A', classIds: ['6A'],
+      nomCourt: 'Éval finale', nomLong: 'Évaluation finale de fin d’année',
+      date: '2026-04-10', periode: 'S2',
+      coef: 2, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 5 },
+        { id: _mnId(), label: 'Q2', max: 5 },
+        { id: _mnId(), label: 'Q3', max: 5 },
+        { id: _mnId(), label: 'Q4', max: 5 },
+      ],
+      notes: {},
+      createdAt: now - 40 * 86400000, updatedAt: now - 20 * 86400000,
+    };
+    _seedNotes(evA2, sids, 4001, 0.75);
+    S.evaluations[evA2.id] = evA2;
+
+    // Bulletin remarques — par (sid × période) sur ~12 élèves
+    const _setRem = (sid, per, txt) => {
+      if (!S.bulletinRemarques) S.bulletinRemarques = {};
+      if (!S.bulletinRemarques[cls6A.id]) S.bulletinRemarques[cls6A.id] = {};
+      if (!S.bulletinRemarques[cls6A.id][sid]) S.bulletinRemarques[cls6A.id][sid] = {};
+      S.bulletinRemarques[cls6A.id][sid][per] = txt;
+    };
+    const remS1Samples = [
+      'Trimestre satisfaisant, élève sérieux et impliqué.',
+      'Bonne participation orale, des progrès en démarche scientifique.',
+      'Manque de travail à la maison. À reprendre.',
+      'Élève en grande difficulté, besoin de soutien régulier.',
+      'Excellents résultats, à encourager dans cette voie.',
+      'Travail régulier, des progrès à confirmer au S2.',
+      'Comportement à surveiller, perd parfois sa concentration.',
+      'Très bonne assimilation des notions, attentive et curieuse.',
+    ];
+    const remS2Samples = [
+      'Confirme les bons résultats du S1, continue ainsi.',
+      'Net redressement par rapport au S1, bravo.',
+      'Les efforts payent, progrès très visibles ce semestre.',
+      'Année difficile, des bases à consolider sur le plan méthodologique.',
+      'Excellente année, profil scientifique prometteur.',
+    ];
+    for (let i = 0; i < Math.min(8, sids.length); i++) _setRem(sids[i], 'S1', remS1Samples[i]);
+    for (let i = 0; i < Math.min(5, sids.length); i++) _setRem(sids[i], 'S2', remS2Samples[i]);
+
+    // Bulletin remarque classe (S1 + S2)
+    if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
+    S.bulletinClassRemarques['6A'] = {
+      'S1': 'Classe agréable et motivée. Niveau hétérogène en démarche scientifique. À poursuivre.',
+      'S2': 'Bonne dynamique sur ce semestre, classe qui a su s’engager dans les TP.'
+    };
+
+    // Éléments travaillés (S1 + S2)
+    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
+    S.bulletinWorkedItems['6A'] = {
+      'S1': [
+        'Mesures et unités du Système International',
+        'Volume, masse, masse volumique',
+        'Démarche scientifique : observer, questionner, mesurer',
+        'Lecture d’un graphique simple',
+      ],
+      'S2': [
+        'Changements d’état de l’eau',
+        'Solutions, dissolution, concentration',
+        'Circuits électriques simples (série / dérivation)',
+        'Évaluation finale — bilan annuel',
+      ],
+    };
+  }
+
+  // ─── 6e B — 1 Type A diag + 1 Type A contrôle + 1 Type C DM (noteMax variable) ───
+  const cls6B = S.classes['6B'];
+  if (cls6B) {
+    const sids = cls6B.eleves;
+
+    const evA1 = {
+      id: _id(), type: 'A',
+      classId: '6B', classIds: ['6B'],
+      nomCourt: 'Diag', nomLong: 'Diagnostic de rentrée',
+      date: '2025-09-25', periode: 'S1',
+      coef: 0.5, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 5 },
+        { id: _mnId(), label: 'Q2', max: 5 },
+        { id: _mnId(), label: 'Q3', max: 10 },
+      ],
+      notes: {},
+      createdAt: now - 190 * 86400000, updatedAt: now - 180 * 86400000,
+    };
+    _seedNotes(evA1, sids, 5001, 0.55);
+    S.evaluations[evA1.id] = evA1;
+
+    const evA2 = {
+      id: _id(), type: 'A',
+      classId: '6B', classIds: ['6B'],
+      nomCourt: 'Ctrl 1', nomLong: 'Contrôle n°1 — états de la matière',
+      date: '2025-11-08', periode: 'S1',
+      coef: 1, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Cours', max: 6 },
+        { id: _mnId(), label: 'Application', max: 8 },
+        { id: _mnId(), label: 'Problème', max: 6 },
+      ],
+      notes: {},
+      createdAt: now - 170 * 86400000, updatedAt: now - 160 * 86400000,
+    };
+    _seedNotes(evA2, sids, 5002, 0.70);
+    _seedStudentRemarks(evA2, sids, [
+      { idx: 3, txt: 'Méthode à reprendre dès le début.' },
+    ]);
+    S.evaluations[evA2.id] = evA2;
+
+    // DM noté sur /40 (montre noteMax variable)
+    const evC1 = {
+      id: _id(), type: 'C',
+      classId: '6B', classIds: ['6B'],
+      nomCourt: 'DM', nomLong: 'Devoir maison — masse volumique',
+      date: '2026-03-15', periode: 'S2',
+      coef: 1, noteMax: 40,
+      exercices: [], miniNotes: [], notes: {},
+      createdAt: now - 70 * 86400000, updatedAt: now - 50 * 86400000,
+    };
+    const exo1 = { id: _exoId(), label: 'Ex.1', name: 'Calculs' };
+    const exo2 = { id: _exoId(), label: 'Ex.2', name: 'Rédaction' };
+    evC1.exercices.push(exo1, exo2);
+    evC1.miniNotes = [
+      { id: _mnId(), label: 'Q1', max: 10, exerciceId: exo1.id },
+      { id: _mnId(), label: 'Q2', max: 10, exerciceId: exo1.id },
+      { id: _mnId(), label: 'Q1', max: 10, exerciceId: exo2.id },
+      { id: _mnId(), label: 'Q2', max: 10, exerciceId: exo2.id },
+    ];
+    _seedNotes(evC1, sids, 5003, 0.80);
+    S.evaluations[evC1.id] = evC1;
+
+    if (!S.bulletinRemarques) S.bulletinRemarques = {};
+    S.bulletinRemarques['6B'] = S.bulletinRemarques['6B'] || {};
+    for (let i = 0; i < Math.min(6, sids.length); i++) {
+      S.bulletinRemarques['6B'][sids[i]] = S.bulletinRemarques['6B'][sids[i]] || {};
+      S.bulletinRemarques['6B'][sids[i]]['S1'] = [
+        'Semestre encourageant, élève appliqué.',
+        'Quelques difficultés en cours d’année, surmontables.',
+        'Excellent niveau, à conforter.',
+        'Inquiétudes sur l’investissement, à reprendre.',
+        'Bons réflexes scientifiques, à approfondir.',
+        'Élève discret mais sérieux, bonne progression.'
+      ][i];
+    }
+    if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
+    S.bulletinClassRemarques['6B'] = {
+      'S1': 'Classe agréable, ambiance studieuse. Bon démarrage.',
+      'S2': 'Le travail du DM a été inégal, à reprendre.'
+    };
+    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
+    S.bulletinWorkedItems['6B'] = {
+      'S1': ['Mesures', 'États de la matière', 'Solutions aqueuses'],
+      'S2': ['Masse volumique (DM)', 'Mélanges et séparations']
+    };
+  }
+
+  // ─── 5e A — Type A + Type B multi-passations + Type C "DST" ───
+  const cls5A = S.classes['5A'];
+  if (cls5A) {
+    const sids = cls5A.eleves;
+
+    const evA1 = {
+      id: _id(), type: 'A',
+      classId: '5A', classIds: ['5A'],
+      nomCourt: 'Surprise', nomLong: 'Test surprise — lecture d’énoncé',
+      date: '2025-10-05', periode: 'S1',
+      coef: 0.5, noteMax: 10,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 3 },
+        { id: _mnId(), label: 'Q2', max: 3 },
+        { id: _mnId(), label: 'Q3', max: 4 },
+      ],
+      notes: {},
+      createdAt: now - 200 * 86400000, updatedAt: now - 195 * 86400000,
+    };
+    _seedNotes(evA1, sids, 6001, 0.65);
+    S.evaluations[evA1.id] = evA1;
+
+    // Type B — 3 passations sur S1 et S2 (multi-période)
+    const evB1 = {
+      id: _id(), type: 'B',
+      classId: '5A', classIds: ['5A'],
+      nomCourt: 'Démarche5A', nomLong: 'Suivi compétences année — 5e A',
+      date: '2026-03-08', periode: 'S2',
+      coef: 2, noteMax: 20,
+      weighting: 'equal',
+      passations: [],
+      createdAt: now - 180 * 86400000, updatedAt: now - 30 * 86400000,
+    };
+    const pa = { id: _passId(), code: 'A', date: '2025-11-15', competenceIds: compIds.slice(0, 3), niveaux: {} };
+    const pb = { id: _passId(), code: 'B', date: '2026-01-20', competenceIds: compIds.slice(1, 5), niveaux: {} };
+    const pc = { id: _passId(), code: 'C', date: '2026-03-08', competenceIds: compIds.slice(0, 4), niveaux: {} };
+    _seedPassationLevels(pa, sids, 6101);
+    _seedPassationLevels(pb, sids, 6102);
+    _seedPassationLevels(pc, sids, 6103);
+    evB1.passations.push(pa, pb, pc);
+    S.evaluations[evB1.id] = evB1;
+
+    // Type C — DST coef 3
+    const evC1 = {
+      id: _id(), type: 'C',
+      classId: '5A', classIds: ['5A'],
+      nomCourt: 'DST', nomLong: 'Devoir surveillé — chapitres 1 à 5',
+      date: '2026-05-02', periode: 'S2',
+      coef: 3, noteMax: 20,
+      exercices: [], miniNotes: [], notes: {},
+      createdAt: now - 30 * 86400000, updatedAt: now - 5 * 86400000,
+    };
+    const ex1 = { id: _exoId(), label: 'Ex.1', name: 'Cours' };
+    const ex2 = { id: _exoId(), label: 'Ex.2', name: 'Démarche' };
+    const ex3 = { id: _exoId(), label: 'Ex.3', name: 'Problème' };
+    const ex4 = { id: _exoId(), label: 'Ex.4', name: 'Bonus' };
+    evC1.exercices.push(ex1, ex2, ex3, ex4);
+    evC1.miniNotes = [
+      { id: _mnId(), label: 'Q1', max: 2, exerciceId: ex1.id },
+      { id: _mnId(), label: 'Q2', max: 2, exerciceId: ex1.id },
+      { id: _mnId(), label: 'Q1', max: 3, exerciceId: ex2.id },
+      { id: _mnId(), label: 'Q2', max: 3, exerciceId: ex2.id },
+      { id: _mnId(), label: 'Q1', max: 3, exerciceId: ex3.id },
+      { id: _mnId(), label: 'Q2', max: 4, exerciceId: ex3.id },
+      { id: _mnId(), label: 'Bonus', max: 3, exerciceId: ex4.id },
+    ];
+    if (compIds[0]) evC1.miniNotes[0].competenceIds = [compIds[0]];
+    if (compIds[1]) evC1.miniNotes[2].competenceIds = [compIds[1]];
+    if (compIds[2]) evC1.miniNotes[4].competenceIds = [compIds[2]];
+    _seedNotes(evC1, sids, 6201, 0.70);
+    _seedStudentRemarks(evC1, sids, [
+      { idx: 1, txt: 'Très bonne copie, raisonnement solide.' },
+      { idx: 7, txt: 'Hors-sujet sur l’Ex.3.' },
+      { idx: 14, txt: 'Bonus très bien traité.' },
+    ]);
+    S.evaluations[evC1.id] = evC1;
+
+    if (!S.bulletinRemarques) S.bulletinRemarques = {};
+    S.bulletinRemarques['5A'] = S.bulletinRemarques['5A'] || {};
+    const rems5A_S1 = [
+      'Élève appliqué, niveau correct.',
+      'Très bons réflexes scientifiques.',
+      'À reprendre la méthode avant le S2.',
+      'Excellente première moitié d’année.',
+      'Difficultés persistantes en démarche.',
+      'Régularité du travail à confirmer.'
+    ];
+    const rems5A_S2 = [
+      'Confirme le très bon niveau du S1.',
+      'Progrès très nets cette seconde moitié d’année.',
+      'Année difficile, à reprendre les fondamentaux.',
+      'Excellente année globale, profil scientifique.'
+    ];
+    for (let i = 0; i < rems5A_S1.length && i < sids.length; i++) {
+      S.bulletinRemarques['5A'][sids[i]] = S.bulletinRemarques['5A'][sids[i]] || {};
+      S.bulletinRemarques['5A'][sids[i]]['S1'] = rems5A_S1[i];
+    }
+    for (let i = 0; i < rems5A_S2.length && i < sids.length; i++) {
+      S.bulletinRemarques['5A'][sids[i]] = S.bulletinRemarques['5A'][sids[i]] || {};
+      S.bulletinRemarques['5A'][sids[i]]['S2'] = rems5A_S2[i];
+    }
+    if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
+    S.bulletinClassRemarques['5A'] = {
+      'S1': 'Classe motivée mais hétérogène. La démarche scientifique progresse.',
+      'S2': 'Très belle évolution sur l’année, classe agréable et engagée.'
+    };
+    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
+    S.bulletinWorkedItems['5A'] = {
+      'S1': ['Lecture d’énoncé', 'Démarche scientifique', 'Mesures et incertitudes'],
+      'S2': ['Solutions et concentrations', 'Réactions chimiques', 'Circuits électriques (Ohm)']
+    };
+  }
+
+  // ─── 5e B — Type A diag + Type C bilan ───
+  const cls5B = S.classes['5B'];
+  if (cls5B) {
+    const sids = cls5B.eleves;
+
+    const evA1 = {
+      id: _id(), type: 'A',
+      classId: '5B', classIds: ['5B'],
+      nomCourt: 'Ini', nomLong: 'Évaluation initiale',
+      date: '2025-09-20', periode: 'S1',
+      coef: 1, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 5 },
+        { id: _mnId(), label: 'Q2', max: 5 },
+        { id: _mnId(), label: 'Q3', max: 5 },
+        { id: _mnId(), label: 'Q4', max: 5 },
+      ],
+      notes: {},
+      createdAt: now - 195 * 86400000, updatedAt: now - 190 * 86400000,
+    };
+    _seedNotes(evA1, sids, 7001, 0.60);
+    S.evaluations[evA1.id] = evA1;
+
+    const evC1 = {
+      id: _id(), type: 'C',
+      classId: '5B', classIds: ['5B'],
+      nomCourt: 'Bilan', nomLong: 'Bilan trimestriel',
+      date: '2026-04-22', periode: 'S2',
+      coef: 2, noteMax: 20,
+      exercices: [], miniNotes: [], notes: {},
+      createdAt: now - 25 * 86400000, updatedAt: now - 10 * 86400000,
+    };
+    const ex1 = { id: _exoId(), label: 'Ex.1', name: 'Restitution' };
+    const ex2 = { id: _exoId(), label: 'Ex.2', name: 'Application' };
+    evC1.exercices.push(ex1, ex2);
+    evC1.miniNotes = [
+      { id: _mnId(), label: 'Q1', max: 3, exerciceId: ex1.id },
+      { id: _mnId(), label: 'Q2', max: 4, exerciceId: ex1.id },
+      { id: _mnId(), label: 'Q1', max: 6, exerciceId: ex2.id },
+      { id: _mnId(), label: 'Q2', max: 7, exerciceId: ex2.id },
+    ];
+    if (compIds[0]) evC1.miniNotes[0].competenceIds = [compIds[0]];
+    if (compIds[2]) evC1.miniNotes[2].competenceIds = [compIds[2]];
+    _seedNotes(evC1, sids, 7002, 0.72);
+    S.evaluations[evC1.id] = evC1;
+
+    if (!S.bulletinRemarques) S.bulletinRemarques = {};
+    S.bulletinRemarques['5B'] = S.bulletinRemarques['5B'] || {};
+    for (let i = 0; i < Math.min(4, sids.length); i++) {
+      S.bulletinRemarques['5B'][sids[i]] = S.bulletinRemarques['5B'][sids[i]] || {};
+      S.bulletinRemarques['5B'][sids[i]]['S2'] = [
+        'Bon semestre, à confirmer.',
+        'Difficultés à reprendre en méthodologie.',
+        'Excellent profil, très bonne année.',
+        'Élève en grande difficulté, soutien nécessaire.'
+      ][i];
+    }
+    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
+    S.bulletinWorkedItems['5B'] = {
+      'S2': ['Évaluation initiale', 'Bilan trimestriel — restitution / application']
+    };
+  }
+
+  // ─── 4e A — 1 Type A simple ───
+  const cls4A = S.classes['4A'];
+  if (cls4A) {
+    const sids = cls4A.eleves;
+    const evA1 = {
+      id: _id(), type: 'A',
+      classId: '4A', classIds: ['4A'],
+      nomCourt: 'Ctrl Élec', nomLong: 'Contrôle électricité',
+      date: '2025-12-12', periode: 'S1',
+      coef: 1, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 5 },
+        { id: _mnId(), label: 'Q2', max: 5 },
+        { id: _mnId(), label: 'Q3', max: 5 },
+        { id: _mnId(), label: 'Q4', max: 5 },
+      ],
+      notes: {},
+      createdAt: now - 150 * 86400000, updatedAt: now - 145 * 86400000,
+    };
+    _seedNotes(evA1, sids, 8001, 0.70);
+    S.evaluations[evA1.id] = evA1;
+  }
+
+  // 3e A : volontairement aucune éval (état vide démontré dans l'UI)
 }
 
 // Charge la démo "à la demande" (depuis la modale Reset) :
@@ -26093,6 +26665,10 @@ function _statsCellHTML(values, opts) {
 function _contrastTextColor(bg) {
   if (!bg) return '';
   if (bg === 'var(--paper-warm)' || bg === 'var(--paper)') return 'var(--ink-deep)';
+  // Note : pour les bg littéraux (#hex / hsl / rgb), on retourne une couleur LITTÉRALE
+  // sombre (#1a252f) et non var(--ink-deep) — ce dernier devient clair en thème sombre,
+  // ce qui donne texte clair sur fond pastel clair → invisible (cf. cellules note /20
+  // dans le bilan, bandes orange/jaune de _noteColor en particulier).
   let r, g, b;
   if (bg.startsWith('#')) {
     const hex = bg.length === 4
@@ -26106,7 +26682,7 @@ function _contrastTextColor(bg) {
     const m = bg.match(/hsl\(\s*\d+\s*,\s*\d+%\s*,\s*(\d+)%/);
     if (!m) return '#fff';
     const l = parseInt(m[1], 10);
-    return l < 60 ? '#fff' : 'var(--ink-deep)';
+    return l < 60 ? '#fff' : '#1a252f';
   } else if (bg.startsWith('rgb')) {
     const m = bg.match(/rgb\w*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
     if (!m) return '#fff';
@@ -26116,7 +26692,7 @@ function _contrastTextColor(bg) {
   }
   // Luminance perçue (YIQ) — > 150 = clair, < 150 = sombre
   const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 150 ? 'var(--ink-deep)' : '#fff';
+  return yiq >= 150 ? '#1a252f' : '#fff';
 }
 
 // Renvoie une couleur en dégradé bleu (rang 1) → vert (médiane) → rouge (dernier rang).

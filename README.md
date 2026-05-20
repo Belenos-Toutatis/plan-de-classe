@@ -31,7 +31,7 @@
 - 🎲 **Interroger un élève au hasard** : carte flottante animée qui surgit de la cellule de l'élève (effet "écho visuel" avec traits connecteurs) — le tirage est immédiatement repérable sur le plan, même de loin
 - 🔄 **Sync auto** vers un dossier (Nextcloud, Drive…) avec backups horodatés en rotation
 - 🖨 **Impressions intelligentes** : Plan Prof / Plan Élève / Plan vide / Liste Élèves / Fiche de prêt / Plan QCMCam — orientation imposée selon le type
-- 📊 **Volet Évaluation à venir** : onglets *Notes · Compétences · Bilan* préparés dans la nav (désactivés pour l'instant) — référentiel personnalisable avec codes courts, saisie type tableur avec sélection multi-cellules, conversion compétences ↔ notes, récap trimestre par élève
+- 📊 **Volet Évaluation** : onglets **Devoirs · Bilan par compétences · Bilan des évaluations**. 3 types d'évaluations (A = mini-notes /20, B = passations de compétences niveau 1–4, C = sommative avec exercices et compétences inline), saisie en tableur ou en fiche par élève, valeurs A/NN, commentaires, exclusions, dates de rattrapage individuelles, coefficients et noteMax variés, multi-classes, multi-périodes (S1+S2). Vues d'agrégation avec sticky thead/tfoot, remarque bulletin par élève × période, remarque générale classe et éléments travaillés synchronisés entre les deux onglets bilan, masquage individuel de colonnes en multi-période, paste multi-lignes depuis tableur. **Type D** (sommative par compétence sans questions intermédiaires) à venir.
 - 🌐 **Aucune dépendance externe**, aucun CDN, aucune connexion réseau requise après ouverture
 
 ---
@@ -72,7 +72,7 @@ L'app se charge directement dans votre navigateur, prête à l'emploi. Pratique 
 1. Sur la page GitHub du dépôt, cliquez sur le bouton vert **`<> Code`** → onglet **Local** → **Download ZIP**
 2. Décompressez le ZIP n'importe où sur votre disque
 3. Double-cliquez sur **`plan de classe.html`** → il s'ouvre dans votre navigateur par défaut
-4. Au **premier lancement**, un modal de bienvenue s'affiche : 4 classes fictives, 2 salles et 2 classes mobiles sont déjà configurées pour explorer
+4. Au **premier lancement**, un modal de bienvenue s'affiche : 6 classes fictives, 4 salles (2 normales + 2 en îlots), 3 classes mobiles et un jeu complet d'évaluations (Type A/B/C, S1+S2, remarques bulletin, éléments travaillés) sont déjà configurés pour explorer
 5. Pour partir d'un fichier vierge : onglet **🏫 Classes** → bouton **🗑 Réinitialiser…** → choisir l'option voulue
 
 > **Compatibilité optimale** : Chrome / Edge / Brave / Opera (tout ce qui est Chromium, ≥ v90 environ).
@@ -141,6 +141,9 @@ Les fichiers `plan-classe-*.json` (sauvegardes manuelles, sync auto, backups hor
 | ⚙️ **Config Salle** | Catalogue partagé des salles : dimensions, tables, horaires, **AESH** (placement + élèves accompagnés) |
 | 📱 **Tablettes**    | Récap par mode, paramétrage des classes mobiles, désaffectation                                        |
 | 📷 **QCMCam**       | Export CSV de tous les élèves au format QCMcam                                                         |
+| 📊 **Devoirs**      | Création/édition d'évaluations Type A/B/C, saisie tableur ou fiche par élève, multi-classes            |
+| 🎯 **Bilan par compétences** | Vue transverse classe : niveau moyen par élève sur chaque compétence évaluée                  |
+| 📜 **Bilan des évaluations** | Agrégation période : moyenne /20, rang, remarque bulletin — prêt à coller dans le bulletin     |
 
 Onglets accessibles via boutons (sortis de la nav principale) :
 
@@ -335,14 +338,19 @@ Les retours, suggestions et issues sont les bienvenus. Workflow :
 
 Améliorations envisagées (pas de calendrier) :
 
-### Prochain gros chantier — **Volet Évaluation**
+### Volet Évaluation — état
 
-- [ ] Onglets *Notes · Compétences · Bilan* (placeholders déjà en place dans la nav)
-- [ ] Référentiel de compétences **personnalisable** avec codes courts (`C1`, `RAI-2`, etc.), partageables entre niveaux ou spécifiques
-- [ ] **Saisie point-par-point** : pour chaque question d'un devoir, indiquer la compétence évaluée et le niveau de maîtrise
-- [ ] **Conversion compétences ↔ notes** avec mapping configurable
-- [ ] Interfaces de saisie **type tableur** (sélection multi-cellules, copier-coller) — primitive `.gridtable` déjà préparée dans le design system
-- [ ] Récap par élève sur la période : toutes les compétences évaluées, toutes les notes données avec moyenne, remarque de période
+- [x] Onglets **Devoirs · Bilan par compétences · Bilan des évaluations**
+- [x] Référentiel de compétences personnalisable avec codes courts (C1..C8 pré-installés, modifiables), 8 domaines du socle
+- [x] **Type A** : mini-notes pondérées sur une note finale (souvent /20)
+- [x] **Type B** : passations de compétences niveau 1–4 (+ 0 non évalué, A absent)
+- [x] **Type C** : sommative avec exercices, questions, compétences inline par question
+- [x] Saisie en **tableur** (sélection multi-cellules, copier-coller multi-colonnes Excel-like) et en **fiche par élève**
+- [x] Multi-classes par évaluation (dates et créneaux par classe)
+- [x] **Bilan par compétences** : niveau moyen par élève × compétence évaluée
+- [x] **Bilan des évaluations** : moyenne /20 par élève, rang, remarque bulletin (par élève × période), remarque classe + éléments travaillés synchronisés, sticky thead/tfoot, masquage de colonnes en multi-période
+- [ ] **Type D** : sommative par compétence sans questions intermédiaires
+- [ ] Export PDF du bilan par élève (à coller dans le bulletin)
 
 ### Autres
 

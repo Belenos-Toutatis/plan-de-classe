@@ -55,9 +55,11 @@ Le filet rouge et les lignes Seyès sont **cachés à l'impression** via `@media
 
 ## Données de démo (1er lancement)
 `createDemo()` (fin du fichier, juste avant `init()`) génère des données fictives au tout premier lancement, conditionné par `localStorage.planClasse_demoInstalled !== '1'` :
-- **4 classes fictives** : 6e A (30 élèves, 2 salles), 6e B (28, Salle 105), 5e A (32, 2 salles), 5e B (29, Salle 102)
-- **2 salles** : Salle 102 (5×7 avec 3 places vides → 32 utilisables), Salle 105 (4×9 avec 4 vides → 32)
-- **2 classes mobiles** customisées à 32 tablettes (CM1 et CM2)
+- **6 classes fictives** : 6e A (30, 2 salles), 6e B (28, 2 salles), 5e A (32, 2 salles), 5e B (29, 2 salles îlots), 4e A (30, 3 groupes G1/G2/G3), 3e A (25, sans groupes — démontre chips désactivés)
+- **Évaluations** (`_seedDemoEvaluations`) : ~10 évaluations réparties sur 5 classes — 6A en a 4 (Type A "Mesures" S1, Type B "Démarche" 3 passations S1+S2, Type C "DS Vol/Masse" S1 avec compétences inline, Type A "Éval finale" S2), 6B en a 3 (dont 1 Type C noté /40), 5A en a 3 (dont Type B 3 passations + Type C "DST" coef 3), 5B en a 2, 4A en a 1. 3A reste sans évaluation (état vide démontré). Couvre : valeurs A/NN, commentaires, exclusions, `dateIndiv` (rattrapage), `studentRemarks`, coef variés, noteMax variés (10/20/40), compétences inline Type C.
+- **Bulletin** : `bulletinRemarques` par (élève × période) sur 6A/6B/5A/5B, `bulletinClassRemarques` S1+S2 sur 6A/6B/5A, `bulletinWorkedItems` S1+S2 sur 6A/6B/5A/5B.
+- **4 salles** : Salle 102 (5×8 avec allée centrale), Salle 105 (4×9 avec allée centrale), Salle ÎlotA (8 îlots mixtes 2×2 + 2×3), Salle ÎlotB (9 îlots 2×2 en grille 3×3)
+- **3 classes mobiles** customisées : CM1 et CM2 à 32 tablettes (2 lots chacune), Pack ENT 15 tablettes (1 lot)
 - Tous les élèves placés dans leur(s) salle(s), n° de tablette CM1 affectés
 - Quelques élèves PPRE / PPS / ULIS+, et compteurs d'oublis pré-remplis
 - Une tablette indisponible dans CM2 (#7) pour démontrer la fonctionnalité
@@ -97,12 +99,20 @@ La nav `#nav` est structurée en **deux groupes** séparés par un filet vertica
 5. **Tablettes** — récap tablettes avec sélecteur de salle + bouton "Affecter automatiquement", génération PDF "Fiche de prêt"
 6. **QCMCam** — plan visuel vue prof + export CSV multi-salles avec identifiant `classe-salle`
 
-### Groupe 2 — "Évaluations · bilans en brouillon" (3 onglets actifs)
+### Groupe 2 — "Évaluations" (3 onglets actifs)
 1. **📊 Devoirs** (`tab-notes`) — création/édition d'évaluations Type A (mini-notes /20), Type B (compétences par passations), Type C (sommative avec exercices). Saisie en tableur ou en fiche par élève. Multi-classes. Tableau d'évaluations avec stats.
-2. **🎯 Bilan par compétences** (`tab-comp`) — vue transverse classe : niveau moyen par élève sur chaque compétence évaluée. **Au stade de brouillon.**
-3. **📜 Bilan des évaluations** (`tab-bilan`) — agrégation période : moyenne /20 par élève, moyenne par domaine du socle, prêt à coller dans le bulletin. **Au stade de brouillon.**
+2. **🎯 Bilan par compétences** (`tab-comp`) — vue transverse classe : niveau moyen par élève sur chaque compétence évaluée. Sticky header + remarque classe et éléments travaillés synchronisés avec l'onglet Bilan des évaluations.
+3. **📜 Bilan des évaluations** (`tab-bilan`) — agrégation période : moyenne /20 par élève, rang, remarque bulletin (par élève × période). Sticky thead/tfoot via `position:sticky` dans `.bilan-table-scroll` (max-height calc(100vh - 220px)), masquage individuel de colonnes (Moy/Rang/Rem) en multi-période via `_bilanHiddenCols` (Set mémoire seule), paste multi-lignes depuis tableur (`_onBilanRemarquePaste`).
 
-Le label "*· bilans en brouillon*" sous le titre du groupe signale que les types A/B/C de saisie sont opérationnels mais que les deux vues d'agrégation (compétences, bilan) restent à finaliser. **Type D (sommative par compétence sans questions intermédiaires) à venir.**
+Le label porte une infobulle *« Volet fonctionnel mais encore en cours de finalisation »* — les types A/B/C de saisie + les deux vues d'agrégation sont opérationnels. **Type D (sommative par compétence sans questions intermédiaires) à venir.**
+
+### Bulletin — remarques et éléments travaillés
+- **`S.bulletinRemarques[classId][sid][periode] = "texte"`** : brouillon de remarque bulletin par (élève × période). Partagé entre Bilan par compétences et Bilan des évaluations.
+- **`S.bulletinClassRemarques[classId][periode] = "texte"`** : remarque générale classe par période. Synchronisée entre les 2 onglets bilan via `_renderBilanBottomSection`.
+- **`S.bulletinWorkedItems[classId][periode] = [item1, item2, …]`** : liste des éléments travaillés sur la période. Synchronisée idem.
+
+### Contraste texte sur fond coloré (`_contrastTextColor`)
+Pour les cellules à fond inline (`background:#hex` ou `background:hsl(...)`), `_contrastTextColor` renvoie une couleur **littérale** (`#1a252f` ou `#fff`) et non `var(--ink-deep)` — ce dernier devient clair en thème sombre, donc texte clair sur pastel clair = invisible. À utiliser dès qu'on pose un fond coloré inline (cellules tableur, badges, chips, bilan note /20, rang).
 
 Le design système supporte ce volet :
 - Primitive `.gridtable` (préparée dans l'onglet Élèves, réutilisée dans le tableur d'éval)
