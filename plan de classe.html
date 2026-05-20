@@ -5878,6 +5878,7 @@ function pushUndo() {
 
 function undoLast() {
   closeCtxMenu();
+  if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
   if (!undoStack.length) return toast('Rien à annuler.');
   redoStack.push(JSON.stringify(S));
   if (redoStack.length > MAX_UNDO) redoStack.shift();
@@ -5893,6 +5894,7 @@ function undoLast() {
 
 function redoLast() {
   closeCtxMenu();
+  if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
   if (!redoStack.length) return toast('Rien à refaire.');
   undoStack.push(JSON.stringify(S));
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -9894,6 +9896,19 @@ function _deleteStudentInternal(id) {
             if (room.seating[k] === id) delete room.seating[k];
           }
         }
+      }
+    }
+  }
+  // F2 — Nettoyage des références à cet élève dans les évaluations (notes, niveaux
+  // de passation, remarques). Sans ça, les saisies restent orphelines dans le JSON
+  // et faussent les agrégats / exports.
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!ev || typeof ev !== 'object') continue;
+    if (ev.notes) delete ev.notes[id];
+    if (ev.studentRemarks) delete ev.studentRemarks[id];
+    if (Array.isArray(ev.passations)) {
+      for (const p of ev.passations) {
+        if (p && p.niveaux) delete p.niveaux[id];
       }
     }
   }
@@ -20124,11 +20139,32 @@ async function autoReloadCheck() {
       const txt = await f.text();
       const data = JSON.parse(txt);
       const dt = new Date(f.lastModified).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      // F4 — Force le flush des timers de saisie d'éval AVANT de mesurer pending,
+      // pour éviter de perdre silencieusement la frappe en cours dans le tableur/fiche
+      // d'une éval pendant que l'utilisateur a alt-tab.
+      const evalDirty = (typeof _evalTableurDirty !== 'undefined' && _evalTableurDirty)
+                     || (typeof _evalSaisieDirty !== 'undefined' && _evalSaisieDirty);
+      if (evalDirty) {
+        try {
+          if (typeof _evalTableurSaveTimer !== 'undefined' && _evalTableurSaveTimer) {
+            clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null;
+          }
+          if (typeof _evalSaisieSaveTimer !== 'undefined' && _evalSaisieSaveTimer) {
+            clearTimeout(_evalSaisieSaveTimer); _evalSaisieSaveTimer = null;
+          }
+        } catch (_) {}
+        save();
+        _evalTableurDirty = false;
+        _evalSaisieDirty = false;
+      }
       // Avertit explicitement si des modifs locales sont en attente d'écriture
       let pendingWarn = '';
       if (_autoSaveTimer && _autoSavePendingSince > 0) {
         const ageSec = Math.round((Date.now() - _autoSavePendingSince) / 1000);
         pendingWarn = `\n\n⚠️ ATTENTION : ${ageSec}s de modifications locales NON encore écrites sur disque. Si vous rechargez, elles seront perdues.\nCliquez sur "Annuler" et attendez l'auto-save (max 5s) si vous voulez les conserver.`;
+      }
+      if (evalDirty) {
+        pendingWarn += `\n\n📝 Une saisie d'évaluation en cours a été préservée dans la sauvegarde locale.`;
       }
       if (confirm(`Le fichier "${AUTO_SAVE_FILENAME}" a été modifié à l'extérieur (${dt}).\n\nRecharger ces données ?${pendingWarn}\n(Tes changements locaux non encore sauvegardés seront écrasés.)`)) {
         S = data;
@@ -21417,7 +21453,29 @@ function init() {
   }
 }
 
-window.addEventListener('beforeunload', save);
+window.addEventListener('beforeunload', () => {
+  // F4 — Flush des timers de saisie d'éval (tableur et fiche) pour persister les
+  // dernières frappes même si l'utilisateur ferme la fenêtre dans la fenêtre de
+  // debounce (800ms après la dernière touche).
+  try {
+    if (typeof _evalTableurSaveTimer !== 'undefined' && _evalTableurSaveTimer) {
+      clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null;
+    }
+    if (typeof _evalSaisieSaveTimer !== 'undefined' && _evalSaisieSaveTimer) {
+      clearTimeout(_evalSaisieSaveTimer); _evalSaisieSaveTimer = null;
+    }
+    if (typeof _evalRemarkSaveTimer !== 'undefined' && _evalRemarkSaveTimer) {
+      clearTimeout(_evalRemarkSaveTimer); _evalRemarkSaveTimer = null;
+    }
+    if (typeof _evalEditPerClassSaveTimer !== 'undefined' && _evalEditPerClassSaveTimer) {
+      clearTimeout(_evalEditPerClassSaveTimer); _evalEditPerClassSaveTimer = null;
+    }
+    if (typeof _evalTableurPassEditTimer !== 'undefined' && _evalTableurPassEditTimer) {
+      clearTimeout(_evalTableurPassEditTimer); _evalTableurPassEditTimer = null;
+    }
+  } catch (_) {}
+  save();
+});
 
 // ─── Tooltip global pour [data-tip] ─────────────────────────────────
 // Positionnement dynamique en JS pour clamper dans le viewport (le pur CSS
@@ -22059,6 +22117,29 @@ function _fillPeriodeSelect(selEl, valueToSelect) {
   }
 }
 
+// ═══════════════ Undo "debouncé" pour la saisie continue d'évaluations ═══════════════
+// Problème : la saisie au clavier dans le tableur déclenche une mutation à chaque frappe
+// (`ev.notes[sid].values[mnId] = parsed`). Si on faisait `pushUndo()` à chaque frappe, la
+// pile saturerait ; si on ne le fait jamais, Ctrl+Z saute par-dessus des heures de saisie.
+// Solution : `_evalArmUndo()` capture un snapshot une seule fois par "salve de frappe",
+// puis libère le verrou 2 s après la dernière mutation → 1 entrée d'undo par salve.
+let _evalUndoArmed = false;
+let _evalUndoArmTimer = null;
+function _evalArmUndo() {
+  if (!_evalUndoArmed) {
+    pushUndo();
+    _evalUndoArmed = true;
+  }
+  if (_evalUndoArmTimer) clearTimeout(_evalUndoArmTimer);
+  _evalUndoArmTimer = setTimeout(() => { _evalUndoArmed = false; }, 2000);
+}
+// Force la fermeture immédiate d'une salve (à appeler quand un workflow distinct commence :
+// fermeture de modale, changement d'éval, undo/redo)
+function _evalFlushUndo() {
+  if (_evalUndoArmTimer) { clearTimeout(_evalUndoArmTimer); _evalUndoArmTimer = null; }
+  _evalUndoArmed = false;
+}
+
 // Évaluations de la classe active, filtrées par période (null = toutes)
 function _evalsForClass(classId, periode) {
   const evs = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, classId));
@@ -22503,6 +22584,7 @@ function _evalEditPerClass(inputEl) {
   if (!ev) return;
   const cid = inputEl.getAttribute('data-cid');
   const field = inputEl.getAttribute('data-field');
+  _evalArmUndo();
   if (field === 'date') {
     _evalSetDateFor(ev, cid, inputEl.value);
     // Re-render pour rafraîchir les options de créneau
@@ -22512,15 +22594,24 @@ function _evalEditPerClass(inputEl) {
   }
   ev.updatedAt = Date.now();
   _evalEditDirty = true;
-  // Auto-save léger (les autres champs gardent leur flag dirty + bouton Enregistrer)
-  save();
+  // Auto-save léger débouncé pour éviter le spam I/O (F15)
+  if (_evalEditPerClassSaveTimer) clearTimeout(_evalEditPerClassSaveTimer);
+  _evalEditPerClassSaveTimer = setTimeout(() => save(), 600);
 }
+let _evalEditPerClassSaveTimer = null;
 
 function _evalEditToggleClass(checkbox) {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
   const cid = checkbox.getAttribute('data-cid');
+  // Validation préalable AVANT pushUndo : empêche de tout décocher
+  if (!checkbox.checked && _evalClassIds(ev).length <= 1) {
+    checkbox.checked = true;
+    toast('⚠ Une évaluation doit concerner au moins une classe', 'warn');
+    return;
+  }
+  pushUndo();
   ev.classIds = _evalClassIds(ev).slice();
   if (checkbox.checked) {
     if (!ev.classIds.includes(cid)) ev.classIds.push(cid);
@@ -22539,12 +22630,6 @@ function _evalEditToggleClass(checkbox) {
       ev.dates[cid] = ev.date;
     }
   } else {
-    // Empêche de tout décocher : au moins une classe doit rester
-    if (ev.classIds.length <= 1) {
-      checkbox.checked = true;
-      toast('⚠ Une évaluation doit concerner au moins une classe', 'warn');
-      return;
-    }
     ev.classIds = ev.classIds.filter(x => x !== cid);
     // Si on décoche ev.classId (ancien "primaire"), réassigne sur la 1re restante
     if (ev.classId === cid) {
@@ -22832,6 +22917,7 @@ function _evalEditAddExo() {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev || ev.type !== 'C') return;
+  pushUndo();
   ev.exercices = ev.exercices || [];
   const exoId = 'exo_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
   const idx = ev.exercices.length + 1;
@@ -22844,6 +22930,7 @@ function _evalEditUpdateExo(idx, fieldOrLabel, maybeVal) {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev || !ev.exercices?.[idx]) return;
+  _evalArmUndo();
   // Rétro-compat : si signature à 2 args (idx, label), c'est l'ancien appel "label only"
   if (arguments.length === 2) {
     ev.exercices[idx].label = String(fieldOrLabel || '');
@@ -22866,6 +22953,7 @@ function _evalEditRemoveExo(idx) {
     ? `Supprimer "${exo.label || '(sans nom)'}" et ses ${nbQ} question${nbQ > 1 ? 's' : ''} ? Les notes saisies seront perdues.`
     : `Supprimer "${exo.label || '(sans nom)'}" ?`;
   if (!confirm(msg)) return;
+  pushUndo();
   // Supprime l'exo et ses questions (avec leurs saisies)
   const qIds = ev.miniNotes.filter(mn => mn.exerciceId === exo.id).map(mn => mn.id);
   ev.miniNotes = ev.miniNotes.filter(mn => mn.exerciceId !== exo.id);
@@ -22885,6 +22973,7 @@ function _evalEditAddQuestion(exoId) {
   if (!ev || ev.type !== 'C') return;
   const exo = ev.exercices?.find(e => e.id === exoId);
   if (!exo) return;
+  pushUndo();
   ev.miniNotes = ev.miniNotes || [];
   const qInExo = ev.miniNotes.filter(mn => mn.exerciceId === exoId).length;
   const exoIdx = ev.exercices.indexOf(exo);
@@ -22991,6 +23080,7 @@ function _evalEditAddMiniNote() {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
+  pushUndo();
   ev.miniNotes = ev.miniNotes || [];
   const nextIdx = ev.miniNotes.length + 1;
   ev.miniNotes.push({ id: _newMiniNoteId(), label: `Q${nextIdx}`, max: 1 });
@@ -23002,6 +23092,7 @@ function _evalEditUpdateMiniNote(idx, field, raw) {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
   if (!ev || !ev.miniNotes[idx]) return;
+  _evalArmUndo();
   if (field === 'label') ev.miniNotes[idx].label = String(raw || '');
   else if (field === 'name') ev.miniNotes[idx].name = String(raw || '');
   else if (field === 'date') {
@@ -23040,6 +23131,7 @@ function _evalEditRemoveMiniNote(idx) {
     ? `Supprimer la mini-note "${mn.label || '(sans nom)'}" ? ${usage} saisie${usage > 1 ? 's' : ''} associée${usage > 1 ? 's' : ''} sera perdue${usage > 1 ? 's' : ''}.`
     : `Supprimer la mini-note "${mn.label || '(sans nom)'}" ?`;
   if (!confirm(msg)) return;
+  pushUndo();
   // Retire la mini-note ET nettoie les saisies orphelines
   ev.miniNotes.splice(idx, 1);
   for (const sid in (ev.notes || {})) {
@@ -23270,6 +23362,7 @@ function _evalSaisieToggleExcluded(checkbox) {
   const mnId   = checkbox.getAttribute('data-mnid');
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
+  _evalArmUndo();
   ev.notes = ev.notes || {};
   ev.notes[sid] = ev.notes[sid] || { values: {} };
   ev.notes[sid].excluded = ev.notes[sid].excluded || [];
@@ -23295,6 +23388,7 @@ function _evalSaisieSaveAmen() {
   const sid    = document.getElementById('meval-saisie-sid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
+  _evalArmUndo();
   ev.notes = ev.notes || {};
   ev.notes[sid] = ev.notes[sid] || { values: {} };
   const dateIndiv = document.getElementById('meval-saisie-dateindiv').value;
@@ -23320,6 +23414,7 @@ function _evalSaisieUpdateNote(inputEl) {
   const mnId = inputEl.getAttribute('data-mnid');
   const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
   const parsed = _parseMiniNoteInput(inputEl.value);
+  _evalArmUndo();
 
   // Validation : un nombre doit être dans [0, mnMax]
   if (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax)) {
@@ -23942,6 +24037,7 @@ function _evalSetStudentRemark(inputEl) {
   if (!ev) return;
   const sid = inputEl.getAttribute('data-sid');
   const v = (inputEl.value || '').trim();
+  _evalArmUndo();
   ev.studentRemarks = ev.studentRemarks || {};
   if (v) ev.studentRemarks[sid] = v; else delete ev.studentRemarks[sid];
   ev.updatedAt = Date.now();
@@ -23956,6 +24052,7 @@ function _evalSetDateIndiv(inputEl) {
   if (!ev) return;
   const sid = inputEl.getAttribute('data-sid');
   const d = inputEl.value;
+  pushUndo();
   ev.notes = ev.notes || {};
   ev.notes[sid] = ev.notes[sid] || { values: {} };
   if (d) ev.notes[sid].dateIndiv = d; else delete ev.notes[sid].dateIndiv;
@@ -23974,20 +24071,21 @@ function _evalTableurUpdate(inputEl) {
   const sid   = row?.getAttribute('data-sid');
   if (!sid) return;
   const parsed = _parseMiniNoteInput(inputEl.value);
+  _evalArmUndo();
 
   const outOfRange = (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax));
   if (outOfRange) {
-    inputEl.style.background = '#fee';
-    inputEl.title = `Valeur hors barème (attendu : 0 – ${mnMax}) — confirmation demandée au déplacement du curseur`;
+    // Conserve la valeur (bonus / malus exceptionnel) mais marque visuellement.
+    // Ctrl+Z annule en cas de faute de frappe (grâce à _evalArmUndo plus haut).
+    inputEl.style.background = 'var(--margin-red-soft)';
+    inputEl.title = `⚠ Hors barème (conservé sciemment — attendu 0–${mnMax}) · Ctrl+Z pour annuler`;
     inputEl.dataset.outOfRange = '1';
-    // Pas de save tant que l'utilisateur n'a pas validé via le confirm onblur
-    _evalTableurDirty = true;
-    return; // sortir avant l'écriture dans ev.notes
+    _toastHorsBareme(parsed, mnMax);
+  } else {
+    inputEl.style.background = '';
+    inputEl.title = '';
+    delete inputEl.dataset.outOfRange;
   }
-  // Valeur OK : retire l'éventuel flag rouge
-  inputEl.style.background = '';
-  inputEl.title = '';
-  delete inputEl.dataset.outOfRange;
 
   ev.notes = ev.notes || {};
   ev.notes[sid] = ev.notes[sid] || { values: {} };
@@ -24021,64 +24119,11 @@ function _evalTableurUpdateTotalCell(cellTotal, ev, sid) {
   cellTotal.style.color = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
 }
 
-// Au blur sur une cellule de saisie Type A/C : si la valeur est hors barème,
-// demande explicitement à l'utilisateur s'il veut conserver (ex. bonus exceptionnel)
-// ou corriger. Si "Corriger", restaure la valeur précédemment enregistrée.
-let _evalConfirmInFlight = false;
-function _evalTableurConfirmIfOutOfRange(inputEl) {
-  if (_evalConfirmInFlight) return;
-  if (!inputEl.dataset.outOfRange) return;
-  const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
-  const parsed = _parseMiniNoteInput(inputEl.value);
-  if (typeof parsed !== 'number' || (parsed >= 0 && parsed <= mnMax)) {
-    delete inputEl.dataset.outOfRange;
-    inputEl.style.background = '';
-    inputEl.title = '';
-    return;
-  }
-  _evalConfirmInFlight = true;
-  const ok = window.confirm(
-    `⚠ Valeur hors barème : ${_fmtNote(parsed)} — attendu entre 0 et ${mnMax}.\n\n`
-    + `OK : conserver malgré tout (bonus exceptionnel, etc.)\n`
-    + `Annuler : restaurer la valeur précédente.`
-  );
-  _evalConfirmInFlight = false;
-  if (ok) {
-    // Validation explicite : on persiste la valeur hors barème
-    const evalId = document.getElementById('meval-tableur-evalid').value;
-    const ev = S.evaluations?.[evalId];
-    if (!ev) return;
-    const sid = inputEl.closest('tr')?.getAttribute('data-sid');
-    const mnId = inputEl.getAttribute('data-mnid');
-    if (!sid || !mnId) return;
-    ev.notes = ev.notes || {};
-    ev.notes[sid] = ev.notes[sid] || { values: {} };
-    ev.notes[sid].values[mnId] = parsed;
-    ev.updatedAt = Date.now();
-    delete inputEl.dataset.outOfRange;
-    inputEl.style.background = '#fde2e1'; // rouge clair persistant pour rappeler que c'est hors barème
-    inputEl.title = `⚠ Hors barème (conservé sciemment — attendu 0–${mnMax})`;
-    // Recalcule total
-    const row = inputEl.closest('tr');
-    const cellTotal = row?.querySelector('.meval-row-total');
-    if (cellTotal) _evalTableurUpdateTotalCell(cellTotal, ev, sid);
-    save();
-  } else {
-    // Restaure la valeur précédemment enregistrée
-    const evalId = document.getElementById('meval-tableur-evalid').value;
-    const ev = S.evaluations?.[evalId];
-    if (!ev) return;
-    const sid = inputEl.closest('tr')?.getAttribute('data-sid');
-    const mnId = inputEl.getAttribute('data-mnid');
-    if (!sid || !mnId) return;
-    const prev = ev.notes?.[sid]?.values?.[mnId];
-    const dispVal = (prev === 'NN' || prev === 'A') ? prev : (prev != null && prev !== '' ? String(prev).replace('.', ',') : '');
-    inputEl.value = dispVal;
-    delete inputEl.dataset.outOfRange;
-    inputEl.style.background = '';
-    inputEl.title = '';
-  }
-}
+// Hook conservé pour compatibilité avec onblur="_evalTableurConfirmIfOutOfRange(this)"
+// dans le HTML rendu. La valeur hors barème est désormais persistée en direct dans
+// _evalTableurUpdate (avec fond rose persistant + toast), donc cette fonction est un
+// no-op : pas de modale bloquante qui interrompt le flux de saisie en classe.
+function _evalTableurConfirmIfOutOfRange(_inputEl) { /* no-op */ }
 
 // ─── Coller multi-colonnes / multi-lignes directement dans le tableur ───
 // Quand l'utilisateur a une cellule focusée et colle un bloc (TSV, copie depuis
@@ -25218,6 +25263,7 @@ function _evalTableurBUpdate(inputEl) {
   const nbMax = S.evalPrefs?.nbLevels || 4;
   const parsed = _parseNiveauInput(inputEl.value, nbMax);
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  _evalArmUndo();
 
   pass.niveaux = pass.niveaux || {};
   pass.niveaux[sid] = pass.niveaux[sid] || {};
@@ -25289,6 +25335,7 @@ function _evalTableurEditPass(inputEl) {
   const cid    = inputEl.getAttribute('data-classid');
   const pass   = ev.passations?.find(p => p.id === passId);
   if (!pass) return;
+  _evalArmUndo();
   if (field === 'code') {
     pass.code = (inputEl.value || '').trim();
   } else if (field === 'date') {
@@ -25397,6 +25444,7 @@ function _tableurEditMn(inputEl) {
   const field = inputEl.getAttribute('data-field');
   const mn = ev.miniNotes?.find(m => m.id === mnId);
   if (!mn) return;
+  _evalArmUndo();
   if (field === 'label') {
     mn.label = String(inputEl.value || '');
   } else if (field === 'max') {
@@ -26703,6 +26751,7 @@ function _evalPassSaisieSetLevel(cid, niveau) {
   if (!ev) return;
   const p = ev.passations?.find(x => x.id === passId);
   if (!p) return;
+  _evalArmUndo();
   p.niveaux = p.niveaux || {};
   p.niveaux[sid] = p.niveaux[sid] || {};
   const cur = p.niveaux[sid][cid] || 0;
