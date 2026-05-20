@@ -2682,6 +2682,10 @@ kbd {
     <div class="about-section">
       <h3>🎨 Couleurs des niveaux de maîtrise</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Couleurs utilisées pour les pastilles N1 → N4 dans la saisie et les bilans.</p>
+      <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;font-size:.9em">
+        <input type="checkbox" id="evalprefs-colorsAuto" onchange="_evalPrefsToggleColorsAuto()">
+        <strong>Mode auto</strong> <span style="color:var(--pencil);font-size:.88em">— palette générée selon le nombre de niveaux (rouge → bleu)</span>
+      </label>
       <div id="evalprefs-colors" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center"></div>
     </div>
 
@@ -2765,8 +2769,12 @@ kbd {
     <div class="about-section">
       <h3>🌡 Seuils de couleur pour la note /20</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Couleurs de fond appliquées à la colonne <strong>Total</strong> dans le tableur et le bilan. Chaque ligne définit le seuil <em>au-dessous duquel</em> on applique la couleur. La dernière ligne (sans seuil) couvre les valeurs au-dessus. Tu peux ajouter/retirer des plages.</p>
+      <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;font-size:.9em">
+        <input type="checkbox" id="evalprefs-thresholdsAuto" onchange="_evalPrefsToggleThresholdsAuto()">
+        <strong>Mode auto</strong> <span style="color:var(--pencil);font-size:.88em">— seuils = milieux entre les points par niveau · couleurs = palette des niveaux</span>
+      </label>
       <div id="evalprefs-noteThresholds" style="display:flex;flex-direction:column;gap:6px"></div>
-      <button class="btn btn-g btn-sm" onclick="_evalPrefsAddNoteThreshold()" style="margin-top:8px">+ Ajouter une plage</button>
+      <button class="btn btn-g btn-sm" id="evalprefs-addNoteThreshold-btn" onclick="_evalPrefsAddNoteThreshold()" style="margin-top:8px">+ Ajouter une plage</button>
     </div>
 
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
@@ -4793,6 +4801,12 @@ const DEFAULT_EVAL_PREFS = {
   //   0.1 = dixième (12.1, 12.2…)
   //   0   = aucune (toutes les décimales, défaut historique)
   defaultGranularity: 0,
+  // Mode auto pour la palette niveaux : si true, on ré-applique _defaultColorsForNb(nb)
+  // à chaque enregistrement (et la palette s'adapte automatiquement quand on change nbLevels).
+  maitriseColorsAuto: false,
+  // Mode auto pour les seuils de couleur de la note : si true, on dérive
+  // {max, color} depuis maitriseColors + maitrisePoints (midpoints entre niveaux).
+  noteThresholdsAuto: false,
 };
 
 function migrateEvalDefaults() {
@@ -4856,6 +4870,8 @@ function migrateEvalDefaults() {
   if (!Array.isArray(ep.noteThresholds) || ep.noteThresholds.length === 0) {
     ep.noteThresholds = DEFAULT_EVAL_PREFS.noteThresholds.map(t => ({ ...t }));
   }
+  if (typeof ep.maitriseColorsAuto !== 'boolean') ep.maitriseColorsAuto = false;
+  if (typeof ep.noteThresholdsAuto !== 'boolean') ep.noteThresholdsAuto = false;
   // Bibliothèque commentaires (regroupée positifs/négatifs ; liste plate dans chaque groupe)
   if (!S.evalCommentLibrary || typeof S.evalCommentLibrary !== 'object') {
     S.evalCommentLibrary = { positive: [], negative: [] };
@@ -21529,6 +21545,24 @@ function _defaultPointsForNb(n) {
   if (n === 2) return [0, 20];
   return arr;
 }
+// Calcule les seuils de couleur de la note /maxNote automatiquement à partir
+// de la palette niveau + des points par niveau. Seuils = milieux entre points
+// consécutifs ; couleurs = palette niveau (1..nb). Dernier seuil = max=null.
+function _autoNoteThresholds(prefs) {
+  const nb = prefs.nbLevels || 4;
+  const points = (Array.isArray(prefs.maitrisePoints) && prefs.maitrisePoints.length >= nb)
+    ? prefs.maitrisePoints : _defaultPointsForNb(nb);
+  const colors = (prefs.maitriseColorsAuto || !Array.isArray(prefs.maitriseColors) || prefs.maitriseColors.length < nb)
+    ? _defaultColorsForNb(nb) : prefs.maitriseColors;
+  const out = [];
+  for (let i = 0; i < nb - 1; i++) {
+    const mid = Math.round(((points[i] + points[i+1]) / 2) * 100) / 100;
+    out.push({ max: mid, color: colors[i] });
+  }
+  out.push({ max: null, color: colors[nb - 1] });
+  return out;
+}
+
 // Pourcentages-seuils par défaut entre niveaux successifs
 function _defaultPercentsForNb(n) {
   const arr = [];
@@ -21560,17 +21594,23 @@ function _evalPrefsRenderAll(prefs) {
     prefs.thresholdPercents = _defaultPercentsForNb(nb);
     break;
   }
+  // ── Toggle auto couleurs ──
+  const wcAuto = document.getElementById('evalprefs-colorsAuto');
+  if (wcAuto) wcAuto.checked = !!prefs.maitriseColorsAuto;
   // ── Couleurs ──
   const wc = document.getElementById('evalprefs-colors');
   if (wc) {
     wc.innerHTML = '';
+    const isAuto = !!prefs.maitriseColorsAuto;
+    const colors = isAuto ? _defaultColorsForNb(nb) : prefs.maitriseColors;
     for (let i = 0; i < nb; i++) {
       const wrap = document.createElement('label');
-      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:.8em';
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.8em;' + (isAuto ? 'cursor:not-allowed;opacity:.7' : 'cursor:pointer');
       wrap.innerHTML = `
         <span style="font-weight:bold">${_esc(prefs.niveauLabels?.[i] || String(i + 1))}</span>
-        <input type="color" data-idx="${i}" value="${prefs.maitriseColors[i]}"
-               style="width:50px;height:36px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">`;
+        <input type="color" data-idx="${i}" value="${colors[i]}"
+               ${isAuto ? 'disabled' : ''}
+               style="width:50px;height:36px;border:1px solid var(--rule-line);border-radius:4px;${isAuto ? 'cursor:not-allowed' : 'cursor:pointer'}">`;
       wc.appendChild(wrap);
     }
   }
@@ -21636,27 +21676,74 @@ function _evalPrefsRenderAll(prefs) {
   const de = document.getElementById('evalprefs-defaultEnter'); if (de) de.value = prefs.defaultEnterBehavior || 'question';
   const dg = document.getElementById('evalprefs-defaultGranularity'); if (dg) dg.value = String(prefs.defaultGranularity ?? 0);
   // ── Seuils de couleur note ──
-  _evalPrefsRenderNoteThresholds(prefs.noteThresholds || []);
+  const wtAuto = document.getElementById('evalprefs-thresholdsAuto');
+  if (wtAuto) wtAuto.checked = !!prefs.noteThresholdsAuto;
+  const thresholds = prefs.noteThresholdsAuto ? _autoNoteThresholds(prefs) : (prefs.noteThresholds || []);
+  _evalPrefsRenderNoteThresholds(thresholds, !!prefs.noteThresholdsAuto);
+  const addBtn = document.getElementById('evalprefs-addNoteThreshold-btn');
+  if (addBtn) addBtn.style.display = prefs.noteThresholdsAuto ? 'none' : '';
 }
 
-function _evalPrefsRenderNoteThresholds(thresholds) {
+// Toggles : lus depuis la modale, on re-render avec les valeurs courantes
+function _evalPrefsToggleColorsAuto() {
+  const auto = document.getElementById('evalprefs-colorsAuto')?.checked;
+  // Lit les valeurs courantes pour les conserver dans le re-render
+  const prefs = _evalPrefsReadCurrent();
+  prefs.maitriseColorsAuto = !!auto;
+  _evalPrefsRenderAll(prefs);
+}
+function _evalPrefsToggleThresholdsAuto() {
+  const auto = document.getElementById('evalprefs-thresholdsAuto')?.checked;
+  const prefs = _evalPrefsReadCurrent();
+  prefs.noteThresholdsAuto = !!auto;
+  _evalPrefsRenderAll(prefs);
+}
+
+// Lit les valeurs courantes affichées dans la modale (sans valider) pour re-render
+function _evalPrefsReadCurrent() {
+  const nb = parseInt(document.getElementById('evalprefs-nbLevels')?.value, 10) || 4;
+  const colors = Array.from(document.querySelectorAll('#evalprefs-colors input[type="color"]'))
+    .map(i => i.value);
+  const points = Array.from(document.querySelectorAll('#evalprefs-points input[type="number"]'))
+    .map(i => parseFloat(i.value)).filter(Number.isFinite);
+  // Fallback si valeurs invalides ou incomplètes
+  const base = S.evalPrefs || DEFAULT_EVAL_PREFS;
+  return {
+    ...base,
+    nbLevels: nb,
+    niveauLabels: base.niveauLabels,
+    maitriseColors: (colors.length === nb) ? colors : (base.maitriseColors || _defaultColorsForNb(nb)),
+    maitrisePoints: (points.length === nb) ? points : (base.maitrisePoints || _defaultPointsForNb(nb)),
+    maitriseColorsAuto: !!document.getElementById('evalprefs-colorsAuto')?.checked,
+    noteThresholdsAuto: !!document.getElementById('evalprefs-thresholdsAuto')?.checked,
+    noteThresholds: _evalPrefsReadNoteThresholds(),
+    thresholdMode: base.thresholdMode,
+    thresholdPercents: base.thresholdPercents,
+    periodMode: base.periodMode,
+    meanRule: base.meanRule,
+    maxNoteDefault: base.maxNoteDefault,
+  };
+}
+
+function _evalPrefsRenderNoteThresholds(thresholds, readOnly) {
   const wrap = document.getElementById('evalprefs-noteThresholds');
   if (!wrap) return;
   wrap.innerHTML = '';
   thresholds.forEach((t, idx) => {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:.9em';
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:.9em' + (readOnly ? ';opacity:.75' : '');
     const isLast = (t.max == null);
     const maxField = isLast
       ? `<span style="color:var(--pencil);font-style:italic;width:80px">(au-dessus)</span>`
-      : `<input type="number" min="0" max="100" step="0.5" value="${t.max}" data-idx="${idx}" data-field="max" style="width:80px;padding:4px 6px;font-family:var(--font-mono)">`;
+      : `<input type="number" min="0" max="100" step="0.5" value="${t.max}" data-idx="${idx}" data-field="max" ${readOnly ? 'disabled' : ''} style="width:80px;padding:4px 6px;font-family:var(--font-mono);${readOnly ? 'cursor:not-allowed' : ''}">`;
+    const txtColor = _contrastTextColor(t.color) || '#fff';
     row.innerHTML = `
       <span style="color:var(--pencil);font-size:.85em">${isLast ? '≥' : '<'}</span>
       ${maxField}
       <span style="color:var(--pencil);font-size:.85em">→</span>
-      <input type="color" value="${t.color}" data-idx="${idx}" data-field="color" style="width:50px;height:30px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer">
-      <span style="font-family:var(--font-mono);font-size:.85em;color:#fff;background:${t.color};padding:2px 8px;border-radius:3px">${isLast ? 'haut' : t.max + '/20'}</span>
-      ${isLast ? '' : `<button class="btn btn-r btn-sm" onclick="_evalPrefsRemoveNoteThreshold(${idx})" title="Supprimer cette plage" style="padding:2px 8px;margin-left:auto">✕</button>`}
+      <input type="color" value="${t.color}" data-idx="${idx}" data-field="color" ${readOnly ? 'disabled' : ''} style="width:50px;height:30px;border:1px solid var(--rule-line);border-radius:4px;${readOnly ? 'cursor:not-allowed' : 'cursor:pointer'}">
+      <span style="font-family:var(--font-mono);font-size:.85em;color:${txtColor};background:${t.color};padding:2px 8px;border-radius:3px">${isLast ? 'haut' : t.max + '/20'}</span>
+      ${(isLast || readOnly) ? '' : `<button class="btn btn-r btn-sm" onclick="_evalPrefsRemoveNoteThreshold(${idx})" title="Supprimer cette plage" style="padding:2px 8px;margin-left:auto">✕</button>`}
     `;
     wrap.appendChild(row);
   });
@@ -21735,10 +21822,12 @@ function _evalPrefsRebuildLabels() {
   for (let i = 0; i < nb - 1; i++) {
     percents.push(Number.isFinite(curPercents[i]) ? curPercents[i] : defPercents[i]);
   }
+  const colorsAuto = !!document.getElementById('evalprefs-colorsAuto')?.checked;
+  const thresholdsAuto = !!document.getElementById('evalprefs-thresholdsAuto')?.checked;
   _evalPrefsRenderAll({
     nbLevels: nb,
     niveauLabels: labels,
-    maitriseColors: colors,
+    maitriseColors: colorsAuto ? _defaultColorsForNb(nb) : colors,
     maitrisePoints: points,
     thresholdMode: document.querySelector('input[name="evalprefs-thresholdMode"]:checked')?.value || S.evalPrefs?.thresholdMode || 'midpoint',
     thresholdPercents: percents,
@@ -21748,6 +21837,9 @@ function _evalPrefsRebuildLabels() {
     zeroLabel: S.evalPrefs?.zeroLabel || '0',
     codeAbsent: S.evalPrefs?.codeAbsent || 'A',
     codeNonNote: S.evalPrefs?.codeNonNote || 'NN',
+    maitriseColorsAuto: colorsAuto,
+    noteThresholdsAuto: thresholdsAuto,
+    noteThresholds: S.evalPrefs?.noteThresholds,
   });
 }
 
@@ -21799,6 +21891,9 @@ function _evalPrefsResetDefaults() {
     meanRule:         DEFAULT_EVAL_PREFS.meanRule,
     maxNoteDefault:   DEFAULT_EVAL_PREFS.maxNoteDefault,
     nbLevels:         DEFAULT_EVAL_PREFS.nbLevels,
+    maitriseColorsAuto: DEFAULT_EVAL_PREFS.maitriseColorsAuto,
+    noteThresholdsAuto: DEFAULT_EVAL_PREFS.noteThresholdsAuto,
+    noteThresholds:   DEFAULT_EVAL_PREFS.noteThresholds.map(t => ({ ...t })),
   });
 }
 
@@ -21806,12 +21901,18 @@ function _evalPrefsResetDefaults() {
 function _evalPrefsSave() {
   const nbLvlRaw = parseInt(document.getElementById('evalprefs-nbLevels')?.value, 10);
   const nb = (nbLvlRaw >= 2 && nbLvlRaw <= 6) ? nbLvlRaw : 4;
-  // Couleurs
-  const colors = [];
-  for (const inp of document.querySelectorAll('#evalprefs-colors input[type="color"]')) {
-    colors.push(inp.value);
+  // Couleurs (auto ou manuel)
+  const colorsAuto = !!document.getElementById('evalprefs-colorsAuto')?.checked;
+  let colors;
+  if (colorsAuto) {
+    colors = _defaultColorsForNb(nb);
+  } else {
+    colors = [];
+    for (const inp of document.querySelectorAll('#evalprefs-colors input[type="color"]')) {
+      colors.push(inp.value);
+    }
+    if (colors.length !== nb) { toast(`⚠ Couleurs : attendu ${nb} entrées, trouvé ${colors.length}`, 'warn'); return; }
   }
-  if (colors.length !== nb) { toast(`⚠ Couleurs : attendu ${nb} entrées, trouvé ${colors.length}`, 'warn'); return; }
   // Points
   const points = [];
   for (const inp of document.querySelectorAll('#evalprefs-points input[type="number"]')) {
@@ -21856,6 +21957,7 @@ function _evalPrefsSave() {
   // Tout est valide : on applique
   pushUndo();
   S.evalPrefs.maitriseColors    = colors;
+  S.evalPrefs.maitriseColorsAuto = colorsAuto;
   S.evalPrefs.maitrisePoints    = points;
   S.evalPrefs.thresholdMode     = thresholdMode;
   S.evalPrefs.thresholdPercents = percents;
@@ -21881,9 +21983,15 @@ function _evalPrefsSave() {
   S.evalPrefs.defaultEnterBehavior = document.getElementById('evalprefs-defaultEnter')?.value || 'question';
   const dGran = parseFloat(document.getElementById('evalprefs-defaultGranularity')?.value);
   S.evalPrefs.defaultGranularity = (Number.isFinite(dGran) && dGran >= 0) ? dGran : 0;
-  // Seuils note /20
-  const noteThresholds = _evalPrefsReadNoteThresholds();
-  if (noteThresholds.length > 0) S.evalPrefs.noteThresholds = noteThresholds;
+  // Seuils note /20 (auto ou manuel)
+  const thresholdsAuto = !!document.getElementById('evalprefs-thresholdsAuto')?.checked;
+  S.evalPrefs.noteThresholdsAuto = thresholdsAuto;
+  if (thresholdsAuto) {
+    S.evalPrefs.noteThresholds = _autoNoteThresholds(S.evalPrefs);
+  } else {
+    const noteThresholds = _evalPrefsReadNoteThresholds();
+    if (noteThresholds.length > 0) S.evalPrefs.noteThresholds = noteThresholds;
+  }
   save();
   closeMod2('mevalprefs');
   // Re-render le tableur courant si ouvert
