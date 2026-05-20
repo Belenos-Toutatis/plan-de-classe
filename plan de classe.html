@@ -4730,7 +4730,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T23:00:00Z';
+const APP_VERSION   = '2026-05-20T23:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -18628,6 +18628,38 @@ function _serializeSeating(seating) {
   return JSON.stringify(keys.map(k => [k, seating[k]]));
 }
 
+// Retourne le numéro de position d'un élève AU MOMENT d'une évaluation :
+// lit le seatingHash de l'éval (ou son hash par-classe en multi-classes) →
+// snapshot {key:sid} → key 'r,c' de l'élève → numéro QCMcam.
+// La salle de référence pour la numérotation QCMcam = cls.activeRoom (le
+// snapshot ne stocke pas la salle — approximation acceptable : la salle
+// principale d'une classe change rarement). Fallback : position actuelle
+// si pas de hash (legacy, démo). Renvoie '' si l'élève n'était pas placé.
+function _evalSeatLabelAtTime(ev, cls, sid) {
+  if (!ev || !cls || !sid) return '';
+  // 1) Snapshot via hash (multi-classes : seatingHashes[cls.id] prioritaire)
+  const hash = ev.seatingHashes?.[cls.id] || ev.seatingHash || null;
+  const snap = hash ? _getSeatingSnapshot(hash) : null;
+  if (snap) {
+    for (const k in snap) {
+      if (snap[k] === sid) {
+        const [r, c] = k.split(',').map(Number);
+        if (Number.isFinite(r) && Number.isFinite(c)) {
+          const cols = S.salles[cls.activeRoom]?.cols || 0;
+          return String(qcmNumForCell(cls, cls.activeRoom, r, c) ?? seatLabelQCM(r, c, cols));
+        }
+        return '';
+      }
+    }
+    return ''; // l'élève n'était pas placé au moment du devoir
+  }
+  // 2) Fallback : position actuelle
+  const pos = getPos(sid, cls);
+  if (!pos) return '';
+  const cols = S.salles[cls.activeRoom]?.cols || 0;
+  return String(qcmNumForCell(cls, cls.activeRoom, pos.r, pos.c) ?? seatLabelQCM(pos.r, pos.c, cols));
+}
+
 // Enregistre un snapshot de seating dans le pool (s'il n'y est pas déjà) et renvoie son hash.
 // Renvoie null si le seating est vide ou invalide (rien à snapshoter).
 function _registerSeatingSnapshot(seating) {
@@ -22530,6 +22562,28 @@ function _seedDemoEvaluations() {
   }
 
   // 3e A : volontairement aucune éval (état vide démontré dans l'UI)
+
+  // Enregistre un seatingHash pour chaque éval démo : permet au tooltip
+  // "position au moment du devoir" de fonctionner. Hash basé sur la salle
+  // active de chaque classe au moment du seed (cohérent avec ce que ferait
+  // _evalNewSave en usage réel).
+  for (const evId of Object.keys(S.evaluations)) {
+    const ev = S.evaluations[evId];
+    if (ev.seatingHash) continue; // déjà fait (idempotent si seed relancé)
+    const classIds = ev.classIds || (ev.classId ? [ev.classId] : []);
+    ev.seatingHashes = ev.seatingHashes || {};
+    for (const cid of classIds) {
+      const c = S.classes[cid];
+      if (!c) continue;
+      const room = c.rooms?.[c.activeRoom];
+      const seating = room?.seating || {};
+      const hash = _registerSeatingSnapshot(seating);
+      if (hash) {
+        ev.seatingHashes[cid] = hash;
+        if (!ev.seatingHash && cid === (ev.classId || classIds[0])) ev.seatingHash = hash;
+      }
+    }
+  }
 }
 
 // Charge la démo "à la demande" (depuis la modale Reset) :
@@ -28682,12 +28736,10 @@ function renderBilanTab() {
         evValues[k].push(n);
         const bg = _noteColor(n, 20);
         const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
-        // Position de l'élève dans la salle active de la classe affichée (numéro QCMcam).
-        const _pos = getPos(sid, cls);
-        const _posLbl = _pos
-          ? String(qcmNumForCell(cls, cls.activeRoom, _pos.r, _pos.c) ?? seatLabelQCM(_pos.r, _pos.c, S.salles[cls.activeRoom]?.cols || 0))
-          : '';
-        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl : ' · non placé(e)'}`;
+        // Position de l'élève AU MOMENT du devoir (via seatingHash de l'éval).
+        // Fallback : position actuelle si l'éval n'a pas de snapshot (legacy/démo sans hash).
+        const _posLbl = _evalSeatLabelAtTime(ev, cls, sid);
+        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}`;
         html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg};color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
       }
     }
