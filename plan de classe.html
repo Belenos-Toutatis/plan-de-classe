@@ -1007,17 +1007,19 @@ html[data-theme="dark"] #mlinks-list > div[style*="background:#fafafa"] { backgr
 .pass-code-chip { background: var(--ink-blue); color: var(--paper); }
 html[data-theme="dark"] .pass-code-chip { background: #3b5a8c !important; color: var(--ink-deep) !important; }
 
-/* Tableur Type B — select de compétence : compact 54px en mode fermé, le navigateur
-   tronque visuellement le "— nom long" qui reste visible quand le dropdown s'ouvre. */
+/* Tableur Type B — select de compétence : compact en mode fermé, le navigateur
+   tronque visuellement le "— nom long" qui reste visible quand le dropdown s'ouvre.
+   Largeur calibrée pour afficher au moins le code court (3-4 caractères + flèche)
+   et qu'on ne tronque pas accidentellement le code lui-même en "c.". */
 .meval-comp-select {
-  padding: 2px 4px;
+  padding: 2px 2px;
   font-family: var(--font-mono);
   font-weight: 600;
   border: 1px solid transparent;
   background: transparent;
   font-size: .92em;
-  width: 54px;
-  max-width: 54px;
+  width: 70px;
+  max-width: 70px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1099,8 +1101,10 @@ html[data-theme="dark"] textarea {
 /* Saisie note/niveau dans le tableur d'éval : on ne force PAS le fond, le td
    parent porte la couleur signifiante (rouge/orange/vert/bleu/gris) qui doit
    transparaître à travers l'input transparent. La couleur de texte est calculée
-   par luminance (_contrastTextColor) dans le rendu JS. */
-html[data-theme="dark"] input.meval-niveau-input {
+   par luminance (_contrastTextColor) dans le rendu JS. APPLIQUÉ AUX 2 THÈMES
+   (clair et sombre) — sinon en clair, l'input prend le fond blanc par défaut du
+   navigateur qui masque la couleur signifiante du td. */
+input.meval-niveau-input {
   background: transparent !important;
   border-color: transparent !important;
 }
@@ -2485,6 +2489,7 @@ kbd {
     <div class="sh">
       <h2>🎯 Bilan par compétences</h2>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+        <button class="btn btn-g btn-sm" onclick="openCompetencesManager()" title="Gérer les compétences : codes courts, noms complets, domaines du socle">⚙ Gérer les compétences</button>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="comp-period-filter" onchange="renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
       </div>
@@ -3607,6 +3612,27 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="_evalPassSaisiePrev()" id="meval-pass-saisie-prev-btn">← Précédent</button>
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-pass-saisie')">Fermer</button>
       <button class="btn btn-p btn-sm" onclick="_evalPassSaisieNext()" id="meval-pass-saisie-next-btn">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Gestion des compétences (codes courts, noms, domaines du socle) ── -->
+<div id="mcompmgr" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:880px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+    <h2>🎯 Gérer les compétences du socle</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
+      Modifie le <strong>code court</strong> (affiché dans le tableur, ex. <code>C1</code>), le <strong>nom complet</strong> (descriptif au survol) et le <strong>domaine du socle</strong> auquel chaque compétence est rattachée. Les compétences sont partagées entre toutes les classes et toutes les évaluations.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn btn-p btn-sm" onclick="mcompmgrAdd()">+ Ajouter une compétence</button>
+      <button class="btn btn-g btn-sm" onclick="mcompmgrSortByDomain()" title="Trier l'affichage par domaine du socle">📂 Grouper par domaine</button>
+      <button class="btn btn-g btn-sm" onclick="mcompmgrSortByCode()" title="Trier par code court (ordre alphanumérique)">🔤 Trier par code</button>
+      <span id="mcompmgr-count" style="margin-left:auto;font-size:.85em;color:var(--pencil)"></span>
+    </div>
+    <div id="mcompmgr-list" style="flex:1;overflow-y:auto;border:1px solid var(--rule-line);border-radius:4px;padding:6px"></div>
+    <div class="ma" style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:.82em;color:var(--pencil);font-style:italic">Les modifications sont enregistrées au fur et à mesure.</span>
+      <button class="btn btn-p" onclick="closeMod2('mcompmgr')">Fermer</button>
     </div>
   </div>
 </div>
@@ -23667,6 +23693,148 @@ function _competencePickerApply() {
   closeMod2('meval-pick-comp');
   _evalEditRenderMiniNotes();
   toast('✓ Compétences mises à jour');
+}
+
+// ═══════════════ Gestion des compétences (CRUD) ═══════════════
+// Modale ⚙ Gérer les compétences depuis l'onglet 🎯 Bilan par compétences.
+// CRUD sur S.competences = { id: {id,code,name,domainId} } avec domaine rattaché
+// à S.competenceDomains = { id: {id,code,name} } (8 domaines fixes du socle).
+let _mcompmgrSortMode = 'domain'; // 'domain' | 'code'
+
+function openCompetencesManager() {
+  if (!S.competences) S.competences = {};
+  if (!S.competenceDomains) S.competenceDomains = {};
+  _mcompmgrSortMode = 'domain';
+  _renderCompMgrList();
+  openMod('mcompmgr');
+}
+
+function mcompmgrSortByDomain() { _mcompmgrSortMode = 'domain'; _renderCompMgrList(); }
+function mcompmgrSortByCode()   { _mcompmgrSortMode = 'code';   _renderCompMgrList(); }
+
+function _renderCompMgrList() {
+  const list = document.getElementById('mcompmgr-list');
+  const count = document.getElementById('mcompmgr-count');
+  if (!list) return;
+  const comps = Object.values(S.competences || {});
+  const doms = Object.values(S.competenceDomains || {});
+  if (count) count.textContent = `${comps.length} compétence${comps.length > 1 ? 's' : ''} · ${doms.length} domaine${doms.length > 1 ? 's' : ''} du socle`;
+  if (comps.length === 0) {
+    list.innerHTML = '<p style="color:var(--pencil);font-style:italic;text-align:center;padding:14px">Aucune compétence pour l\'instant. Clique sur <strong>+ Ajouter une compétence</strong>.</p>';
+    return;
+  }
+  // Options du <select> domaine
+  const domOpts = doms
+    .slice().sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }))
+    .map(d => `<option value="${_esc(d.id)}">${_esc(d.code)} — ${_esc(d.name)}</option>`).join('');
+
+  const buildRow = c => {
+    const usage = _countCompUsage(c.id);
+    return `<div class="mcompmgr-row" data-cid="${_esc(c.id)}" style="display:grid;grid-template-columns:80px 1fr 220px 60px 36px;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--rule-line-soft)">
+      <input type="text" value="${_escAttr(c.code || '')}" maxlength="8" placeholder="Code" onchange="updateCompField('${_esc(c.id)}','code',this.value)" style="padding:3px 6px;font-family:var(--font-mono);font-weight:600;text-align:center" title="Code court (ex. C1, D1.1, Lec)">
+      <input type="text" value="${_escAttr(c.name || '')}" maxlength="120" placeholder="Nom complet (descriptif)" onchange="updateCompField('${_esc(c.id)}','name',this.value)" style="padding:3px 6px" title="Descriptif complet (affiché au survol et dans le dropdown du tableur)">
+      <select onchange="updateCompField('${_esc(c.id)}','domainId',this.value)" title="Domaine du socle de référence" style="padding:3px 6px;font-size:.88em">
+        <option value="">— Sans domaine —</option>
+        ${domOpts.replace(`value="${_esc(c.domainId || '')}"`, `value="${_esc(c.domainId || '')}" selected`)}
+      </select>
+      <span style="font-size:.78em;color:var(--pencil);text-align:right" title="Nombre d'évaluations qui référencent cette compétence">${usage ? usage + ' éval' + (usage > 1 ? 's' : '') : '—'}</span>
+      <button class="btn btn-d btn-sm" onclick="deleteCompetence('${_esc(c.id)}')" title="Supprimer cette compétence (refusé si utilisée par une évaluation)" style="padding:2px 6px">🗑</button>
+    </div>`;
+  };
+
+  if (_mcompmgrSortMode === 'domain') {
+    // Groupé par domaine
+    const byDom = {};
+    for (const c of comps) {
+      const key = c.domainId || '_nodom';
+      (byDom[key] = byDom[key] || []).push(c);
+    }
+    const order = doms.slice().sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true })).map(d => d.id);
+    if (byDom._nodom) order.push('_nodom');
+    let html = '';
+    for (const dId of order) {
+      const arr = byDom[dId];
+      if (!arr || !arr.length) continue;
+      arr.sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
+      const dom = S.competenceDomains?.[dId];
+      const lbl = dom ? `${dom.code} — ${dom.name}` : 'Sans domaine';
+      html += `<div style="margin:8px 0 2px;padding:4px 8px;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600;letter-spacing:0.05em;text-transform:uppercase">${_esc(lbl)}</div>`;
+      html += arr.map(buildRow).join('');
+    }
+    list.innerHTML = html;
+  } else {
+    // Tri à plat par code
+    comps.sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
+    list.innerHTML = comps.map(buildRow).join('');
+  }
+}
+
+function _countCompUsage(cid) {
+  let n = 0;
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!ev) continue;
+    // Type B
+    if (Array.isArray(ev.passations)) {
+      for (const p of ev.passations) {
+        if (Array.isArray(p.competenceIds) && p.competenceIds.includes(cid)) { n++; break; }
+      }
+      continue;
+    }
+    // Type A/C : via mini-notes
+    if (Array.isArray(ev.miniNotes)) {
+      if (ev.miniNotes.some(mn => Array.isArray(mn.competenceIds) && mn.competenceIds.includes(cid))) n++;
+    }
+  }
+  return n;
+}
+
+function updateCompField(cid, field, val) {
+  const c = S.competences?.[cid];
+  if (!c) return;
+  const v = (val || '').trim();
+  if (field === 'code') {
+    if (!v) { toast('⚠ Code court obligatoire', 'warn'); _renderCompMgrList(); return; }
+    pushUndo();
+    c.code = v;
+  } else if (field === 'name') {
+    pushUndo();
+    c.name = v;
+  } else if (field === 'domainId') {
+    pushUndo();
+    if (v && S.competenceDomains?.[v]) c.domainId = v; else delete c.domainId;
+  }
+  save();
+  // Re-render uniquement si on a regroupé par domaine (le tri pourrait changer)
+  if (_mcompmgrSortMode === 'domain' && field === 'domainId') _renderCompMgrList();
+}
+
+function mcompmgrAdd() {
+  pushUndo();
+  const id = 'comp_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
+  S.competences[id] = { id, code: '', name: '', domainId: '' };
+  save();
+  _renderCompMgrList();
+  // Focus le champ Code de la nouvelle ligne
+  setTimeout(() => {
+    const row = document.querySelector(`.mcompmgr-row[data-cid="${id}"] input[type="text"]`);
+    if (row) { row.focus(); row.select(); }
+  }, 50);
+}
+
+function deleteCompetence(cid) {
+  const c = S.competences?.[cid];
+  if (!c) return;
+  const usage = _countCompUsage(cid);
+  if (usage > 0) {
+    toast(`⚠ Impossible : utilisée dans ${usage} évaluation${usage > 1 ? 's' : ''}. Retire-la d'abord des évals.`, 'warn');
+    return;
+  }
+  if (!confirm(`Supprimer la compétence « ${c.code || '(sans code)'}${c.name ? ' — ' + c.name : ''} » ?`)) return;
+  pushUndo();
+  delete S.competences[cid];
+  save();
+  _renderCompMgrList();
+  toast('🗑 Compétence supprimée');
 }
 
 function _evalEditAddMiniNote() {
