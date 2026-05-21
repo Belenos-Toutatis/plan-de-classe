@@ -1182,6 +1182,112 @@ Corrigé sur 3 plans :
 2. Migration : `migrateEvalDefaults()` parcourt `S.evaluations[*].notes[*].comments` et ré-emballe les strings en tableaux à chaque chargement (idempotent)
 3. Garde-fou dans `_evalCommentsGetList` (compat live)
 
+### Modèle de dates 100 % per-classe
+
+Plus de date globale sur l'éval. Toutes les dates et créneaux passent par des maps per-classe :
+- `ev.dates[cid]` — date pour cette classe (au lieu de `ev.date`)
+- `ev.slotIds[cid]` — créneau pour cette classe (au lieu de `ev.slotId`)
+- `ev.datesManual[cid]` — `true` si la classe est en mode manuel (saisie utilisateur figée) ; sinon mode auto (date recalculée depuis la dernière mn/passation)
+
+**Helpers** :
+- `_evalNormalizeDates(ev)` — canonicaliseur : propage les legacy `ev.date` / `ev.dateManual` vers les maps per-classe, nettoie les entrées orphelines (classes plus dans `classIds`). Appelé dans `postLoadHook`, `_evalEditToggleClass`, `_evalEditSave`, `_evalNewSave`.
+- `_evalAutoUpdateDate(ev)` — itère sur les classes, skip celles `datesManual`, écrit `ev.dates[cid] = max(sous-dates per-classe)`. Pour Type A : `mn.dates[cid] || mn.date`. Pour Type B : idem passations.
+- `_evalDateFor(ev, classId, group?)` / `_evalSlotIdFor(ev, classId)` — cascade per-groupe → per-classe → fallback sub-dates (mn/passations) → ancien `ev.date`.
+
+**UI Réglages** : champ « Date » global toujours masqué (`_evalEditAdjustGlobalDateVisibility` est un masque inconditionnel). Dans la section « Classes concernées », chaque classe cochée affiche son input date + bouton **↻ Auto** (si manuel) ou hint **(auto)** (si auto). Éditer le champ bascule en manuel ; cliquer Auto efface le flag et recalcule.
+
+### Granularité par mn et par passation
+
+Chaque mini-note (Type A/C) peut porter en plus de sa date :
+- `mn.slotIds[cid]` — créneau per-classe (rendu dans l'en-tête tableur à côté de la date, options régénérées selon planning de la salle / jour de la semaine)
+- `mn.datesByGroup[cid][g]` / `mn.slotIdsByGroup[cid][g]` — overrides per-groupe (G1/G2/G3) au sein d'une classe. Édité via la modale clic droit (`meval-mn-menu`) avec checkbox « Distinguer par groupe ». Pictogramme 👥 sur l'en-tête de colonne quand des données per-groupe existent.
+
+Chaque passation (Type B) — idem : `pass.datesByGroup[cid][g]`, `pass.slotIdsByGroup[cid][g]`. Édité via le clic droit `meval-pass-menu` (nouveau bouton ✓ Enregistrer en bas + section Distinguer par groupe). En-tête de colonne : date + select créneau côte à côte (au lieu d'un libellé statique).
+
+### Tableur Type A/C — frontière exo + saisie en temps réel
+
+- **Frontière entre exercices** (Type C) : la 1re colonne de chaque nouvel exo (header + cellule de saisie + footer stats) reçoit un `border-left:2px solid var(--ink-blue-soft)`. Set d'indices via `exoBoundarySet` calculé à partir de `exoGroups.colStart`.
+- **Type C en-tête vertical** : code / barème / pastille compétence empilés sur 3 lignes (au lieu de code + max côte à côte) → colonnes peuvent rester serrées à 70px.
+- **Saisie en temps réel** : `_evalTableurUpdate` met à jour la couleur de fond de la cellule + la couleur du texte à chaque frappe (plus besoin de refresh). Helpers `_evalTableurRefreshFooterStats`, `_evalTableurRefreshRowDerived`, `_evalTableurRefreshFooterStatsB` recalculent toutes les stats footer + colonnes dérivées (Σ exo, brut, comps inline) en place sans toucher au focus.
+- **Confirmation hors barème** : `_evalTableurConfirmIfOutOfRange` (au blur) → confirm() bloquant si la note finale est hors `[0, mn.max]`. Refus = restaure la valeur d'avant focus (capturée dans `dataset.prevValue` à l'`onfocus`).
+- **Code/barème serrés** Type A : `maxlength="5"` sur le code, `max=99` + largeur réduite (54px / 40px) pour le barème. Type C garde les dimensions historiques (60px / 40px, max=100).
+
+### Affectation de compétences en lot (Type C)
+
+Modale `meval-pick-comp` enrichie d'une section « 📋 Aussi appliquer à » qui liste les autres questions de l'éval, groupées par exercice, avec checkbox + boutons « Tout cocher / Tout décocher ». À l'apply, les compétences cochées sont écrites sur toutes les questions cibles d'un coup. Le picker accepte désormais un index unique (rétro-compat) OU un tableau. Bouton **🎯 Compétences…** ajouté dans la modale contextuelle d'une mini-note du tableur (clic droit).
+
+### Création / duplication d'évaluation — panneau unique
+
+Plus de modale Réglages intermédiaire. La modale `meval-new` (création + duplication) contient désormais toutes les sections :
+1. **Type** (radio A/B/C, verrouillé en duplication)
+2. **Informations** (nom court · nom long · descriptif · période · note max · coef · granulométrie)
+3. **Classes concernées** : chips compacts en haut (clic = toggle), lignes per-classe en dessous **uniquement pour les classes cochées** (input date + select créneau). État local `_evalNewState = { dates, slotIds }`.
+4. **Options avancées** : countsForMean, facultative + 3 modes, weighting (Type B), meanRule (Type B/C — caché Type A)
+
+À ✓ Créer → bascule directement sur le tableur (ouvre Structure si la mini-note/passation initiale manque, puis revient au tableur via `_modalReturnTo['meval-structure']`). Le bouton ⚙ dans la toolbar du tableur permet d'ajuster les options avancées plus tard.
+
+### Import CSV QCMcam — picker dossier mémorisé
+
+Bouton **📂** dans la toolbar du tableur Type A/C. Modale `meval-qcmcam` :
+- Sélecteur de mini-note cible
+- **Picker fichier** : handle du dossier d'import stocké dans IndexedDB (`'qcmcam-import-dir'`). Liste des `.csv`/`.tsv` du dossier, triable :
+  - 🕐 Plus récents en premier (défaut, `lastModified`)
+  - 🔤 Nom (A→Z, tri naturel français)
+  - Préférence persistée dans `localStorage.planClasse_qcmcamImportSort`
+- Fallback `<input type="file">` pour Safari/Firefox ou fichier ponctuel.
+
+**Parsing** : TSV (séparateur tabulation), guillemets droits optionnels, CRLF. Header `id / Nom / Q1..Qn / Score`. Ligne « Bonne réponse » skippée (id vide).
+- **Score** : dernière cellule numérique non vide après la colonne Nom (gère le padding loin à droite quand toutes les questions n'ont pas été soumises).
+- **Absent** : si toutes les colonnes Q* de l'élève sont vides → `score = 'A'`.
+- **Barème détecté** : `max(réponses non vides par élève) || nb de "Bonne réponse" renseignées || qIdx.length`. Cf. `_qcmcamExtractRows`.
+
+**3 modes proposés** quand barème détecté ≠ `mn.max` :
+- `update` (défaut) — modifie `mn.max`
+- `create` — crée une nouvelle mini-note avec le bon barème (utile si la mini-note a déjà été notée pour d'autres classes — préserve l'historique)
+- `keep` — laisse `mn.max` inchangé, clampe
+
+**Date** : motif `AAAA-MM-JJ` cherché dans le nom du fichier (`_qcmcamExtractDate`). Si trouvée, checkbox « 📅 Appliquer à la mini-note ».
+
+**Matching élève → ligne CSV** (`_qcmcamMatchStudent`) : la colonne `Nom` du CSV contient le prénom éventuellement suivi des premières lettres du nom de famille. Normalisation (`_qcmcamNorm` : NFD, accents, tirets, apostrophes, casse). Cascade : prénom exact → prénom commençant par la chaîne → désambiguïsation par début de nom de famille → `ambig` (rouge dans l'aperçu).
+
+### Bilan des évaluations — toolbar et colonnes
+
+- **Pastille type** (`A`/`B`/`C`) dans chaque en-tête de colonne d'éval (classe `eval-type-badge`).
+- **Clic gauche** sur l'en-tête de colonne ouvre la saisie en mode tableur (au lieu d'un clic droit). Tooltip de survol : type + nom + nom long + date + /noteMax + mention facultative + descriptif. Aucune mention « clic droit pour ouvrir ».
+- **Tri des évaluations** : date croissante (plus anciennes à gauche), tri secondaire par nom court en cas d'égalité, évals sans date en fin de tableau.
+- **Évaluations facultatives** :
+  - Badge **★** (étoile orange) dans l'en-tête de colonne, tooltip explicite le mode (improveOnly / bonus / over10).
+  - **Cellules non comptées** pour un élève : fond hachuré gris léger superposé à la couleur de barème. Tooltip : `★ Facultative — NON comptée pour cet élève (mode : X)`. Calcul via `_computeStudentFacultativeCounted(classId, sid, periode)` qui miroie la logique de moyenne pour tracker les facultatives effectivement comptées.
+- **Colonne 🎓 Conseil** (par période) à droite de Remarque : 4 boutons-pastilles `F` (vert) · `E` (bleu) · `AT` (orange) · `AC` (rouge). F et E mutuellement exclusifs. AT et AC cumulables entre eux et avec F/E. Storage `S.conseilClasse[classId][sid][periode] = { F, E, AT, AC }`. Footer du tableau : totaux par période sous forme de pastilles. `_toggleConseilClasse` préserve la position de scroll de `.bilan-table-scroll` lors du re-render.
+
+### Bilan par compétences — toolbar
+
+- Sélecteur d'affichage : `🧩 Codes compétences` (défaut) / `🏛 Domaines du socle`. En mode domaine, 1 colonne par domaine, niveau = moyenne arithmétique des compétences évaluées du domaine. Tooltip détaillé.
+- Toggle `🎯 Arrondir aux entiers` : affiche `Math.round(niveau)` au lieu de la décimale. Pris en compte par `📋 Copier`, `💾 CSV` et `📤 Export ENT`. Préférence persistée.
+- En-tête de la colonne Moyenne : unité visuelle `/4` ajoutée pour éviter la confusion avec une note /20.
+
+### Onglets Évaluation — mode d'emploi pliable
+
+Les 3 onglets du volet Évaluation (Devoirs, Bilan évaluations, Bilan compétences) ont chacun un paragraphe descriptif en haut. Boutons :
+- **✕** en haut à droite du paragraphe pour le masquer.
+- **?** à gauche de Période (initialement caché) qui réapparaît quand le paragraphe est masqué, pour le ré-afficher.
+
+État persisté par onglet : `planClasse_evhelp_notes`, `planClasse_evhelp_bilan`, `planClasse_evhelp_comp`. Restauration via `_evhelpApply(key)` appelé en début de chaque renderer.
+
+### Liste des Devoirs — tri configurable
+
+Barre de tri au-dessus de la liste, 4 modes :
+- 📅 Date (plus récent en premier, défaut)
+- 🔤 Nom (A→Z, tri naturel français)
+- 📂 Type, puis date
+- 📂 Type, puis nom
+
+Bouton « ↓ ordre normal / ↑ inversé » pour basculer dans chaque mode. Persistance via `localStorage.planClasse_evalListSort` + `planClasse_evalListReverse`. En modes regroupés, un en-tête mono / dashed marque les blocs TYPE A / TYPE B / TYPE C.
+
+### Filet rouge — masqué quand une modale est ouverte
+
+`body:has(.mo.on)::before { display: none; }` — règle CSS pure. Évite que le filet rouge (`body::before`, z-index 9990) passe au-dessus du tableur d'éval en mode plein écran (99vw).
+
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
 - CSS dans le `<style>`, JS dans le `<script>` en fin de body
