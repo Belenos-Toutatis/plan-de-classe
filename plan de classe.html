@@ -2538,7 +2538,7 @@ kbd {
   <div id="tab-notes" class="tab">
     <div class="sh">
       <h2>📊 Devoirs</h2>
-      <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation pour la classe active">+ Nouvelle évaluation</button>
+      <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation (choix d'une ou plusieurs classes)">+ Nouvelle évaluation</button>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
         <select id="eval-period-filter" onchange="_syncBilanPeriode('eval-period-filter');renderEvalNotes()" style="padding:4px 8px;font-size:.9em" title="Période affichée. Partagée entre les onglets Devoirs, Bilan par compétences et Bilan des évaluations."></select>
@@ -3346,8 +3346,13 @@ kbd {
   <div class="mb" style="max-width:560px;width:100%">
     <h2 id="meval-new-title">+ Nouvelle évaluation</h2>
     <input type="hidden" id="meval-new-id">
+    <input type="hidden" id="meval-new-source-id">
+    <div id="meval-new-classes-wrap" style="margin-bottom:14px;padding:10px;background:var(--paper-warm);border-radius:4px;display:none">
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">Classe(s) concernée(s) <span style="color:var(--margin-red);text-transform:none;letter-spacing:0">*</span></div>
+      <div id="meval-new-classes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
     <div style="margin-bottom:14px;padding:10px;background:var(--paper-warm);border-radius:4px">
-      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">Type d'évaluation</div>
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">Type d'évaluation <span id="meval-new-type-lock" style="display:none;color:var(--pencil);text-transform:none;letter-spacing:0;font-family:var(--font-sans)">(verrouillé en duplication — le type reste celui de l'original)</span></div>
       <label style="display:block;margin:3px 0;cursor:pointer">
         <input type="radio" name="meval-new-type" value="A" checked>
         <strong>Type A — Mini-notes (DS / IE classique)</strong>
@@ -3445,7 +3450,19 @@ kbd {
         <label style="display:block;cursor:pointer"><input type="radio" name="meval-edit-facmoderadio" value="over10" onchange="_evalEditMarkDirty()"> Compte <strong>uniquement si &gt; 10/20</strong></label>
       </div>
 
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-line-soft)">
+      <div id="meval-edit-weighting-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-line-soft);display:none">
+        <div style="font-size:.92em;margin-bottom:4px"><strong>Calcul de la note finale</strong> <span style="color:var(--pencil);font-size:.88em">(Type B)</span></div>
+        <label style="display:block;cursor:pointer;font-size:.88em" title="Moyenne par compétence puis moyenne des compétences — toutes les compétences pèsent autant, peu importe le nombre de saisies">
+          <input type="radio" name="meval-edit-weighting" value="perCompetence" onchange="_evalEditMarkDirty()">
+          <strong>Compétences à égalité</strong> <span style="color:var(--pencil)">— chaque compétence pèse pareil, peu importe le nombre de saisies</span>
+        </label>
+        <label style="display:block;cursor:pointer;font-size:.88em" title="Chaque saisie compte pour 1 — une compétence évaluée 3 fois pèse 3 fois plus qu'une évaluée 1 fois">
+          <input type="radio" name="meval-edit-weighting" value="equal" onchange="_evalEditMarkDirty()">
+          <strong>Compétences pondérées</strong> <span style="color:var(--pencil)">— pondération par nombre de saisies (une compétence vue 3 fois pèse 3×)</span>
+        </label>
+      </div>
+
+      <div id="meval-edit-meanRule-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-line-soft)">
         <div style="font-size:.92em;margin-bottom:4px"><strong>Compétence évaluée plusieurs fois</strong> <span style="color:var(--pencil);font-size:.88em">(remplace la règle globale pour cette éval)</span></div>
         <label style="display:block;cursor:pointer;font-size:.88em"><input type="radio" name="meval-edit-meanRule" value="" onchange="_evalEditMarkDirty()"> Utiliser la <strong>règle globale</strong> <span style="color:var(--pencil)">(<span id="meval-edit-meanRule-global">arithmétique</span>)</span></label>
         <label style="display:block;cursor:pointer;font-size:.88em"><input type="radio" name="meval-edit-meanRule" value="arithmetic" onchange="_evalEditMarkDirty()"> Moyenne <strong>arithmétique</strong> des niveaux</label>
@@ -4763,7 +4780,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-21T18:00:00Z';
+const APP_VERSION   = '2026-05-21T20:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -21105,13 +21122,28 @@ async function listAndShowFiles() {
       }
     }
   } catch(e) {
-    // Permission peut avoir expiré — redemander
+    // Le dossier n'existe plus (supprimé, déplacé, démonté) ou la permission
+    // a expiré. NotFoundError = dossier disparu → on oublie le handle et on
+    // redemande à l'utilisateur d'en choisir un. Sinon (NotAllowedError,
+    // SecurityError) on tente une fois de re-demander la permission.
+    const isMissing = e && (e.name === 'NotFoundError' || /NotFound|introuvable|not found/i.test(e.message || ''));
+    if (isMissing) {
+      const oldName = dirHandle?.name || '';
+      dirHandle = null;
+      try { await idbSaveHandle(null); } catch(_) {}
+      toast(`Dossier « ${oldName} » introuvable — choisis-en un autre.`, 4000);
+      await changeDirAndList();
+      return;
+    }
     try {
-      await dirHandle.requestPermission({ mode: 'read' });
-      return await listAndShowFiles();
+      const p = await dirHandle.requestPermission({ mode: 'read' });
+      if (p === 'granted') return await listAndShowFiles();
+      throw new Error('permission refusée');
     } catch(e2) {
       dirHandle = null;
-      toast('Accès au dossier perdu. Veuillez resélectionner.');
+      try { await idbSaveHandle(null); } catch(_) {}
+      toast('Accès au dossier perdu — choisis-en un autre.', 4000);
+      await changeDirAndList();
       return;
     }
   }
@@ -23788,21 +23820,72 @@ function _fmtDateFr(ymd) {
 
 // ── Modale "Nouvelle évaluation" ──
 function openNewEvalModal() {
-  const cls = getCls();
-  if (!cls) { toast('⚠ Sélectionne d\'abord une classe', 'warn'); return; }
+  const allCls = Object.values(S.classes || {});
+  if (allCls.length === 0) { toast('⚠ Crée d\'abord une classe', 'warn'); return; }
+  const cur = getCls();
+  document.getElementById('meval-new-source-id').value = '';
+  document.getElementById('meval-new-title').textContent = '+ Nouvelle évaluation';
   document.getElementById('meval-new-nomcourt').value = '';
   document.getElementById('meval-new-nomlong').value = '';
   document.getElementById('meval-new-date').value = new Date().toISOString().slice(0, 10);
   _fillPeriodeSelect(document.getElementById('meval-new-periode'), _currentPeriode());
   document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
   document.getElementById('meval-new-coef').value = (S.evalPrefs?.defaultCoef ?? 1);
+  // Type : déverrouillé, A coché par défaut
+  document.getElementById('meval-new-type-lock').style.display = 'none';
+  for (const r of document.querySelectorAll('input[name="meval-new-type"]')) {
+    r.disabled = false;
+    r.checked = (r.value === 'A');
+  }
+  _evalRenderNewClassPicker(cur ? [cur.id] : (allCls[0] ? [allCls[0].id] : []));
   openMod('meval-new');
   setTimeout(() => document.getElementById('meval-new-nomcourt')?.focus(), 50);
 }
 
+// Rendu de la liste à cocher des classes dans la modale Nouvelle/Dupliquer évaluation.
+// preCheckedIds : array d'ids à cocher. Cache la section s'il n'y a qu'une seule classe.
+function _evalRenderNewClassPicker(preCheckedIds) {
+  const wrap = document.getElementById('meval-new-classes-wrap');
+  const list = document.getElementById('meval-new-classes');
+  const allCls = Object.values(S.classes || {});
+  // Si une seule classe : on cache (pas de choix utile), mais on garde la coche pour _evalNewSave
+  if (allCls.length <= 1) {
+    wrap.style.display = 'none';
+    list.innerHTML = allCls.map(c =>
+      `<label style="display:none"><input type="checkbox" name="meval-new-class" value="${_escAttr(c.id)}" checked></label>`
+    ).join('');
+    return;
+  }
+  wrap.style.display = '';
+  const pre = new Set(preCheckedIds || []);
+  // Tri : classe primaire / courante en tête, puis par niveau puis nom
+  const sorted = allCls.slice().sort((a, b) => {
+    const aPri = pre.has(a.id) ? 0 : 1;
+    const bPri = pre.has(b.id) ? 0 : 1;
+    if (aPri !== bPri) return aPri - bPri;
+    return (a.niveau || 999) - (b.niveau || 999) || (a.nom || '').localeCompare(b.nom || '', 'fr');
+  });
+  list.innerHTML = sorted.map(c => {
+    const checked = pre.has(c.id) ? ' checked' : '';
+    return `<label style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--paper);border:1px solid var(--rule-line);border-radius:14px;cursor:pointer;font-size:.9em">
+      <input type="checkbox" name="meval-new-class" value="${_escAttr(c.id)}"${checked}>
+      <span>${_esc(c.nom)}</span>
+    </label>`;
+  }).join('');
+}
+
+function _evalNewGetCheckedClassIds() {
+  return Array.from(document.querySelectorAll('input[name="meval-new-class"]:checked')).map(i => i.value);
+}
+
 function _evalNewSave() {
-  const cls = getCls();
-  if (!cls) { toast('⚠ Pas de classe active', 'warn'); return; }
+  const checkedIds = _evalNewGetCheckedClassIds();
+  if (checkedIds.length === 0) { toast('⚠ Coche au moins une classe', 'warn'); return; }
+  // Filtre sur les classes qui existent réellement
+  const validIds = checkedIds.filter(id => S.classes?.[id]);
+  if (validIds.length === 0) { toast('⚠ Aucune classe valide sélectionnée', 'warn'); return; }
+  const primaryCls = S.classes[validIds[0]];
+
   const nomCourt = (document.getElementById('meval-new-nomcourt').value || '').trim();
   if (!nomCourt) { toast('⚠ Le nom court est obligatoire', 'warn'); return; }
   const nomLong = (document.getElementById('meval-new-nomlong').value || '').trim();
@@ -23817,36 +23900,96 @@ function _evalNewSave() {
     toast('⚠ Coefficient invalide (entre 0 et 100)', 'warn'); return;
   }
 
-  const type = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
+  const sourceId = document.getElementById('meval-new-source-id').value;
+  const isDuplicate = !!sourceId && !!S.evaluations?.[sourceId];
+
   pushUndo();
   const id = _newEvalId();
   const now = Date.now();
-  // Capture du seating au moment de la création — sert au pattern de tri
-  // (position de l'élève à la date de l'éval, pas position actuelle)
-  const seatingHash = _registerSeatingSnapshot(cls.seating || {});
-  S.evaluations[id] = {
-    id, type,
-    classId: cls.id,                       // classe primaire (créatrice)
-    classIds: [cls.id],                    // toutes les classes concernées (multi-classes)
-    nomCourt, nomLong, date, periode, coef, noteMax,
-    seatingHash,                           // legacy single (classe primaire)
-    seatingHashes: { [cls.id]: seatingHash },  // map classId → hash
-    // Type A / C : structure de mini-notes/questions
-    miniNotes:  type === 'B' ? undefined : [],
-    exercices:  type === 'C' ? [] : undefined,
-    notes:      type === 'B' ? undefined : {},
-    // Type B : passations accumulées
-    passations: type === 'B' ? [] : undefined,
-    weighting:  type === 'B' ? 'equal' : undefined,
-    createdAt: now, updatedAt: now,
-  };
+  let evObj;
+
+  if (isDuplicate) {
+    // Mode duplication : on clone la structure (mini-notes, exercices, passations)
+    // mais on remplace les méta utilisateur, on régénère les IDs internes et on
+    // vide les saisies. Le type est verrouillé sur celui de la source.
+    const src = S.evaluations[sourceId];
+    evObj = JSON.parse(JSON.stringify(src));
+    evObj.id = id;
+    evObj.nomCourt = nomCourt;
+    evObj.nomLong  = nomLong;
+    evObj.date     = date;
+    evObj.periode  = periode;
+    evObj.noteMax  = noteMax;
+    evObj.coef     = coef;
+    evObj.createdAt = now;
+    evObj.updatedAt = now;
+    // Régénère les IDs internes (mini-notes, exercices, passations)
+    if (Array.isArray(evObj.miniNotes)) {
+      for (const mn of evObj.miniNotes) mn.id = _newMiniNoteId();
+    }
+    if (Array.isArray(evObj.exercices)) {
+      for (const exo of evObj.exercices) {
+        const oldId = exo.id;
+        exo.id = 'exo_' + Math.random().toString(36).slice(2, 9);
+        if (Array.isArray(evObj.miniNotes)) {
+          for (const mn of evObj.miniNotes) {
+            if (mn.exerciceId === oldId) mn.exerciceId = exo.id;
+          }
+        }
+      }
+    }
+    if (Array.isArray(evObj.passations)) {
+      for (const p of evObj.passations) {
+        p.id = _newPassationId();
+        p.niveaux = {};
+      }
+    }
+    // Vide les saisies et les méta-classes pour repartir propre
+    evObj.notes = (evObj.type === 'B') ? undefined : {};
+    delete evObj.studentRemarks;
+    delete evObj.dates;
+    delete evObj.slotIds;
+    delete evObj.seatingHash;
+    delete evObj.seatingHashes;
+  } else {
+    const type = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
+    evObj = {
+      id, type,
+      nomCourt, nomLong, date, periode, coef, noteMax,
+      miniNotes:  type === 'B' ? undefined : [],
+      exercices:  type === 'C' ? [] : undefined,
+      notes:      type === 'B' ? undefined : {},
+      passations: type === 'B' ? [] : undefined,
+      weighting:  type === 'B' ? 'equal' : undefined,
+      createdAt: now, updatedAt: now,
+    };
+  }
+
+  // Classes affectées (multi)
+  evObj.classId = primaryCls.id;
+  evObj.classIds = validIds.slice();
+  // Capture du seating de la classe primaire au moment de la création
+  const primarySeatingHash = _registerSeatingSnapshot(primaryCls.seating || {});
+  evObj.seatingHash = primarySeatingHash;
+  evObj.seatingHashes = { [primaryCls.id]: primarySeatingHash };
+  for (const cid of validIds.slice(1)) {
+    const c = S.classes[cid];
+    if (c) evObj.seatingHashes[cid] = _registerSeatingSnapshot(c.seating || {});
+  }
+
+  S.evaluations[id] = evObj;
   save();
   closeMod2('meval-new');
   renderEvalNotes();
-  toast(`✓ Évaluation "${nomCourt}" créée — clique dessus pour ajouter les mini-notes`);
-  // Ouvre directement l'éditeur pour faciliter la mise en place
+  toast(isDuplicate ? `✓ Évaluation dupliquée : "${nomCourt}"` : `✓ Évaluation "${nomCourt}" créée`);
+  // Ouvre directement l'éditeur (Réglages), puis au save → bascule sur le tableur
+  _evalEditOpenTableurAfterSave = id;
   setTimeout(() => _evalOpenEditor(id), 80);
 }
+
+// Quand on vient de créer/dupliquer une éval, on stocke ici son id pour que le
+// prochain ✓ Enregistrer de la modale Réglages enchaîne sur le tableur.
+let _evalEditOpenTableurAfterSave = null;
 
 // ── Modale "Éditeur d'évaluation" ──
 let _evalEditDirty = false;
@@ -23889,6 +24032,22 @@ function _evalOpenEditor(evalId) {
   document.getElementById('meval-edit-meanRule-global').textContent = ruleLabels[S.evalPrefs?.meanRule || 'arithmetic'] || 'arithmétique';
   for (const r of document.querySelectorAll('input[name="meval-edit-meanRule"]')) {
     r.checked = (r.value === (ev.meanRule || ''));
+  }
+  // Règle d'agrégation des niveaux : sans objet pour Type A (pas de compétences saisies)
+  const mrWrap = document.getElementById('meval-edit-meanRule-wrap');
+  if (mrWrap) mrWrap.style.display = (ev.type === 'A') ? 'none' : '';
+  // Pondération Type B (compétences à égalité vs pondérées par nb de saisies)
+  const wWrap = document.getElementById('meval-edit-weighting-wrap');
+  if (wWrap) {
+    if (ev.type === 'B') {
+      wWrap.style.display = '';
+      const cur = (ev.weighting === 'perCompetence') ? 'perCompetence' : 'equal';
+      for (const r of document.querySelectorAll('input[name="meval-edit-weighting"]')) {
+        r.checked = (r.value === cur);
+      }
+    } else {
+      wWrap.style.display = 'none';
+    }
   }
   _evalEditToggleFacMode();
   _evalEditDirty = false;
@@ -24728,12 +24887,23 @@ function _evalEditSave() {
   }
   const ruleOverride = document.querySelector('input[name="meval-edit-meanRule"]:checked')?.value || '';
   if (ruleOverride) ev.meanRule = ruleOverride; else delete ev.meanRule;
+  // Pondération Type B
+  if (ev.type === 'B') {
+    const w = document.querySelector('input[name="meval-edit-weighting"]:checked')?.value;
+    if (w === 'perCompetence' || w === 'equal') ev.weighting = w;
+  }
   ev.updatedAt = Date.now();
   _evalEditDirty = false;
   save();
   renderEvalNotes();
   closeMod2('meval-edit');
-  toast('✓ Évaluation enregistrée');
+  // Si l'éval vient d'être créée/dupliquée, on enchaîne directement sur le tableur
+  if (_evalEditOpenTableurAfterSave === evalId) {
+    _evalEditOpenTableurAfterSave = null;
+    setTimeout(() => _evalOpenTableur(evalId), 80);
+  } else {
+    toast('✓ Évaluation enregistrée');
+  }
 }
 
 function _evalEditDelete() {
@@ -25098,51 +25268,33 @@ function _evalOpenExportFor(evalId) {
 // nomCourt suffixé " (copie)".
 function _evalDuplicate(evalId) {
   const ev = S.evaluations?.[evalId];
-  if (!ev) return;
-  pushUndo();
-  const now = Date.now();
-  const today = new Date().toISOString().slice(0, 10);
-  const newId = _newEvalId();
-  const copy = JSON.parse(JSON.stringify(ev));
-  copy.id = newId;
-  copy.nomCourt = (ev.nomCourt || '') + ' (copie)';
-  copy.date = today;
-  copy.createdAt = now;
-  copy.updatedAt = now;
-  // Régénère les IDs internes pour éviter toute collision (mn, exo, pass)
-  if (Array.isArray(copy.miniNotes)) {
-    for (const mn of copy.miniNotes) mn.id = _newMiniNoteId();
+  if (!ev) { toast('⚠ Évaluation introuvable', 'warn'); return; }
+  const allCls = Object.values(S.classes || {});
+  if (allCls.length === 0) { toast('⚠ Aucune classe disponible', 'warn'); return; }
+  // Ouvre la modale Nouvelle évaluation en mode "duplication" : type verrouillé,
+  // champs pré-remplis depuis l'éval source, classes pré-cochées sur celles de la source.
+  document.getElementById('meval-new-source-id').value = evalId;
+  document.getElementById('meval-new-title').textContent = `📋 Dupliquer "${ev.nomCourt}"`;
+  document.getElementById('meval-new-nomcourt').value = (ev.nomCourt || '') + ' (copie)';
+  document.getElementById('meval-new-nomlong').value  = ev.nomLong || '';
+  document.getElementById('meval-new-date').value     = new Date().toISOString().slice(0, 10);
+  _fillPeriodeSelect(document.getElementById('meval-new-periode'), ev.periode || _currentPeriode());
+  document.getElementById('meval-new-notemax').value  = ev.noteMax ?? (S.evalPrefs?.maxNoteDefault || 20);
+  document.getElementById('meval-new-coef').value     = ev.coef ?? (S.evalPrefs?.defaultCoef ?? 1);
+  // Type verrouillé : on coche celui de la source et on désactive les radios
+  document.getElementById('meval-new-type-lock').style.display = '';
+  for (const r of document.querySelectorAll('input[name="meval-new-type"]')) {
+    r.checked = (r.value === ev.type);
+    r.disabled = true;
   }
-  if (Array.isArray(copy.exercices)) {
-    for (const exo of copy.exercices) {
-      const oldId = exo.id;
-      exo.id = 'exo_' + Math.random().toString(36).slice(2, 9);
-      // Re-câble les miniNotes qui référencent cet exo
-      if (Array.isArray(copy.miniNotes)) {
-        for (const mn of copy.miniNotes) {
-          if (mn.exerciceId === oldId) mn.exerciceId = exo.id;
-        }
-      }
-    }
-  }
-  if (Array.isArray(copy.passations)) {
-    for (const p of copy.passations) {
-      p.id = _newPassationId();
-      p.niveaux = {};
-    }
-  }
-  // Vide les saisies tout en gardant la structure
-  copy.notes = (ev.type === 'B') ? undefined : {};
-  delete copy.studentRemarks;
-  // Vide les dates par-classe (à re-saisir) — la date globale `today` couvre le cas mono-classe
-  delete copy.dates;
-  delete copy.slotIds;
-  delete copy.seatingHash;
-  delete copy.seatingHashes;
-  S.evaluations[newId] = copy;
-  save();
-  renderEvalNotes();
-  toast(`✓ Évaluation dupliquée : "${copy.nomCourt}"`);
+  // Classes : pré-coche celles de la source (qui existent encore)
+  const srcClassIds = (_evalClassIds(ev) || []).filter(id => S.classes?.[id]);
+  _evalRenderNewClassPicker(srcClassIds.length ? srcClassIds : [allCls[0].id]);
+  openMod('meval-new');
+  setTimeout(() => {
+    const inp = document.getElementById('meval-new-nomcourt');
+    inp?.focus(); inp?.select();
+  }, 50);
 }
 
 function _evalDeleteFromList(evalId) {
@@ -25796,6 +25948,25 @@ function _evalTableurUpdate(inputEl) {
   }
   ev.updatedAt = Date.now();
   _evalTableurDirty = true;
+
+  // Recolore la cellule en direct (fond du <td> + couleur du texte de l'input)
+  // selon la valeur saisie — sans attendre un refresh. Le fond hors-barème posé
+  // sur l'input juste au-dessus reste prioritaire visuellement (sur l'input).
+  if (!outOfRange) {
+    let cellBg = '';
+    const newVal = ev.notes[sid].values[mnId];
+    if (newVal === 'A') cellBg = '#9ca3af';
+    else if (typeof newVal === 'number' && mnMax > 0) cellBg = _noteColor(newVal, mnMax) || '';
+    const td = inputEl.closest('td');
+    if (td) td.style.background = cellBg;
+    if (cellBg) {
+      inputEl.style.color = _contrastTextColor(cellBg);
+      inputEl.style.fontWeight = '700';
+    } else {
+      inputEl.style.color = '';
+      inputEl.style.fontWeight = '';
+    }
+  }
 
   // Met à jour le total de la ligne uniquement (perf : pas de re-render complet)
   const cellTotal = row.querySelector('.meval-row-total');
