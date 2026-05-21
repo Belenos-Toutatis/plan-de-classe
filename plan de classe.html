@@ -4798,7 +4798,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T05:00:00Z';
+const APP_VERSION   = '2026-05-22T06:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -23702,6 +23702,17 @@ function _parseMiniNoteInput(raw) {
 }
 
 // ── Onglet Notes — rendu de la liste d'évaluations ──
+function _evalListSetSortMode(mode) {
+  try { localStorage.setItem('planClasse_evalListSort', mode); } catch (e) {}
+  renderEvalNotes();
+}
+function _evalListToggleReverse() {
+  let cur = false;
+  try { cur = localStorage.getItem('planClasse_evalListReverse') === '1'; } catch (e) {}
+  try { localStorage.setItem('planClasse_evalListReverse', cur ? '0' : '1'); } catch (e) {}
+  renderEvalNotes();
+}
+
 function renderEvalNotes() {
   const cls = getCls();
   const wrap = document.getElementById('evals-list-wrap');
@@ -23743,13 +23754,59 @@ function renderEvalNotes() {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir ses évaluations.</p>';
     return;
   }
-  const evs = _evalsForClass(cls.id, periode || null).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  if (evs.length === 0) {
+  const allEvs = _evalsForClass(cls.id, periode || null);
+  if (allEvs.length === 0) {
     wrap.innerHTML = `<p style="color:var(--pencil);font-style:italic;padding:14px">Aucune évaluation pour <strong>${_esc(cls.nom)}</strong>${periode ? ' en ' + _esc(periode) : ''}. Clique sur <strong>+ Nouvelle évaluation</strong> pour commencer.</p>`;
     return;
   }
-  let html = '<div style="display:flex;flex-direction:column;gap:8px">';
+
+  // ─── Tri configurable + persistant (localStorage) ───
+  const sortMode = (() => { try { return localStorage.getItem('planClasse_evalListSort') || 'date'; } catch (e) { return 'date'; } })();
+  const reverse  = (() => { try { return localStorage.getItem('planClasse_evalListReverse') === '1'; } catch (e) { return false; } })();
+  // Date "primaire" : date de la classe active si dispo, sinon date globale
+  const _evDate = (ev) => _evalDateFor(ev, cls.id) || ev.date || '';
+  // Comparateurs (ordre "naturel" du mode ; reverse inverse le signe ensuite).
+  // date  : desc (plus récent en premier)
+  // name  : asc alphabétique
+  // type-date : type asc (A, B, C), puis date desc
+  // type-name : type asc, puis nom asc
+  const cmps = {
+    date: (a, b) => _evDate(b).localeCompare(_evDate(a)),
+    name: (a, b) => (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' }),
+    'type-date': (a, b) => (a.type || '').localeCompare(b.type || '') || _evDate(b).localeCompare(_evDate(a)),
+    'type-name': (a, b) => (a.type || '').localeCompare(b.type || '')
+                         || (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' }),
+  };
+  const cmp = cmps[sortMode] || cmps.date;
+  const evs = allEvs.slice().sort((a, b) => reverse ? -cmp(a, b) : cmp(a, b));
+  const grouped = (sortMode === 'type-date' || sortMode === 'type-name');
+
+  // Toolbar de tri (au-dessus de la liste)
+  const opts = [
+    { v: 'date',      lbl: '📅 Date' },
+    { v: 'name',      lbl: '🔤 Nom' },
+    { v: 'type-date', lbl: '📂 Type, puis date' },
+    { v: 'type-name', lbl: '📂 Type, puis nom' },
+  ];
+  let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:.86em;flex-wrap:wrap">';
+  html += '<span style="color:var(--pencil)">Tri :</span>';
+  html += `<select onchange="_evalListSetSortMode(this.value)" style="padding:3px 8px;font-size:.9em">`;
+  for (const o of opts) {
+    html += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
+  }
+  html += '</select>';
+  html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
+  html += '</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:8px">';
+  let lastType = null;
+  const typeLabels = { A: 'TYPE A — Mini-notes', B: 'TYPE B — Compétences', C: 'TYPE C — Sommative' };
   for (const ev of evs) {
+    // Insère un en-tête de groupe quand le type change (uniquement en modes "regroupé")
+    if (grouped && ev.type !== lastType) {
+      html += `<div style="font-family:var(--font-mono);font-size:.78em;letter-spacing:0.08em;color:var(--pencil);margin:${lastType ? '8px' : '0'} 0 -2px;padding:2px 6px;border-bottom:1px dashed var(--rule-line)">${_esc(typeLabels[ev.type] || ev.type || '?')}</div>`;
+      lastType = ev.type;
+    }
     const totalStudents = (cls.eleves || []).length;
     let typeBadge, summaryInfo, nbStudents;
     // L'éval peut couvrir plusieurs classes, mais on affiche les stats de la classe active.
