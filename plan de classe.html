@@ -3374,6 +3374,8 @@ kbd {
       <input type="text" id="meval-new-nomcourt" maxlength="20" placeholder="ex. DS3, IE2, TP1…" style="padding:5px 8px">
       <label for="meval-new-nomlong">Nom long</label>
       <input type="text" id="meval-new-nomlong" maxlength="80" placeholder="ex. Contrôle Chapitre 4 — Lumière" style="padding:5px 8px">
+      <label for="meval-new-desc" style="align-self:flex-start;padding-top:5px">Descriptif</label>
+      <textarea id="meval-new-desc" maxlength="500" rows="2" placeholder="Notes libres affichées dans les infobulles (ex. compétences travaillées, énoncé spécifique, contexte…)" style="padding:5px 8px;resize:vertical;font-family:inherit"></textarea>
       <label for="meval-new-date">Date</label>
       <input type="date" id="meval-new-date" style="padding:5px 8px;font-family:var(--font-mono)">
       <label for="meval-new-periode">Période</label>
@@ -3404,6 +3406,8 @@ kbd {
         <input type="text" id="meval-edit-nomcourt" maxlength="20" style="padding:4px 8px" oninput="_evalEditMarkDirty()">
         <label>Nom long</label>
         <input type="text" id="meval-edit-nomlong" maxlength="80" style="padding:4px 8px" oninput="_evalEditMarkDirty()">
+        <label style="align-self:flex-start;padding-top:5px">Descriptif</label>
+        <textarea id="meval-edit-desc" maxlength="500" rows="2" placeholder="Notes libres affichées dans les infobulles" style="padding:4px 8px;resize:vertical;font-family:inherit" oninput="_evalEditMarkDirty()"></textarea>
         <label>Date</label>
         <input type="date" id="meval-edit-date" style="padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty();_evalEditUpdateSlotOptions()">
         <label>Créneau <span style="color:var(--pencil);font-weight:normal;font-size:.85em">(optionnel)</span></label>
@@ -4780,7 +4784,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-21T20:00:00Z';
+const APP_VERSION   = '2026-05-21T21:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -23786,7 +23790,8 @@ function renderEvalNotes() {
         <span title="Nombre d'élèves avec note ≥ ${_fmtNote(halfMax)}" class="eval-stats-mid">≥${_fmtNote(halfMax)} : <strong>${above}/${allNotes.length}</strong></span>
       </span>`;
     }
-    html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')" title="Ouvrir la saisie (mode tableur) — utilise les boutons à droite pour les réglages / export / suppression">
+    const rowTip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${ev.description ? '\n\n' + ev.description : ''}\n\nOuvrir la saisie (mode tableur) — boutons à droite pour réglages / export / suppression`;
+    html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr(rowTip)}">
       <div style="flex:1">
         <div>${typeBadge}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
         <div style="font-size:.85em;color:var(--pencil);margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
@@ -23827,6 +23832,7 @@ function openNewEvalModal() {
   document.getElementById('meval-new-title').textContent = '+ Nouvelle évaluation';
   document.getElementById('meval-new-nomcourt').value = '';
   document.getElementById('meval-new-nomlong').value = '';
+  document.getElementById('meval-new-desc').value = '';
   document.getElementById('meval-new-date').value = new Date().toISOString().slice(0, 10);
   _fillPeriodeSelect(document.getElementById('meval-new-periode'), _currentPeriode());
   document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
@@ -23889,6 +23895,7 @@ function _evalNewSave() {
   const nomCourt = (document.getElementById('meval-new-nomcourt').value || '').trim();
   if (!nomCourt) { toast('⚠ Le nom court est obligatoire', 'warn'); return; }
   const nomLong = (document.getElementById('meval-new-nomlong').value || '').trim();
+  const description = (document.getElementById('meval-new-desc').value || '').trim();
   const date    = document.getElementById('meval-new-date').value || new Date().toISOString().slice(0, 10);
   const periode = document.getElementById('meval-new-periode').value;
   const noteMax = parseFloat(document.getElementById('meval-new-notemax').value);
@@ -23917,6 +23924,7 @@ function _evalNewSave() {
     evObj.id = id;
     evObj.nomCourt = nomCourt;
     evObj.nomLong  = nomLong;
+    if (description) evObj.description = description; else delete evObj.description;
     evObj.date     = date;
     evObj.periode  = periode;
     evObj.noteMax  = noteMax;
@@ -23956,6 +23964,7 @@ function _evalNewSave() {
     evObj = {
       id, type,
       nomCourt, nomLong, date, periode, coef, noteMax,
+      description: description || undefined,
       miniNotes:  type === 'B' ? undefined : [],
       exercices:  type === 'C' ? [] : undefined,
       notes:      type === 'B' ? undefined : {},
@@ -24014,6 +24023,7 @@ function _evalOpenEditor(evalId) {
   document.getElementById('meval-edit-title').textContent = `📊 ${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}`;
   document.getElementById('meval-edit-nomcourt').value = ev.nomCourt || '';
   document.getElementById('meval-edit-nomlong').value  = ev.nomLong  || '';
+  document.getElementById('meval-edit-desc').value     = ev.description || '';
   document.getElementById('meval-edit-date').value     = ev.date     || '';
   _evalEditUpdateSlotOptions(ev.slotId || '');
   _evalEditRenderClasses(ev);
@@ -24864,6 +24874,8 @@ function _evalEditSave() {
   pushUndo();
   ev.nomCourt = nomCourt;
   ev.nomLong  = (document.getElementById('meval-edit-nomlong').value || '').trim();
+  const descVal = (document.getElementById('meval-edit-desc')?.value || '').trim();
+  if (descVal) ev.description = descVal; else delete ev.description;
   ev.date     = document.getElementById('meval-edit-date').value || ev.date;
   const slotId = document.getElementById('meval-edit-slot')?.value || '';
   if (slotId) ev.slotId = slotId; else delete ev.slotId;
@@ -25277,6 +25289,7 @@ function _evalDuplicate(evalId) {
   document.getElementById('meval-new-title').textContent = `📋 Dupliquer "${ev.nomCourt}"`;
   document.getElementById('meval-new-nomcourt').value = (ev.nomCourt || '') + ' (copie)';
   document.getElementById('meval-new-nomlong').value  = ev.nomLong || '';
+  document.getElementById('meval-new-desc').value     = ev.description || '';
   document.getElementById('meval-new-date').value     = new Date().toISOString().slice(0, 10);
   _fillPeriodeSelect(document.getElementById('meval-new-periode'), ev.periode || _currentPeriode());
   document.getElementById('meval-new-notemax').value  = ev.noteMax ?? (S.evalPrefs?.maxNoteDefault || 20);
@@ -28895,7 +28908,7 @@ function renderBilanTab() {
   // 1 colonne par éval — header avec : code court · coef éditable (sans ×) · date
   for (const ev of evs) {
     const dateFr = ev.date ? _fmtDateFr(ev.date) : '';
-    const tip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateFr ? ' · ' + dateFr : ''} · /${ev.noteMax ?? 20}\n\nClic droit : ouvrir la saisie en mode tableur`;
+    const tip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateFr ? ' · ' + dateFr : ''} · /${ev.noteMax ?? 20}${ev.description ? '\n\n' + ev.description : ''}\n\nClic droit : ouvrir la saisie en mode tableur`;
     html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px" title="${_esc(tip)}">
       <div style="font-weight:700;cursor:context-menu" oncontextmenu="event.preventDefault();_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr('Clic droit : ouvrir la saisie en mode tableur')}">${_esc(ev.nomCourt)}</div>
       <input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
