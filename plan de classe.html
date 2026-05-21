@@ -4818,7 +4818,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T11:00:00Z';
+const APP_VERSION   = '2026-05-22T12:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -24204,9 +24204,17 @@ function _evalEditRenderClasses(ev) {
         <strong>${_esc(c.nom)}</strong> <span style="color:var(--pencil);font-size:.88em">${_esc(c.année || '')}</span>
       </label>`;
     if (checked) {
+      const isManual = !!ev.datesManual?.[c.id];
+      // Bouton "↻ Auto" visible uniquement si la date a été réglée manuellement
+      // (clique pour repasser en mode auto = recalculée depuis les sous-dates).
+      // Hint "(auto)" sinon, pour signaler que la date est calculée automatiquement.
+      const autoCtl = isManual
+        ? `<button type="button" class="btn btn-g btn-sm" data-cid="${_esc(c.id)}" onclick="_evalEditPerClassResetAuto('${_esc(c.id)}')" title="Repasser cette classe en mode automatique (date = dernière mini-note / passation)" style="padding:1px 6px;font-size:.78em">↻ Auto</button>`
+        : `<span style="font-size:.78em;color:var(--pencil);font-style:italic" title="Date calculée automatiquement depuis la dernière mini-note (Type A) ou passation (Type B). Édite le champ pour passer en mode manuel.">(auto)</span>`;
       html += `<span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
         <input type="date" value="${_esc(dateCur)}" data-cid="${_esc(c.id)}" data-field="date" onchange="_evalEditPerClass(this)"
-          style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe">
+          style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe (édition = passage en mode manuel)">
+        ${autoCtl}
         <span style="font-size:.85em;color:var(--pencil)">⏰</span>
         <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalEditPerClass(this)" style="padding:3px 6px;font-size:.85em">
           ${_evalEditSlotOpts(c, dateCur, slotCur)}
@@ -24242,28 +24250,35 @@ function _evalEditSlotOpts(cls, dateStr, slotIdCur) {
 
 // Cache date/créneau globaux dans l'en-tête quand multi-classes (≥2 classes cochées)
 function _evalEditAdjustGlobalDateVisibility(ev) {
-  const ids = _evalClassIds(ev);
-  const multi = ids.length > 1;
+  // Modèle 100% per-classe : la date/créneau « globale » de l'éval n'a plus
+  // de sens. On masque toujours ces champs du grid en haut de Réglages —
+  // la date est désormais éditée par classe dans la section « Classes
+  // concernées » plus bas. On masque aussi le wrapper div parent (input
+  // dans un wrapper avec le bouton ↻ Auto) selon la structure du DOM.
   const dateField = document.getElementById('meval-edit-date');
   const slotField = document.getElementById('meval-edit-slot');
   if (!dateField || !slotField) return;
-  // Masque les <label> et <input> de date/créneau quand multi
-  const dateRow = dateField.parentElement;        // le <input> est seul dans le grid → on doit cacher l'élément + son label
-  const slotRow = slotField.parentElement;
-  // En grid 130px+1fr, chaque label/champ est un descendant direct du grid wrapper.
   const grid = dateField.closest('div[style*="grid-template-columns"]');
   if (!grid) return;
-  // Trouve label "Date" et "Créneau" en récupérant les frères directs
   const children = Array.from(grid.children);
-  const idxDate = children.indexOf(dateField);
-  const idxSlot = children.indexOf(slotField);
+  // L'input date peut être dans un wrapper (div.flex contenant input + bouton).
+  // On cherche le 1er parent qui est enfant direct du grid.
+  const findGridChild = (el) => {
+    let cur = el;
+    while (cur && cur.parentElement !== grid) cur = cur.parentElement;
+    return cur;
+  };
+  const dateGridChild = findGridChild(dateField);
+  const slotGridChild = findGridChild(slotField);
+  const idxDate = children.indexOf(dateGridChild);
+  const idxSlot = children.indexOf(slotGridChild);
   const setDisplay = (i, val) => {
     if (i < 0) return;
-    if (children[i]) children[i].style.display = val;            // input
+    if (children[i]) children[i].style.display = val;            // wrapper de l'input
     if (children[i - 1]) children[i - 1].style.display = val;    // label
   };
-  setDisplay(idxDate, multi ? 'none' : '');
-  setDisplay(idxSlot, multi ? 'none' : '');
+  setDisplay(idxDate, 'none');
+  setDisplay(idxSlot, 'none');
 }
 
 // Édition d'une date ou d'un créneau spécifique à une classe (dans Réglages)
@@ -24275,6 +24290,10 @@ function _evalEditPerClass(inputEl) {
   const field = inputEl.getAttribute('data-field');
   _evalArmUndo();
   if (field === 'date') {
+    // Édition explicite = passe en mode manuel pour cette classe (l'auto
+    // ne réécrira plus la date depuis les sous-dates).
+    ev.datesManual = ev.datesManual || {};
+    ev.datesManual[cid] = true;
     _evalSetDateFor(ev, cid, inputEl.value);
     // Mise à jour ciblée des options de créneau pour cette classe — on évite
     // _evalEditRenderClasses(ev) qui rebuilde l'innerHTML de toute la section
@@ -24287,6 +24306,8 @@ function _evalEditPerClass(inputEl) {
       const curSlot = _evalSlotIdFor(ev, cid);
       slotSel.innerHTML = _evalEditSlotOpts(cls, inputEl.value, curSlot);
     }
+    // Bascule le hint "(auto)" en bouton "↻ Auto" pour cette classe
+    _evalEditRefreshDateAutoCtl(ev, cid);
   } else if (field === 'slot') {
     _evalSetSlotIdFor(ev, cid, inputEl.value);
   }
@@ -24297,6 +24318,67 @@ function _evalEditPerClass(inputEl) {
   _evalEditPerClassSaveTimer = setTimeout(() => save(), 600);
 }
 let _evalEditPerClassSaveTimer = null;
+
+// Repasse la date d'une classe en mode automatique : retire le flag manuel,
+// recalcule via _evalAutoUpdateDate, met à jour l'input dans la modale et
+// rebascule le bouton "↻ Auto" en hint "(auto)".
+function _evalEditPerClassResetAuto(cid) {
+  const evalId = document.getElementById('meval-edit-id')?.value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !cid) return;
+  pushUndo();
+  if (ev.datesManual) delete ev.datesManual[cid];
+  _evalAutoUpdateDate(ev);
+  save();
+  // Met à jour l'input date de cette classe
+  const dateInp = document.querySelector(
+    `#meval-edit-classes input[type="date"][data-cid="${CSS.escape(cid)}"]`
+  );
+  if (dateInp) dateInp.value = _evalDateFor(ev, cid) || '';
+  // Met à jour le créneau (les options dépendent de la date)
+  const slotSel = document.querySelector(
+    `#meval-edit-classes select[data-cid="${CSS.escape(cid)}"][data-field="slot"]`
+  );
+  const cls = S.classes?.[cid];
+  if (slotSel && cls) {
+    slotSel.innerHTML = _evalEditSlotOpts(cls, _evalDateFor(ev, cid), _evalSlotIdFor(ev, cid));
+  }
+  _evalEditRefreshDateAutoCtl(ev, cid);
+  toast('✓ Date repassée en mode automatique pour cette classe');
+}
+
+// Met à jour uniquement le contrôle "↻ Auto" / "(auto)" à droite du champ
+// date d'une classe — pas de re-render de toute la section classes (qui
+// casserait la saisie clavier en cours).
+function _evalEditRefreshDateAutoCtl(ev, cid) {
+  const dateInp = document.querySelector(
+    `#meval-edit-classes input[type="date"][data-cid="${CSS.escape(cid)}"]`
+  );
+  if (!dateInp) return;
+  // Le contrôle est l'élément qui suit immédiatement l'input date
+  const next = dateInp.nextElementSibling;
+  if (!next) return;
+  const isManual = !!ev.datesManual?.[cid];
+  if (isManual && next.tagName === 'SPAN' && next.textContent.includes('auto')) {
+    // Remplace le hint "(auto)" par un bouton "↻ Auto"
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-g btn-sm';
+    btn.setAttribute('data-cid', cid);
+    btn.title = 'Repasser cette classe en mode automatique (date = dernière mini-note / passation)';
+    btn.style.cssText = 'padding:1px 6px;font-size:.78em';
+    btn.textContent = '↻ Auto';
+    btn.onclick = () => _evalEditPerClassResetAuto(cid);
+    next.replaceWith(btn);
+  } else if (!isManual && next.tagName === 'BUTTON') {
+    // Remplace le bouton par le hint "(auto)"
+    const span = document.createElement('span');
+    span.style.cssText = 'font-size:.78em;color:var(--pencil);font-style:italic';
+    span.title = 'Date calculée automatiquement depuis la dernière mini-note (Type A) ou passation (Type B). Édite le champ pour passer en mode manuel.';
+    span.textContent = '(auto)';
+    next.replaceWith(span);
+  }
+}
 
 function _evalEditToggleClass(checkbox) {
   const evalId = document.getElementById('meval-edit-id').value;
@@ -24347,72 +24429,12 @@ function _evalEditToggleClass(checkbox) {
   save();
 }
 
-// Peuple le select de créneau selon la salle active et la date saisie.
-// Si pas de salle ou pas d'horaires : option vide seule.
-// Met à jour l'UI du bouton "↻ Auto" + le hint selon ev.dateManual et le type de l'éval.
-// Le bouton n'est utile que si l'éval est Type A/B et déjà en mode manuel (pour revenir
-// à l'auto). Le hint indique le mode courant.
-function _evalEditUpdateDateAutoUI(ev) {
-  const btn = document.getElementById('meval-edit-date-auto-btn');
-  const hint = document.getElementById('meval-edit-date-auto-hint');
-  if (!btn || !hint) return;
-  const isAuto = (ev?.type === 'A' || ev?.type === 'B') && !ev?.dateManual;
-  const eligible = (ev?.type === 'A' || ev?.type === 'B');
-  if (isAuto) {
-    btn.style.display = 'none';
-    hint.style.display = '';
-    hint.textContent = '(auto : dernière mini-note/passation)';
-  } else if (eligible) {
-    btn.style.display = '';
-    hint.style.display = '';
-    hint.textContent = '(manuelle — ne s\'ajustera pas aux sous-dates)';
-  } else {
-    btn.style.display = 'none';
-    hint.style.display = 'none';
-  }
-}
-
-// Handler du onchange de l'input date dans Réglages : passe en mode manuel et
-// rafraîchit les options de créneau.
-function _evalEditOnDateChange() {
-  _evalEditMarkDirty();
-  // Tag interne pour signaler au save() que l'utilisateur a touché la date
-  const inp = document.getElementById('meval-edit-date');
-  if (inp) inp.dataset.touched = '1';
-  // Re-render le bouton Auto pour refléter le futur état manuel (visuel cohérent
-  // dès la frappe, même si la persistance attend ✓ Enregistrer)
-  const evalId = document.getElementById('meval-edit-id')?.value;
-  const ev = S.evaluations?.[evalId];
-  if (ev) {
-    // On simule l'état "manuel" dans l'UI sans encore toucher S
-    const btn = document.getElementById('meval-edit-date-auto-btn');
-    const hint = document.getElementById('meval-edit-date-auto-hint');
-    if (btn && hint && (ev.type === 'A' || ev.type === 'B')) {
-      btn.style.display = '';
-      hint.textContent = '(manuelle — ne s\'ajustera pas aux sous-dates)';
-    }
-  }
-  _evalEditUpdateSlotOptions();
-}
-
-// Repasse en mode automatique : efface le flag dateManual et la date stockée,
-// puis recalcule la date depuis les sous-dates. L'utilisateur voit le résultat
-// immédiatement dans le champ date.
-function _evalEditResetDateAuto() {
-  const evalId = document.getElementById('meval-edit-id')?.value;
-  const ev = S.evaluations?.[evalId];
-  if (!ev) return;
-  pushUndo();
-  delete ev.dateManual;
-  _evalAutoUpdateDate(ev);
-  save();
-  document.getElementById('meval-edit-date').value = ev.date || '';
-  const inp = document.getElementById('meval-edit-date');
-  if (inp) delete inp.dataset.touched;
-  _evalEditUpdateDateAutoUI(ev);
-  _evalEditUpdateSlotOptions(ev.slotId || '');
-  toast('✓ Date repassée en mode automatique');
-}
+// Stubs conservés pour compatibilité avec le HTML rendu (onchange="_evalEditOnDateChange()"
+// sur le champ date global, masqué désormais). Le modèle est passé en 100% per-classe :
+// la date est éditée par classe dans la section "Classes concernées" plus bas.
+function _evalEditUpdateDateAutoUI(_ev) { /* no-op : champ global masqué */ }
+function _evalEditOnDateChange() { _evalEditMarkDirty(); }
+function _evalEditResetDateAuto() { /* no-op : remplacé par _evalEditPerClassResetAuto par classe */ }
 
 function _evalEditUpdateSlotOptions(preselect) {
   const sel = document.getElementById('meval-edit-slot');
@@ -25155,15 +25177,12 @@ function _evalEditSave() {
   ev.nomLong  = (document.getElementById('meval-edit-nomlong').value || '').trim();
   const descVal = (document.getElementById('meval-edit-desc')?.value || '').trim();
   if (descVal) ev.description = descVal; else delete ev.description;
-  const dateInp = document.getElementById('meval-edit-date');
-  const newDateVal = dateInp?.value || '';
-  // L'utilisateur a explicitement édité la date → bascule en mode manuel
-  if (dateInp?.dataset.touched === '1') {
-    if (ev.type === 'A' || ev.type === 'B') ev.dateManual = true;
-    delete dateInp.dataset.touched;
-  }
-  ev.date = newDateVal || ev.date;
-  // Canonicalise après save : si multi-classes, ev.date sera propagé puis effacé.
+  // Modèle 100% per-classe : ev.date global n'existe plus. Les dates sont
+  // saisies dans la section « Classes concernées » plus bas, et persistées
+  // en direct via _evalEditPerClass. Le champ du haut est caché de toute façon
+  // (_evalEditAdjustGlobalDateVisibility) — on ignore donc sa valeur ici.
+  // On canonicalise quand même par sécurité (nettoie les éventuels résidus
+  // legacy ev.date / ev.dateManual qui auraient pu être posés ailleurs).
   _evalNormalizeDates(ev);
   const slotId = document.getElementById('meval-edit-slot')?.value || '';
   if (slotId) ev.slotId = slotId; else delete ev.slotId;
@@ -28293,50 +28312,54 @@ function _evalSeatingHashFor(ev, classId) {
 //   3. Si aucune date par-classe n'est définie sur les constituants, fallback sur la date
 //      globale des constituants (mn.date / pass.date) : ancien comportement mono-classe.
 //   4. ev.date global en dernier recours.
-// Canonicalise les dates/créneaux d'une éval selon le nombre de classes concernées :
-//   - mono-classe   → seuls ev.date / ev.slotId existent (pas de ev.dates / ev.slotIds)
-//   - multi-classes → seuls ev.dates[cid] / ev.slotIds[cid] existent (pas de ev.date / ev.slotId)
-// En passant de mono à multi : ev.date est propagé à toutes les classes sans date.
-// En passant de multi à mono : la date de la classe restante remplace ev.date.
-// Nettoie aussi les entrées orphelines pour des classes qui ne sont plus dans classIds.
+// Canonicalise les dates/créneaux d'une éval — modèle 100% per-classe.
+// Plus de date « globale » de l'éval (ev.date / ev.slotId) : tout passe par
+// ev.dates[cid] / ev.slotIds[cid]. Le flag manuel devient aussi per-classe :
+// ev.datesManual[cid] = true signifie « cette classe a été réglée à la main,
+// ne pas recalculer automatiquement ».
+//
+// La fonction :
+// - propage ev.date (legacy) vers ev.dates pour toutes les classes sans date
+//   per-classe, puis supprime ev.date
+// - idem ev.slotId → ev.slotIds
+// - migre ev.dateManual (legacy) → ev.datesManual[classe primaire]
+// - nettoie les entrées orphelines (classes plus dans classIds)
 function _evalNormalizeDates(ev) {
   if (!ev) return;
   const ids = _evalClassIds(ev);
-  if (ids.length <= 1) {
-    const onlyCid = ids[0];
-    if (ev.dates && Object.keys(ev.dates).length > 0) {
-      const d = (onlyCid && ev.dates[onlyCid]) || Object.values(ev.dates).find(v => v) || '';
-      if (d && !ev.date) ev.date = d;
-      delete ev.dates;
-    }
-    if (ev.slotIds && Object.keys(ev.slotIds).length > 0) {
-      const s = (onlyCid && ev.slotIds[onlyCid]) || Object.values(ev.slotIds).find(v => v) || '';
-      if (s && !ev.slotId) ev.slotId = s;
-      delete ev.slotIds;
-    }
-  } else {
-    if (ev.date) {
-      ev.dates = ev.dates || {};
-      for (const cid of ids) if (!ev.dates[cid]) ev.dates[cid] = ev.date;
-      delete ev.date;
-    }
-    if (ev.slotId) {
-      ev.slotIds = ev.slotIds || {};
-      for (const cid of ids) if (!ev.slotIds[cid]) ev.slotIds[cid] = ev.slotId;
-      delete ev.slotId;
-    }
-    if (ev.dates) { for (const k of Object.keys(ev.dates)) if (!ids.includes(k)) delete ev.dates[k]; }
-    if (ev.slotIds) { for (const k of Object.keys(ev.slotIds)) if (!ids.includes(k)) delete ev.slotIds[k]; }
+  // Migration legacy ev.date → ev.dates pour les classes sans valeur
+  if (ev.date) {
+    ev.dates = ev.dates || {};
+    for (const cid of ids) if (!ev.dates[cid]) ev.dates[cid] = ev.date;
+    delete ev.date;
   }
+  if (ev.slotId) {
+    ev.slotIds = ev.slotIds || {};
+    for (const cid of ids) if (!ev.slotIds[cid]) ev.slotIds[cid] = ev.slotId;
+    delete ev.slotId;
+  }
+  // Migration legacy ev.dateManual → ev.datesManual[primaryCid]
+  if (ev.dateManual) {
+    ev.datesManual = ev.datesManual || {};
+    const primary = ev.classId && ids.includes(ev.classId) ? ev.classId : ids[0];
+    if (primary) ev.datesManual[primary] = true;
+    delete ev.dateManual;
+  }
+  // Nettoyage des entrées de classes plus dans classIds
+  const idsSet = new Set(ids);
+  if (ev.dates) { for (const k of Object.keys(ev.dates)) if (!idsSet.has(k)) delete ev.dates[k]; }
+  if (ev.slotIds) { for (const k of Object.keys(ev.slotIds)) if (!idsSet.has(k)) delete ev.slotIds[k]; }
+  if (ev.datesManual) { for (const k of Object.keys(ev.datesManual)) if (!idsSet.has(k)) delete ev.datesManual[k]; }
 }
 
-// Recalcule la date « officielle » de l'éval comme la max des sous-dates
-// (mn.date pour A/C, passation.date pour B). En mono-classe : ev.date.
-// En multi-classes : ev.dates[cid] par classe. Saute si dateManual.
+// Recalcule la date de chaque classe comme la max des sous-dates correspondantes
+// (mn.dates[cid]||mn.date pour A/C, passation.dates[cid]||passation.date pour B).
+// Une classe avec ev.datesManual[cid] === true est skippée (la date est figée
+// à ce que l'utilisateur a saisi).
 function _evalAutoUpdateDate(ev) {
-  if (!ev || ev.dateManual) return;
+  if (!ev) return;
   const ids = _evalClassIds(ev);
-  const multi = ids.length > 1;
+  if (ids.length === 0) return;
   const collectFor = (cid) => {
     if (ev.type === 'A' || ev.type === 'C') {
       const dates = (ev.miniNotes || []).map(m => (cid && m.dates?.[cid]) || m.date).filter(Boolean);
@@ -28348,18 +28371,14 @@ function _evalAutoUpdateDate(ev) {
     }
     return null;
   };
-  if (multi) {
-    ev.dates = ev.dates || {};
-    for (const cid of ids) {
-      const auto = collectFor(cid);
-      if (auto) ev.dates[cid] = auto;
-    }
-    delete ev.date;
-  } else {
-    const auto = collectFor(ids[0]);
-    if (auto) ev.date = auto;
-    delete ev.dates;
+  ev.dates = ev.dates || {};
+  for (const cid of ids) {
+    if (ev.datesManual?.[cid]) continue;  // classe en mode manuel → on ne touche pas
+    const auto = collectFor(cid);
+    if (auto) ev.dates[cid] = auto;
   }
+  // Toujours en mode per-classe : pas de ev.date globale.
+  delete ev.date;
 }
 
 function _evalDateFor(ev, classId) {
@@ -28413,28 +28432,15 @@ function _evalSlotIdFor(ev, classId) {
   return ev?.slotId || null;
 }
 function _evalSetDateFor(ev, classId, date) {
-  const multi = _evalClassIds(ev).length > 1;
-  if (multi) {
-    // Multi-classes : on n'écrit que dans ev.dates, jamais ev.date.
-    ev.dates = ev.dates || {};
-    if (date) ev.dates[classId] = date; else delete ev.dates[classId];
-    delete ev.date;
-  } else {
-    // Mono-classe : on n'écrit que dans ev.date, jamais ev.dates.
-    ev.date = date || '';
-    delete ev.dates;
-  }
+  // Modèle 100% per-classe : pas de ev.date globale.
+  ev.dates = ev.dates || {};
+  if (date) ev.dates[classId] = date; else delete ev.dates[classId];
+  delete ev.date;
 }
 function _evalSetSlotIdFor(ev, classId, slotId) {
-  const multi = _evalClassIds(ev).length > 1;
-  if (multi) {
-    ev.slotIds = ev.slotIds || {};
-    if (slotId) ev.slotIds[classId] = slotId; else delete ev.slotIds[classId];
-    delete ev.slotId;
-  } else {
-    if (slotId) ev.slotId = slotId; else delete ev.slotId;
-    delete ev.slotIds;
-  }
+  ev.slotIds = ev.slotIds || {};
+  if (slotId) ev.slotIds[classId] = slotId; else delete ev.slotIds[classId];
+  delete ev.slotId;
 }
 
 // Classe active dans le tableur — lit dataset.classid sur #meval-tableur,
@@ -29018,8 +29024,14 @@ function _evalPassNewSaveFinalize(transferAction) {
   const sortedDesc = ev.passations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const latest = sortedDesc[0];
   _evalAutoUpdateDate(ev);
-  if (!ev.dateManual) {
-    if (latest?.slotId) ev.slotId = latest.slotId; else delete ev.slotId;
+  // Slot per-classe : propage le slotId de la passation la plus récente aux
+  // classes non encore en mode manuel.
+  if (latest?.slotId) {
+    ev.slotIds = ev.slotIds || {};
+    for (const cid of _evalClassIds(ev)) {
+      if (!ev.datesManual?.[cid]) ev.slotIds[cid] = latest.slotId;
+    }
+    delete ev.slotId;
   }
   // Pré-remplir 'A' (absent) pour chaque élève absent au créneau de cette passation
   if (pass && slotId) {
