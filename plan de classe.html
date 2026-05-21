@@ -3956,16 +3956,28 @@ kbd {
 
 <!-- ── MODAL Menu Passation (clic droit sur en-tête passation Type B) ── -->
 <div id="meval-pass-menu" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:420px;width:100%">
+  <div class="mb" style="max-width:520px;width:100%;max-height:92vh;overflow-y:auto">
     <h2 id="meval-pass-menu-title">🎯 Passation</h2>
     <input type="hidden" id="meval-pass-menu-passid">
+
+    <div id="meval-pass-menu-pergroup-wrap" style="display:none;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">Date + créneau par groupe (classe active)</div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.92em;margin-bottom:6px">
+        <input type="checkbox" id="meval-pass-menu-pergroup" onchange="_tableurPassMenuTogglePerGroup()">
+        <strong>Distinguer par groupe</strong>
+        <span style="color:var(--pencil);font-size:.85em">(différer entre G1, G2, G3 dans la classe active)</span>
+      </label>
+      <div id="meval-pass-menu-pergroup-rows" style="display:none;flex-direction:column;gap:6px;font-size:.9em"></div>
+    </div>
+
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
-      <button class="btn btn-g btn-sm" onclick="_tableurPassEdit()" title="Modifier code / nom / date / créneau / compétences">✏ Éditer</button>
+      <button class="btn btn-g btn-sm" onclick="_tableurPassEdit()" title="Modifier code / nom / date / créneau / compétences">✏ Éditer en détail</button>
       <button class="btn btn-r btn-sm" onclick="_tableurPassDelete()" title="Supprimer cette passation (et ses niveaux saisis)" style="margin-left:auto">🗑 Supprimer</button>
     </div>
     <p style="margin:0 0 10px;font-size:.82em;color:var(--pencil);font-style:italic">💡 Pour insérer une nouvelle passation et réordonner, passe par <strong>🏗 Structure</strong> (drag&drop).</p>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('meval-pass-menu')">Fermer</button>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-pass-menu')">Annuler</button>
+      <button class="btn btn-p" onclick="_tableurPassMenuSavePerGroup()">✓ Enregistrer</button>
     </div>
   </div>
 </div>
@@ -4828,7 +4840,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T13:00:00Z';
+const APP_VERSION   = '2026-05-22T14:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -26007,14 +26019,12 @@ function _evalTableurRender() {
     // un petit pictogramme 👥 prévient que le clic droit donne accès aux détails.
     const hasPg = !!(mn.datesByGroup?.[cls.id] || mn.slotIdsByGroup?.[cls.id]);
     const pgIcon = hasPg ? ` <span title="Cette mini-note a des dates/créneaux différents par groupe (G1/G2/G3) — clic droit pour voir/éditer" style="color:var(--margin-red);cursor:context-menu">👥</span>` : '';
-    const dateInput = isTypeC ? '' : `<div style="display:flex;align-items:center;justify-content:center;gap:2px;margin-top:1px">
+    const dateInput = isTypeC ? '' : `<div style="display:flex;align-items:center;justify-content:center;gap:2px;margin-top:1px;flex-wrap:nowrap">
         <input type="date" value="${_esc(mnDate)}" data-mnid="${_esc(mn.id)}" data-field="date" data-classid="${_esc(cls.id)}"
                onchange="_tableurEditMn(this)"
-               style="width:100px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil)"
+               style="width:96px;padding:0 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.7em;color:var(--pencil)"
                title="Date de cette mini-note pour ${_esc(cls.nom)} (optionnelle)">
-      </div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:2px">
-        <select data-mnid="${_esc(mn.id)}" data-field="slot" data-classid="${_esc(cls.id)}" onchange="_tableurEditMn(this)" title="Créneau (optionnel)" style="padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil);max-width:80px">${slotOpts}</select>${pgIcon}
+        <select data-mnid="${_esc(mn.id)}" data-field="slot" data-classid="${_esc(cls.id)}" onchange="_tableurEditMn(this)" title="Créneau (optionnel)" style="padding:0 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.7em;color:var(--pencil);max-width:48px">${slotOpts}</select>${pgIcon}
       </div>`;
     // Largeur compacte pour Type C (pas de date par question, donc on peut serrer) :
     // 70px au lieu de 120px → permet d'afficher 8-10 questions sans scroll horizontal sur écran 13".
@@ -26022,17 +26032,17 @@ function _evalTableurRender() {
     const labelMaxWidth = isTypeC ? '60px' : '110px';
     const maxInpWidth = isTypeC ? '40px' : '56px';
     const exoBoundary = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
-    html += `<th class="meval-mn-head" style="padding:3px 2px;border-bottom:2px solid var(--rule-line);text-align:center;${thWidth};font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative;${exoBoundary}" title="${_esc(tooltip)}${mnDate ? ' · ' + _fmtDateFr(mnDate) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
-      <input type="text" value="${_esc(mn.label || '')}" data-mnid="${_esc(mn.id)}" data-field="label" placeholder="Code"
-             oninput="_tableurEditMn(this)"
-             style="width:100%;max-width:${labelMaxWidth};padding:2px 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:600;text-align:center;font-size:.92em"
-             title="${_esc(mn.name ? mn.name + '\n\n(Clic droit pour éditer)' : 'Code court (clic droit = descriptif / suppression)')}">
-      <div style="display:flex;align-items:center;justify-content:center;gap:1px;margin-top:1px">
-        <span style="font-size:.78em;color:var(--pencil);font-weight:normal">/</span>
+    html += `<th class="meval-mn-head" style="padding:2px 2px;border-bottom:2px solid var(--rule-line);text-align:center;${thWidth};font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative;${exoBoundary}" title="${_esc(tooltip)}${mnDate ? ' · ' + _fmtDateFr(mnDate) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
+      <div style="display:flex;align-items:center;justify-content:center;gap:2px;flex-wrap:nowrap">
+        <input type="text" value="${_esc(mn.label || '')}" data-mnid="${_esc(mn.id)}" data-field="label" placeholder="Code"
+               oninput="_tableurEditMn(this)"
+               style="flex:1;min-width:0;max-width:${labelMaxWidth};padding:1px 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:600;text-align:center;font-size:.9em"
+               title="${_esc(mn.name ? mn.name + '\n\n(Clic droit pour éditer)' : 'Code court (clic droit = descriptif / suppression)')}">
+        <span style="font-size:.72em;color:var(--pencil);font-weight:normal">/</span>
         <input type="number" min="0" max="100" step="0.5" value="${mn.max ?? 1}" data-mnid="${_esc(mn.id)}" data-field="max"
                oninput="_tableurEditMn(this)"
                class="no-spinner"
-               style="width:${maxInpWidth};padding:1px 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);text-align:center;font-size:.82em"
+               style="width:${maxInpWidth};padding:1px 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);text-align:center;font-size:.78em"
                title="Maximum de points">
       </div>
       ${dateInput}
@@ -27313,26 +27323,37 @@ function _evalTableurRenderB(ev, cls) {
   for (const p of sortedPass) {
     const nbComps = (p.competenceIds || []).length || 1;
     const passDate = _passDateFor(p, cls.id);
-    const passSlot = _passSlotIdFor(p, cls.id);
-    const slotLbl = _slotLabelFromId(ev, passSlot);
+    const passSlot = _passSlotIdFor(p, cls.id) || '';
     const tip = (p.name ? `${p.code || '?'} — ${p.name}\n` : '')
               + `clic droit pour les autres options`;
-    // Inputs inline : code court + date (de la classe active) + créneau
-    // (le descriptif et la liste des compétences restent éditables via clic droit / Structure)
     const isMulti = _evalClassIds(ev).length > 1;
-    html += `<th colspan="${nbComps}" oncontextmenu="event.preventDefault();_tableurPassContextMenu(event,'${_esc(p.id)}')" style="padding:5px 6px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper);cursor:context-menu;border-left:2px solid var(--ink-blue-soft)" title="${_esc(tip)}">
-        <input type="text" value="${_esc(p.code || '')}" data-passid="${_esc(p.id)}" data-field="code"
-               oninput="_evalTableurEditPass(this)"
-               style="width:80px;max-width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:700;text-align:center;color:var(--ink-blue);font-size:.95em"
-               title="Code court (édition directe)">
-        <div style="display:flex;align-items:center;justify-content:center;gap:3px;margin-top:2px">
+    // Options du select créneau selon la salle/date de la classe active
+    const passSalle = S.salles?.[cls.activeRoom];
+    let passSlotOpts = '<option value="">—</option>';
+    if (passDate && passSalle?.schedule) {
+      const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(passDate + 'T12:00:00').getDay()];
+      for (const s of (passSalle.schedule[day] || [])) {
+        const sel = (s.id === passSlot) ? ' selected' : '';
+        passSlotOpts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.id)}</option>`;
+      }
+    }
+    const hasPg = !!(p.datesByGroup?.[cls.id] || p.slotIdsByGroup?.[cls.id]);
+    const pgIcon = hasPg ? ` <span title="Cette passation a des dates/créneaux différents par groupe (G1/G2/G3) — clic droit pour voir/éditer" style="color:var(--margin-red);cursor:context-menu">👥</span>` : '';
+    html += `<th colspan="${nbComps}" oncontextmenu="event.preventDefault();_tableurPassContextMenu(event,'${_esc(p.id)}')" style="padding:2px 4px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper);cursor:context-menu;border-left:2px solid var(--ink-blue-soft)" title="${_esc(tip)}">
+        <div style="display:flex;align-items:center;justify-content:center;gap:2px;flex-wrap:nowrap">
+          <input type="text" value="${_esc(p.code || '')}" data-passid="${_esc(p.id)}" data-field="code"
+                 oninput="_evalTableurEditPass(this)"
+                 style="flex:1;min-width:0;max-width:80px;padding:1px 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:700;text-align:center;color:var(--ink-blue);font-size:.9em"
+                 title="Code court (édition directe)">
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:2px;margin-top:1px;flex-wrap:nowrap">
           <input type="date" value="${_esc(passDate)}" data-passid="${_esc(p.id)}" data-field="date"
                  data-classid="${_esc(cls.id)}"
                  onchange="_evalTableurEditPass(this)"
-                 style="width:108px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.78em;color:var(--pencil)"
+                 style="width:96px;padding:0 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.7em;color:var(--pencil)"
                  title="Date (${isMulti ? 'pour la classe ' + _esc(cls.nom) : 'classe unique'})">
+          <select data-passid="${_esc(p.id)}" data-field="slot" data-classid="${_esc(cls.id)}" onchange="_evalTableurEditPass(this)" title="Créneau (optionnel)" style="padding:0 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.7em;color:var(--pencil);max-width:48px">${passSlotOpts}</select>${pgIcon}
         </div>
-        ${slotLbl ? `<div style="font-weight:400;font-size:.76em;color:var(--pencil);margin-top:1px">${_esc(slotLbl)}</div>` : ''}
       </th>`;
   }
   // Colonne Remarque (facultative, par élève) — rowspan 2 pour aligner sur les deux lignes
@@ -27750,15 +27771,43 @@ function _evalTableurEditPass(inputEl) {
     pass.code = (inputEl.value || '').trim();
   } else if (field === 'date') {
     const d = inputEl.value || '';
-    const isMulti = _evalClassIds(ev).length > 1;
-    if (isMulti && cid) {
+    if (cid) {
       pass.dates = pass.dates || {};
       if (d) pass.dates[cid] = d; else delete pass.dates[cid];
-      // Re-calcule la date "officielle" = la plus récente parmi les classes
       const allDates = Object.values(pass.dates).filter(Boolean);
       pass.date = allDates.reduce((m, x) => (x > m ? x : m), '');
+      // Régénère les options du select créneau de la même colonne (les
+      // créneaux disponibles dépendent du jour de la semaine)
+      const slotSel = document.querySelector(
+        `#meval-tableur-tbl select[data-passid="${CSS.escape(pass.id)}"][data-field="slot"][data-classid="${CSS.escape(cid)}"]`
+      );
+      if (slotSel) {
+        const cls = S.classes?.[cid];
+        const salle = cls ? S.salles?.[cls.activeRoom] : null;
+        const day = d ? ['sun','mon','tue','wed','thu','fri','sat'][new Date(d + 'T12:00:00').getDay()] : null;
+        const slots = (day && salle?.schedule) ? (salle.schedule[day] || []) : [];
+        const cur = pass.slotIds?.[cid] || '';
+        const stillPresent = slots.some(s => s.id === cur);
+        let opts = '<option value="">—</option>';
+        for (const s of slots) {
+          const sel = (s.id === cur && stillPresent) ? ' selected' : '';
+          opts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.id)}</option>`;
+        }
+        slotSel.innerHTML = opts;
+        if (cur && !stillPresent && pass.slotIds) {
+          delete pass.slotIds[cid];
+          if (Object.keys(pass.slotIds).length === 0) delete pass.slotIds;
+        }
+      }
     } else {
       pass.date = d;
+    }
+  } else if (field === 'slot') {
+    const v = inputEl.value || '';
+    if (cid) {
+      pass.slotIds = pass.slotIds || {};
+      if (v) pass.slotIds[cid] = v; else delete pass.slotIds[cid];
+      if (Object.keys(pass.slotIds).length === 0) delete pass.slotIds;
     }
   }
   ev.updatedAt = Date.now();
@@ -28241,10 +28290,140 @@ function _tableurPassContextMenu(event, passId) {
   if (!ev || ev.type !== 'B') return;
   const pass = ev.passations?.find(p => p.id === passId);
   if (!pass) return;
+  const cls = _evalTableurActiveCls(ev);
   document.getElementById('meval-pass-menu-passid').value = passId;
-  document.getElementById('meval-pass-menu-title').textContent = `🎯 Passation ${pass.code || '?'} — ${_fmtDateFr(pass.date)}`;
+  document.getElementById('meval-pass-menu-title').textContent = `🎯 Passation ${pass.code || '?'} — ${_fmtDateFr(_passDateFor(pass, cls?.id))}`;
+  // Section per-groupe : visible si la classe active a au moins un élève G1/G2/G3
+  const pgWrap = document.getElementById('meval-pass-menu-pergroup-wrap');
+  const hasGroups = cls && (cls.eleves || []).some(sid => {
+    const g = S.eleves?.[sid]?.groupe;
+    return g === 1 || g === 2 || g === 3;
+  });
+  if (pgWrap) pgWrap.style.display = hasGroups ? '' : 'none';
+  const cb = document.getElementById('meval-pass-menu-pergroup');
+  const hasPgData = cls && (
+    Object.keys(pass.datesByGroup?.[cls.id] || {}).length > 0 ||
+    Object.keys(pass.slotIdsByGroup?.[cls.id] || {}).length > 0
+  );
+  if (cb) cb.checked = !!hasPgData;
+  _tableurPassMenuTogglePerGroup();
   _modalReturnTo['meval-pass-menu'] = () => _evalTableurRender();
   openMod('meval-pass-menu');
+}
+
+// Affiche/masque la section per-groupe de la modale pass-menu selon la checkbox.
+function _tableurPassMenuTogglePerGroup() {
+  const cb = document.getElementById('meval-pass-menu-pergroup');
+  const rows = document.getElementById('meval-pass-menu-pergroup-rows');
+  if (!cb || !rows) return;
+  rows.style.display = cb.checked ? 'flex' : 'none';
+  if (cb.checked) _tableurPassMenuRenderPerGroupRows();
+}
+
+// Rend une ligne par groupe (G1/G2/G3 si présents dans la classe active) avec
+// input date + select créneau. Pré-rempli depuis pass.datesByGroup / pass.slotIdsByGroup.
+function _tableurPassMenuRenderPerGroupRows() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const wrap = document.getElementById('meval-pass-menu-pergroup-rows');
+  if (!wrap || !ev) return;
+  const passId = document.getElementById('meval-pass-menu-passid').value;
+  const pass = ev.passations?.find(p => p.id === passId);
+  const cls = _evalTableurActiveCls(ev);
+  if (!pass || !cls) { wrap.innerHTML = ''; return; }
+  const groupsInCls = new Set();
+  for (const sid of (cls.eleves || [])) {
+    const g = S.eleves?.[sid]?.groupe;
+    if (g === 1 || g === 2 || g === 3) groupsInCls.add(g);
+  }
+  const groups = [...groupsInCls].sort();
+  if (groups.length === 0) { wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Aucun groupe G1/G2/G3 dans cette classe.</p>'; return; }
+  const salle = S.salles?.[cls.activeRoom];
+  const colorMap = { 1: '#3498db', 2: '#e67e22', 3: '#9b59b6' };
+  let html = '';
+  for (const g of groups) {
+    const d = pass.datesByGroup?.[cls.id]?.[g] || '';
+    const s = pass.slotIdsByGroup?.[cls.id]?.[g] || '';
+    let slotOpts = '<option value="">— Pendant la journée —</option>';
+    if (d) {
+      const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(d + 'T12:00:00').getDay()];
+      for (const slot of (salle?.schedule?.[day] || [])) {
+        const selA = (slot.id === s) ? ' selected' : '';
+        slotOpts += `<option value="${_esc(slot.id)}"${selA}>${_esc(slot.label || slot.id)} (${_esc(slot.start)}–${_esc(slot.end)})</option>`;
+      }
+    }
+    html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <strong style="display:inline-block;min-width:28px;padding:2px 6px;border-radius:10px;background:${colorMap[g]};color:#fff;font-family:var(--font-mono);font-size:.82em;text-align:center">G${g}</strong>
+      <input type="date" data-pgg="${g}" data-pgfield="date" value="${_esc(d)}" onchange="_tableurPassMenuPgRefreshSlots(this)" style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em">
+      <select data-pgg="${g}" data-pgfield="slot" style="padding:3px 6px;font-size:.88em">${slotOpts}</select>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function _tableurPassMenuPgRefreshSlots(inputEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const cls = ev ? _evalTableurActiveCls(ev) : null;
+  if (!cls) return;
+  const salle = S.salles?.[cls.activeRoom];
+  const g = inputEl.getAttribute('data-pgg');
+  const sel = inputEl.parentElement.querySelector(`select[data-pgg="${g}"]`);
+  if (!sel) return;
+  const cur = sel.value;
+  let opts = '<option value="">— Pendant la journée —</option>';
+  const d = inputEl.value;
+  if (d) {
+    const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(d + 'T12:00:00').getDay()];
+    for (const slot of (salle?.schedule?.[day] || [])) {
+      const selA = (slot.id === cur) ? ' selected' : '';
+      opts += `<option value="${_esc(slot.id)}"${selA}>${_esc(slot.label || slot.id)} (${_esc(slot.start)}–${_esc(slot.end)})</option>`;
+    }
+  }
+  sel.innerHTML = opts;
+}
+
+// Sauvegarde les overrides per-groupe pour cette passation et cette classe active.
+// Décocher la checkbox = retirer les overrides.
+function _tableurPassMenuSavePerGroup() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const passId = document.getElementById('meval-pass-menu-passid').value;
+  const pass = ev.passations?.find(p => p.id === passId);
+  if (!pass) { closeMod2('meval-pass-menu'); return; }
+  const cls = _evalTableurActiveCls(ev);
+  pushUndo();
+  const pgChk = document.getElementById('meval-pass-menu-pergroup');
+  if (cls) {
+    if (pgChk?.checked) {
+      pass.datesByGroup = pass.datesByGroup || {};
+      pass.slotIdsByGroup = pass.slotIdsByGroup || {};
+      pass.datesByGroup[cls.id] = pass.datesByGroup[cls.id] || {};
+      pass.slotIdsByGroup[cls.id] = pass.slotIdsByGroup[cls.id] || {};
+      const wrap = document.getElementById('meval-pass-menu-pergroup-rows');
+      for (const inp of wrap.querySelectorAll('input[data-pgg][data-pgfield="date"]')) {
+        const g = parseInt(inp.getAttribute('data-pgg'), 10);
+        const v = inp.value || '';
+        if (v) pass.datesByGroup[cls.id][g] = v; else delete pass.datesByGroup[cls.id][g];
+      }
+      for (const sel of wrap.querySelectorAll('select[data-pgg][data-pgfield="slot"]')) {
+        const g = parseInt(sel.getAttribute('data-pgg'), 10);
+        const v = sel.value || '';
+        if (v) pass.slotIdsByGroup[cls.id][g] = v; else delete pass.slotIdsByGroup[cls.id][g];
+      }
+      if (Object.keys(pass.datesByGroup[cls.id]).length === 0) delete pass.datesByGroup[cls.id];
+      if (Object.keys(pass.slotIdsByGroup[cls.id]).length === 0) delete pass.slotIdsByGroup[cls.id];
+    } else {
+      if (pass.datesByGroup) delete pass.datesByGroup[cls.id];
+      if (pass.slotIdsByGroup) delete pass.slotIdsByGroup[cls.id];
+    }
+    if (pass.datesByGroup && Object.keys(pass.datesByGroup).length === 0) delete pass.datesByGroup;
+    if (pass.slotIdsByGroup && Object.keys(pass.slotIdsByGroup).length === 0) delete pass.slotIdsByGroup;
+  }
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-pass-menu');
 }
 
 function _tableurPassEdit() {
@@ -29719,9 +29898,11 @@ function renderBilanTab() {
     // pas leur date dans le header.
     const evDate = _evalDateFor(ev, cls.id);
     const dateFr = evDate ? _fmtDateFr(evDate) : '';
-    const tip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateFr ? ' · ' + dateFr : ''} · /${ev.noteMax ?? 20}${ev.description ? '\n\n' + ev.description : ''}\n\nClic droit : ouvrir la saisie en mode tableur`;
+    const tip = `Type ${ev.type || '?'} · ${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateFr ? ' · ' + dateFr : ''} · /${ev.noteMax ?? 20}${ev.description ? '\n\n' + ev.description : ''}\n\nClic droit : ouvrir la saisie en mode tableur`;
+    // Pastille type d'éval, cohérente avec la liste des Devoirs (eval-type-badge)
+    const typePill = `<span class="eval-type-badge eval-type-${ev.type || 'A'}" style="font-size:.62em;padding:1px 5px;line-height:1.2;border-radius:8px">${ev.type || '?'}</span>`;
     html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px" title="${_esc(tip)}">
-      <div style="font-weight:700;cursor:context-menu" oncontextmenu="event.preventDefault();_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr('Clic droit : ouvrir la saisie en mode tableur')}">${_esc(ev.nomCourt)}</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:context-menu" oncontextmenu="event.preventDefault();_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr('Clic droit : ouvrir la saisie en mode tableur')}">${typePill}<span>${_esc(ev.nomCourt)}</span></div>
       <input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
              oninput="_bilanUpdateEvalCoef(this)"
              class="no-spinner"
