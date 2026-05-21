@@ -2570,7 +2570,7 @@ kbd {
       </div>
     </div>
     <p class="al al-i" style="margin-bottom:8px">
-      Synthèse de la période pour le bulletin : <strong>moyenne /20</strong> pondérée par les coefficients des évaluations + <strong>moyenne par domaine du socle</strong> (D1.1, D1.2, D1.3, D1.4, D2, D3, D4, D5) basée sur les niveaux de compétences atteints. Les évaluations avec ❝ne compte pas dans la moyenne❞ (diagnostiques) sont ignorées.
+      Synthèse de la période pour le bulletin. <strong>Une colonne par évaluation</strong> (note /20 individuelle de chaque élève, fond coloré selon la valeur), triées <strong>par date croissante</strong> de gauche à droite (sans date à la fin). En multi-période (« Toutes »), les colonnes <strong>Moyenne /20</strong>, <strong>Rang</strong> et <strong>📝 Remarque</strong> sont dédupliquées par période (S1/S2 ou T1/T2/T3). La moyenne est <strong>pondérée par les coefficients</strong> de chaque éval. Les évals marquées <em>« ne compte pas dans la moyenne »</em> (diagnostiques) sont ignorées. Clic droit sur le code court d'une éval = ouvrir sa saisie tableur.
     </p>
     <div id="bilan-wrap"></div>
   </div>
@@ -2600,7 +2600,7 @@ kbd {
       </div>
     </div>
     <p class="al al-i" style="margin-bottom:8px">
-      Vue transverse : tableau élèves × compétences (ou domaines du socle) agrégeant toutes les évaluations de la classe et de la période. Niveau moyen (1–4) calculé selon la règle de moyenne (Paramètres évaluation). Survole une cellule pour voir le détail.
+      Vue transverse <strong>élèves × compétences</strong> (ou <strong>domaines du socle</strong> selon l'affichage choisi) sur toutes les évaluations de la classe et de la période. Chaque cellule = <strong>niveau (1–4)</strong> calculé selon la règle de moyenne (configurable dans <em>⚙ Paramètres</em>). En mode <em>domaines</em>, le niveau d'un domaine = moyenne des compétences évaluées qu'il regroupe. La colonne <strong>Moyenne</strong> agrège les niveaux de la ligne (1–4), et la colonne <strong>📝 Remarque</strong> est synchronisée avec celle de l'onglet <em>Bilan des évaluations</em>. Le toggle <em>🎯 Arrondir aux entiers</em> arrondit l'affichage et les exports CSV / ENT (l'ENT n'accepte que des valeurs entières). Survole une cellule pour voir le détail.
     </p>
     <div id="comp-wrap"></div>
   </div>
@@ -4812,7 +4812,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T07:00:00Z';
+const APP_VERSION   = '2026-05-22T08:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -29280,12 +29280,22 @@ function renderBilanTab() {
 
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
 
-  // Évals de la classe + période (incluses dans la moyenne)
+  // Évals de la classe + période (incluses dans la moyenne).
+  // Tri : date croissante (plus anciennes à gauche, plus récentes à droite),
+  // les évals sans date en fin de tableau. Tri secondaire par nom court pour
+  // garantir un ordre stable en cas d'égalité.
   const evs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, cls.id))
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
-    .sort((a, b) => (_evalDateFor(a, cls.id) || '').localeCompare(_evalDateFor(b, cls.id) || ''));
+    .sort((a, b) => {
+      const da = _evalDateFor(a, cls.id) || '';
+      const db = _evalDateFor(b, cls.id) || '';
+      if (!da && !db) return (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
+      if (!da) return 1;   // a sans date → fin
+      if (!db) return -1;
+      return da.localeCompare(db) || (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
+    });
 
   // Cache des notes /20 par (sid × evalId)
   const noteSur20 = (ev, sid) => {
@@ -30107,7 +30117,7 @@ function renderCompetencesTab() {
     const suffix = compMulti ? ' ' + perCode : '';
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     const attr = compMulti ? `onclick="_toggleBilanCol('${cMoyKey(perCode)}')" style="cursor:pointer;` : 'style="';
-    html += `<th ${attr}padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Moyenne globale${suffix}">Moyenne${suffix}</th>`;
+    html += `<th ${attr}padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Moyenne globale${suffix} (échelle 1–4)">Moyenne${suffix}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/4</span></th>`;
   });
   // Remarque(s) — 1 par période de synthèse
   compSynthPeriodes.forEach((perCode, idx) => {
