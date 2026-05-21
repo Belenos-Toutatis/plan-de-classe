@@ -3417,7 +3417,8 @@ kbd {
 
     <div id="meval-new-classes-wrap" class="about-section">
       <h3>🏫 Classes concernées <span style="color:var(--margin-red);font-weight:normal">*</span></h3>
-      <p style="margin:0 0 8px;font-size:.85em;color:var(--pencil)">Coche les classes qui passent ce devoir, puis renseigne la date et le créneau pour chacune (vides = sans date).</p>
+      <p style="margin:0 0 8px;font-size:.85em;color:var(--pencil)">Clique sur les pastilles pour sélectionner les classes qui passent ce devoir. La date et le créneau s'affichent en dessous pour chacune.</p>
+      <div id="meval-new-classes-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
       <div id="meval-new-classes" style="display:flex;flex-direction:column;gap:4px"></div>
     </div>
 
@@ -4894,7 +4895,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T18:00:00Z';
+const APP_VERSION   = '2026-05-22T18:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -24066,10 +24067,12 @@ const _evalNewState = { dates: {}, slotIds: {} };
 
 function _evalRenderNewClassPicker(preCheckedIds) {
   const wrap = document.getElementById('meval-new-classes-wrap');
+  const chips = document.getElementById('meval-new-classes-chips');
   const list = document.getElementById('meval-new-classes');
   const allCls = Object.values(S.classes || {});
   if (allCls.length === 0) {
     wrap.style.display = 'none';
+    chips.innerHTML = '';
     list.innerHTML = '';
     return;
   }
@@ -24088,13 +24091,57 @@ function _evalRenderNewClassPicker(preCheckedIds) {
   for (const c of sorted) {
     if (pre.has(c.id) && _evalNewState.dates[c.id] == null) _evalNewState.dates[c.id] = today;
   }
-  list.innerHTML = sorted.map(c => _evalNewClassRowHTML(c, pre.has(c.id))).join('');
+  // Chips compacts en haut (toggle sélection). Les inputs cachés restent dans
+  // la liste pour que _evalNewGetCheckedClassIds() continue à fonctionner.
+  chips.innerHTML = sorted.map(c => _evalNewClassChipHTML(c, pre.has(c.id))).join('');
+  // Lignes per-classe en dessous, uniquement pour les classes cochées.
+  _evalNewRenderClassRows();
 }
 
-function _evalNewClassRowHTML(c, checked) {
+// Re-rend les lignes "date + créneau" pour les classes actuellement cochées.
+function _evalNewRenderClassRows() {
+  const list = document.getElementById('meval-new-classes');
+  if (!list) return;
+  const allCls = Object.values(S.classes || {});
+  const sorted = allCls.slice().sort((a, b) => (a.niveau || 999) - (b.niveau || 999) || (a.nom || '').localeCompare(b.nom || '', 'fr'));
+  const checkedIds = new Set(_evalNewGetCheckedClassIds());
+  list.innerHTML = sorted.filter(c => checkedIds.has(c.id)).map(c => _evalNewClassRowHTML(c)).join('');
+}
+
+// Rendu d'une pastille (chip) pour la sélection des classes. Style cohérent
+// avec les autres chips de sélection (comp-chip).
+function _evalNewClassChipHTML(c, checked) {
+  return `<label class="comp-chip${checked ? ' on' : ''}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:14px;cursor:pointer;font-size:.9em">
+    <input type="checkbox" name="meval-new-class" data-cid="${_esc(c.id)}" value="${_escAttr(c.id)}"${checked ? ' checked' : ''} onchange="_evalNewOnClassChipToggle(this)" style="margin:0">
+    <strong>${_esc(c.nom)}</strong>
+  </label>`;
+}
+
+// Quand un chip est toggle, on ajoute/retire les données per-classe puis on
+// re-rend uniquement la liste des lignes en dessous (le chip lui-même conserve
+// son état via la checkbox cachée).
+function _evalNewOnClassChipToggle(checkbox) {
+  const cid = checkbox.getAttribute('data-cid');
+  if (checkbox.checked && _evalNewState.dates[cid] == null) {
+    _evalNewState.dates[cid] = new Date().toISOString().slice(0, 10);
+  }
+  if (!checkbox.checked) {
+    delete _evalNewState.dates[cid];
+    delete _evalNewState.slotIds[cid];
+  }
+  // Met à jour la classe visuelle du chip
+  const lbl = checkbox.closest('label');
+  if (lbl) {
+    if (checkbox.checked) lbl.classList.add('on'); else lbl.classList.remove('on');
+  }
+  _evalNewRenderClassRows();
+}
+
+// Ligne "date + créneau" pour une classe cochée. La checkbox de sélection est
+// désormais dans le chip en haut — cette ligne ne contient que le label + date + slot.
+function _evalNewClassRowHTML(c) {
   const date = _evalNewState.dates[c.id] || '';
   const slotId = _evalNewState.slotIds[c.id] || '';
-  // Options du select créneau selon planning de la salle + date
   const salle = S.salles?.[c.activeRoom];
   let slotOpts = '<option value="">— Pendant la journée —</option>';
   if (date && salle?.schedule) {
@@ -24104,38 +24151,15 @@ function _evalNewClassRowHTML(c, checked) {
       slotOpts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.label || s.id)} (${_esc(s.start)}–${_esc(s.end)})</option>`;
     }
   }
-  const rowBg = checked ? 'background:var(--paper);border:1px solid var(--rule-line)' : 'background:transparent;border:1px solid transparent';
-  return `<div data-cid="${_esc(c.id)}" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px;border-radius:3px;${rowBg}">
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.92em">
-      <input type="checkbox" name="meval-new-class" data-cid="${_esc(c.id)}" value="${_escAttr(c.id)}"${checked ? ' checked' : ''} onchange="_evalNewOnClassToggle(this)">
-      <strong>${_esc(c.nom)}</strong> <span style="color:var(--pencil);font-size:.88em">${_esc(c.année || '')}</span>
-    </label>
-    ${checked ? `
-      <span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
-      <input type="date" data-cid="${_esc(c.id)}" data-field="date" value="${_esc(date)}" onchange="_evalNewOnClassDateChange(this)"
-        style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe">
-      <span style="font-size:.85em;color:var(--pencil)">⏰</span>
-      <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalNewOnClassSlotChange(this)" style="padding:3px 6px;font-size:.85em">${slotOpts}</select>
-    ` : ''}
+  return `<div data-cid="${_esc(c.id)}" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px;border-radius:3px;background:var(--paper);border:1px solid var(--rule-line)">
+    <strong style="font-size:.92em">${_esc(c.nom)}</strong>
+    <span style="color:var(--pencil);font-size:.85em">${_esc(c.année || '')}</span>
+    <span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
+    <input type="date" data-cid="${_esc(c.id)}" data-field="date" value="${_esc(date)}" onchange="_evalNewOnClassDateChange(this)"
+      style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe">
+    <span style="font-size:.85em;color:var(--pencil)">⏰</span>
+    <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalNewOnClassSlotChange(this)" style="padding:3px 6px;font-size:.85em">${slotOpts}</select>
   </div>`;
-}
-
-// Toggle classe : on rebuild juste la ligne concernée (préserve focus dans les
-// autres lignes), met à jour _evalNewState.dates avec aujourd'hui à la coche.
-function _evalNewOnClassToggle(checkbox) {
-  const cid = checkbox.getAttribute('data-cid');
-  const c = S.classes?.[cid];
-  if (!c) return;
-  if (checkbox.checked && _evalNewState.dates[cid] == null) {
-    _evalNewState.dates[cid] = new Date().toISOString().slice(0, 10);
-  }
-  if (!checkbox.checked) {
-    delete _evalNewState.dates[cid];
-    delete _evalNewState.slotIds[cid];
-  }
-  // Re-rend juste cette ligne (cible son <div data-cid>)
-  const row = document.querySelector(`#meval-new-classes [data-cid="${CSS.escape(cid)}"]`);
-  if (row) row.outerHTML = _evalNewClassRowHTML(c, checkbox.checked);
 }
 
 function _evalNewOnClassDateChange(inputEl) {
