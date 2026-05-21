@@ -4818,7 +4818,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T09:00:00Z';
+const APP_VERSION   = '2026-05-22T10:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -25757,7 +25757,7 @@ function _evalTableurRenderClassPicker(ev, activeCls) {
   // Date + créneau spécifiques à la classe active
   html += `<span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>`;
   html += `<label style="font-size:.85em;color:var(--pencil)">📅 Date pour <strong>${_esc(activeCls.nom)}</strong> :</label>`;
-  html += `<input type="date" value="${_esc(dateCur)}" onchange="_evalTableurChangeDate(this.value)" style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em">`;
+  html += `<input type="date" id="meval-tableur-date-input" value="${_esc(dateCur)}" onchange="_evalTableurChangeDate(this.value)" style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em">`;
   // Créneau (selon planning de la salle de la classe active)
   const salle = S.salles?.[activeCls.activeRoom];
   if (salle && dateCur) {
@@ -25765,7 +25765,7 @@ function _evalTableurRenderClassPicker(ev, activeCls) {
     const slots = salle.schedule?.[day] || [];
     if (slots.length > 0) {
       html += `<label style="font-size:.85em;color:var(--pencil)">⏰ Créneau :</label>`;
-      html += `<select onchange="_evalTableurChangeSlot(this.value)" style="padding:3px 6px;font-size:.85em">`;
+      html += `<select id="meval-tableur-slot-select" onchange="_evalTableurChangeSlot(this.value)" style="padding:3px 6px;font-size:.85em">`;
       html += `<option value="">— Pendant la journée —</option>`;
       for (const s of slots) {
         const sel = s.id === slotCur ? ' selected' : '';
@@ -25795,7 +25795,24 @@ function _evalTableurChangeDate(date) {
   _evalSetDateFor(ev, cls.id, date);
   ev.updatedAt = Date.now();
   save();
-  _evalTableurRender();
+  // Mise à jour ciblée du <select> créneau — pas de re-render complet du
+  // tableur (qui détruirait l'input <type=date> et casserait la saisie
+  // clavier entre segments jour/mois/année dans certains navigateurs).
+  const slotSel = document.getElementById('meval-tableur-slot-select');
+  if (slotSel) {
+    const salle = S.salles?.[cls.activeRoom];
+    let opts = '<option value="">— Pendant la journée —</option>';
+    if (salle && date) {
+      const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(date + 'T12:00:00').getDay()];
+      const slots = salle.schedule?.[day] || [];
+      const curSlot = _evalSlotIdFor(ev, cls.id);
+      for (const s of slots) {
+        const sel = s.id === curSlot ? ' selected' : '';
+        opts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.label || s.id)} (${_esc(s.start)}–${_esc(s.end)})</option>`;
+      }
+    }
+    slotSel.innerHTML = opts;
+  }
 }
 
 function _evalTableurChangeSlot(slotId) {
@@ -29371,7 +29388,11 @@ function renderBilanTab() {
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px">Élève</th>';
   // 1 colonne par éval — header avec : code court · coef éditable (sans ×) · date
   for (const ev of evs) {
-    const dateFr = ev.date ? _fmtDateFr(ev.date) : '';
+    // Utilise _evalDateFor (gère per-classe + fallback sur les sous-dates des
+    // mini-notes / passations) — sinon les Type A multi-classes n'affichent
+    // pas leur date dans le header.
+    const evDate = _evalDateFor(ev, cls.id);
+    const dateFr = evDate ? _fmtDateFr(evDate) : '';
     const tip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateFr ? ' · ' + dateFr : ''} · /${ev.noteMax ?? 20}${ev.description ? '\n\n' + ev.description : ''}\n\nClic droit : ouvrir la saisie en mode tableur`;
     html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px" title="${_esc(tip)}">
       <div style="font-weight:700;cursor:context-menu" oncontextmenu="event.preventDefault();_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr('Clic droit : ouvrir la saisie en mode tableur')}">${_esc(ev.nomCourt)}</div>
