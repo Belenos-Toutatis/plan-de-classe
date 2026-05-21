@@ -3846,8 +3846,18 @@ kbd {
       <input type="text" id="meval-mn-menu-name" maxlength="120" placeholder="(optionnel — affiché en tooltip)" style="padding:5px 8px">
       <label>Maximum</label>
       <div><input type="number" id="meval-mn-menu-max" min="0" max="100" step="0.5" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
-      <label id="meval-mn-menu-date-label">Date</label>
-      <input type="date" id="meval-mn-menu-date" style="padding:5px 8px;font-family:var(--font-mono);max-width:200px">
+      <label id="meval-mn-menu-date-label">Date · créneau</label>
+      <div id="meval-mn-menu-date-row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="date" id="meval-mn-menu-date" onchange="_tableurMnMenuRefreshSlots()" style="padding:5px 8px;font-family:var(--font-mono);max-width:170px">
+        <select id="meval-mn-menu-slot" style="padding:5px 8px;font-size:.92em"><option value="">— Pendant la journée —</option></select>
+      </div>
+    </div>
+    <div id="meval-mn-menu-pergroup-wrap" style="display:none;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.92em;margin-bottom:6px">
+        <input type="checkbox" id="meval-mn-menu-pergroup" onchange="_tableurMnMenuTogglePerGroup()">
+        <strong>Distinguer par groupe</strong> <span style="color:var(--pencil);font-size:.88em">(date/créneau différent par G1, G2, G3 dans la classe active)</span>
+      </label>
+      <div id="meval-mn-menu-pergroup-rows" style="display:none;flex-direction:column;gap:6px;font-size:.9em"></div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
       <span style="font-size:.82em;color:var(--pencil);font-style:italic">💡 Insertion à un endroit précis : utilise <strong>🏗 Structure</strong> avec drag&drop</span>
@@ -4818,7 +4828,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T12:00:00Z';
+const APP_VERSION   = '2026-05-22T13:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -25982,10 +25992,30 @@ function _evalTableurRender() {
   orderedMNs.forEach((mn, ci) => {
     const tooltip = mn.name ? `${mn.label || '?'} — ${mn.name}` : (mn.label || '(sans nom)');
     const mnDate = _mnDateFor(mn, cls.id);
-    const dateInput = isTypeC ? '' : `<input type="date" value="${_esc(mnDate)}" data-mnid="${_esc(mn.id)}" data-field="date" data-classid="${_esc(cls.id)}"
-             onchange="_tableurEditMn(this)"
-             style="width:118px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil)"
-             title="Date de cette mini-note pour ${_esc(cls.nom)} (optionnelle)">`;
+    const mnSlot = _mnSlotIdFor(mn, cls.id) || '';
+    // Construit les options du select créneau selon la salle + date
+    const salle = S.salles?.[cls.activeRoom];
+    let slotOpts = '<option value="">—</option>';
+    if (mnDate && salle?.schedule) {
+      const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(mnDate + 'T12:00:00').getDay()];
+      for (const s of (salle.schedule[day] || [])) {
+        const sel = (s.id === mnSlot) ? ' selected' : '';
+        slotOpts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.id)}</option>`;
+      }
+    }
+    // Indicateur per-groupe : si des données per-groupe existent pour cette classe,
+    // un petit pictogramme 👥 prévient que le clic droit donne accès aux détails.
+    const hasPg = !!(mn.datesByGroup?.[cls.id] || mn.slotIdsByGroup?.[cls.id]);
+    const pgIcon = hasPg ? ` <span title="Cette mini-note a des dates/créneaux différents par groupe (G1/G2/G3) — clic droit pour voir/éditer" style="color:var(--margin-red);cursor:context-menu">👥</span>` : '';
+    const dateInput = isTypeC ? '' : `<div style="display:flex;align-items:center;justify-content:center;gap:2px;margin-top:1px">
+        <input type="date" value="${_esc(mnDate)}" data-mnid="${_esc(mn.id)}" data-field="date" data-classid="${_esc(cls.id)}"
+               onchange="_tableurEditMn(this)"
+               style="width:100px;padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil)"
+               title="Date de cette mini-note pour ${_esc(cls.nom)} (optionnelle)">
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:2px">
+        <select data-mnid="${_esc(mn.id)}" data-field="slot" data-classid="${_esc(cls.id)}" onchange="_tableurEditMn(this)" title="Créneau (optionnel)" style="padding:0 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.72em;color:var(--pencil);max-width:80px">${slotOpts}</select>${pgIcon}
+      </div>`;
     // Largeur compacte pour Type C (pas de date par question, donc on peut serrer) :
     // 70px au lieu de 120px → permet d'afficher 8-10 questions sans scroll horizontal sur écran 13".
     const thWidth = isTypeC ? 'min-width:70px;width:70px' : 'min-width:120px';
@@ -27861,18 +27891,48 @@ function _tableurEditMn(inputEl) {
   } else if (field === 'date') {
     const d = String(inputEl.value || '');
     const cid = inputEl.getAttribute('data-classid');
-    const isMulti = _evalClassIds(ev).length > 1;
-    if (isMulti && cid) {
+    if (cid) {
       mn.dates = mn.dates || {};
       if (d) mn.dates[cid] = d; else delete mn.dates[cid];
-      // Recalcule la date "officielle" de la mini-note = la plus récente parmi les classes
+      // mn.date "globale" = max des per-classe (pour la cascade fallback)
       const allDates = Object.values(mn.dates).filter(Boolean);
       if (allDates.length > 0) mn.date = allDates.reduce((m, x) => x > m ? x : m, '');
       else delete mn.date;
-    } else {
-      if (d) mn.date = d; else delete mn.date;
+      // Quand la date change, les options du select créneau de la même
+      // colonne deviennent obsolètes — on les rebuilde et on remet la valeur
+      // courante si elle est encore présente.
+      const slotSel = document.querySelector(
+        `#meval-tableur-tbl select[data-mnid="${CSS.escape(mn.id)}"][data-field="slot"][data-classid="${CSS.escape(cid)}"]`
+      );
+      if (slotSel) {
+        const cls = S.classes?.[cid];
+        const salle = cls ? S.salles?.[cls.activeRoom] : null;
+        const day = d ? ['sun','mon','tue','wed','thu','fri','sat'][new Date(d + 'T12:00:00').getDay()] : null;
+        const slots = (day && salle?.schedule) ? (salle.schedule[day] || []) : [];
+        const cur = mn.slotIds?.[cid] || '';
+        const stillPresent = slots.some(s => s.id === cur);
+        let opts = '<option value="">—</option>';
+        for (const s of slots) {
+          const sel = (s.id === cur && stillPresent) ? ' selected' : '';
+          opts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.id)}</option>`;
+        }
+        slotSel.innerHTML = opts;
+        // Si le créneau enregistré n'existe plus pour cette nouvelle date, on le retire
+        if (cur && !stillPresent && mn.slotIds) {
+          delete mn.slotIds[cid];
+          if (Object.keys(mn.slotIds).length === 0) delete mn.slotIds;
+        }
+      }
     }
     _evalAutoUpdateDate(ev);
+  } else if (field === 'slot') {
+    const v = String(inputEl.value || '');
+    const cid = inputEl.getAttribute('data-classid');
+    if (cid) {
+      mn.slotIds = mn.slotIds || {};
+      if (v) mn.slotIds[cid] = v; else delete mn.slotIds[cid];
+      if (Object.keys(mn.slotIds).length === 0) delete mn.slotIds;
+    }
   }
   ev.updatedAt = Date.now();
   save();
@@ -27886,22 +27946,148 @@ function _tableurMnContextMenu(event, mnId) {
   if (!ev) return;
   const mn = ev.miniNotes?.find(m => m.id === mnId);
   if (!mn) return;
+  const cls = _evalTableurActiveCls(ev);
   document.getElementById('meval-mn-menu-mnid').value = mnId;
   document.getElementById('meval-mn-menu-title').textContent = `📝 ${ev.type === 'C' ? 'Question' : 'Mini-note'} ${mn.label || '(sans nom)'}`;
   document.getElementById('meval-mn-menu-label').value = mn.label || '';
   document.getElementById('meval-mn-menu-name').value  = mn.name  || '';
   document.getElementById('meval-mn-menu-max').value   = mn.max ?? 1;
-  document.getElementById('meval-mn-menu-date').value  = mn.date  || '';
+  // Date + créneau pour la classe active
+  const dateInp = document.getElementById('meval-mn-menu-date');
+  dateInp.value = cls ? (_mnDateFor(mn, cls.id) || '') : (mn.date || '');
   // Type C : sommatif → la date est globale à l'éval (pas par question)
   const isC = (ev.type === 'C');
-  document.getElementById('meval-mn-menu-date').style.display = isC ? 'none' : '';
+  const dateRow = document.getElementById('meval-mn-menu-date-row');
+  if (dateRow) dateRow.style.display = isC ? 'none' : '';
   document.getElementById('meval-mn-menu-date-label').style.display = isC ? 'none' : '';
   // Bouton "Compétences" visible uniquement en Type C
   const pickBtn = document.getElementById('meval-mn-menu-pickcomp-btn');
   if (pickBtn) pickBtn.style.display = isC ? '' : 'none';
+  // Peuple le select créneau selon la salle/date courante
+  _tableurMnMenuRefreshSlots();
+  if (!isC && cls) {
+    document.getElementById('meval-mn-menu-slot').value = _mnSlotIdFor(mn, cls.id) || '';
+  }
+  // Section per-groupe : visible si Type A et si la classe a au moins un élève G1/G2/G3
+  const perGroupWrap = document.getElementById('meval-mn-menu-pergroup-wrap');
+  const hasGroups = !isC && cls && (cls.eleves || []).some(sid => {
+    const g = S.eleves?.[sid]?.groupe;
+    return g === 1 || g === 2 || g === 3;
+  });
+  if (perGroupWrap) perGroupWrap.style.display = hasGroups ? '' : 'none';
+  // Active la checkbox si des données per-groupe existent déjà pour cette classe
+  const cb = document.getElementById('meval-mn-menu-pergroup');
+  const hasPgData = cls && (
+    Object.keys(mn.datesByGroup?.[cls.id] || {}).length > 0 ||
+    Object.keys(mn.slotIdsByGroup?.[cls.id] || {}).length > 0
+  );
+  if (cb) cb.checked = !!hasPgData;
+  _tableurMnMenuTogglePerGroup();
   _modalReturnTo['meval-mn-menu'] = () => _evalTableurRender();
   openMod('meval-mn-menu');
   setTimeout(() => document.getElementById('meval-mn-menu-name')?.focus(), 50);
+}
+
+// Reconstruit les options du <select> créneau de la modale mn-menu selon la
+// salle active et la date saisie. Appelé à l'ouverture et à chaque changement
+// de date (onchange du datepicker).
+function _tableurMnMenuRefreshSlots() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const sel = document.getElementById('meval-mn-menu-slot');
+  if (!sel || !ev) return;
+  const cur = sel.value;
+  let opts = '<option value="">— Pendant la journée —</option>';
+  const cls = _evalTableurActiveCls(ev);
+  const dateStr = document.getElementById('meval-mn-menu-date')?.value || '';
+  if (cls && dateStr) {
+    const salle = S.salles?.[cls.activeRoom];
+    const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(dateStr + 'T12:00:00').getDay()];
+    const slots = salle?.schedule?.[day] || [];
+    for (const s of slots) {
+      const selAttr = (s.id === cur) ? ' selected' : '';
+      opts += `<option value="${_esc(s.id)}"${selAttr}>${_esc(s.label || s.id)} (${_esc(s.start)}–${_esc(s.end)})</option>`;
+    }
+  }
+  sel.innerHTML = opts;
+  // Rafraîchit aussi les sous-rows per-groupe si visibles (chaque rangée a son select)
+  const pgRows = document.getElementById('meval-mn-menu-pergroup-rows');
+  if (pgRows && pgRows.style.display !== 'none') _tableurMnMenuRenderPerGroupRows();
+}
+
+// Affiche/masque la section per-groupe selon la checkbox + rerender si visible.
+function _tableurMnMenuTogglePerGroup() {
+  const cb = document.getElementById('meval-mn-menu-pergroup');
+  const rows = document.getElementById('meval-mn-menu-pergroup-rows');
+  if (!cb || !rows) return;
+  rows.style.display = cb.checked ? 'flex' : 'none';
+  if (cb.checked) _tableurMnMenuRenderPerGroupRows();
+}
+
+// Construit les lignes de saisie per-groupe (G1, G2, G3 si présents dans la classe).
+// Chaque ligne : libellé + input date + select slot. Pré-remplie depuis mn.datesByGroup
+// et mn.slotIdsByGroup pour la classe active.
+function _tableurMnMenuRenderPerGroupRows() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const wrap = document.getElementById('meval-mn-menu-pergroup-rows');
+  if (!wrap || !ev) return;
+  const mnId = document.getElementById('meval-mn-menu-mnid').value;
+  const mn = ev.miniNotes?.find(m => m.id === mnId);
+  const cls = _evalTableurActiveCls(ev);
+  if (!mn || !cls) { wrap.innerHTML = ''; return; }
+  // Détecte les groupes présents dans la classe
+  const groupsInCls = new Set();
+  for (const sid of (cls.eleves || [])) {
+    const g = S.eleves?.[sid]?.groupe;
+    if (g === 1 || g === 2 || g === 3) groupsInCls.add(g);
+  }
+  const groups = [...groupsInCls].sort();
+  if (groups.length === 0) { wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Aucun groupe G1/G2/G3 dans cette classe.</p>'; return; }
+  const salle = S.salles?.[cls.activeRoom];
+  let html = '';
+  for (const g of groups) {
+    const d = mn.datesByGroup?.[cls.id]?.[g] || '';
+    const s = mn.slotIdsByGroup?.[cls.id]?.[g] || '';
+    let slotOpts = '<option value="">— Pendant la journée —</option>';
+    if (d) {
+      const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(d + 'T12:00:00').getDay()];
+      for (const slot of (salle?.schedule?.[day] || [])) {
+        const selA = (slot.id === s) ? ' selected' : '';
+        slotOpts += `<option value="${_esc(slot.id)}"${selA}>${_esc(slot.label || slot.id)} (${_esc(slot.start)}–${_esc(slot.end)})</option>`;
+      }
+    }
+    const colorMap = { 1: '#3498db', 2: '#e67e22', 3: '#9b59b6' };
+    html += `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <strong style="display:inline-block;min-width:28px;padding:2px 6px;border-radius:10px;background:${colorMap[g]};color:#fff;font-family:var(--font-mono);font-size:.82em;text-align:center">G${g}</strong>
+      <input type="date" data-pgg="${g}" data-pgfield="date" value="${_esc(d)}" onchange="_tableurMnMenuPgRefreshSlots(this)" style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em">
+      <select data-pgg="${g}" data-pgfield="slot" style="padding:3px 6px;font-size:.88em">${slotOpts}</select>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+// Quand la date d'une ligne per-groupe change, met à jour son select slot.
+function _tableurMnMenuPgRefreshSlots(inputEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const cls = ev ? _evalTableurActiveCls(ev) : null;
+  if (!cls) return;
+  const salle = S.salles?.[cls.activeRoom];
+  const g = inputEl.getAttribute('data-pgg');
+  const sel = inputEl.parentElement.querySelector(`select[data-pgg="${g}"]`);
+  if (!sel) return;
+  const cur = sel.value;
+  let opts = '<option value="">— Pendant la journée —</option>';
+  const d = inputEl.value;
+  if (d) {
+    const day = ['sun','mon','tue','wed','thu','fri','sat'][new Date(d + 'T12:00:00').getDay()];
+    for (const slot of (salle?.schedule?.[day] || [])) {
+      const selA = (slot.id === cur) ? ' selected' : '';
+      opts += `<option value="${_esc(slot.id)}"${selA}>${_esc(slot.label || slot.id)} (${_esc(slot.start)}–${_esc(slot.end)})</option>`;
+    }
+  }
+  sel.innerHTML = opts;
 }
 
 // Ouvre le picker de compétences pour la mini-note ciblée par le menu contextuel
@@ -27929,25 +28115,66 @@ function _tableurMnMenuSave() {
   const mnId = document.getElementById('meval-mn-menu-mnid').value;
   const mn = ev.miniNotes?.find(m => m.id === mnId);
   if (!mn) return;
+  const cls = _evalTableurActiveCls(ev);
   const label = (document.getElementById('meval-mn-menu-label').value || '').trim();
   const name  = (document.getElementById('meval-mn-menu-name').value  || '').trim();
   const max   = parseFloat(document.getElementById('meval-mn-menu-max').value);
   const isC = (ev.type === 'C');
-  const date  = isC ? '' : document.getElementById('meval-mn-menu-date').value;
+  const date = isC ? '' : (document.getElementById('meval-mn-menu-date').value || '');
+  const slot = isC ? '' : (document.getElementById('meval-mn-menu-slot')?.value || '');
   if (!Number.isFinite(max) || max < 0) { toast('⚠ Maximum invalide', 'warn'); return; }
   pushUndo();
   mn.label = label;
   if (name) mn.name = name; else delete mn.name;
   mn.max = max;
   if (isC) {
-    // Type C : pas de date par question, retire toute date legacy
+    // Type C : pas de date/créneau par question, retire les champs legacy
     delete mn.date;
-  } else if (date) {
-    mn.date = date;
-  } else {
-    delete mn.date;
+    delete mn.slotId;
+    delete mn.dates;
+    delete mn.slotIds;
+    delete mn.datesByGroup;
+    delete mn.slotIdsByGroup;
+  } else if (cls) {
+    // Type A : date + créneau pour la classe active
+    mn.dates = mn.dates || {};
+    if (date) mn.dates[cls.id] = date; else delete mn.dates[cls.id];
+    mn.slotIds = mn.slotIds || {};
+    if (slot) mn.slotIds[cls.id] = slot; else delete mn.slotIds[cls.id];
+    // mn.date "globale" = max des per-classe (pour la cascade fallback)
+    const allDates = Object.values(mn.dates).filter(Boolean);
+    if (allDates.length > 0) mn.date = allDates.reduce((m, x) => x > m ? x : m, ''); else delete mn.date;
+    // Per-groupe : si la checkbox est cochée, lit les sous-rows ; sinon, on
+    // nettoie les données per-groupe de cette classe.
+    const pgChk = document.getElementById('meval-mn-menu-pergroup');
+    if (pgChk?.checked) {
+      mn.datesByGroup = mn.datesByGroup || {};
+      mn.slotIdsByGroup = mn.slotIdsByGroup || {};
+      mn.datesByGroup[cls.id] = mn.datesByGroup[cls.id] || {};
+      mn.slotIdsByGroup[cls.id] = mn.slotIdsByGroup[cls.id] || {};
+      const wrap = document.getElementById('meval-mn-menu-pergroup-rows');
+      for (const inp of wrap.querySelectorAll('input[data-pgg][data-pgfield="date"]')) {
+        const g = parseInt(inp.getAttribute('data-pgg'), 10);
+        const v = inp.value || '';
+        if (v) mn.datesByGroup[cls.id][g] = v; else delete mn.datesByGroup[cls.id][g];
+      }
+      for (const sel of wrap.querySelectorAll('select[data-pgg][data-pgfield="slot"]')) {
+        const g = parseInt(sel.getAttribute('data-pgg'), 10);
+        const v = sel.value || '';
+        if (v) mn.slotIdsByGroup[cls.id][g] = v; else delete mn.slotIdsByGroup[cls.id][g];
+      }
+      // Nettoie les maps vides
+      if (Object.keys(mn.datesByGroup[cls.id]).length === 0) delete mn.datesByGroup[cls.id];
+      if (Object.keys(mn.slotIdsByGroup[cls.id]).length === 0) delete mn.slotIdsByGroup[cls.id];
+    } else {
+      // Checkbox décochée : on retire les overrides per-groupe pour cette classe
+      if (mn.datesByGroup) delete mn.datesByGroup[cls.id];
+      if (mn.slotIdsByGroup) delete mn.slotIdsByGroup[cls.id];
+    }
+    if (mn.datesByGroup && Object.keys(mn.datesByGroup).length === 0) delete mn.datesByGroup;
+    if (mn.slotIdsByGroup && Object.keys(mn.slotIdsByGroup).length === 0) delete mn.slotIdsByGroup;
   }
-  // Date globale = max des sous-dates (sauf si réglée manuellement)
+  // Date "globale" de l'éval = max des sous-dates (per-classe via _evalAutoUpdateDate)
   _evalAutoUpdateDate(ev);
   ev.updatedAt = Date.now();
   save();
@@ -28409,23 +28636,33 @@ function _evalDateFor(ev, classId) {
   return ev.date || '';
 }
 
-// Date/créneau d'une passation pour une classe donnée.
-// Fallback : pass.date / pass.slotId si pas de surcharge par classe.
-function _passDateFor(pass, classId) {
+// Date/créneau d'une passation pour une classe donnée, éventuellement spécifique
+// à un groupe (G1=1, G2=2, G3=3). Cascade de fallbacks :
+//   pass.datesByGroup[cid][g] → pass.dates[cid] → pass.date
+// Permet à un demi-groupe G1 de passer la passation à une date/un créneau
+// différent de G2 dans la même classe.
+function _passDateFor(pass, classId, group) {
+  if (group && pass?.datesByGroup?.[classId]?.[group]) return pass.datesByGroup[classId][group];
   if (pass?.dates?.[classId]) return pass.dates[classId];
   return pass?.date || '';
 }
-function _passSlotIdFor(pass, classId) {
+function _passSlotIdFor(pass, classId, group) {
+  if (group && pass?.slotIdsByGroup?.[classId]?.[group]) return pass.slotIdsByGroup[classId][group];
   if (pass?.slotIds?.[classId]) return pass.slotIds[classId];
   return pass?.slotId || null;
 }
 
-// Date d'une mini-note (Type A) pour une classe donnée. Multi-classes peuvent
-// avoir des dates différentes (les classes ne font pas toutes l'éval en même
-// temps). Fallback : mn.date.
-function _mnDateFor(mn, classId) {
+// Date / créneau d'une mini-note (Type A) pour une classe et un groupe donnés.
+// Même cascade que pour les passations.
+function _mnDateFor(mn, classId, group) {
+  if (group && mn?.datesByGroup?.[classId]?.[group]) return mn.datesByGroup[classId][group];
   if (mn?.dates?.[classId]) return mn.dates[classId];
   return mn?.date || '';
+}
+function _mnSlotIdFor(mn, classId, group) {
+  if (group && mn?.slotIdsByGroup?.[classId]?.[group]) return mn.slotIdsByGroup[classId][group];
+  if (mn?.slotIds?.[classId]) return mn.slotIds[classId];
+  return mn?.slotId || null;
 }
 function _evalSlotIdFor(ev, classId) {
   if (ev?.slotIds?.[classId]) return ev.slotIds[classId];
