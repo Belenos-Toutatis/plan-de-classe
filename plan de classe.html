@@ -4895,7 +4895,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T18:30:00Z';
+const APP_VERSION   = '2026-05-22T19:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -29980,6 +29980,52 @@ function _updateTpBanner() { const b = document.getElementById('tp-banner'); if 
 // + moyenne par domaine du socle (D1.1, D1.2, D1.3, D1.4, D2, D3, D4, D5).
 // Gère facultative (3 modes) + countsForMean (false → ignoré).
 
+// Renvoie un Set des evalId d'évaluations facultatives qui sont effectivement
+// comptées dans la moyenne d'un élève sur une période donnée. Miroir de la
+// logique de _computeStudentMeanForPeriod mais focalisé sur le tracking. Utilisé
+// par le Bilan des évaluations pour griser visuellement les cellules ignorées.
+function _computeStudentFacultativeCounted(classId, sid, periode) {
+  const counted = new Set();
+  const evs = Object.values(S.evaluations || {})
+    .filter(e => _evalIncludesClass(e, classId))
+    .filter(e => !periode || e.periode === periode)
+    .filter(e => e.countsForMean !== false);
+  const oblig = evs.filter(e => !e.facultative?.active);
+  const facultatives = evs.filter(e => e.facultative?.active);
+  const noteMaxRef = 20;
+  let num = 0, den = 0;
+  for (const ev of oblig) {
+    const note = _computeStudentEvalNote(ev, sid);
+    if (note == null) continue;
+    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const coef = (ev.coef != null ? ev.coef : 1);
+    num += coef * noteSur20;
+    den += coef;
+  }
+  for (const ev of facultatives) {
+    const note = _computeStudentEvalNote(ev, sid);
+    if (note == null) continue;
+    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const coef = (ev.coef != null ? ev.coef : 1);
+    const mode = ev.facultative.mode || 'improveOnly';
+    if (mode === 'over10') {
+      if (noteSur20 > 10) { counted.add(ev.id); num += coef * noteSur20; den += coef; }
+    } else if (mode === 'bonus') {
+      if (noteSur20 > 10) { counted.add(ev.id); num += coef * (noteSur20 - 10); }
+    } else {
+      const num2 = num + coef * noteSur20;
+      const den2 = den + coef;
+      const moyAvec = (den2 > 0) ? num2 / den2 : null;
+      const moyActuelle = (den > 0) ? num / den : null;
+      if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
+        counted.add(ev.id);
+        num = num2; den = den2;
+      }
+    }
+  }
+  return counted;
+}
+
 // Moyenne /20 d'un élève sur une période donnée, pondérée par les coefficients
 // des évaluations. Tient compte de ev.countsForMean et ev.facultative.
 function _computeStudentMeanForPeriod(classId, sid, periode) {
@@ -30169,11 +30215,25 @@ function renderBilanTab() {
     // pas leur date dans le header.
     const evDate = _evalDateFor(ev, cls.id);
     const dateFr = evDate ? _fmtDateFr(evDate) : '';
-    const tip = `Type ${ev.type || '?'} · ${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateFr ? ' · ' + dateFr : ''} · /${ev.noteMax ?? 20}${ev.description ? '\n\n' + ev.description : ''}\n\nClic droit : ouvrir la saisie en mode tableur`;
+    // Facultative : badge ★ + mention dans le tooltip
+    const isFac = !!(ev.facultative?.active);
+    const facMode = isFac ? (ev.facultative.mode || 'improveOnly') : null;
+    const facModeLabel = facMode === 'over10' ? 'compte uniquement si > 10/20'
+                       : facMode === 'bonus'  ? 'bonus : points au-dessus de 10/20 ajoutés'
+                       : 'compte si améliore la moyenne';
+    // Tooltip : pure information, le descriptif s'il existe ; pas d'instruction d'action.
+    const tipParts = [`Type ${ev.type || '?'} · ${ev.nomCourt}`];
+    if (ev.nomLong) tipParts.push(ev.nomLong);
+    if (dateFr) tipParts.push(dateFr);
+    tipParts.push(`/${ev.noteMax ?? 20}`);
+    let tip = tipParts.join(' · ');
+    if (isFac) tip += `\n★ Facultative — ${facModeLabel}`;
+    if (ev.description) tip += `\n\n${ev.description}`;
     // Pastille type d'éval, cohérente avec la liste des Devoirs (eval-type-badge)
     const typePill = `<span class="eval-type-badge eval-type-${ev.type || 'A'}" style="font-size:.62em;padding:1px 5px;line-height:1.2;border-radius:8px">${ev.type || '?'}</span>`;
+    const facStar = isFac ? `<span title="Évaluation facultative — ${_escAttr(facModeLabel)}" style="color:#d97706;font-size:.85em;cursor:help">★</span>` : '';
     html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px" title="${_esc(tip)}">
-      <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:context-menu" oncontextmenu="event.preventDefault();_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr('Clic droit : ouvrir la saisie en mode tableur')}">${typePill}<span>${_esc(ev.nomCourt)}</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')">${typePill}<span>${_esc(ev.nomCourt)}</span>${facStar}</div>
       <input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
              oninput="_bilanUpdateEvalCoef(this)"
              class="no-spinner"
@@ -30223,21 +30283,44 @@ function renderBilanTab() {
     const rowBg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${rowBg}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    // Détermine quelles facultatives sont effectivement comptées pour cet élève
+    // (par période de synthèse ou global selon le filtre). On précalcule l'union
+    // sur les périodes de synthèse pour rester rapide.
+    const facCounted = new Set();
+    for (const sd of synthData) {
+      const sub = _computeStudentFacultativeCounted(cls.id, sid, sd.perCode);
+      for (const id of sub) facCounted.add(id);
+    }
     // Notes par éval (ordre chronologique)
     for (let k = 0; k < evs.length; k++) {
       const ev = evs[k];
       const n = noteSur20(ev, sid);
+      const isFac = !!(ev.facultative?.active);
+      const facCounts = isFac ? facCounted.has(ev.id) : true;
+      // Fond hachuré pour les facultatives NON comptées pour cet élève (mode improveOnly
+      // qui n'améliore pas la moyenne, ou over10/bonus si note ≤ 10). Le code couleur
+      // normal reste visible derrière les hachures grises pour ne pas effacer l'info.
+      const facStyle = (isFac && !facCounts)
+        ? 'background-image:repeating-linear-gradient(135deg,rgba(120,120,120,.18) 0,rgba(120,120,120,.18) 4px,transparent 4px,transparent 8px);'
+        : '';
+      const facTip = isFac
+        ? (facCounts
+          ? '\n★ Facultative — comptée dans la moyenne'
+          : `\n★ Facultative — NON comptée pour cet élève (mode : ${ev.facultative.mode || 'improveOnly'})`)
+        : '';
       if (n == null) {
-        html += '<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em">—</td>';
+        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${facStyle}">—</td>`;
       } else {
         evValues[k].push(n);
         const bg = _noteColor(n, 20);
         const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
-        // Position de l'élève AU MOMENT du devoir (via seatingHash de l'éval).
-        // Fallback : position actuelle si l'éval n'a pas de snapshot (legacy/démo sans hash).
         const _posLbl = _evalSeatLabelAtTime(ev, cls, sid);
-        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}`;
-        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg};color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
+        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}${facTip}`;
+        // Style fond : si facultative non comptée, on superpose les hachures sur la couleur de barème.
+        const cellStyle = (isFac && !facCounts)
+          ? `background-color:${bg};background-image:repeating-linear-gradient(135deg,rgba(120,120,120,.32) 0,rgba(120,120,120,.32) 4px,transparent 4px,transparent 9px);`
+          : `background:${bg};`;
+        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${cellStyle}color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
       }
     }
     // Moyenne + Rang par période de synthèse (skip si col masquée)
