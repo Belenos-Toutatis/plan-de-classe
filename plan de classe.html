@@ -3798,9 +3798,18 @@ kbd {
       <label style="cursor:pointer;padding:3px 10px;border-radius:12px;border:1px solid var(--rule-line)"><input type="radio" name="meval-pick-comp-sort" value="domain" onchange="_competencePickerRender()" style="margin-right:4px">Par domaine</label>
     </div>
     <div id="meval-pick-comp-list" style="margin-bottom:14px"></div>
+    <div id="meval-pick-comp-also" style="margin:0 0 14px;padding:10px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:4px;display:none">
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">📋 Aussi appliquer à</div>
+      <div style="font-size:.82em;color:var(--pencil);margin-bottom:8px;line-height:1.4">Coche les autres questions qui doivent recevoir <strong>exactement la même sélection</strong> de compétences. Pratique pour propager d'un coup une compétence sur plusieurs questions.</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-g btn-sm" onclick="_competencePickerAlsoToggleAll(true)" style="font-size:.82em;padding:2px 8px">☑ Tout cocher</button>
+        <button type="button" class="btn btn-g btn-sm" onclick="_competencePickerAlsoToggleAll(false)" style="font-size:.82em;padding:2px 8px">☐ Tout décocher</button>
+      </div>
+      <div id="meval-pick-comp-also-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto"></div>
+    </div>
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-g" onclick="closeMod2('meval-pick-comp')">Annuler</button>
-      <button class="btn btn-p" onclick="_competencePickerApply()">✓ Appliquer</button>
+      <button class="btn btn-p" onclick="_competencePickerApply()" id="meval-pick-comp-apply-btn">✓ Appliquer</button>
     </div>
   </div>
 </div>
@@ -3822,6 +3831,7 @@ kbd {
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
       <span style="font-size:.82em;color:var(--pencil);font-style:italic">💡 Insertion à un endroit précis : utilise <strong>🏗 Structure</strong> avec drag&drop</span>
+      <button class="btn btn-g btn-sm" id="meval-mn-menu-pickcomp-btn" onclick="_tableurMnPickCompetences()" title="Affecter des compétences à cette question (et optionnellement à d'autres en un clic)" style="display:none">🎯 Compétences…</button>
       <button class="btn btn-r btn-sm" onclick="_tableurMnDelete()" title="Supprimer cette mini-note (et les saisies associées)" style="margin-left:auto">🗑 Supprimer</button>
     </div>
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
@@ -4788,7 +4798,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T03:30:00Z';
+const APP_VERSION   = '2026-05-22T05:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -24572,22 +24582,31 @@ function _evalEditAddQuestion(exoId) {
   _evalEditRenderMiniNotes();
 }
 
-// Popup de sélection multi-compétences pour une question (Type C uniquement)
-function _evalEditPickCompetences(globalIdx) {
+// Popup de sélection multi-compétences pour une question (Type C uniquement).
+// `target` peut être un nombre (index unique, comportement historique) OU un
+// tableau d'indices (affectation en lot — la sélection sera appliquée à toutes
+// les questions concernées).
+function _evalEditPickCompetences(target) {
   const evalId = document.getElementById('meval-edit-id').value;
   const ev = S.evaluations?.[evalId];
-  if (!ev || !ev.miniNotes?.[globalIdx]) return;
-  const q = ev.miniNotes[globalIdx];
-  q.competenceIds = q.competenceIds || [];
-  // Ouvre la modale dédiée
+  if (!ev) return;
+  const initialIdxs = Array.isArray(target) ? target.slice() : [target];
+  if (initialIdxs.length === 0) return;
+  // Toutes les cibles doivent référer à des mini-notes existantes
+  const validIdxs = initialIdxs.filter(i => ev.miniNotes?.[i] != null);
+  if (validIdxs.length === 0) return;
+  const firstQ = ev.miniNotes[validIdxs[0]];
+  firstQ.competenceIds = firstQ.competenceIds || [];
   _competencePicker.targetEval = evalId;
-  _competencePicker.targetQIdx = globalIdx;
-  _competencePicker.selected   = new Set(q.competenceIds);
+  _competencePicker.primaryQIdx = validIdxs[0];
+  _competencePicker.alsoQIdxs   = new Set(validIdxs.slice(1));  // cibles additionnelles cochées par défaut
+  _competencePicker.selected    = new Set(firstQ.competenceIds);
   _competencePickerRender();
+  _competencePickerRenderAlso();
   openMod('meval-pick-comp');
 }
 
-const _competencePicker = { targetEval: null, targetQIdx: null, selected: new Set() };
+const _competencePicker = { targetEval: null, primaryQIdx: null, alsoQIdxs: new Set(), selected: new Set() };
 
 function _competencePickerRender() {
   const wrap = document.getElementById('meval-pick-comp-list');
@@ -24650,15 +24669,93 @@ function _competencePickerToggle(cid, checked) {
 
 function _competencePickerApply() {
   const ev = S.evaluations?.[_competencePicker.targetEval];
-  const idx = _competencePicker.targetQIdx;
-  if (!ev || ev.miniNotes?.[idx] == null) { closeMod2('meval-pick-comp'); return; }
+  if (!ev) { closeMod2('meval-pick-comp'); return; }
+  const allIdxs = [_competencePicker.primaryQIdx, ..._competencePicker.alsoQIdxs]
+    .filter(i => i != null && ev.miniNotes?.[i] != null);
+  if (allIdxs.length === 0) { closeMod2('meval-pick-comp'); return; }
   pushUndo();
-  ev.miniNotes[idx].competenceIds = Array.from(_competencePicker.selected);
+  const cids = Array.from(_competencePicker.selected);
+  for (const i of allIdxs) {
+    ev.miniNotes[i].competenceIds = cids.slice();
+  }
   ev.updatedAt = Date.now();
   save();
   closeMod2('meval-pick-comp');
   _evalEditRenderMiniNotes();
-  toast('✓ Compétences mises à jour');
+  // Si on a appliqué depuis le tableur, on re-render aussi
+  if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
+  const n = allIdxs.length;
+  toast(n > 1
+    ? `✓ Compétences appliquées à ${n} question${n > 1 ? 's' : ''}`
+    : '✓ Compétences mises à jour');
+}
+
+// Liste les autres questions de l'éval (hors primaire) pour la section "Aussi appliquer à".
+// Cochées au départ : celles initialement passées en lot. L'utilisateur peut ajouter/retirer.
+function _competencePickerRenderAlso() {
+  const wrap = document.getElementById('meval-pick-comp-also');
+  const listEl = document.getElementById('meval-pick-comp-also-list');
+  if (!wrap || !listEl) return;
+  const ev = S.evaluations?.[_competencePicker.targetEval];
+  if (!ev) { wrap.style.display = 'none'; return; }
+  if (ev.type !== 'C') { wrap.style.display = 'none'; return; }
+  const mns = ev.miniNotes || [];
+  if (mns.length <= 1) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  // Regroupement par exercice pour faciliter le repérage
+  const byExo = new Map();
+  for (let i = 0; i < mns.length; i++) {
+    if (i === _competencePicker.primaryQIdx) continue;
+    const mn = mns[i];
+    const exoId = mn.exerciceId || null;
+    if (!byExo.has(exoId)) byExo.set(exoId, []);
+    byExo.get(exoId).push({ i, mn });
+  }
+  let html = '';
+  for (const [exoId, list] of byExo) {
+    const exo = exoId ? ev.exercices?.find(e => e.id === exoId) : null;
+    const exoLabel = exo ? (exo.label || '(exercice sans nom)') : '⚠ Sans exercice';
+    html += `<div>
+      <div style="font-size:.78em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin:4px 0 4px">${_esc(exoLabel)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">`;
+    for (const { i, mn } of list) {
+      const checked = _competencePicker.alsoQIdxs.has(i);
+      const compCount = (mn.competenceIds || []).length;
+      const compHint = compCount > 0
+        ? ` <span style="color:var(--pencil);font-size:.78em">(${compCount} comp.)</span>`
+        : '';
+      html += `<label class="comp-chip${checked ? ' on' : ''}" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:.85em">
+        <input type="checkbox" ${checked ? 'checked' : ''} onchange="_competencePickerAlsoToggle(${i}, this.checked)" style="margin:0">
+        <strong style="font-family:var(--font-mono)">${_esc(mn.label || '?')}</strong>${compHint}
+      </label>`;
+    }
+    html += `</div></div>`;
+  }
+  listEl.innerHTML = html;
+  // Met à jour le label du bouton Appliquer pour refléter le nombre de cibles
+  const btn = document.getElementById('meval-pick-comp-apply-btn');
+  if (btn) {
+    const total = 1 + _competencePicker.alsoQIdxs.size;
+    btn.textContent = total > 1 ? `✓ Appliquer à ${total} questions` : '✓ Appliquer';
+  }
+}
+
+function _competencePickerAlsoToggle(idx, checked) {
+  if (checked) _competencePicker.alsoQIdxs.add(idx);
+  else _competencePicker.alsoQIdxs.delete(idx);
+  _competencePickerRenderAlso();
+}
+
+function _competencePickerAlsoToggleAll(check) {
+  const ev = S.evaluations?.[_competencePicker.targetEval];
+  if (!ev) return;
+  _competencePicker.alsoQIdxs = new Set();
+  if (check) {
+    for (let i = 0; i < (ev.miniNotes || []).length; i++) {
+      if (i !== _competencePicker.primaryQIdx) _competencePicker.alsoQIdxs.add(i);
+    }
+  }
+  _competencePickerRenderAlso();
 }
 
 // ═══════════════ Gestion des compétences (CRUD) ═══════════════
@@ -25615,6 +25712,10 @@ function _evalTableurRender() {
   } else {
     orderedMNs = ev.miniNotes;
   }
+  // Indices des questions qui démarrent un nouvel exercice (hors la 1re) — pour
+  // tracer une bordure verticale plus marquée et permettre à l'œil de repérer
+  // les frontières entre exos dans le tableur Type C.
+  const exoBoundarySet = new Set((isTypeC ? exoGroups : []).slice(1).map(g => g.colStart));
   // Type C avec exos : total brut sur barème additionné, affiché en colonne séparée
   // SEULEMENT si différent de ev.noteMax (sinon la colonne ferait doublon avec Note /20)
   const exoMaxes = {};
@@ -25676,7 +25777,8 @@ function _evalTableurRender() {
     const thWidth = isTypeC ? 'min-width:70px;width:70px' : 'min-width:120px';
     const labelMaxWidth = isTypeC ? '60px' : '110px';
     const maxInpWidth = isTypeC ? '40px' : '56px';
-    html += `<th class="meval-mn-head" style="padding:3px 2px;border-bottom:2px solid var(--rule-line);text-align:center;${thWidth};font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative" title="${_esc(tooltip)}${mnDate ? ' · ' + _fmtDateFr(mnDate) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
+    const exoBoundary = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+    html += `<th class="meval-mn-head" style="padding:3px 2px;border-bottom:2px solid var(--rule-line);text-align:center;${thWidth};font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);position:relative;${exoBoundary}" title="${_esc(tooltip)}${mnDate ? ' · ' + _fmtDateFr(mnDate) : ''}" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')">
       <input type="text" value="${_esc(mn.label || '')}" data-mnid="${_esc(mn.id)}" data-field="label" placeholder="Code"
              oninput="_tableurEditMn(this)"
              style="width:100%;max-width:${labelMaxWidth};padding:2px 2px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-weight:600;text-align:center;font-size:.92em"
@@ -25748,7 +25850,8 @@ function _evalTableurRender() {
       const cellInpStyle = isTypeC
         ? 'width:100%;min-width:0;box-sizing:border-box;'
         : 'width:46px;';
-      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
     if (isTypeC && exoGroups.length > 0) {
@@ -25807,10 +25910,11 @@ function _evalTableurRender() {
   html += '</tbody><tfoot>';
   html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line);position:sticky;bottom:0;z-index:2">';
   html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
-  mnOrder.forEach((mn) => {
+  mnOrder.forEach((mn, ci) => {
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mn.id])
                      .filter(v => typeof v === 'number');
-    html += `<td data-stat-mn="${_esc(mn.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm)">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
+    const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+    html += `<td data-stat-mn="${_esc(mn.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${exoBdr}">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
   });
   // Type C avec exos : stats Σ par exo regroupées en footer
   if (isTypeC && exoGroups.length > 0) {
@@ -27581,9 +27685,30 @@ function _tableurMnContextMenu(event, mnId) {
   const isC = (ev.type === 'C');
   document.getElementById('meval-mn-menu-date').style.display = isC ? 'none' : '';
   document.getElementById('meval-mn-menu-date-label').style.display = isC ? 'none' : '';
+  // Bouton "Compétences" visible uniquement en Type C
+  const pickBtn = document.getElementById('meval-mn-menu-pickcomp-btn');
+  if (pickBtn) pickBtn.style.display = isC ? '' : 'none';
   _modalReturnTo['meval-mn-menu'] = () => _evalTableurRender();
   openMod('meval-mn-menu');
   setTimeout(() => document.getElementById('meval-mn-menu-name')?.focus(), 50);
+}
+
+// Ouvre le picker de compétences pour la mini-note ciblée par le menu contextuel
+// du tableur. Le picker affichera la section "Aussi appliquer à" qui permet
+// d'étendre l'affectation à d'autres questions en un clic.
+function _tableurMnPickCompetences() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const mnId = document.getElementById('meval-mn-menu-mnid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !mnId) return;
+  const idx = (ev.miniNotes || []).findIndex(m => m.id === mnId);
+  if (idx < 0) return;
+  // Le picker lit meval-edit-id (partagé entre Réglages et tableur) — on le sync
+  document.getElementById('meval-edit-id').value = evalId;
+  closeMod2('meval-mn-menu');
+  // Hook de retour : à la fermeture du picker, re-render le tableur
+  _modalReturnTo['meval-pick-comp'] = () => _evalTableurRender();
+  setTimeout(() => _evalEditPickCompetences(idx), 50);
 }
 
 function _tableurMnMenuSave() {
