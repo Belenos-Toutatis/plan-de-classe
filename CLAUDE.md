@@ -1137,6 +1137,51 @@ Helper **`_contrastTextColor(bg)`** (formule YIQ, threshold 150) renvoie `'var(-
 ### Hors barème (commit f3e1371)
 Plus de `confirm()` bloquant : une note hors `[0, max]` est conservée d'office avec fond rose persistant + toast non-bloquant. Ctrl+Z l'annule grâce au système d'undo armé. `_evalTableurConfirmIfOutOfRange` est désormais un no-op (gardé pour compat HTML rendu).
 
+### Import CSV QCMcam (Type A / C, tableur)
+
+Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des notes »), visible uniquement pour Type A et C. Ouvre la modale `meval-qcmcam` qui importe un fichier `resultats.csv` exporté depuis qcmcam.net (« Exporter liste élèves.csv »).
+
+**Format CSV attendu** : TSV (séparateur tabulation), guillemets droits optionnels, CRLF. Header `id / Nom / Q1..Qn / Score`. Ligne « Bonne réponse » (id vide) après le header. Une ligne par élève ensuite.
+
+**Détection du score** : dernière cellule numérique non vide après la colonne Nom — le score peut être padé loin à droite quand toutes les questions n'ont pas été soumises.
+
+**Détection absent** : si toutes les colonnes Q* de l'élève sont vides → `score = 'A'` (exclu du total, comme la saisie manuelle) au lieu de `0`.
+
+**Détection du barème** (`_qcmcamExtractRows`) : prio (1) max de réponses non vides par élève (= ce que la classe a réellement vu) > (2) nb de « Bonne réponse » renseignées > (3) `qIdx.length`. Le prof peut avoir oublié de saisir les bonnes réponses dans qcmcam, donc on ne s'y fie pas en priorité.
+
+**3 modes proposés** (radio dans l'aperçu, seulement si barème détecté ≠ `mn.max`) :
+- `update` — modifie `mn.max` de la mini-note sélectionnée
+- `create` — crée une nouvelle mini-note avec le bon barème (label suffixé `bis`/`ter`/…, copie `exerciceId` + `competenceIds`, insertion juste après l'originale). **Utile si la mini-note a déjà été utilisée pour d'autres classes** — on garde l'historique intact.
+- `keep` — laisse `mn.max` inchangé, clampe les scores hors limite
+
+**Date** : motif `AAAA-MM-JJ` cherché dans le nom du fichier via `_qcmcamExtractDate`. Si trouvée, checkbox « 📅 Appliquer à la mini-note » (cochée par défaut sauf si identique). Toujours appliquée à la nouvelle mini-note en mode `create`.
+
+**Matching élève → ligne CSV** (`_qcmcamMatchStudent`) : la colonne `Nom` du CSV contient en réalité le **prénom** éventuellement suivi des premières lettres du nom de famille. Normalisation (`_qcmcamNorm` : NFD, accents, tirets, apostrophes, casse).
+1. Prénom exact (1 candidat → ok)
+2. Fallback : prénom commençant par la chaîne (Léa-Marie pour `Léa`)
+3. Si ambigu : désambiguïsation par début de nom de famille
+4. Sinon : statut `ambig` (rouge dans l'aperçu)
+
+**Picker fichier** :
+- Handle du **dossier d'import** stocké dans IndexedDB sous la clé `'qcmcam-import-dir'`. Au 1er import → bouton « 📂 Choisir le dossier… ». Aux suivants → liste directe.
+- Liste les `.csv`/`.tsv` du dossier, triable :
+  - **🕐 Plus récents en premier** (défaut, basé sur `lastModified`)
+  - **🔤 Nom (A→Z)** (tri naturel français, `numeric: true`)
+  - Préférence persistée dans `localStorage.planClasse_qcmcamImportSort`
+- Boutons « ↻ changer » (re-pick dossier), « ↻ » (refresh), « 📄 Ou un fichier ailleurs… » (fallback `<input type="file">`).
+- Fallback navigateur : si `showDirectoryPicker` indisponible (Safari/Firefox), seul l'input natif est affiché.
+
+**Application** (`_evalQcmcamApply`) : `pushUndo()` une fois, applique `'A'` ou `clamp(score, 0, mn.max)`, met à jour `mn.max`/`mn.date` selon les choix, save, toast récap.
+
+### Bug fix : commentaires d'éval stockés comme string
+
+Bug historique du seed démo : `ev.notes[sid].comments[mnId] = 'foo'` (string) au lieu de `['foo']` (tableau). Conséquence : `nbCom = comments.length` retournait le nombre de caractères (ex. `💬 35`), et `_evalCommentsGetList().list.forEach(...)` plantait à l'ouverture de la modale → clics sur le badge sans effet.
+
+Corrigé sur 3 plans :
+1. Démo : `_seedDemoEvaluations` stocke maintenant `['foo']`
+2. Migration : `migrateEvalDefaults()` parcourt `S.evaluations[*].notes[*].comments` et ré-emballe les strings en tableaux à chaque chargement (idempotent)
+3. Garde-fou dans `_evalCommentsGetList` (compat live)
+
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
 - CSS dans le `<style>`, JS dans le `<script>` en fin de body

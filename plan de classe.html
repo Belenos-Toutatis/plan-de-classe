@@ -3543,6 +3543,38 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Import CSV QCMcam ── -->
+<div id="meval-qcmcam" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:760px;width:100%;max-height:92vh;overflow-y:auto">
+    <h2>📂 Importer un CSV QCMcam</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
+      Importe directement un fichier <code>resultats.csv</code> exporté depuis <strong>qcmcam.net</strong> via le bouton <em>« Exporter liste élèves.csv »</em>. Les élèves sont identifiés <strong>par leur prénom</strong> (colonne <code>Nom</code>), avec désambiguïsation par les premières lettres du nom de famille si présentes. La <strong>note finale</strong> est lue dans la dernière cellule numérique non vide de chaque ligne.
+    </p>
+
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:flex-start;font-size:.92em;margin-bottom:12px">
+      <label style="padding-top:5px">1. Mini-note cible</label>
+      <select id="meval-qcmcam-target" style="width:100%;padding:5px 8px" onchange="_evalQcmcamRenderPreview()"></select>
+
+      <label style="padding-top:5px">2. Fichier CSV</label>
+      <div>
+        <div id="meval-qcmcam-picker" style="display:flex;flex-direction:column;gap:6px">
+          <!-- rendu dynamique par _evalQcmcamRenderPicker() -->
+        </div>
+        <input type="file" id="meval-qcmcam-file-fallback" accept=".csv,.tsv,text/csv,text/tab-separated-values,text/plain" onchange="_evalQcmcamFileSelected(this)" style="display:none">
+      </div>
+    </div>
+
+    <div id="meval-qcmcam-preview" style="font-size:.88em;color:var(--pencil);margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px;min-height:40px">
+      <em>Sélectionne un fichier pour voir l'aperçu.</em>
+    </div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('meval-qcmcam')">Annuler</button>
+      <button class="btn btn-p" onclick="_evalQcmcamApply()" id="meval-qcmcam-apply-btn" disabled>✓ Importer (écrase les valeurs précédentes)</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Commentaires d'une mini-note (phase 7) ── -->
 <div id="meval-comments" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:600px;width:100%;max-height:88vh;overflow-y:auto">
@@ -3935,6 +3967,7 @@ kbd {
           <option value="column">↩ Colonne par colonne</option>
         </select>
         <button class="btn btn-g btn-sm" onclick="_evalPasteOpen()" title="📥 Coller des notes (depuis QCMCam, un autre tableur…)" aria-label="Coller des notes" style="padding:4px 6px">📥</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-qcmcam-btn" onclick="_evalQcmcamOpen()" title="📂 Importer un fichier CSV exporté de qcmcam.net (matching par prénom)" aria-label="Importer CSV QCMcam" style="display:none;padding:4px 6px">📂</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="📋 Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">📋</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-bilan-btn" onclick="_evalOpenBilanComps()" title="📊 Bilan par compétence : niveau atteint par chaque élève + note /20" aria-label="Bilan par compétence" style="display:none;padding:4px 6px">📊</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
@@ -4730,7 +4763,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-20T23:30:00Z';
+const APP_VERSION   = '2026-05-21T18:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5414,6 +5447,21 @@ function migrateEvalDefaults() {
   }
   // Évaluations — vide jusqu'à phase 1
   if (!S.evaluations || typeof S.evaluations !== 'object') S.evaluations = {};
+  // Compat héritée : un bug d'anciens seeds démo stockait ev.notes[sid].comments[mnId]
+  // sous forme de string au lieu de tableau, ce qui faisait que nbCom = comments.length
+  // renvoyait le nombre de caractères et que forEach plantait à l'ouverture de la modale.
+  for (const ev of Object.values(S.evaluations)) {
+    const notes = ev?.notes;
+    if (!notes || typeof notes !== 'object') continue;
+    for (const stuNotes of Object.values(notes)) {
+      const c = stuNotes?.comments;
+      if (!c || typeof c !== 'object') continue;
+      for (const k of Object.keys(c)) {
+        if (typeof c[k] === 'string') c[k] = [c[k]];
+        else if (!Array.isArray(c[k])) c[k] = [];
+      }
+    }
+  }
   // Préférences évaluation : on s'assure que chaque champ existe (sinon valeur par défaut)
   if (!S.evalPrefs || typeof S.evalPrefs !== 'object') S.evalPrefs = {};
   const ep = S.evalPrefs;
@@ -22066,14 +22114,14 @@ function _seedDemoEvaluations() {
         values[mn.id] = v;
       }
       ev.notes[sid] = { values };
-      // Quelques commentaires
+      // Quelques commentaires (toujours stockés sous forme de tableau)
       if (i % 11 === 3) {
         ev.notes[sid].comments = ev.notes[sid].comments || {};
-        ev.notes[sid].comments[mns[0].id] = 'A confondu deux notions — à revoir.';
+        ev.notes[sid].comments[mns[0].id] = ['A confondu deux notions — à revoir.'];
       }
       if (i % 13 === 7) {
         ev.notes[sid].comments = ev.notes[sid].comments || {};
-        ev.notes[sid].comments[mns[Math.min(2, mns.length - 1)].id] = 'Démarche très claire 👍';
+        ev.notes[sid].comments[mns[Math.min(2, mns.length - 1)].id] = ['Démarche très claire 👍'];
       }
     }
   };
@@ -25153,6 +25201,8 @@ function _evalOpenTableur(forcedId) {
   if (planBtn)  planBtn.style.display  = (ev.type === 'B') ? '' : 'none';
   if (addMnBtn) addMnBtn.style.display = (ev.type === 'A' || ev.type === 'C') ? '' : 'none';
   if (addExoBtn)addExoBtn.style.display= (ev.type === 'C') ? '' : 'none';
+  const qcmBtn  = document.getElementById('meval-tableur-qcmcam-btn');
+  if (qcmBtn) qcmBtn.style.display = (ev.type === 'A' || ev.type === 'C') ? '' : 'none';
   if (addMnBtn) addMnBtn.textContent   = (ev.type === 'C') ? '+ Q' : '+ Mini-note';
   // Bouton "Bilan compétences" : visible si l'éval évalue des compétences
   const bilanBtn = document.getElementById('meval-tableur-bilan-btn');
@@ -30178,6 +30228,575 @@ function _evalPasteApply() {
   toast(`✓ ${applied} note${applied > 1 ? 's' : ''} collée${applied > 1 ? 's' : ''} sur "${mn.label}"${skipped > 0 ? ` (${skipped} ignorée${skipped > 1 ? 's' : ''})` : ''}`);
 }
 
+// ═══════════════ IMPORT CSV QCMcam ═══════════════
+// Fichier exporté depuis qcmcam.net (« Exporter liste élèves.csv ») : TSV avec
+// colonnes id / Nom (= prénom éventuellement suivi de premières lettres du nom) /
+// Q1..Qn / Score. La note finale peut tomber au-delà de la colonne Score quand
+// toutes les questions n'ont pas été soumises (cellules vides padées en fin) :
+// on prend donc la dernière cellule numérique non vide de la ligne.
+
+const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, dirHandle: null, files: [] };
+const QCMCAM_DIR_KEY = 'qcmcam-import-dir';
+const QCMCAM_SORT_KEY = 'planClasse_qcmcamImportSort'; // 'date' | 'name'
+
+function _qcmcamGetSortMode() {
+  try { return localStorage.getItem(QCMCAM_SORT_KEY) || 'date'; } catch (e) { return 'date'; }
+}
+function _qcmcamSetSortMode(mode) {
+  try { localStorage.setItem(QCMCAM_SORT_KEY, mode); } catch (e) {}
+}
+
+// Cherche un motif AAAA-MM-JJ dans une chaîne (ex. nom de fichier) et le renvoie
+// si la date est valide (mois 01-12, jour 01-31), sinon null.
+function _qcmcamExtractDate(s) {
+  const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+function _qcmcamNorm(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[-'’]/g, ' ').trim();
+}
+
+function _qcmcamParseCsv(text) {
+  // TSV. Champs éventuellement entourés de guillemets droits. Tolère \r\n.
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const fields = line.split('\t').map(f => {
+      let s = f.trim();
+      if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
+      return s;
+    });
+    out.push(fields);
+  }
+  return out;
+}
+
+function _qcmcamExtractRows(grid) {
+  // grid : array de array de strings. Détecte l'index de la colonne "Nom",
+  // les colonnes Q* (questions) et la ligne "Bonne réponse" (id vide).
+  // Renvoie { rows: [{id, nom, score|'A'}], maxPoints: nb de questions réellement posées }
+  if (!grid.length) return { rows: [], maxPoints: null };
+  const header = grid[0].map(s => s.toLowerCase());
+  let nomIdx = header.findIndex(h => h === 'nom');
+  if (nomIdx < 0) nomIdx = 1;
+  const qIdx = [];
+  for (let i = 0; i < header.length; i++) {
+    if (/^q\d+$/i.test(header[i] || '')) qIdx.push(i);
+  }
+  // Détection du nombre de questions effectivement posées :
+  //  - prio 1 : max de réponses non vides sur les lignes élèves (= ce que la classe a effectivement vu)
+  //  - prio 2 : nb de "Bonne réponse" renseignées (si l'éval n'a été tentée par personne)
+  //  - prio 3 : nb de colonnes Q* (dernier recours)
+  // Le 1) prime sur le 2) car le prof peut avoir oublié de saisir des bonnes réponses
+  // dans qcmcam, alors que les élèves ont bien répondu.
+  let bonneCount = 0;
+  for (let i = 1; i < grid.length; i++) {
+    if ((grid[i][0] || '').trim() === '') {
+      bonneCount = qIdx.reduce((acc, idx) => acc + ((grid[i][idx] || '').trim() ? 1 : 0), 0);
+      break;
+    }
+  }
+  let maxAttempted = 0;
+  for (let i = 1; i < grid.length; i++) {
+    const row = grid[i];
+    if ((row[0] || '').trim() === '') continue;
+    const n = qIdx.reduce((acc, idx) => acc + ((row[idx] || '').trim() ? 1 : 0), 0);
+    if (n > maxAttempted) maxAttempted = n;
+  }
+  const maxPoints = maxAttempted > 0 ? maxAttempted : (bonneCount > 0 ? bonneCount : (qIdx.length || null));
+  const out = [];
+  for (let i = 1; i < grid.length; i++) {
+    const row = grid[i];
+    const id = (row[0] || '').trim();
+    const nom = (row[nomIdx] || '').trim();
+    if (!id) continue;        // skip ligne "Bonne réponse"
+    if (!nom) continue;
+    // Absent : aucune réponse dans aucune colonne Q*
+    const allQEmpty = qIdx.length > 0 && qIdx.every(idx => !(row[idx] || '').trim());
+    let score;
+    if (allQEmpty) {
+      score = 'A';
+    } else {
+      // Score = dernière cellule numérique non vide après la colonne Nom
+      score = null;
+      for (let j = row.length - 1; j > nomIdx; j--) {
+        const cell = (row[j] || '').trim();
+        if (cell === '') continue;
+        const n = parseFloat(cell.replace(',', '.'));
+        if (Number.isFinite(n)) { score = n; break; }
+      }
+    }
+    out.push({ id, nom, score });
+  }
+  return { rows: out, maxPoints };
+}
+
+function _qcmcamMatchStudent(rawName, students) {
+  const norm = _qcmcamNorm(rawName);
+  if (!norm) return { status: 'empty' };
+  const parts = norm.split(/\s+/);
+  const prenomQ = parts[0];
+  const nomPrefix = parts.slice(1).join('');
+
+  // 1. Prénom exact
+  let cands = students.filter(s => _qcmcamNorm(s.prenom) === prenomQ);
+  // 2. Fallback : prénom qui commence par la chaîne (Léa-Marie pour "Léa", etc.)
+  if (cands.length === 0) {
+    cands = students.filter(s => _qcmcamNorm(s.prenom).startsWith(prenomQ));
+  }
+  if (cands.length === 0) return { status: 'none' };
+  if (cands.length === 1) return { status: 'ok', sid: cands[0].id };
+  // Désambiguïsation par début de nom de famille
+  if (nomPrefix) {
+    const filt = cands.filter(s => _qcmcamNorm(s.nom).startsWith(nomPrefix));
+    if (filt.length === 1) return { status: 'ok', sid: filt[0].id };
+    if (filt.length === 0) return { status: 'ambig', sids: cands.map(s => s.id) };
+    return { status: 'ambig', sids: filt.map(s => s.id) };
+  }
+  return { status: 'ambig', sids: cands.map(s => s.id) };
+}
+
+function _evalQcmcamOpen() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  if (ev.type !== 'A' && ev.type !== 'C') {
+    toast('⚠ Import QCMcam : Type A ou C uniquement', 'warn'); return;
+  }
+  if (!ev.miniNotes || ev.miniNotes.length === 0) {
+    toast('⚠ Pas de mini-note définie — ajoute-en une d\'abord', 'warn'); return;
+  }
+  const sel = document.getElementById('meval-qcmcam-target');
+  sel.innerHTML = '';
+  const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+  if (isTypeC) {
+    for (const exo of ev.exercices) {
+      const qs = ev.miniNotes.filter(mn => mn.exerciceId === exo.id);
+      if (qs.length === 0) continue;
+      const og = document.createElement('optgroup');
+      og.label = exo.label || '(sans nom)';
+      for (const mn of qs) {
+        const opt = document.createElement('option');
+        opt.value = mn.id;
+        opt.textContent = `${mn.label} (/${mn.max})`;
+        og.appendChild(opt);
+      }
+      sel.appendChild(og);
+    }
+  } else {
+    for (const mn of ev.miniNotes) {
+      const opt = document.createElement('option');
+      opt.value = mn.id;
+      opt.textContent = `${mn.label} (/${mn.max})`;
+      sel.appendChild(opt);
+    }
+  }
+  _qcmcamState.rows = [];
+  _qcmcamState.matches = [];
+  _qcmcamState.filename = '';
+  _qcmcamState.detectedDate = null;
+  _qcmcamState.files = [];
+  const fbInput = document.getElementById('meval-qcmcam-file-fallback');
+  if (fbInput) fbInput.value = '';
+  document.getElementById('meval-qcmcam-apply-btn').disabled = true;
+  document.getElementById('meval-qcmcam-preview').innerHTML = '<em>Choisis un fichier pour voir l\'aperçu.</em>';
+  openMod('meval-qcmcam');
+  _evalQcmcamRefreshPicker();
+}
+
+// ── Picker fichier : dossier mémorisé + liste triable ──
+
+async function _evalQcmcamRefreshPicker() {
+  const wrap = document.getElementById('meval-qcmcam-picker');
+  if (!wrap) return;
+  // Pas d'API File System Access (Safari, Firefox) → fallback input natif
+  if (!window.showDirectoryPicker) {
+    wrap.innerHTML = `<button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()" style="align-self:flex-start">📄 Choisir un fichier…</button>`;
+    return;
+  }
+  // Tente de restaurer le handle de dossier
+  if (!_qcmcamState.dirHandle) {
+    try {
+      const h = await idbLoadHandleKey(QCMCAM_DIR_KEY);
+      if (h) _qcmcamState.dirHandle = h;
+    } catch (e) {}
+  }
+  if (!_qcmcamState.dirHandle) {
+    wrap.innerHTML = `
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Choisir le dossier d'import…</button>
+        <span style="color:var(--pencil);font-size:.85em">ou</span>
+        <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()">📄 Un fichier ponctuel</button>
+      </div>
+      <div style="color:var(--pencil);font-size:.82em;font-style:italic">Le dossier sera mémorisé pour les prochains imports.</div>`;
+    return;
+  }
+  // Vérifie la permission
+  try {
+    const perm = await _qcmcamState.dirHandle.queryPermission({ mode: 'read' });
+    if (perm !== 'granted') {
+      const req = await _qcmcamState.dirHandle.requestPermission({ mode: 'read' });
+      if (req !== 'granted') {
+        wrap.innerHTML = `
+          <div style="color:var(--margin-red);font-size:.88em">⚠ Permission refusée sur le dossier mémorisé.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Changer de dossier</button>
+            <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()">📄 Un fichier ponctuel</button>
+          </div>`;
+        return;
+      }
+    }
+  } catch (e) {
+    wrap.innerHTML = `<div style="color:var(--margin-red);font-size:.88em">⚠ Dossier inaccessible : ${_esc(e.message || e)}</div>
+      <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Choisir un dossier</button>`;
+    return;
+  }
+  // Liste les fichiers .csv/.tsv
+  try {
+    const files = [];
+    for await (const entry of _qcmcamState.dirHandle.values()) {
+      if (entry.kind !== 'file') continue;
+      const nm = entry.name || '';
+      if (!/\.(csv|tsv)$/i.test(nm)) continue;
+      let lm = 0;
+      try { const f = await entry.getFile(); lm = f.lastModified || 0; } catch (e) {}
+      files.push({ name: nm, lastModified: lm, handle: entry });
+    }
+    _qcmcamState.files = files;
+  } catch (e) {
+    wrap.innerHTML = `<div style="color:var(--margin-red);font-size:.88em">⚠ Lecture du dossier impossible : ${_esc(e.message || e)}</div>
+      <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Changer de dossier</button>`;
+    return;
+  }
+  _evalQcmcamRenderPicker();
+}
+
+function _evalQcmcamRenderPicker() {
+  const wrap = document.getElementById('meval-qcmcam-picker');
+  if (!wrap) return;
+  const sortMode = _qcmcamGetSortMode();
+  const files = (_qcmcamState.files || []).slice();
+  if (sortMode === 'name') {
+    files.sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }));
+  } else {
+    files.sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0));
+  }
+  const dirName = _qcmcamState.dirHandle?.name || '?';
+  let html = `
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.86em">
+      <span style="color:var(--pencil)">📂 <strong>${_esc(dirName)}</strong></span>
+      <button class="btn btn-g btn-sm" onclick="_evalQcmcamPickDir()" title="Changer de dossier" style="padding:2px 6px">↻ changer</button>
+      <span style="flex:1"></span>
+      <label style="color:var(--pencil)">Tri :</label>
+      <select onchange="_qcmcamSetSortMode(this.value);_evalQcmcamRenderPicker()" style="padding:2px 6px;font-size:.88em">
+        <option value="date"${sortMode === 'date' ? ' selected' : ''}>🕐 Plus récents en premier</option>
+        <option value="name"${sortMode === 'name' ? ' selected' : ''}>🔤 Nom (A→Z)</option>
+      </select>
+      <button class="btn btn-g btn-sm" onclick="_evalQcmcamRefreshPicker()" title="Rafraîchir la liste" style="padding:2px 6px">↻</button>
+    </div>`;
+  if (files.length === 0) {
+    html += `<div style="color:var(--pencil);font-style:italic;font-size:.88em;padding:8px">Aucun fichier .csv ou .tsv dans ce dossier.</div>
+      <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()" style="align-self:flex-start">📄 Choisir un fichier ailleurs</button>`;
+  } else {
+    html += `<div style="max-height:180px;overflow:auto;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper)">
+      <table style="width:100%;border-collapse:collapse;font-size:.86em">
+        <tbody>`;
+    for (const f of files) {
+      const dt = f.lastModified ? new Date(f.lastModified) : null;
+      const dtLbl = dt ? `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}h${String(dt.getMinutes()).padStart(2,'0')}` : '—';
+      const sel = (_qcmcamState.filename === f.name) ? 'background:#dbeafe' : '';
+      html += `<tr style="cursor:pointer;border-bottom:1px solid var(--rule-line-soft);${sel}" onclick="_evalQcmcamSelectFromDir('${_esc(f.name)}')">
+        <td style="padding:4px 8px">📄 ${_esc(f.name)}</td>
+        <td style="padding:4px 8px;color:var(--pencil);font-family:var(--font-mono);text-align:right;white-space:nowrap">${dtLbl}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+    html += `<button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()" style="align-self:flex-start;font-size:.85em">📄 Ou un fichier ailleurs…</button>`;
+  }
+  wrap.innerHTML = html;
+}
+
+async function _evalQcmcamPickDir() {
+  if (!window.showDirectoryPicker) { toast('⚠ Sélection de dossier non supportée par ce navigateur', 'warn'); return; }
+  try {
+    const h = await window.showDirectoryPicker({ mode: 'read' });
+    _qcmcamState.dirHandle = h;
+    await idbSaveHandleKey(h, QCMCAM_DIR_KEY);
+    await _evalQcmcamRefreshPicker();
+  } catch (e) {
+    if (e?.name !== 'AbortError') toast('⚠ ' + (e.message || e), 'warn');
+  }
+}
+
+async function _evalQcmcamSelectFromDir(name) {
+  const f = (_qcmcamState.files || []).find(x => x.name === name);
+  if (!f) return;
+  try {
+    const file = await f.handle.getFile();
+    _qcmcamState.filename = file.name || name;
+    _qcmcamState.detectedDate = _qcmcamExtractDate(file.name || '');
+    const text = await file.text();
+    const grid = _qcmcamParseCsv(text);
+    const { rows, maxPoints } = _qcmcamExtractRows(grid);
+    _qcmcamState.rows = rows;
+    _qcmcamState.maxPoints = maxPoints;
+    _evalQcmcamRenderPreview();
+    _evalQcmcamRenderPicker(); // pour le highlight de la ligne sélectionnée
+  } catch (e) {
+    toast('⚠ Lecture impossible : ' + (e.message || e), 'err');
+  }
+}
+
+function _evalQcmcamFileSelected(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  _qcmcamState.filename = file.name || '';
+  _qcmcamState.detectedDate = _qcmcamExtractDate(file.name || '');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const grid = _qcmcamParseCsv(e.target.result);
+      const { rows, maxPoints } = _qcmcamExtractRows(grid);
+      _qcmcamState.rows = rows;
+      _qcmcamState.maxPoints = maxPoints;
+    } catch (err) {
+      _qcmcamState.rows = [];
+      _qcmcamState.maxPoints = null;
+      toast('⚠ Lecture CSV impossible : ' + (err?.message || err), 'err');
+    }
+    _evalQcmcamRenderPreview();
+  };
+  reader.onerror = () => { toast('⚠ Erreur de lecture du fichier', 'err'); };
+  reader.readAsText(file, 'utf-8');
+}
+
+function _evalQcmcamRenderPreview() {
+  const previewEl = document.getElementById('meval-qcmcam-preview');
+  const applyBtn  = document.getElementById('meval-qcmcam-apply-btn');
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cls = _evalTableurActiveCls(ev);
+  if (!cls) { previewEl.innerHTML = '<em>Pas de classe active.</em>'; applyBtn.disabled = true; return; }
+  const rows = _qcmcamState.rows;
+  if (!rows.length) {
+    previewEl.innerHTML = _qcmcamState.filename
+      ? `<em>Fichier « ${_esc(_qcmcamState.filename)} » : aucune ligne d'élève détectée.</em>`
+      : '<em>Sélectionne un fichier pour voir l\'aperçu.</em>';
+    applyBtn.disabled = true;
+    return;
+  }
+  const students = (cls.eleves || []).map(sid => S.eleves?.[sid]).filter(Boolean);
+  const mnId = document.getElementById('meval-qcmcam-target').value;
+  const mn   = ev.miniNotes.find(m => m.id === mnId);
+  const maxNote = mn?.max || 0;
+
+  const matches = rows.map(r => {
+    const m = _qcmcamMatchStudent(r.nom, students);
+    return { row: r, match: m };
+  });
+  _qcmcamState.matches = matches;
+
+  let nbOk = 0, nbNone = 0, nbAmbig = 0, nbNoScore = 0, nbHorsLim = 0, nbAbs = 0;
+  const lines = [];
+  const absCode = (S.evalPrefs?.codeAbsent || 'A').toUpperCase();
+  for (const { row, match } of matches) {
+    let cls = '', label = '', note = row.score;
+    if (match.status === 'ok') {
+      const stu = S.eleves?.[match.sid];
+      if (note === 'A') { nbAbs++; cls = 'color:var(--margin-red);font-weight:600'; label = absCode; }
+      else if (note == null) { nbNoScore++; cls = 'color:var(--pencil)'; label = `— pas de score —`; }
+      else if (typeof note === 'number' && (note < 0 || note > maxNote)) {
+        nbHorsLim++; cls = 'color:var(--margin-red)';
+        label = `${note} → clampé à ${Math.max(0, Math.min(note, maxNote))}`;
+      } else { nbOk++; cls = 'color:var(--ink-deep)'; label = `${note}`; }
+      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px">→</td><td style="padding:2px 6px">${_esc(stu ? `${stu.prenom} ${stu.nom}` : '?')}</td><td style="padding:2px 6px;${cls};font-family:var(--font-mono);text-align:right">${label}</td></tr>`);
+    } else if (match.status === 'ambig') {
+      nbAmbig++;
+      const names = (match.sids || []).map(sid => {
+        const s = S.eleves?.[sid]; return s ? `${s.prenom} ${s.nom}` : '?';
+      }).join(', ');
+      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--margin-red)">⚠ ambigu</td><td style="padding:2px 6px;color:var(--margin-red)" colspan="2">${_esc(names)}</td></tr>`);
+    } else {
+      nbNone++;
+      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--margin-red)">✗ inconnu</td><td style="padding:2px 6px" colspan="2">—</td></tr>`);
+    }
+  }
+
+  const tableHtml = `
+    <div style="max-height:240px;overflow:auto;border:1px solid var(--rule-line);background:var(--paper);border-radius:3px;margin-top:6px">
+      <table style="width:100%;border-collapse:collapse;font-size:.86em">
+        <thead style="position:sticky;top:0;background:var(--paper-warm);border-bottom:1px solid var(--rule-line)">
+          <tr><th style="padding:3px 6px;text-align:left">CSV « Nom »</th><th style="padding:3px 6px"></th><th style="padding:3px 6px;text-align:left">Élève</th><th style="padding:3px 6px;text-align:right">Note → /${maxNote}</th></tr>
+        </thead>
+        <tbody>${lines.join('')}</tbody>
+      </table>
+    </div>`;
+  // Détection du barème : nombre de questions effectivement posées dans le CSV
+  const mp = _qcmcamState.maxPoints;
+  let baremeBlock = '';
+  if (mp != null && mp > 0 && mp !== mn.max) {
+    baremeBlock = `<div style="margin:8px 0 0;padding:8px 10px;background:#fff;border-left:3px solid var(--margin-red);border-radius:3px;color:var(--ink-deep)">
+      <div style="font-weight:600;margin-bottom:4px">⚠ Le barème détecté (/${mp}) ne correspond pas à « ${_esc(mn.label)} » (/${mn.max})</div>
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px">${mp} question${mp>1?'s':''} effectivement posée${mp>1?'s':''} dans le CSV (max de réponses par élève).</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:.92em">
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
+          <input type="radio" name="meval-qcmcam-bareme" value="update" checked style="margin-top:3px">
+          <span>🎯 <strong>Mettre à jour</strong> le barème : « ${_esc(mn.label)} » passe de /${mn.max} à /${mp}</span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
+          <input type="radio" name="meval-qcmcam-bareme" value="create" style="margin-top:3px">
+          <span>📑 <strong>Créer une nouvelle mini-note /${mp}</strong> (garder « ${_esc(mn.label)} » à /${mn.max} intact — utile si déjà utilisée pour d'autres classes)</span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
+          <input type="radio" name="meval-qcmcam-bareme" value="keep" style="margin-top:3px">
+          <span>↩ <strong>Garder /${mn.max}</strong> (les scores hors limite seront clampés)</span>
+        </label>
+      </div>
+    </div>`;
+  } else if (mp != null && mp > 0 && mp === mn.max) {
+    baremeBlock = `<div style="margin:8px 0 0;color:var(--pencil);font-size:.86em">✓ Barème cohérent (/${mp} questions détectées dans le CSV)</div>`;
+  }
+
+  // Date détectée dans le nom du fichier (AAAA-MM-JJ)
+  let dateBlock = '';
+  const dd = _qcmcamState.detectedDate;
+  if (dd) {
+    const fr = _fmtDateFr ? _fmtDateFr(dd) : dd;
+    const sameAsCurrent = (mn.date === dd);
+    dateBlock = `<div style="margin:6px 0 0;padding:6px 10px;background:#fff;border-left:3px solid var(--ink-blue-soft);border-radius:3px;font-size:.9em">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="meval-qcmcam-apply-date" ${sameAsCurrent ? '' : 'checked'}>
+        📅 Date détectée dans le nom du fichier : <strong>${_esc(fr)}</strong>
+        ${sameAsCurrent ? '<span style="color:var(--pencil)">(déjà appliquée)</span>' : `<span style="color:var(--pencil);font-size:.88em">— l'appliquer à la mini-note${mn.date ? ` (remplace ${_esc(_fmtDateFr ? _fmtDateFr(mn.date) : mn.date)})` : ''}</span>`}
+      </label>
+    </div>`;
+  }
+
+  previewEl.innerHTML = `
+    <strong>${rows.length} ligne${rows.length>1?'s':''} dans le CSV</strong> · ✓ ${nbOk} reconnue${nbOk>1?'s':''}
+    ${nbAbs?` · <span style="color:var(--margin-red)">🚫 ${nbAbs} absent${nbAbs>1?'s':''}</span>`:''}
+    ${nbAmbig?` · <span style="color:var(--margin-red)">⚠ ${nbAmbig} ambigu${nbAmbig>1?'s':''}</span>`:''}
+    ${nbNone?` · <span style="color:var(--margin-red)">✗ ${nbNone} inconnu${nbNone>1?'s':''}</span>`:''}
+    ${nbNoScore?` · <span style="color:var(--pencil)">${nbNoScore} sans score</span>`:''}
+    ${nbHorsLim?` · <span style="color:var(--margin-red)">⚠ ${nbHorsLim} hors barème (clampé)</span>`:''}
+    ${baremeBlock}
+    ${dateBlock}
+    ${tableHtml}`;
+  applyBtn.disabled = (nbOk === 0 && nbHorsLim === 0 && nbAbs === 0);
+}
+
+function _evalQcmcamApply() {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const mnIdSelected = document.getElementById('meval-qcmcam-target').value;
+  const mnSelected   = ev.miniNotes.find(m => m.id === mnIdSelected);
+  if (!mnSelected) return;
+  const matches = _qcmcamState.matches || [];
+  if (!matches.length) { toast('⚠ Rien à importer', 'warn'); return; }
+
+  // Mode barème : update / create / keep (seulement si différent)
+  const mp = _qcmcamState.maxPoints;
+  let mode = 'keep';
+  if (mp != null && mp > 0 && mp !== mnSelected.max) {
+    const r = document.querySelector('input[name="meval-qcmcam-bareme"]:checked');
+    mode = r?.value || 'update';
+  } else {
+    mode = 'noop';
+  }
+
+  pushUndo();
+
+  // Sélection / création de la mini-note cible
+  let mn = mnSelected, createdNewMn = false;
+  if (mode === 'update') {
+    mn.max = mp;
+  } else if (mode === 'create') {
+    // Nouvelle mini-note avec barème détecté, copie de l'exerciceId/competenceIds
+    const newMn = {
+      id: _newMiniNoteId(),
+      label: _qcmcamNextMnLabel(ev, mnSelected),
+      max: mp,
+    };
+    if (mnSelected.exerciceId) newMn.exerciceId = mnSelected.exerciceId;
+    if (Array.isArray(mnSelected.competenceIds)) newMn.competenceIds = mnSelected.competenceIds.slice();
+    // Insère juste après la mini-note sélectionnée pour rester groupé
+    const idx = ev.miniNotes.indexOf(mnSelected);
+    ev.miniNotes.splice(idx + 1, 0, newMn);
+    mn = newMn;
+    createdNewMn = true;
+  }
+  // mode 'keep' ou 'noop' : on garde mn = mnSelected sans toucher mn.max
+
+  // Date détectée dans le nom du fichier : à appliquer sur la mn cible si demandé
+  // (toujours appliquée en mode 'create' pour la nouvelle mn — sinon checkbox)
+  const applyDateChk = document.getElementById('meval-qcmcam-apply-date');
+  let dateApplied = null;
+  if (_qcmcamState.detectedDate) {
+    if (createdNewMn) {
+      mn.date = _qcmcamState.detectedDate;
+      dateApplied = mn.date;
+    } else if (applyDateChk?.checked) {
+      mn.date = _qcmcamState.detectedDate;
+      dateApplied = mn.date;
+    }
+  }
+
+  ev.notes = ev.notes || {};
+  let applied = 0, skipped = 0, nbAbs = 0, nbClamp = 0;
+  for (const { row, match } of matches) {
+    if (match.status !== 'ok') { skipped++; continue; }
+    const sid = match.sid;
+    let val = row.score;
+    if (val == null) { skipped++; continue; }
+    ev.notes[sid] = ev.notes[sid] || { values: {} };
+    ev.notes[sid].values = ev.notes[sid].values || {};
+    if (val === 'A') {
+      ev.notes[sid].values[mn.id] = 'A';
+      nbAbs++;
+    } else {
+      if (typeof val === 'number') {
+        const clamped = Math.max(0, Math.min(val, mn.max));
+        if (clamped !== val) nbClamp++;
+        val = clamped;
+      }
+      ev.notes[sid].values[mn.id] = val;
+    }
+    applied++;
+  }
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('meval-qcmcam');
+  _evalTableurRender();
+  const parts = [`✓ ${applied} note${applied>1?'s':''} importée${applied>1?'s':''} sur "${mn.label}"`];
+  if (createdNewMn) parts.push(`(nouvelle mini-note /${mn.max})`);
+  else if (mode === 'update') parts.push(`(barème mis à jour : /${mn.max})`);
+  if (dateApplied) parts.push(`· 📅 ${_fmtDateFr ? _fmtDateFr(dateApplied) : dateApplied}`);
+  if (nbAbs > 0) parts.push(`· ${nbAbs} absent${nbAbs>1?'s':''}`);
+  if (nbClamp > 0) parts.push(`· ${nbClamp} clampé${nbClamp>1?'s':''}`);
+  if (skipped > 0) parts.push(`· ${skipped} ignorée${skipped>1?'s':''}`);
+  toast(parts.join(' '));
+}
+
+// Génère un label pour une nouvelle mini-note dupliquant le contexte d'une autre
+// (utilisé par l'import CSV en mode "créer une nouvelle mini-note"). Si la base
+// est "Q3", essaie "Q3 bis" puis "Q3 ter", etc. — sinon suffixe " (CSV)".
+function _qcmcamNextMnLabel(ev, baseMn) {
+  const labels = new Set((ev.miniNotes || []).map(m => m.label));
+  const suffixes = [' bis', ' ter', ' quater', ' (2)', ' (3)', ' (4)'];
+  for (const sx of suffixes) {
+    const cand = baseMn.label + sx;
+    if (!labels.has(cand)) return cand;
+  }
+  return baseMn.label + ' (CSV)';
+}
+
 // ═══════════════ COMMENTAIRES (phase 7) ═══════════════
 // Stockés dans ev.notes[sid].comments[mnId] = [string, string, ...]
 // Bibliothèque globale : S.evalCommentLibrary = { positive: [str,...], negative: [str,...] }
@@ -30214,7 +30833,11 @@ function _evalCommentsGetList() {
   ev.notes = ev.notes || {};
   ev.notes[sid] = ev.notes[sid] || { values: {} };
   ev.notes[sid].comments = ev.notes[sid].comments || {};
-  ev.notes[sid].comments[mnId] = ev.notes[sid].comments[mnId] || [];
+  // Compat données héritées : un commentaire écrit comme string (bug ancien
+  // seed démo) est ré-emballé en tableau pour que .length / .forEach marchent.
+  const existing = ev.notes[sid].comments[mnId];
+  if (typeof existing === 'string') ev.notes[sid].comments[mnId] = [existing];
+  else if (!Array.isArray(existing)) ev.notes[sid].comments[mnId] = [];
   return { ev, sid, mnId, list: ev.notes[sid].comments[mnId] };
 }
 
