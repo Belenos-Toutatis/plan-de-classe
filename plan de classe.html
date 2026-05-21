@@ -4895,7 +4895,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T19:00:00Z';
+const APP_VERSION   = '2026-05-22T20:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5369,6 +5369,8 @@ function postLoadHook() {
   // Surlignage des dernières places modifiées (persistant cross-device via JSON)
   // Structure : { [classId]: { [salleId]: { keys: ['r,c', ...], hidden: bool } } }
   if (!S.movedHighlights) S.movedHighlights = {};
+  // Conseil de classe : { classId: { sid: { periode: { F, E, AT, AC } } } }
+  if (!S.conseilClasse) S.conseilClasse = {};
   // ── Volet ÉVALUATION (phase 0 : fondations) ──
   // S.competenceDomains  : 8 domaines fixes du socle commun (D1.1 → D5)
   // S.competences        : compétences personnalisables, chacune rattachée à un domainId
@@ -30268,6 +30270,11 @@ function renderBilanTab() {
     const remAttr = isMulti ? `onclick="_toggleBilanCol('${remKey(sd)}')" style="cursor:pointer;` : 'style="';
     html += `<th ${remAttr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan par compétences.">📝 Remarque${suffix}</th>`;
   });
+  // Colonne Conseil (mentions du conseil de classe) — 1 par période
+  synthData.forEach((sd, sdIdx) => {
+    const suffix = isMulti ? ' (' + sd.perCode + ')' : (periode ? ' (' + periode + ')' : '');
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-serif);min-width:120px;background:var(--paper-warm);border-left:1px solid var(--rule-line)" title="Conseil de classe${suffix} : F = félicitations, E = encouragements, AT = avertissement travail, AC = avertissement comportement. F/E exclusifs, AT et AC cumulables.">🎓 Conseil${suffix}</th>`;
+  });
   html += '</tr>';
   html += '</thead><tbody>';
 
@@ -30361,6 +30368,18 @@ function renderBilanTab() {
         <span class="${counterClass}" title="Nombre de caractères (limite ENT : 600)">${remLen}/600</span>
       </td>`;
     });
+    // Conseil de classe (4 boutons F · E · AT · AC) — 1 par période
+    synthData.forEach((sd, sdIdx) => {
+      const c = _getConseilClasse(cls.id, sid, sd.perCode);
+      html += `<td style="padding:3px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${rowBg};border-left:1px solid var(--rule-line)">
+        <div style="display:inline-flex;gap:3px">
+          ${_conseilBtnHTML('F',  'Félicitations',           c.F,  '#16a34a', cls.id, sid, sd.perCode)}
+          ${_conseilBtnHTML('E',  'Encouragements',          c.E,  '#2563eb', cls.id, sid, sd.perCode)}
+          ${_conseilBtnHTML('AT', 'Avertissement travail',   c.AT, '#d97706', cls.id, sid, sd.perCode)}
+          ${_conseilBtnHTML('AC', 'Avertissement comportement', c.AC, '#dc2626', cls.id, sid, sd.perCode)}
+        </div>
+      </td>`;
+    });
     html += '</tr>';
   }
 
@@ -30415,6 +30434,28 @@ function renderBilanTab() {
     if (_isBilanColHidden(remKey(sd))) return;
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     html += `<td style="background:var(--paper-warm);${sep}"></td>`;
+  });
+  // Totaux Conseil de classe par période : nb F · nb E · nb AT · nb AC
+  synthData.forEach((sd) => {
+    const totals = { F: 0, E: 0, AT: 0, AC: 0 };
+    for (const sid of sids) {
+      const c = _getConseilClasse(cls.id, sid, sd.perCode);
+      if (c.F)  totals.F++;
+      if (c.E)  totals.E++;
+      if (c.AT) totals.AT++;
+      if (c.AC) totals.AC++;
+    }
+    const pill = (lbl, n, color) => n > 0
+      ? `<span style="display:inline-block;padding:1px 6px;border-radius:9px;background:${color};color:#fff;font-family:var(--font-mono);font-size:.78em;font-weight:700">${lbl} ${n}</span>`
+      : `<span style="display:inline-block;padding:1px 6px;color:var(--pencil-soft);font-family:var(--font-mono);font-size:.78em">${lbl} 0</span>`;
+    html += `<td style="background:var(--paper-warm);border-left:1px solid var(--rule-line);padding:4px 6px;text-align:center">
+      <div style="display:inline-flex;flex-wrap:wrap;gap:3px;justify-content:center">
+        ${pill('F',  totals.F,  '#16a34a')}
+        ${pill('E',  totals.E,  '#2563eb')}
+        ${pill('AT', totals.AT, '#d97706')}
+        ${pill('AC', totals.AC, '#dc2626')}
+      </div>
+    </td>`;
   });
   html += '</tr></tfoot>';
   html += '</table></div>';
@@ -30631,6 +30672,49 @@ function _setBulletinRemarque(classId, sid, periode, text) {
   _bulletinRemarqueSaveTimer = setTimeout(() => save(), 600);
 }
 let _bulletinRemarqueSaveTimer = null;
+
+// ═══════════════ Conseil de classe (par classe × élève × période) ═══════════════
+// 4 marqueurs : F (félicitations), E (encouragements), AT (avertissement
+// travail), AC (avertissement comportement). F et E sont exclusifs (cliquer F
+// retire E et vice versa). AT et AC sont cumulables entre eux et avec F/E.
+// Stocké dans S.conseilClasse[classId][sid][periode] = { F, E, AT, AC } (booleans).
+function _getConseilClasse(classId, sid, periode) {
+  const o = S.conseilClasse?.[classId]?.[sid]?.[periode || ''] || {};
+  return { F: !!o.F, E: !!o.E, AT: !!o.AT, AC: !!o.AC };
+}
+function _toggleConseilClasse(classId, sid, periode, code) {
+  pushUndo();
+  if (!S.conseilClasse) S.conseilClasse = {};
+  if (!S.conseilClasse[classId]) S.conseilClasse[classId] = {};
+  if (!S.conseilClasse[classId][sid]) S.conseilClasse[classId][sid] = {};
+  const key = periode || '';
+  const o = S.conseilClasse[classId][sid][key] || {};
+  const now = !o[code];
+  o[code] = now;
+  // F et E sont exclusifs : cocher l'un décoche l'autre
+  if (now && code === 'F') o.E = false;
+  if (now && code === 'E') o.F = false;
+  // Nettoie : si tout est faux, supprime l'entrée
+  if (!o.F && !o.E && !o.AT && !o.AC) {
+    delete S.conseilClasse[classId][sid][key];
+    if (Object.keys(S.conseilClasse[classId][sid]).length === 0) delete S.conseilClasse[classId][sid];
+    if (Object.keys(S.conseilClasse[classId]).length === 0) delete S.conseilClasse[classId];
+  } else {
+    S.conseilClasse[classId][sid][key] = o;
+  }
+  save();
+  renderBilanTab();
+}
+// Rendu d'un bouton-pastille pour une mention de conseil.
+function _conseilBtnHTML(code, label, isOn, color, classId, sid, periode) {
+  const bg = isOn ? color : 'transparent';
+  const fg = isOn ? '#fff' : 'var(--pencil)';
+  const border = isOn ? color : 'var(--rule-line)';
+  return `<button type="button" onclick="_toggleConseilClasse('${_esc(classId)}','${_esc(sid)}','${_esc(periode || '')}','${code}')"
+    title="${_escAttr(label + (isOn ? ' (actif — clic pour retirer)' : ' (clic pour ajouter)'))}"
+    style="background:${bg};color:${fg};border:1px solid ${border};border-radius:10px;padding:1px 6px;font-family:var(--font-mono);font-size:.78em;font-weight:700;cursor:pointer;line-height:1.4;min-width:24px">${code}</button>`;
+}
+
 // Handler appelé depuis l'oninput d'une cellule remarque dans les bilans
 function _onBilanRemarqueInput(input) {
   const classId = input.getAttribute('data-cls');
