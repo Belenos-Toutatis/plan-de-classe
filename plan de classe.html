@@ -2584,13 +2584,23 @@ kbd {
         <button class="btn btn-g btn-sm" onclick="_bilanCompCsv()" title="Télécharger un fichier CSV">💾 CSV</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompExportEnt()" title="Export prêt pour l'ENT : ligne par élève, colonnes = compétences uniquement (niveau atteint)">📤 Export ENT</button>
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
+        <label style="font-size:.85em;color:var(--pencil)">Affichage :</label>
+        <select id="comp-display-mode" onchange="_compBilanSetDisplayMode(this.value)" title="Une colonne par compétence (codes), ou une colonne par domaine du socle (D1.1, D2…) avec moyenne par domaine" style="padding:4px 8px;font-size:.88em">
+          <option value="code">🧩 Codes compétences</option>
+          <option value="domain">🏛 Domaines du socle</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85em;color:var(--pencil);cursor:pointer" title="Arrondit tous les niveaux affichés à l'entier le plus proche — utile avant l'export vers l'ENT qui n'accepte que des valeurs entières">
+          <input type="checkbox" id="comp-round-int" onchange="_compBilanSetRoundInt(this.checked)">
+          🎯 Arrondir aux entiers
+        </label>
+        <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
         <button class="btn btn-g btn-sm" onclick="openCompetencesManager()" title="Gérer les compétences : codes courts, noms complets, domaines du socle">⚙ Gérer les compétences</button>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="comp-period-filter" onchange="_syncBilanPeriode('comp-period-filter');renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
       </div>
     </div>
     <p class="al al-i" style="margin-bottom:8px">
-      Vue transverse : tableau élèves × compétences agrégeant toutes les évaluations de la classe et de la période. Niveau moyen (1–4) calculé selon la règle de moyenne (Paramètres évaluation). Survole une cellule pour voir le détail.
+      Vue transverse : tableau élèves × compétences (ou domaines du socle) agrégeant toutes les évaluations de la classe et de la période. Niveau moyen (1–4) calculé selon la règle de moyenne (Paramètres évaluation). Survole une cellule pour voir le détail.
     </p>
     <div id="comp-wrap"></div>
   </div>
@@ -3413,7 +3423,11 @@ kbd {
         <label style="align-self:flex-start;padding-top:5px">Descriptif</label>
         <textarea id="meval-edit-desc" maxlength="500" rows="2" placeholder="Notes libres affichées dans les infobulles" style="padding:4px 8px;resize:vertical;font-family:inherit" oninput="_evalEditMarkDirty()"></textarea>
         <label>Date</label>
-        <input type="date" id="meval-edit-date" style="padding:4px 8px;font-family:var(--font-mono)" onchange="_evalEditMarkDirty();_evalEditUpdateSlotOptions()">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input type="date" id="meval-edit-date" style="padding:4px 8px;font-family:var(--font-mono)" onchange="_evalEditOnDateChange()">
+          <button type="button" class="btn btn-g btn-sm" id="meval-edit-date-auto-btn" onclick="_evalEditResetDateAuto()" title="Repasse en mode automatique : la date sera la plus récente parmi les mini-notes (Type A) ou les passations (Type B)" style="padding:2px 8px;font-size:.82em;display:none">↻ Auto</button>
+          <span id="meval-edit-date-auto-hint" style="color:var(--pencil);font-size:.82em;font-style:italic">(auto : dernière mini-note/passation)</span>
+        </div>
         <label>Créneau <span style="color:var(--pencil);font-weight:normal;font-size:.85em">(optionnel)</span></label>
         <select id="meval-edit-slot" style="padding:4px 8px;font-family:var(--font-mono);font-size:.9em" onchange="_evalEditMarkDirty()"><option value="">— Pendant la journée —</option></select>
         <label>Période</label>
@@ -4798,7 +4812,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T06:00:00Z';
+const APP_VERSION   = '2026-05-22T07:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -24096,6 +24110,7 @@ function _evalOpenEditor(evalId) {
   document.getElementById('meval-edit-nomlong').value  = ev.nomLong  || '';
   document.getElementById('meval-edit-desc').value     = ev.description || '';
   document.getElementById('meval-edit-date').value     = ev.date     || '';
+  _evalEditUpdateDateAutoUI(ev);
   _evalEditUpdateSlotOptions(ev.slotId || '');
   _evalEditRenderClasses(ev);
   _fillPeriodeSelect(document.getElementById('meval-edit-periode'), ev.periode);
@@ -24299,6 +24314,71 @@ function _evalEditToggleClass(checkbox) {
 
 // Peuple le select de créneau selon la salle active et la date saisie.
 // Si pas de salle ou pas d'horaires : option vide seule.
+// Met à jour l'UI du bouton "↻ Auto" + le hint selon ev.dateManual et le type de l'éval.
+// Le bouton n'est utile que si l'éval est Type A/B et déjà en mode manuel (pour revenir
+// à l'auto). Le hint indique le mode courant.
+function _evalEditUpdateDateAutoUI(ev) {
+  const btn = document.getElementById('meval-edit-date-auto-btn');
+  const hint = document.getElementById('meval-edit-date-auto-hint');
+  if (!btn || !hint) return;
+  const isAuto = (ev?.type === 'A' || ev?.type === 'B') && !ev?.dateManual;
+  const eligible = (ev?.type === 'A' || ev?.type === 'B');
+  if (isAuto) {
+    btn.style.display = 'none';
+    hint.style.display = '';
+    hint.textContent = '(auto : dernière mini-note/passation)';
+  } else if (eligible) {
+    btn.style.display = '';
+    hint.style.display = '';
+    hint.textContent = '(manuelle — ne s\'ajustera pas aux sous-dates)';
+  } else {
+    btn.style.display = 'none';
+    hint.style.display = 'none';
+  }
+}
+
+// Handler du onchange de l'input date dans Réglages : passe en mode manuel et
+// rafraîchit les options de créneau.
+function _evalEditOnDateChange() {
+  _evalEditMarkDirty();
+  // Tag interne pour signaler au save() que l'utilisateur a touché la date
+  const inp = document.getElementById('meval-edit-date');
+  if (inp) inp.dataset.touched = '1';
+  // Re-render le bouton Auto pour refléter le futur état manuel (visuel cohérent
+  // dès la frappe, même si la persistance attend ✓ Enregistrer)
+  const evalId = document.getElementById('meval-edit-id')?.value;
+  const ev = S.evaluations?.[evalId];
+  if (ev) {
+    // On simule l'état "manuel" dans l'UI sans encore toucher S
+    const btn = document.getElementById('meval-edit-date-auto-btn');
+    const hint = document.getElementById('meval-edit-date-auto-hint');
+    if (btn && hint && (ev.type === 'A' || ev.type === 'B')) {
+      btn.style.display = '';
+      hint.textContent = '(manuelle — ne s\'ajustera pas aux sous-dates)';
+    }
+  }
+  _evalEditUpdateSlotOptions();
+}
+
+// Repasse en mode automatique : efface le flag dateManual et la date stockée,
+// puis recalcule la date depuis les sous-dates. L'utilisateur voit le résultat
+// immédiatement dans le champ date.
+function _evalEditResetDateAuto() {
+  const evalId = document.getElementById('meval-edit-id')?.value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  pushUndo();
+  delete ev.dateManual;
+  _evalAutoUpdateDate(ev);
+  save();
+  document.getElementById('meval-edit-date').value = ev.date || '';
+  const inp = document.getElementById('meval-edit-date');
+  if (inp) delete inp.dataset.touched;
+  _evalEditUpdateDateAutoUI(ev);
+  _evalEditUpdateSlotOptions(ev.slotId || '');
+  toast('✓ Date repassée en mode automatique');
+}
+
 function _evalEditUpdateSlotOptions(preselect) {
   const sel = document.getElementById('meval-edit-slot');
   if (!sel) return;
@@ -24979,11 +25059,8 @@ function _evalEditUpdateMiniNote(idx, field, raw) {
   else if (field === 'date') {
     const d = String(raw || '');
     if (d) ev.miniNotes[idx].date = d; else delete ev.miniNotes[idx].date;
-    // Date globale de l'éval = max des dates de mini-notes datées
-    const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
-    if (dates.length > 0) {
-      ev.date = dates.reduce((m, d) => d > m ? d : m, '');
-    }
+    // Date globale = max des sous-dates (sauf si réglée manuellement par l'utilisateur)
+    _evalAutoUpdateDate(ev);
   }
   else if (field === 'max') {
     const n = parseFloat(raw);
@@ -25043,7 +25120,14 @@ function _evalEditSave() {
   ev.nomLong  = (document.getElementById('meval-edit-nomlong').value || '').trim();
   const descVal = (document.getElementById('meval-edit-desc')?.value || '').trim();
   if (descVal) ev.description = descVal; else delete ev.description;
-  ev.date     = document.getElementById('meval-edit-date').value || ev.date;
+  const dateInp = document.getElementById('meval-edit-date');
+  const newDateVal = dateInp?.value || '';
+  // L'utilisateur a explicitement édité la date → bascule en mode manuel
+  if (dateInp?.dataset.touched === '1') {
+    if (ev.type === 'A' || ev.type === 'B') ev.dateManual = true;
+    delete dateInp.dataset.touched;
+  }
+  ev.date = newDateVal || ev.date;
   const slotId = document.getElementById('meval-edit-slot')?.value || '';
   if (slotId) ev.slotId = slotId; else delete ev.slotId;
   ev.periode  = document.getElementById('meval-edit-periode').value;
@@ -27575,8 +27659,7 @@ function _evalTableurEditPass(inputEl) {
     }
   }
   ev.updatedAt = Date.now();
-  // Date globale de l'éval = max des dates des passations
-  ev.date = (ev.passations || []).reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  _evalAutoUpdateDate(ev);
   if (_evalTableurPassEditTimer) clearTimeout(_evalTableurPassEditTimer);
   _evalTableurPassEditTimer = setTimeout(() => save(), 600);
 }
@@ -27716,9 +27799,7 @@ function _tableurEditMn(inputEl) {
     } else {
       if (d) mn.date = d; else delete mn.date;
     }
-    // Date globale de l'éval = max des dates de mini-notes
-    const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
-    if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
+    _evalAutoUpdateDate(ev);
   }
   ev.updatedAt = Date.now();
   save();
@@ -27793,11 +27874,8 @@ function _tableurMnMenuSave() {
   } else {
     delete mn.date;
   }
-  // Date globale = max des dates (Type A uniquement)
-  if (!isC) {
-    const dates = ev.miniNotes.map(m => m.date).filter(Boolean);
-    if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
-  }
+  // Date globale = max des sous-dates (sauf si réglée manuellement)
+  _evalAutoUpdateDate(ev);
   ev.updatedAt = Date.now();
   save();
   closeMod2('meval-mn-menu');
@@ -27915,8 +27993,7 @@ function _tableurPassDelete() {
   if (!confirm(msg)) return;
   pushUndo();
   ev.passations = ev.passations.filter(p => p.id !== passId);
-  // Recalcule la date globale de l'éval
-  ev.date = ev.passations.reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  _evalAutoUpdateDate(ev);
   ev.updatedAt = Date.now();
   save();
   closeMod2('meval-pass-menu');
@@ -28162,6 +28239,21 @@ function _evalSeatingHashFor(ev, classId) {
 //   3. Si aucune date par-classe n'est définie sur les constituants, fallback sur la date
 //      globale des constituants (mn.date / pass.date) : ancien comportement mono-classe.
 //   4. ev.date global en dernier recours.
+// Recalcule ev.date comme la max des sous-dates (mn.date pour A/C, passation.date
+// pour B) — sauf si l'utilisateur a explicitement fixé une date manuelle dans la
+// modale Réglages (ev.dateManual === true). Centralise tous les sites qui faisaient
+// auparavant `ev.date = (…).reduce(...)` à la main.
+function _evalAutoUpdateDate(ev) {
+  if (!ev || ev.dateManual) return;
+  if (ev.type === 'A' || ev.type === 'C') {
+    const dates = (ev.miniNotes || []).map(m => m.date).filter(Boolean);
+    if (dates.length > 0) ev.date = dates.reduce((m, d) => d > m ? d : m, '');
+  } else if (ev.type === 'B') {
+    const dates = (ev.passations || []).map(p => p.date).filter(Boolean);
+    ev.date = dates.length > 0 ? dates.reduce((m, d) => d > m ? d : m, '') : '';
+  }
+}
+
 function _evalDateFor(ev, classId) {
   if (ev?.dates?.[classId]) return ev.dates[classId];
   if (!ev || !classId) return ev?.date || '';
@@ -28800,10 +28892,13 @@ function _evalPassNewSaveFinalize(transferAction) {
     ev.passations.push(pass);
   }
   // Date/créneau "officiels" de l'éval = ceux de la passation la plus récente
+  // (sauf si la date a été réglée manuellement par l'utilisateur)
   const sortedDesc = ev.passations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const latest = sortedDesc[0];
-  ev.date = latest?.date || '';
-  if (latest?.slotId) ev.slotId = latest.slotId; else delete ev.slotId;
+  _evalAutoUpdateDate(ev);
+  if (!ev.dateManual) {
+    if (latest?.slotId) ev.slotId = latest.slotId; else delete ev.slotId;
+  }
   // Pré-remplir 'A' (absent) pour chaque élève absent au créneau de cette passation
   if (pass && slotId) {
     const prefilled = _prefillAbsencesForPassation(ev, pass);
@@ -28925,7 +29020,7 @@ function _evalRemovePassation(passId) {
   if (!confirm(msg)) return;
   pushUndo();
   ev.passations = ev.passations.filter(x => x.id !== passId);
-  ev.date = ev.passations.reduce((m, p) => (p.date && p.date > m) ? p.date : m, '');
+  _evalAutoUpdateDate(ev);
   ev.updatedAt = Date.now();
   save();
   _evalEditRenderSaisieSection(ev);
@@ -29866,10 +29961,31 @@ function _restoreBilanPeriode(selectId) {
   }
 }
 
+// Mode d'affichage du tab-comp : 'code' (1 col par compétence) ou 'domain' (1 col par domaine du socle).
+function _compBilanGetDisplayMode() {
+  try { return localStorage.getItem('planClasse_compBilanDisplay') || 'code'; } catch (e) { return 'code'; }
+}
+function _compBilanSetDisplayMode(mode) {
+  try { localStorage.setItem('planClasse_compBilanDisplay', mode); } catch (e) {}
+  renderCompetencesTab();
+}
+function _compBilanGetRoundInt() {
+  try { return localStorage.getItem('planClasse_compBilanRoundInt') === '1'; } catch (e) { return false; }
+}
+function _compBilanSetRoundInt(on) {
+  try { localStorage.setItem('planClasse_compBilanRoundInt', on ? '1' : '0'); } catch (e) {}
+  renderCompetencesTab();
+}
+
 function renderCompetencesTab() {
   const cls = getCls();
   const wrap = document.getElementById('comp-wrap');
   if (!wrap) return;
+  // Restaure l'état UI des contrôles
+  const dispSel = document.getElementById('comp-display-mode');
+  if (dispSel) dispSel.value = _compBilanGetDisplayMode();
+  const roundChk = document.getElementById('comp-round-int');
+  if (roundChk) roundChk.checked = _compBilanGetRoundInt();
   const sel = document.getElementById('comp-period-filter');
   if (sel) {
     // Restaure la période persistée (synchronisée avec l'autre onglet bilan).
@@ -29913,6 +30029,47 @@ function renderCompetencesTab() {
     wrap.innerHTML = `<p style="color:var(--pencil);font-style:italic;padding:14px">Aucune compétence évaluée pour <strong>${_esc(cls.nom)}</strong>${periode ? ' en ' + _esc(periode) : ''}. Crée une éval Type B (compétences au fil de l'eau) ou Type C avec compétences rattachées aux questions.</p>`;
     return;
   }
+
+  // Mode d'affichage : 1 colonne par compétence (défaut) ou par domaine du socle.
+  // En mode "domain", on regroupe les compétences évaluées par leur domainId et
+  // chaque colonne représente le domaine. Le niveau d'un élève sur un domaine =
+  // moyenne (arithmétique) de ses niveaux sur les compétences du domaine.
+  const displayMode = _compBilanGetDisplayMode();
+  const roundInt = _compBilanGetRoundInt();
+  // `cols` est la liste abstraite des colonnes affichées. Chaque entrée a :
+  //   { key, code, name, tip, compIds: [cid…] }
+  let cols;
+  if (displayMode === 'domain') {
+    const byDomain = new Map();
+    for (const c of comps) {
+      const did = c.domainId || '_nodom';
+      if (!byDomain.has(did)) byDomain.set(did, []);
+      byDomain.get(did).push(c.id);
+    }
+    cols = [];
+    const orderedDomainIds = [...Object.keys(S.competenceDomains || {})].filter(d => byDomain.has(d));
+    if (byDomain.has('_nodom')) orderedDomainIds.push('_nodom');
+    for (const did of orderedDomainIds) {
+      const dom = S.competenceDomains?.[did];
+      const compsOfDom = byDomain.get(did).map(id => S.competences?.[id]).filter(Boolean);
+      const code = dom ? dom.code : 'Hors socle';
+      const name = dom ? (dom.name || '') : '';
+      const compsLbl = compsOfDom.map(c => c.code).join(', ');
+      const tip = `${code}${name ? ' — ' + name : ''}\nMoyenne sur ${compsOfDom.length} compétence${compsOfDom.length > 1 ? 's' : ''} : ${compsLbl}`;
+      cols.push({ key: did, code, name, tip, compIds: compsOfDom.map(c => c.id) });
+    }
+  } else {
+    cols = comps.map(c => {
+      const dom = S.competenceDomains?.[c.domainId];
+      return {
+        key: c.id,
+        code: c.code,
+        name: c.name || '',
+        tip: `${c.code} — ${c.name || ''}${dom ? ' (' + dom.code + ')' : ''}`,
+        compIds: [c.id],
+      };
+    });
+  }
   // Tri élèves alpha nom-prénom
   const sids = cls.eleves.slice().sort((a, b) => {
     const sa = S.eleves[a], sb = S.eleves[b];
@@ -29937,10 +30094,8 @@ function renderCompetencesTab() {
   html += '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
   html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
-  for (const c of comps) {
-    const dom = S.competenceDomains?.[c.domainId];
-    const tip = `${c.code} — ${c.name || ''}${dom ? ' (' + dom.code + ')' : ''}`;
-    html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(tip)}">${_esc(c.code)}</th>`;
+  for (const col of cols) {
+    html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(col.tip)}">${_esc(col.code)}</th>`;
   }
   // Moyenne(s) — 1 colonne quand une période, N quand "Toutes" (cliquable pour masquer en multi)
   const compSynthPeriodes = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
@@ -29972,19 +30127,38 @@ function renderCompetencesTab() {
     html += `<tr style="background:${bg}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
     let sumMean = 0, nbMean = 0;
-    for (const c of comps) {
-      const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
-      if (agg.levelMean == null) {
+    for (const col of cols) {
+      // Pour chaque colonne (compétence unique OU domaine), on agrège les niveaux
+      // sur les compétences qu'elle représente puis on en prend la moyenne.
+      const aggs = col.compIds.map(cid => _aggregateStudentCompetence(cls.id, sid, cid, periode));
+      const levels = aggs.map(a => a.levelMean).filter(v => v != null);
+      if (levels.length === 0) {
         html += '<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
         continue;
       }
-      sumMean += agg.levelMean; nbMean++;
-      const lvl = agg.levelMean;
+      let lvl = levels.reduce((s, v) => s + v, 0) / levels.length;
+      if (roundInt) lvl = Math.round(lvl);
+      sumMean += lvl; nbMean++;
       const lvlIdx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
-      const tipDetail = agg.entries.map(e => `• ${e.evalNomCourt}${e.code ? '/' + e.code : ''} (${_fmtDateFr(e.date || '')}) : N${e.niveau}`).join('\n');
-      const tip = `${_fmtNote(lvl)} / 4 — moyenne sur ${agg.entries.length} évaluation${agg.entries.length > 1 ? 's' : ''}\n\n${tipDetail}`;
+      // Détail dans le tooltip : si plusieurs compétences (mode domaine), on liste les sous-moyennes
+      let tipDetail;
+      if (col.compIds.length > 1) {
+        tipDetail = aggs.map((a, i) => {
+          const c = S.competences?.[col.compIds[i]];
+          if (a.levelMean == null) return `• ${c?.code || '?'} : —`;
+          return `• ${c?.code || '?'} : ${_fmtNote(a.levelMean)} (${a.entries.length} éval.)`;
+        }).join('\n');
+      } else {
+        const a = aggs[0];
+        tipDetail = a.entries.map(e => `• ${e.evalNomCourt}${e.code ? '/' + e.code : ''} (${_fmtDateFr(e.date || '')}) : N${e.niveau}`).join('\n');
+      }
+      const dispLvl = roundInt ? String(lvl) : _fmtNote(lvl);
+      const headerLine = col.compIds.length > 1
+        ? `${dispLvl} / 4 — moyenne sur ${col.compIds.length} compétences du domaine`
+        : `${dispLvl} / 4 — moyenne sur ${aggs[0].entries.length} évaluation${aggs[0].entries.length > 1 ? 's' : ''}`;
+      const tip = `${headerLine}\n\n${tipDetail}`;
       html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="${_esc(tip)}">
-        <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${_fmtNote(lvl)}</span>
+        <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${dispLvl}</span>
       </td>`;
     }
     // Moyenne(s) : skip si col masquée
@@ -30202,7 +30376,8 @@ let _bilanCompState = null;
 function _bilanCompBuildRows(sep) {
   if (!_bilanCompState) return '';
   const { cls, periode, comps, sids, compMeans } = _bilanCompState;
-  const fmt = v => v == null ? '' : _fmtNote(v).replace('.', ',');
+  const roundInt = _compBilanGetRoundInt();
+  const fmt = v => v == null ? '' : (roundInt ? String(Math.round(v)) : _fmtNote(v).replace('.', ','));
   const header = ['Élève', ...comps.map(c => c.code), 'Moyenne'];
   const lines = [header.join(sep)];
   for (const sid of sids) {
@@ -30261,7 +30436,10 @@ function _bilanCompCsv() {
 function _bilanCompExportEnt() {
   if (!_bilanCompState) { toast('⚠ Pas de bilan à exporter', 'warn'); return; }
   const { cls, periode, comps, sids } = _bilanCompState;
-  const fmt = v => v == null ? '—' : _fmtNote(v).replace('.', ',');
+  // Si l'arrondi entier est activé (ex. pour l'ENT qui n'accepte que des valeurs
+  // entières), on arrondit avant formatage.
+  const roundInt = _compBilanGetRoundInt();
+  const fmt = v => v == null ? '—' : (roundInt ? String(Math.round(v)) : _fmtNote(v).replace('.', ','));
   // Tri Nom Prénom (défaut ENT)
   const sortedSids = sids.slice().sort((a, b) => {
     const sa = S.eleves[a], sb = S.eleves[b];
