@@ -4784,7 +4784,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-21T22:30:00Z';
+const APP_VERSION   = '2026-05-21T23:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -25727,7 +25727,7 @@ function _evalTableurRender() {
       const cellInpStyle = isTypeC
         ? 'width:100%;min-width:0;box-sizing:border-box;'
         : 'width:46px;';
-      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="6" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="Clic droit = commentaires (bonus / malus / annotations)" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
     if (isTypeC && exoGroups.length > 0) {
@@ -26096,11 +26096,27 @@ function _evalTableurUpdateTotalCell(cellTotal, ev, sid) {
   cellTotal.style.color = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
 }
 
-// Hook conservé pour compatibilité avec onblur="_evalTableurConfirmIfOutOfRange(this)"
-// dans le HTML rendu. La valeur hors barème est désormais persistée en direct dans
-// _evalTableurUpdate (avec fond rose persistant + toast), donc cette fonction est un
-// no-op : pas de modale bloquante qui interrompt le flux de saisie en classe.
-function _evalTableurConfirmIfOutOfRange(_inputEl) { /* no-op */ }
+// Au blur d'une cellule de note (Type A/C), si la valeur saisie est hors barème
+// (négative ou > mn.max), on demande confirmation via confirm() bloquant. Si
+// l'utilisateur refuse, on restaure la valeur précédente (capturée au focus).
+function _evalTableurConfirmIfOutOfRange(inputEl) {
+  if (!inputEl) return;
+  const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
+  const parsed = _parseMiniNoteInput(inputEl.value);
+  const outOfRange = (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax));
+  if (!outOfRange) return;
+  const ok = window.confirm(`Note hors barème : ${parsed} (attendu entre 0 et ${mnMax}).\n\nConserver cette valeur ?`);
+  if (ok) return; // garde la valeur saisie (déjà persistée par _evalTableurUpdate)
+  // Refus : on restaure la valeur précédente
+  const prev = inputEl.dataset.prevValue || '';
+  inputEl.value = prev;
+  delete inputEl.dataset.outOfRange;
+  inputEl.style.background = '';
+  inputEl.title = '';
+  // Re-déclenche le pipeline standard pour repropager la couleur de fond,
+  // recalculer total + stats + colonnes dérivées.
+  _evalTableurUpdate(inputEl);
+}
 
 // ─── Coller multi-colonnes / multi-lignes directement dans le tableur ───
 // Quand l'utilisateur a une cellule focusée et colle un bloc (TSV, copie depuis
