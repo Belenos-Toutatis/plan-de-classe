@@ -861,6 +861,47 @@ Total max : ~80 backups sur 4 mois.
 - **Recharger** : modal listant les fichiers `.json` du dossier (les autoSave + backups + exports manuels).
 - **Import JSON** : fichier local quelconque, avec confirmation.
 
+## Export tableur des notes (XLSX + ODS) — module `_NotesExport`
+
+Sauvegarde lisible des évaluations dans un format pérenne hors-app, **un fichier par classe**, mis en forme avec couleurs. Accessible via le **menu Données → 📤 Exporter les notes**. Ouvre la modale `mexport-notes` : sélection multi-classes (chips avec compteurs élèves/évals, classe active pré-cochée, ☑ Tout / ☐ Aucune) + radio XLSX/ODS (XLSX par défaut). Génération séquentielle (espace 200 ms entre fichiers), toast récap à la fin.
+
+### Architecture
+Module IIFE `_NotesExport` situé juste avant `createDemo()` (~ligne 21663). 3 couches :
+
+1. **ZIP writer "stored"** (`zipBlob(files, mimeType)`) : ~150 lignes, méthode 0 (sans compression — supportée par XLSX et ODS), CRC32 via table de lookup pré-calculée (256 entrées). Format PKZip standard avec bit 11 pour les noms de fichier UTF-8. Headers locaux + central directory + end-of-central-directory.
+
+2. **Modèle abstrait** (`buildWorkbookForClass(classId)`) : structure format-indépendante :
+   ```js
+   { sheets: [{ name, rows: [[ {v, t:'s'|'n', bg, color, bold, italic, align, border, merge}, ... ]], cols: [{width}, ...] }] }
+   ```
+   Helpers de cellules pré-stylées : `T(v)` (titre), `H(v)` (header), `S0(v, opts)` (cellule normale), `N0(v, opts)` (numérique), `EMPTY()`. Helpers couleurs : `noteCellBg(score20)` (lit `S.evalPrefs.noteThresholds` + auto), `levelCellBg(level)` (lit `S.evalPrefs.maitriseColors`), `textOnHex(hex6)` (formule YIQ pour lisibilité).
+
+3. **Émetteurs format-spécifiques** :
+   - **`emitXLSX(wb)`** : produit `[Content_Types].xml`, `_rels/.rels`, `xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/styles.xml` (fonts + fills + borders + cellXfs dédoublonnés via Map), `xl/sharedStrings.xml`, et 1 `xl/worksheets/sheet{N}.xml` par feuille. Cells numériques → `<c><v>n</v></c>`, strings → `<c t="s"><v>idx</v></c>` via SST.
+   - **`emitODS(wb)`** : produit `mimetype` (en 1er fichier, non-compressé — requis ODS), `content.xml` (avec `<office:automatic-styles>` pour les ce/co styles), `styles.xml` (minimal), `META-INF/manifest.xml`. Cells = `<table:table-cell office:value-type="float|string">`, fusion via `table:number-columns-spanned` + `<table:covered-table-cell/>`.
+
+### Contenu par classe
+1. **Synthèse** : récap N° · Nom · Prénom · Groupe · Moy S1/S2 · Conseil S1/S2 · Moy annuelle · Remarques · Compétences (moy /4 toutes Type B confondues).
+2. **Bilan S1 / Bilan S2 (ou T1/T2/T3)** : 1 colonne par éval (libellé court + pastille type A/B/C + date + /noteMax + ★ si facultative), notes /20 colorées par seuils, codes A/NN préservés, Moyenne /20 + Rang + Remarque bulletin + Conseil F/E/AT/AC. Footer : moyenne classe, min, max, écart-type, remarque classe, éléments travaillés.
+3. **Compétences** : 1 colonne par compétence Type B évaluée, niveau moyen 1-4 coloré, moyenne ligne, moyenne par compétence en footer.
+4. **Eval ‹nomCourt›** (1 par éval incluant la classe) :
+   - Type A : élèves × mini-notes, total /noteMax + niveau 1-4 + Commentaires + Remarque élève.
+   - Type C : idem A, mini-notes groupées par exercice (label exercice dans le header), bloc compétences inline à droite.
+   - Type B : élèves × (passation × compétence), niveau coloré ou A, Note /noteMax + Niveau + Remarque.
+
+### Helpers existants réutilisés
+`_computeStudentEvalNote`, `_computeStudentEvalNoteB`, `_computeStudentMeanForPeriod`, `_computeStudentCompetenceLevel`, `_noteToLevel`, `_evalIncludesClass`, `_evalDateFor`, `_evalPrimaryAliveClassId`, `_autoNoteThresholds` (si présent). Tri élèves : `localeCompare('fr')` sur nom puis prénom (indépendant de `evalPrefs.defaultSort`).
+
+### Validation
+XLSX testé avec openpyxl + LibreOffice headless conversion PDF — aucune erreur. ODS idem. Cas limite "classe sans évaluation" produit un classeur minimal valide (Synthèse + Bilans vides + Compétences vide + aucune feuille Eval). Couleurs de fond appliquées via patternFill solid (XLSX) et table-cell-properties fo:background-color (ODS). Texte clair/foncé adapté au fond via formule YIQ.
+
+### Dimensions typiques (6e A démo, 30 élèves, 4 évals)
+- XLSX : ~140 Ko, 8 feuilles, 30 lignes × 11-17 colonnes par feuille.
+- ODS : ~380 Ko (plus de verbosité XML).
+
+### Noms de fichiers
+`<nomClasse-sanitized>-notes-YYYYMMDD.<xlsx|ods>` via `safeFilename()` qui retire `[\\/:*?"<>|]` et remplace les espaces par `_`.
+
 ## Raccourcis clavier
 | Raccourci | Action |
 |---|---|
@@ -1283,6 +1324,19 @@ Barre de tri au-dessus de la liste, 4 modes :
 - 📂 Type, puis nom
 
 Bouton « ↓ ordre normal / ↑ inversé » pour basculer dans chaque mode. Persistance via `localStorage.planClasse_evalListSort` + `planClasse_evalListReverse`. En modes regroupés, un en-tête mono / dashed marque les blocs TYPE A / TYPE B / TYPE C.
+
+**Sens du type indépendant du tri secondaire** (modes groupés uniquement) : un 2e bouton **`Type : A→C / C→A`** apparaît à côté du bouton d'inversion secondaire (`Date : ↓/↑` ou `Nom : ↓/↑`). Permet d'avoir par exemple Type C → B → A en haut, et au sein de chaque type un tri par date croissante. Persistance via `localStorage.planClasse_evalListReverseType`. Le comparateur applique `rt = reverseType ? -1 : 1` au résultat du compare des types, et `rs = reverse ? -1 : 1` au compare secondaire ; les deux sont composés indépendamment dans la même closure.
+
+### Affichage compact des noms (`_compactNameMode` + `_buildAbbrMap`)
+
+Toggle global (persisté `localStorage.planClasse_compactNameMode` : `'full' | 'auto'`) qui change l'affichage des noms dans **5 tableaux d'éval** : tableur de saisie Type A/C (`_evalTableurRender`), tableur Type B (`_evalTableurRenderB`), bilan compétences popup tableur (`_evalRenderBilanComps`), Bilan des évaluations (`renderBilanTab`), Bilan par compétences (`renderCompetencesTab`).
+
+- **`'full'`** (défaut) : `<strong>NOM</strong> Prénom`
+- **`'auto'`** : pour chaque groupe d'élèves avec le même prénom dans la classe, calcule le **plus petit k** tel que `nom[:k]` soit unique au sein du groupe. Si prénom unique → juste le prénom. Sinon → `Prénom <strong>Nn.</strong>`. Ex. 3 « Léo MARTIN / MERCIER / MARCHAND » → `Léo MART. / Léo MERC. / Léo MARC.` (k=4 minimum).
+
+**Toggle au clic gauche sur l'en-tête `<th>Élève`** via `_NAME_HEAD_ATTRS()` injecté dans 8 `<th>`. Fonction (et non `const`) car ce bloc est situé après l'appel `init()` ligne ~24159 — un `const` top-level serait en TDZ au 1er render. Idem `var _CUR_ABBR_MAP` (Map<sid, k> du contexte de rendu courant, set par chaque renderer via `_setCurAbbrMap(students)` juste avant sa boucle).
+
+L'algo normalise les prénoms via NFD + suppression des combining marks `/[̀-ͯ]/g` + lowercase pour comparer sans tenir compte des accents.
 
 ### Filet rouge — masqué quand une modale est ouverte
 

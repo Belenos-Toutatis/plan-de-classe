@@ -2002,6 +2002,8 @@ kbd {
       <div class="dd-menu">
         <button onclick="closeAllDd();exportJSON()" title="Télécharger un fichier JSON contenant TOUTES vos données (classes, élèves, salles, snapshots, appels). Utile pour sauvegarder manuellement ou transférer vers une autre machine.">⬇ Exporter (.json)</button>
         <button onclick="closeAllDd();document.getElementById('imp-file').click()" title="Charger un fichier JSON (export précédent ou backup) — remplace l'état actuel après confirmation. Annulable via Ctrl+Z.">⬆ Importer (.json)</button>
+        <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
+        <button onclick="closeAllDd();openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe, mis en forme avec couleurs">📤 Exporter les notes</button>
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -4205,6 +4207,48 @@ kbd {
     </div>
     <div class="ma" style="margin-top:10px">
       <button class="btn btn-g" onclick="closeMod2('mreset')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Export des notes (XLSX / ODS, un fichier par classe) ── -->
+<div id="mexport-notes" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:680px;width:100%">
+    <h2>📤 Exporter les notes (sauvegarde tableur)</h2>
+    <p style="font-size:.85em;color:#555;margin-bottom:10px;line-height:1.4">
+      Génère <strong>un classeur par classe</strong> au format tableur, mis en forme avec couleurs (notes /20, niveaux de compétence).
+      Chaque classeur contient une feuille Synthèse, une feuille par période (Bilan), une feuille Compétences, et une feuille par évaluation.
+      <br><em style="color:#888">Sauvegarde lisible hors-app — utile pour archiver en fin d'année.</em>
+    </p>
+
+    <div class="about-section" style="margin-bottom:10px">
+      <h3 style="margin-top:0">📐 Format</h3>
+      <label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;cursor:pointer">
+        <input type="radio" name="exnotes-fmt" value="xlsx" checked> <strong>XLSX</strong>
+        <span style="font-size:.78em;color:#888">(Excel, LibreOffice, Numbers, Google Sheets)</span>
+      </label>
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="radio" name="exnotes-fmt" value="ods"> <strong>ODS</strong>
+        <span style="font-size:.78em;color:#888">(OpenDocument — LibreOffice, Excel récent)</span>
+      </label>
+    </div>
+
+    <div class="about-section" style="margin-bottom:10px">
+      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;justify-content:space-between">
+        <span>🏫 Classes à exporter</span>
+        <span style="display:inline-flex;gap:6px">
+          <button class="btn btn-w" style="padding:2px 8px;font-size:.78em" onclick="_exnotesCheckAll(true)">☑ Tout</button>
+          <button class="btn btn-w" style="padding:2px 8px;font-size:.78em" onclick="_exnotesCheckAll(false)">☐ Aucune</button>
+        </span>
+      </h3>
+      <div id="exnotes-classes-list" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding:4px"></div>
+    </div>
+
+    <p id="exnotes-summary" style="font-size:.84em;color:#666;margin:8px 0">—</p>
+
+    <div class="ma">
+      <button class="btn btn-g" onclick="closeMod2('mexport-notes')">Annuler</button>
+      <button id="exnotes-go" class="btn btn-b" onclick="_exnotesRun()">✓ Exporter</button>
     </div>
   </div>
 </div>
@@ -7389,7 +7433,7 @@ let _mvcShowOnlySelected = false;
 function _normalizeCivilite(token) {
   if (!token) return null;
   const t = token
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // retire les accents
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // retire les accents
     .replace(/\.$/, '')                                  // retire le point final éventuel
     .toUpperCase();
   if (t === 'M' || t === 'MR' || t === 'MONSIEUR' || t === 'H' || t === 'HOMME' || t === 'GARCON') return 'M';
@@ -7403,7 +7447,7 @@ function civiliteFullLabel(c) { return c === 'M' ? 'Garçon (M)' : c === 'F' ? '
 function _suggestVcId(name) {
   if (!name) return 'VC';
   const words = name
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // retire les diacritiques (accents)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // retire les diacritiques (accents)
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, ' ')                         // garde A-Z, 0-9, espaces
     .split(/\s+/).filter(Boolean);
@@ -21617,6 +21661,1059 @@ function* _demoNameGen(seed) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT NOTES — tableur par classe (XLSX + ODS), sauvegarde lisible hors-app
+// Aucune dépendance externe : mini-écrivain ZIP "stored" + génération XML
+// directe (OOXML pour XLSX, OpenDocument pour ODS).
+// ═══════════════════════════════════════════════════════════════════════════
+
+// — Helpers UI de la modale d'export —————————————————————————————————————
+function openExportNotes() {
+  if (!Object.keys(S.classes || {}).length) {
+    toast('Aucune classe à exporter');
+    return;
+  }
+  _exnotesRenderClasses();
+  _exnotesUpdateSummary();
+  openMod('mexport-notes');
+}
+function _exnotesRenderClasses() {
+  const host = document.getElementById('exnotes-classes-list');
+  if (!host) return;
+  const curId = S.cur || '';
+  const items = Object.values(S.classes || {})
+    .slice()
+    .sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr', { numeric: true }));
+  const lines = items.map(c => {
+    const nbEv = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, c.id)).length;
+    const nbEl = (c.eleves || []).length;
+    const checked = (c.id === curId) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid var(--rule-line-soft)">
+      <input type="checkbox" class="exnotes-cls-cb" data-cid="${c.id}" ${checked} onchange="_exnotesUpdateSummary()">
+      <strong style="flex:1">${_esc(c.nom)}</strong>
+      <span style="font-size:.78em;color:var(--pencil)">${nbEl} élève(s) · ${nbEv} éval(s)</span>
+    </label>`;
+  });
+  host.innerHTML = lines.join('') || '<em>Aucune classe.</em>';
+}
+function _exnotesCheckAll(on) {
+  document.querySelectorAll('.exnotes-cls-cb').forEach(cb => { cb.checked = !!on; });
+  _exnotesUpdateSummary();
+}
+function _exnotesSelectedIds() {
+  return Array.from(document.querySelectorAll('.exnotes-cls-cb:checked')).map(cb => cb.dataset.cid);
+}
+function _exnotesUpdateSummary() {
+  const n = _exnotesSelectedIds().length;
+  const fmt = (document.querySelector('input[name="exnotes-fmt"]:checked')?.value || 'xlsx').toUpperCase();
+  const el = document.getElementById('exnotes-summary');
+  const btn = document.getElementById('exnotes-go');
+  if (el) el.textContent = n ? `→ ${n} fichier(s) ${fmt} à générer` : '— Cochez au moins une classe —';
+  if (btn) btn.disabled = (n === 0);
+}
+// Met à jour l'aperçu quand le format change
+document.addEventListener('change', e => {
+  if (e.target?.name === 'exnotes-fmt') _exnotesUpdateSummary();
+});
+
+function _exnotesRun() {
+  const classIds = _exnotesSelectedIds();
+  if (!classIds.length) { toast('Sélectionnez au moins une classe'); return; }
+  const fmt = document.querySelector('input[name="exnotes-fmt"]:checked')?.value || 'xlsx';
+  closeMod2('mexport-notes');
+  try {
+    _NotesExport.run(classIds, fmt);
+  } catch (e) {
+    console.error('[exportNotes]', e);
+    toast('Erreur d\'export : ' + (e?.message || e), 'error');
+  }
+}
+
+// — Module d'export proprement dit ————————————————————————————————————————
+const _NotesExport = (function () {
+
+  // —— Utilitaires généraux ————————————————————————————————————————————————
+  const _enc = new TextEncoder();
+  function strToU8(s) { return _enc.encode(s); }
+  function concatU8(parts) {
+    let total = 0;
+    for (const p of parts) total += p.length;
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const p of parts) { out.set(p, off); off += p.length; }
+    return out;
+  }
+  function u16(n) { return new Uint8Array([n & 0xff, (n >>> 8) & 0xff]); }
+  function u32(n) {
+    return new Uint8Array([n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]);
+  }
+
+  // —— CRC32 (table de lookup, méthode standard PKZip) ——————————————————————
+  const _crcTab = (function () {
+    const t = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let j = 0; j < 8; j++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      t[i] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(buf) {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i++) c = _crcTab[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  // —— Mini-écrivain ZIP « stored » (sans compression) ————————————————————
+  // files: [{ name: 'path/in/zip', data: Uint8Array }]
+  function zipBlob(files, mimeType) {
+    const localParts = [];
+    const central = [];
+    let offset = 0;
+    const now = new Date();
+    const dosTime = ((now.getHours() & 0x1f) << 11) | ((now.getMinutes() & 0x3f) << 5) | ((now.getSeconds() >>> 1) & 0x1f);
+    const dosDate = (((now.getFullYear() - 1980) & 0x7f) << 9) | (((now.getMonth() + 1) & 0xf) << 5) | (now.getDate() & 0x1f);
+    for (const f of files) {
+      const nameBytes = strToU8(f.name);
+      const data = f.data;
+      const crc = crc32(data);
+      // Local file header
+      const lh = concatU8([
+        u32(0x04034b50),       // signature
+        u16(20),               // version needed
+        u16(0x0800),           // bit 11 = UTF-8 filenames
+        u16(0),                // method = 0 (stored)
+        u16(dosTime), u16(dosDate),
+        u32(crc), u32(data.length), u32(data.length),
+        u16(nameBytes.length), u16(0),
+        nameBytes,
+        data
+      ]);
+      localParts.push(lh);
+      // Central directory entry
+      central.push(concatU8([
+        u32(0x02014b50),
+        u16(20), u16(20),
+        u16(0x0800), u16(0),
+        u16(dosTime), u16(dosDate),
+        u32(crc), u32(data.length), u32(data.length),
+        u16(nameBytes.length), u16(0), u16(0),
+        u16(0), u16(0), u32(0),
+        u32(offset),
+        nameBytes
+      ]));
+      offset += lh.length;
+    }
+    const centralStart = offset;
+    const centralBytes = concatU8(central);
+    const end = concatU8([
+      u32(0x06054b50),
+      u16(0), u16(0),
+      u16(files.length), u16(files.length),
+      u32(centralBytes.length), u32(centralStart),
+      u16(0)
+    ]);
+    const all = concatU8([concatU8(localParts), centralBytes, end]);
+    return new Blob([all], { type: mimeType || 'application/zip' });
+  }
+
+  // —— Helpers couleurs / chaînes ————————————————————————————————————————
+  function xmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+  // Convertit une couleur CSS (#abc, #aabbcc, rgb(...), nom CSS) → 'RRGGBB'
+  const _hexCache = {};
+  function toHex6(col) {
+    if (!col) return 'FFFFFF';
+    if (_hexCache[col]) return _hexCache[col];
+    let out;
+    if (/^#[0-9a-f]{6}$/i.test(col)) out = col.slice(1).toUpperCase();
+    else if (/^#[0-9a-f]{3}$/i.test(col)) {
+      const c = col.slice(1);
+      out = (c[0]+c[0]+c[1]+c[1]+c[2]+c[2]).toUpperCase();
+    } else {
+      // Délègue au navigateur via un <span> hors-flow
+      const probe = document.createElement('span');
+      probe.style.color = col;
+      probe.style.display = 'none';
+      document.body.appendChild(probe);
+      const computed = getComputedStyle(probe).color;
+      document.body.removeChild(probe);
+      const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(computed);
+      if (m) {
+        const h = (n) => ('00' + parseInt(n, 10).toString(16)).slice(-2).toUpperCase();
+        out = h(m[1]) + h(m[2]) + h(m[3]);
+      } else out = 'FFFFFF';
+    }
+    _hexCache[col] = out;
+    return out;
+  }
+  // Texte lisible noir/blanc selon la luminance d'un fond hex 6 chiffres
+  function textOnHex(hex6) {
+    const r = parseInt(hex6.slice(0, 2), 16);
+    const g = parseInt(hex6.slice(2, 4), 16);
+    const b = parseInt(hex6.slice(4, 6), 16);
+    const y = (0.299 * r + 0.587 * g + 0.114 * b);
+    return y > 150 ? '1A252F' : 'FFFFFF';
+  }
+  // Format date DD/MM/YYYY à partir de 'YYYY-MM-DD'
+  function fmtDateFr(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+    return iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+  }
+  // Nom de fichier safe
+  function safeFilename(s) {
+    return String(s || 'classe').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+  }
+  // YYYYMMDD pour le nom de fichier
+  function todayYMD() {
+    const d = new Date();
+    const p = n => ('0' + n).slice(-2);
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+  }
+
+  // —— Modèle abstrait de classeur (format-indépendant) ————————————————————
+  // Cell: { v: string|number, t: 's'|'n'|'b', bg?: 'RRGGBB', bold?: bool, italic?: bool,
+  //        color?: 'RRGGBB', align?: 'left'|'center'|'right', border?: bool,
+  //        merge?: { rows, cols } }
+  // Sheet: { name, rows: Cell[][], cols?: [{ width }] }
+  // Workbook: { sheets: Sheet[] }
+
+  // Construit le classeur pour UNE classe
+  function buildWorkbookForClass(classId) {
+    const cls = S.classes[classId];
+    if (!cls) return { sheets: [] };
+    const sheets = [];
+    const periods = _periodeOptions().map(o => o.code);
+    const students = (cls.eleves || []).map(sid => S.eleves[sid]).filter(Boolean);
+    // Tri par défaut Nom puis Prénom
+    students.sort((a, b) => {
+      const na = (a.nom || '').localeCompare(b.nom || '', 'fr');
+      if (na !== 0) return na;
+      return (a.prenom || '').localeCompare(b.prenom || '', 'fr');
+    });
+    const evs = Object.values(S.evaluations || {})
+      .filter(e => _evalIncludesClass(e, classId))
+      .sort((a, b) => {
+        const da = _evalDateFor(a, classId) || '';
+        const db = _evalDateFor(b, classId) || '';
+        if (da !== db) return da.localeCompare(db);
+        return (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
+      });
+
+    sheets.push(buildSheetSynthese(cls, students, periods));
+    for (const p of periods) {
+      const evsP = evs.filter(e => e.periode === p);
+      if (evsP.length || students.length) sheets.push(buildSheetBilan(cls, students, p, evsP));
+    }
+    sheets.push(buildSheetCompetences(cls, students, evs));
+    for (const ev of evs) {
+      sheets.push(buildSheetEval(cls, students, ev));
+    }
+    return { sheets };
+  }
+
+  // —— Styles de cellule prédéfinis ————————————————————————————————————————
+  const TITLE_BG = '1A252F', TITLE_FG = 'FFFFFF';
+  const HEAD_BG  = '2A3540', HEAD_FG  = 'FFFFFF';
+  const SUB_BG   = 'E6EBF2';
+  const ALT_BG   = 'F4F6FA';
+  function H(v, opts) { return Object.assign({ v, t: 's', bold: true, bg: HEAD_BG, color: HEAD_FG, border: true, align: 'center' }, opts || {}); }
+  function T(v) { return { v, t: 's', bold: true, bg: TITLE_BG, color: TITLE_FG, align: 'center' }; }
+  function S0(v, opts) { return Object.assign({ v, t: 's', border: true }, opts || {}); }
+  function N0(v, opts) { return Object.assign({ v, t: 'n', border: true, align: 'right' }, opts || {}); }
+  function EMPTY() { return { v: '', t: 's', border: true }; }
+
+  function noteCellBg(score20) {
+    if (score20 == null || !Number.isFinite(score20)) return null;
+    const prefs = S.evalPrefs || {};
+    let thresholds = prefs.noteThresholds;
+    if (prefs.noteThresholdsAuto && typeof _autoNoteThresholds === 'function') {
+      thresholds = _autoNoteThresholds(prefs);
+    }
+    if (!Array.isArray(thresholds) || !thresholds.length) {
+      const colors = prefs.maitriseColors || ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'];
+      thresholds = [{ max: 8, color: colors[0] }, { max: 12, color: colors[1] }, { max: 15, color: colors[2] }, { max: null, color: colors[3] }];
+    }
+    for (const t of thresholds) {
+      if (t.max == null || score20 <= t.max) return toHex6(t.color);
+    }
+    return null;
+  }
+  function levelCellBg(level) {
+    if (!level || level < 1) return null;
+    const prefs = S.evalPrefs || {};
+    const colors = prefs.maitriseColors || ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'];
+    const idx = Math.min(colors.length - 1, Math.max(0, Math.round(level) - 1));
+    return toHex6(colors[idx]);
+  }
+  function fmtNumFr(n, decimals) {
+    if (n == null || !Number.isFinite(n)) return '—';
+    const r = Math.round(n * Math.pow(10, decimals || 2)) / Math.pow(10, decimals || 2);
+    return String(r).replace('.', ',');
+  }
+
+  // —— Feuille Synthèse ——————————————————————————————————————————————————
+  function buildSheetSynthese(cls, students, periods) {
+    const rows = [];
+    const today = new Date();
+    const todayStr = ('0' + today.getDate()).slice(-2) + '/' + ('0' + (today.getMonth() + 1)).slice(-2) + '/' + today.getFullYear();
+    const wide = 7 + periods.length * 2;
+    rows.push([Object.assign(T('📊 Synthèse — ' + (cls.nom || '')), { merge: { rows: 1, cols: wide } })]);
+    while (rows[rows.length - 1].length < wide) rows[rows.length - 1].push({ v: '', t: 's' });
+    rows.push([Object.assign({ v: 'Exporté le ' + todayStr + ' · Année : ' + (cls.année || '—') + ' · ' + students.length + ' élève(s)',
+                                t: 's', italic: true, color: '56697F', align: 'center', merge: { rows: 1, cols: wide } })]);
+    while (rows[rows.length - 1].length < wide) rows[rows.length - 1].push({ v: '', t: 's' });
+    rows.push([]);
+    // Header
+    const head = [H('N°'), H('Nom'), H('Prénom'), H('Groupe')];
+    for (const p of periods) { head.push(H('Moy ' + p)); head.push(H('Conseil ' + p)); }
+    head.push(H('Moy annuelle'));
+    head.push(H('Remarques'));
+    head.push(H('Compétences (moy /4)'));
+    rows.push(head);
+    let n = 0;
+    for (const stu of students) {
+      n++;
+      const r = [];
+      r.push(S0(n, { align: 'center' }));
+      r.push(S0(stu.nom || ''));
+      r.push(S0(stu.prenom || ''));
+      r.push(S0(stu.groupe ? 'G' + stu.groupe : ''));
+      let sumY = 0, denY = 0;
+      for (const p of periods) {
+        const moy = _computeStudentMeanForPeriod(cls.id, stu.id, p);
+        if (moy != null) {
+          const bg = noteCellBg(moy);
+          r.push({ v: Math.round(moy * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null });
+          sumY += moy; denY++;
+        } else {
+          r.push(EMPTY());
+        }
+        const cs = S.conseilClasse?.[cls.id]?.[stu.id]?.[p] || {};
+        const codes = [cs.F && 'F', cs.E && 'E', cs.AT && 'AT', cs.AC && 'AC'].filter(Boolean).join(' · ');
+        r.push(S0(codes, { align: 'center' }));
+      }
+      const moyY = denY > 0 ? sumY / denY : null;
+      if (moyY != null) {
+        const bg = noteCellBg(moyY);
+        r.push({ v: Math.round(moyY * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null, bold: true });
+      } else r.push(EMPTY());
+      // Remarques (concaténation périodes)
+      const allRem = periods.map(p => {
+        const rk = S.bulletinRemarques?.[cls.id]?.[stu.id]?.[p];
+        return rk ? (p + ' : ' + rk) : '';
+      }).filter(Boolean).join(' | ');
+      r.push(S0(allRem));
+      // Niveau moyen toutes compétences (Type B)
+      const compLvls = [];
+      const compIds = new Set();
+      for (const ev of Object.values(S.evaluations || {})) {
+        if (!_evalIncludesClass(ev, cls.id) || ev.type !== 'B') continue;
+        for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+      }
+      for (const cid of compIds) {
+        let sum = 0, k = 0;
+        for (const ev of Object.values(S.evaluations || {})) {
+          if (!_evalIncludesClass(ev, cls.id) || ev.type !== 'B') continue;
+          const lvl = _computeStudentCompetenceLevel(ev, stu.id, cid);
+          if (lvl > 0) { sum += lvl; k++; }
+        }
+        if (k > 0) compLvls.push(sum / k);
+      }
+      if (compLvls.length) {
+        const moyLvl = compLvls.reduce((s, x) => s + x, 0) / compLvls.length;
+        const bg = levelCellBg(moyLvl);
+        r.push({ v: Math.round(moyLvl * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null });
+      } else r.push(EMPTY());
+      rows.push(r);
+    }
+    return {
+      name: 'Synthèse',
+      rows,
+      cols: [{ width: 5 }, { width: 18 }, { width: 16 }, { width: 8 }].concat(
+        periods.flatMap(() => [{ width: 10 }, { width: 12 }])
+      ).concat([{ width: 12 }, { width: 40 }, { width: 14 }])
+    };
+  }
+
+  // —— Feuille Bilan par période ———————————————————————————————————————————
+  function buildSheetBilan(cls, students, periode, evs) {
+    const rows = [];
+    rows.push([T('📜 Bilan ' + periode + ' — ' + (cls.nom || ''))]);
+    rows.push([]);
+    // Calcul des notes pour ranking
+    const rankNotes = students.map(stu => ({
+      sid: stu.id,
+      moy: _computeStudentMeanForPeriod(cls.id, stu.id, periode)
+    }));
+    const sortedForRank = rankNotes.filter(x => x.moy != null).slice().sort((a, b) => b.moy - a.moy);
+    const rankMap = {};
+    sortedForRank.forEach((x, i) => { rankMap[x.sid] = i + 1; });
+    // Header
+    const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
+    for (const ev of evs) {
+      const date = _evalDateFor(ev, cls.id);
+      const fac = ev.facultative?.active ? ' ★' : '';
+      const label = '[' + ev.type + '] ' + (ev.nomCourt || '') + fac
+        + '\n' + (date ? fmtDateFr(date) : '') + ' · /' + (ev.noteMax || 20);
+      head.push(H(label));
+    }
+    head.push(H('Moy /20'));
+    head.push(H('Rang'));
+    head.push(H('Remarque'));
+    head.push(H('Conseil'));
+    rows.push(head);
+    let n = 0;
+    for (const stu of students) {
+      n++;
+      const r = [];
+      r.push(S0(n, { align: 'center' }));
+      r.push(S0(stu.nom || ''));
+      r.push(S0(stu.prenom || ''));
+      r.push(S0(stu.groupe ? 'G' + stu.groupe : ''));
+      for (const ev of evs) {
+        const note = _computeStudentEvalNote(ev, stu.id);
+        if (note == null) {
+          // Vérifie s'il y a au moins un 'A' ou 'NN' explicite
+          const vals = ev.notes?.[stu.id]?.values || {};
+          let anyA = false, anyNN = false;
+          for (const k in vals) { if (vals[k] === 'A') anyA = true; if (vals[k] === 'NN') anyNN = true; }
+          r.push(S0(anyA ? 'A' : (anyNN ? 'NN' : ''), { align: 'center', italic: anyA || anyNN, color: anyA ? 'B03D2E' : '56697F' }));
+          continue;
+        }
+        const note20 = (note / (ev.noteMax || 20)) * 20;
+        const bg = noteCellBg(note20);
+        r.push({ v: Math.round(note * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null });
+      }
+      const moy = _computeStudentMeanForPeriod(cls.id, stu.id, periode);
+      if (moy != null) {
+        const bg = noteCellBg(moy);
+        r.push({ v: Math.round(moy * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null, bold: true });
+        r.push(S0(rankMap[stu.id] || '', { align: 'center' }));
+      } else { r.push(EMPTY()); r.push(EMPTY()); }
+      const rem = S.bulletinRemarques?.[cls.id]?.[stu.id]?.[periode] || '';
+      r.push(S0(rem));
+      const cs = S.conseilClasse?.[cls.id]?.[stu.id]?.[periode] || {};
+      const codes = [cs.F && 'F', cs.E && 'E', cs.AT && 'AT', cs.AC && 'AC'].filter(Boolean).join(' · ');
+      r.push(S0(codes, { align: 'center' }));
+      rows.push(r);
+    }
+    // Footer
+    rows.push([]);
+    const moysOk = rankNotes.filter(x => x.moy != null).map(x => x.moy);
+    if (moysOk.length) {
+      const moyClasse = moysOk.reduce((s, x) => s + x, 0) / moysOk.length;
+      const minN = Math.min(...moysOk), maxN = Math.max(...moysOk);
+      const variance = moysOk.reduce((s, x) => s + (x - moyClasse) * (x - moyClasse), 0) / moysOk.length;
+      const sd = Math.sqrt(variance);
+      rows.push([S0('Moyenne classe', { bold: true, bg: SUB_BG }), S0(fmtNumFr(moyClasse, 2)),
+        S0('Min', { bold: true, bg: SUB_BG }), S0(fmtNumFr(minN, 2)),
+        S0('Max', { bold: true, bg: SUB_BG }), S0(fmtNumFr(maxN, 2)),
+        S0('Écart-type', { bold: true, bg: SUB_BG }), S0(fmtNumFr(sd, 2))]);
+    }
+    const remCl = S.bulletinClassRemarques?.[cls.id]?.[periode];
+    if (remCl) rows.push([S0('Remarque classe', { bold: true, bg: SUB_BG }), S0(remCl)]);
+    const wit = S.bulletinWorkedItems?.[cls.id]?.[periode];
+    if (wit && wit.length) rows.push([S0('Éléments travaillés', { bold: true, bg: SUB_BG }), S0(wit.join(' · '))]);
+    return {
+      name: 'Bilan ' + periode,
+      rows,
+      cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
+        evs.map(() => ({ width: 12 }))
+      ).concat([{ width: 10 }, { width: 7 }, { width: 30 }, { width: 12 }])
+    };
+  }
+
+  // —— Feuille Compétences ————————————————————————————————————————————————
+  function buildSheetCompetences(cls, students, evs) {
+    const rows = [];
+    rows.push([T('🎯 Bilan compétences — ' + (cls.nom || ''))]);
+    rows.push([]);
+    // Collecte compétences évaluées pour la classe (uniquement Type B; Type C inline ignoré ici)
+    const compIds = new Set();
+    for (const ev of evs) {
+      if (ev.type !== 'B') continue;
+      for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+    }
+    const compArr = Array.from(compIds).map(cid => S.competences?.[cid]).filter(Boolean)
+      .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
+    if (compArr.length === 0) {
+      rows.push([S0('Aucune compétence évaluée pour cette classe.', { italic: true })]);
+      return { name: 'Compétences', rows };
+    }
+    const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
+    for (const c of compArr) head.push(H((c.code || '') + ' — ' + (c.name || '')));
+    head.push(H('Moy /4'));
+    rows.push(head);
+    let n = 0;
+    const colSums = compArr.map(() => ({ sum: 0, n: 0 }));
+    for (const stu of students) {
+      n++;
+      const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+      let rowSum = 0, rowN = 0;
+      compArr.forEach((c, idx) => {
+        let s = 0, k = 0;
+        for (const ev of evs) {
+          if (ev.type !== 'B') continue;
+          const lvl = _computeStudentCompetenceLevel(ev, stu.id, c.id);
+          if (lvl > 0) { s += lvl; k++; }
+        }
+        if (k > 0) {
+          const lvl = s / k;
+          const bg = levelCellBg(lvl);
+          r.push({ v: Math.round(lvl * 100) / 100, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
+          rowSum += lvl; rowN++;
+          colSums[idx].sum += lvl; colSums[idx].n++;
+        } else r.push(EMPTY());
+      });
+      if (rowN) {
+        const m = rowSum / rowN;
+        const bg = levelCellBg(m);
+        r.push({ v: Math.round(m * 100) / 100, t: 'n', border: true, align: 'center', bold: true, bg, color: bg ? textOnHex(bg) : null });
+      } else r.push(EMPTY());
+      rows.push(r);
+    }
+    // Footer moyenne par compétence
+    const footer = [S0('', { bg: SUB_BG }), S0('Moy classe', { bold: true, bg: SUB_BG }), S0('', { bg: SUB_BG }), S0('', { bg: SUB_BG })];
+    compArr.forEach((c, idx) => {
+      const cs = colSums[idx];
+      if (cs.n) {
+        const m = cs.sum / cs.n;
+        const bg = levelCellBg(m);
+        footer.push({ v: Math.round(m * 100) / 100, t: 'n', border: true, align: 'center', bold: true, bg, color: bg ? textOnHex(bg) : null });
+      } else footer.push(S0('—', { bg: SUB_BG, align: 'center' }));
+    });
+    footer.push(S0('', { bg: SUB_BG }));
+    rows.push(footer);
+    return {
+      name: 'Compétences',
+      rows,
+      cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
+        compArr.map(() => ({ width: 18 }))
+      ).concat([{ width: 8 }])
+    };
+  }
+
+  // —— Feuille par évaluation —————————————————————————————————————————————
+  function buildSheetEval(cls, students, ev) {
+    const rows = [];
+    const date = _evalDateFor(ev, cls.id);
+    const title = '[' + ev.type + '] ' + (ev.nomCourt || '') + ' — ' + (cls.nom || '');
+    rows.push([T(title)]);
+    const metaParts = [
+      ev.nomLong || '',
+      'Période : ' + (ev.periode || '—'),
+      'Date : ' + (date ? fmtDateFr(date) : '—'),
+      '/' + (ev.noteMax || 20),
+      'Coef ' + (ev.coef != null ? ev.coef : 1)
+    ].filter(Boolean);
+    rows.push([{ v: metaParts.join('  ·  '), t: 's', italic: true, color: '56697F' }]);
+    if (ev.descriptif) rows.push([{ v: ev.descriptif, t: 's', italic: true, color: '7F8C8D' }]);
+    rows.push([]);
+
+    if (ev.type === 'A' || ev.type === 'C') {
+      // Header questions
+      const mns = ev.miniNotes || [];
+      const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
+      if (ev.type === 'C') {
+        // Affiche aussi l'exercice au-dessus (ligne sup non implémentée — on intègre dans le label)
+        const exoLookup = {};
+        for (const ex of (ev.exercices || [])) exoLookup[ex.id] = ex.label || ex.id;
+        for (const mn of mns) {
+          const exoLab = mn.exerciceId ? (exoLookup[mn.exerciceId] || '') + ' · ' : '';
+          head.push(H(exoLab + (mn.label || '') + '\n/' + (mn.max || 0)));
+        }
+      } else {
+        for (const mn of mns) head.push(H((mn.label || '') + '\n/' + (mn.max || 0)));
+      }
+      head.push(H('Total\n/' + (ev.noteMax || 20)));
+      head.push(H('Niveau\n1-4'));
+      head.push(H('Commentaires'));
+      head.push(H('Remarque'));
+      rows.push(head);
+      let n = 0;
+      for (const stu of students) {
+        n++;
+        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+        const vals = ev.notes?.[stu.id]?.values || {};
+        const comms = ev.notes?.[stu.id]?.comments || {};
+        const excSet = new Set(ev.notes?.[stu.id]?.excluded || []);
+        const commParts = [];
+        for (const mn of mns) {
+          if (excSet.has(mn.id)) {
+            r.push(S0('—', { align: 'center', italic: true, color: '92A1B5' }));
+            continue;
+          }
+          const v = vals[mn.id];
+          if (v === 'A' || v === 'NN') {
+            r.push(S0(v, { align: 'center', italic: true, color: v === 'A' ? 'B03D2E' : '56697F' }));
+          } else if (v == null || v === '') {
+            r.push(EMPTY());
+          } else {
+            const num = parseFloat(v);
+            if (Number.isFinite(num) && mn.max) {
+              const ratio = num / mn.max;
+              const score20 = ratio * 20;
+              const bg = noteCellBg(score20);
+              r.push({ v: Math.round(num * 100) / 100, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
+            } else r.push(S0(String(v), { align: 'center' }));
+          }
+          const cs = comms[mn.id];
+          if (Array.isArray(cs) && cs.length) commParts.push((mn.label || mn.id) + ': ' + cs.join(' / '));
+        }
+        const total = _computeStudentEvalNote(ev, stu.id);
+        if (total != null) {
+          const total20 = (total / (ev.noteMax || 20)) * 20;
+          const bg = noteCellBg(total20);
+          r.push({ v: Math.round(total * 100) / 100, t: 'n', border: true, align: 'right', bold: true, bg, color: bg ? textOnHex(bg) : null });
+          const lvl = _noteToLevel(total, ev.noteMax || 20);
+          const lvlBg = levelCellBg(lvl);
+          r.push({ v: lvl, t: 'n', border: true, align: 'center', bg: lvlBg, color: lvlBg ? textOnHex(lvlBg) : null });
+        } else { r.push(EMPTY()); r.push(EMPTY()); }
+        r.push(S0(commParts.join(' | ')));
+        r.push(S0((ev.studentRemarks?.[stu.id]) || ''));
+        rows.push(r);
+      }
+      return {
+        name: _safeSheetName(ev),
+        rows,
+        cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
+          mns.map(() => ({ width: 9 }))
+        ).concat([{ width: 10 }, { width: 8 }, { width: 30 }, { width: 22 }])
+      };
+    }
+
+    // Type B
+    if (ev.type === 'B') {
+      const passations = ev.passations || [];
+      // Collecte toutes les paires (passation, compétence)
+      const cols = [];
+      for (const p of passations) {
+        for (const cid of (p.competenceIds || [])) {
+          const c = S.competences?.[cid];
+          cols.push({ pid: p.id, p, cid, code: c?.code || cid, name: c?.name || '' });
+        }
+      }
+      const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
+      for (const col of cols) {
+        const pDate = col.p.date ? ' (' + fmtDateFr(col.p.date) + ')' : '';
+        head.push(H((col.p.code || '') + pDate + '\n' + col.code));
+      }
+      head.push(H('Note\n/' + (ev.noteMax || 20)));
+      head.push(H('Niveau\n1-4'));
+      head.push(H('Remarque'));
+      rows.push(head);
+      let n = 0;
+      for (const stu of students) {
+        n++;
+        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+        for (const col of cols) {
+          const niv = col.p.niveaux?.[stu.id]?.[col.cid];
+          if (niv === 'A') r.push(S0('A', { align: 'center', italic: true, color: 'B03D2E' }));
+          else if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
+            const bg = levelCellBg(niv);
+            r.push({ v: niv, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
+          } else r.push(EMPTY());
+        }
+        const total = _computeStudentEvalNote(ev, stu.id);
+        if (total != null) {
+          const total20 = (total / (ev.noteMax || 20)) * 20;
+          const bg = noteCellBg(total20);
+          r.push({ v: Math.round(total * 100) / 100, t: 'n', border: true, align: 'right', bold: true, bg, color: bg ? textOnHex(bg) : null });
+          const lvl = _noteToLevel(total, ev.noteMax || 20);
+          const lvlBg = levelCellBg(lvl);
+          r.push({ v: lvl, t: 'n', border: true, align: 'center', bg: lvlBg, color: lvlBg ? textOnHex(lvlBg) : null });
+        } else { r.push(EMPTY()); r.push(EMPTY()); }
+        r.push(S0((ev.studentRemarks?.[stu.id]) || ''));
+        rows.push(r);
+      }
+      return {
+        name: _safeSheetName(ev),
+        rows,
+        cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
+          cols.map(() => ({ width: 10 }))
+        ).concat([{ width: 10 }, { width: 8 }, { width: 22 }])
+      };
+    }
+
+    return { name: _safeSheetName(ev), rows };
+  }
+
+  // —— Nom de feuille safe (Excel : max 31 chars, pas de [ ] : * ? / \) ——
+  const _usedSheetNames = new WeakMap();
+  function _safeSheetName(ev) {
+    let base = 'Eval ' + (ev.nomCourt || ev.id || '');
+    base = base.replace(/[\[\]:*?\/\\]/g, '_').slice(0, 31);
+    return base || 'Eval';
+  }
+
+  // —— Émission XLSX —————————————————————————————————————————————————————
+  function emitXLSX(wb) {
+    // Dédupe noms de feuille (Excel exige unicité)
+    const usedNames = new Set();
+    wb.sheets.forEach(sh => {
+      let nm = sh.name || 'Sheet';
+      let suffix = 1;
+      while (usedNames.has(nm.toLowerCase())) {
+        const base = (sh.name || 'Sheet').slice(0, 28);
+        nm = base + ' ' + (++suffix);
+      }
+      sh._uniqueName = nm;
+      usedNames.add(nm.toLowerCase());
+    });
+    // Construit le pool de styles
+    const styleKey = (c) => [
+      c.bg || '', c.color || '', c.bold ? 1 : 0, c.italic ? 1 : 0,
+      c.align || '', c.border ? 1 : 0, c.t === 'n' && c.v != null ? 'n' : 's'
+    ].join('|');
+    const styleMap = new Map();
+    styleMap.set(styleKey({}), 0);
+    const styles = [{}];
+    for (const sh of wb.sheets) for (const row of sh.rows) for (const c of (row || [])) {
+      if (!c) continue;
+      const k = styleKey(c);
+      if (!styleMap.has(k)) { styleMap.set(k, styles.length); styles.push(c); }
+    }
+    // Shared strings
+    const sst = new Map();
+    const sstArr = [];
+    function sstIdx(s) {
+      if (sst.has(s)) return sst.get(s);
+      const i = sstArr.length;
+      sstArr.push(s);
+      sst.set(s, i);
+      return i;
+    }
+    for (const sh of wb.sheets) for (const row of sh.rows) for (const c of (row || [])) {
+      if (!c) continue;
+      if (c.t !== 'n' || typeof c.v !== 'number') sstIdx(String(c.v == null ? '' : c.v));
+    }
+
+    // colLetter (1 → A, 27 → AA…)
+    function colLetter(n) {
+      let s = '';
+      while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+      return s;
+    }
+
+    // styles.xml
+    function buildStylesXml() {
+      // Fills : 0 = none, 1 = gray (Excel requirement), then user fills
+      const fills = ['<fill><patternFill patternType="none"/></fill>',
+                     '<fill><patternFill patternType="gray125"/></fill>'];
+      const fillMap = new Map();
+      // Fonts: 0 = default
+      const fonts = ['<font><sz val="11"/><name val="Calibri"/></font>'];
+      const fontMap = new Map();
+      // Borders: 0 = none, 1 = thin all
+      const borders = ['<border/>',
+                       '<border><left style="thin"><color rgb="FFC8D2E0"/></left><right style="thin"><color rgb="FFC8D2E0"/></right><top style="thin"><color rgb="FFC8D2E0"/></top><bottom style="thin"><color rgb="FFC8D2E0"/></bottom></border>'];
+      const xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'];
+      for (let i = 1; i < styles.length; i++) {
+        const s = styles[i];
+        let fillId = 0;
+        if (s.bg) {
+          const key = s.bg;
+          if (fillMap.has(key)) fillId = fillMap.get(key);
+          else {
+            fillId = fills.length;
+            fills.push('<fill><patternFill patternType="solid"><fgColor rgb="FF' + key + '"/><bgColor indexed="64"/></patternFill></fill>');
+            fillMap.set(key, fillId);
+          }
+        }
+        let fontId = 0;
+        if (s.bold || s.italic || s.color) {
+          const fkey = (s.bold ? 'B' : '') + (s.italic ? 'I' : '') + '|' + (s.color || '');
+          if (fontMap.has(fkey)) fontId = fontMap.get(fkey);
+          else {
+            const parts = ['<font>'];
+            if (s.bold) parts.push('<b/>');
+            if (s.italic) parts.push('<i/>');
+            parts.push('<sz val="11"/>');
+            if (s.color) parts.push('<color rgb="FF' + s.color + '"/>');
+            parts.push('<name val="Calibri"/></font>');
+            fontId = fonts.length;
+            fonts.push(parts.join(''));
+            fontMap.set(fkey, fontId);
+          }
+        }
+        const borderId = s.border ? 1 : 0;
+        const align = s.align ? ('<alignment horizontal="' + s.align + '" vertical="center" wrapText="1"/>') : '<alignment vertical="center" wrapText="1"/>';
+        xfs.push('<xf numFmtId="0" fontId="' + fontId + '" fillId="' + fillId + '" borderId="' + borderId
+          + '" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">' + align + '</xf>');
+      }
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + '<fonts count="' + fonts.length + '">' + fonts.join('') + '</fonts>'
+        + '<fills count="' + fills.length + '">' + fills.join('') + '</fills>'
+        + '<borders count="' + borders.length + '">' + borders.join('') + '</borders>'
+        + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        + '<cellXfs count="' + xfs.length + '">' + xfs.join('') + '</cellXfs>'
+        + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        + '</styleSheet>';
+    }
+    function buildSharedStringsXml() {
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="'
+        + sstArr.length + '" uniqueCount="' + sstArr.length + '">'
+        + sstArr.map(s => '<si><t xml:space="preserve">' + xmlEsc(s) + '</t></si>').join('')
+        + '</sst>';
+    }
+    function buildSheetXml(sh) {
+      const merges = [];
+      let cells = '';
+      const colsXml = (sh.cols && sh.cols.length) ?
+        ('<cols>' + sh.cols.map((c, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (c.width || 10) + '" customWidth="1"/>').join('') + '</cols>') : '';
+      sh.rows.forEach((row, ri) => {
+        const rIdx = ri + 1;
+        let rowCells = '';
+        (row || []).forEach((c, ci) => {
+          if (!c) return;
+          const ref = colLetter(ci + 1) + rIdx;
+          const styleIdx = styleMap.get(styleKey(c)) || 0;
+          if (c.t === 'n' && typeof c.v === 'number') {
+            rowCells += '<c r="' + ref + '" s="' + styleIdx + '"><v>' + c.v + '</v></c>';
+          } else {
+            const idx = sstIdx(String(c.v == null ? '' : c.v));
+            rowCells += '<c r="' + ref + '" s="' + styleIdx + '" t="s"><v>' + idx + '</v></c>';
+          }
+          if (c.merge && (c.merge.rows > 1 || c.merge.cols > 1)) {
+            const endR = rIdx + (c.merge.rows - 1);
+            const endC = colLetter(ci + c.merge.cols);
+            merges.push(ref + ':' + endC + endR);
+          }
+        });
+        if (rowCells) cells += '<row r="' + rIdx + '">' + rowCells + '</row>';
+      });
+      const mergeXml = merges.length ? '<mergeCells count="' + merges.length + '">' + merges.map(m => '<mergeCell ref="' + m + '"/>').join('') + '</mergeCells>' : '';
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + colsXml
+        + '<sheetData>' + cells + '</sheetData>'
+        + mergeXml
+        + '</worksheet>';
+    }
+
+    const files = [];
+    files.push({ name: '[Content_Types].xml',
+      data: strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        + '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+        + wb.sheets.map((_, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')
+        + '</Types>') });
+    files.push({ name: '_rels/.rels',
+      data: strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        + '</Relationships>') });
+    // workbook.xml
+    files.push({ name: 'xl/workbook.xml',
+      data: strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        + '<sheets>'
+        + wb.sheets.map((sh, i) => '<sheet name="' + xmlEsc(sh._uniqueName) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('')
+        + '</sheets></workbook>') });
+    files.push({ name: 'xl/_rels/workbook.xml.rels',
+      data: strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + wb.sheets.map((sh, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('')
+        + '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        + '<Relationship Id="rIdSst" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>'
+        + '</Relationships>') });
+    wb.sheets.forEach((sh, i) => {
+      files.push({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml', data: strToU8(buildSheetXml(sh)) });
+    });
+    files.push({ name: 'xl/styles.xml', data: strToU8(buildStylesXml()) });
+    files.push({ name: 'xl/sharedStrings.xml', data: strToU8(buildSharedStringsXml()) });
+    return zipBlob(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  }
+
+  // —— Émission ODS ——————————————————————————————————————————————————————
+  function emitODS(wb) {
+    // Dédupe noms de feuille
+    const usedNames = new Set();
+    wb.sheets.forEach(sh => {
+      let nm = sh.name || 'Sheet';
+      let suffix = 1;
+      while (usedNames.has(nm.toLowerCase())) {
+        const base = (sh.name || 'Sheet');
+        nm = base + ' ' + (++suffix);
+      }
+      sh._uniqueName = nm;
+      usedNames.add(nm.toLowerCase());
+    });
+    // Styles : un par variante de cellule
+    const styleMap = new Map();
+    let styleCounter = 0;
+    function styleKey(c) {
+      return [c.bg || '', c.color || '', c.bold ? 1 : 0, c.italic ? 1 : 0, c.align || '', c.border ? 1 : 0].join('|');
+    }
+    for (const sh of wb.sheets) for (const row of sh.rows) for (const c of (row || [])) {
+      if (!c) continue;
+      const k = styleKey(c);
+      if (!styleMap.has(k)) styleMap.set(k, { name: 'ce' + (++styleCounter), spec: c });
+    }
+    // Styles de colonne (largeur)
+    const colStylesByWidth = new Map();
+    let colStyleCounter = 0;
+    for (const sh of wb.sheets) {
+      if (!sh.cols) continue;
+      for (const co of sh.cols) {
+        const w = co.width || 10;
+        if (!colStylesByWidth.has(w)) colStylesByWidth.set(w, 'co' + (++colStyleCounter));
+      }
+    }
+    function buildAutomaticStyles() {
+      let xml = '';
+      // Cell styles
+      for (const { name, spec } of styleMap.values()) {
+        const ts = [];
+        if (spec.color) ts.push('fo:color="#' + spec.color + '"');
+        if (spec.bold) ts.push('fo:font-weight="bold"');
+        if (spec.italic) ts.push('fo:font-style="italic"');
+        const cs = [];
+        if (spec.bg) cs.push('fo:background-color="#' + spec.bg + '"');
+        if (spec.border) cs.push('fo:border="0.5pt solid #C8D2E0"');
+        const ps = [];
+        if (spec.align) ps.push('fo:text-align="' + spec.align + '"');
+        ps.push('fo:vertical-align="middle"');
+        xml += '<style:style style:name="' + name + '" style:family="table-cell">';
+        if (cs.length) xml += '<style:table-cell-properties ' + cs.join(' ') + ' style:vertical-align="middle"/>';
+        else xml += '<style:table-cell-properties style:vertical-align="middle"/>';
+        if (ps.length) xml += '<style:paragraph-properties ' + ps.join(' ') + '/>';
+        if (ts.length) xml += '<style:text-properties ' + ts.join(' ') + '/>';
+        xml += '</style:style>';
+      }
+      // Column widths (1 char ≈ 7px ≈ 0.18 cm)
+      for (const [w, name] of colStylesByWidth.entries()) {
+        const cm = (w * 0.22).toFixed(2);
+        xml += '<style:style style:name="' + name + '" style:family="table-column">'
+          + '<style:table-column-properties style:column-width="' + cm + 'cm"/></style:style>';
+      }
+      return xml;
+    }
+    function buildSheetXml(sh) {
+      let xml = '<table:table table:name="' + xmlEsc(sh._uniqueName) + '">';
+      if (sh.cols) {
+        for (const co of sh.cols) {
+          const styleName = colStylesByWidth.get(co.width || 10);
+          xml += '<table:table-column table:style-name="' + styleName + '"/>';
+        }
+      }
+      for (const row of sh.rows) {
+        xml += '<table:table-row>';
+        if (!row || row.length === 0) {
+          xml += '<table:table-cell/>';
+        } else {
+          for (const c of row) {
+            if (!c) { xml += '<table:table-cell/>'; continue; }
+            const k = styleKey(c);
+            const styleName = styleMap.get(k).name;
+            let attrs = 'table:style-name="' + styleName + '"';
+            const span = (c.merge && c.merge.cols > 1) ? (' table:number-columns-spanned="' + c.merge.cols + '"') : '';
+            const rspan = (c.merge && c.merge.rows > 1) ? (' table:number-rows-spanned="' + c.merge.rows + '"') : '';
+            if (c.t === 'n' && typeof c.v === 'number') {
+              xml += '<table:table-cell ' + attrs + ' office:value-type="float" office:value="' + c.v + '"' + span + rspan + '>';
+              xml += '<text:p>' + xmlEsc(c.v) + '</text:p></table:table-cell>';
+            } else {
+              const s = String(c.v == null ? '' : c.v);
+              xml += '<table:table-cell ' + attrs + ' office:value-type="string"' + span + rspan + '>';
+              const lines = s.split('\n');
+              for (const ln of lines) xml += '<text:p>' + xmlEsc(ln) + '</text:p>';
+              xml += '</table:table-cell>';
+            }
+            // Ajoute des cellules couvertes après une fusion horizontale
+            if (c.merge && c.merge.cols > 1) {
+              for (let i = 1; i < c.merge.cols; i++) xml += '<table:covered-table-cell/>';
+            }
+          }
+        }
+        xml += '</table:table-row>';
+      }
+      xml += '</table:table>';
+      return xml;
+    }
+
+    const contentXml = '<?xml version="1.0" encoding="UTF-8"?>'
+      + '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+      + ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+      + ' xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"'
+      + ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"'
+      + ' xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"'
+      + ' office:version="1.2">'
+      + '<office:automatic-styles>' + buildAutomaticStyles() + '</office:automatic-styles>'
+      + '<office:body><office:spreadsheet>'
+      + wb.sheets.map(buildSheetXml).join('')
+      + '</office:spreadsheet></office:body></office:document-content>';
+    const stylesXml = '<?xml version="1.0" encoding="UTF-8"?>'
+      + '<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+      + ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+      + ' office:version="1.2"><office:styles/></office:document-styles>';
+    const manifestXml = '<?xml version="1.0" encoding="UTF-8"?>'
+      + '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">'
+      + '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/>'
+      + '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+      + '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>'
+      + '</manifest:manifest>';
+    // Le mimetype doit être le 1er fichier, sans compression — ZIP "stored" l'assure
+    const files = [
+      { name: 'mimetype', data: strToU8('application/vnd.oasis.opendocument.spreadsheet') },
+      { name: 'content.xml', data: strToU8(contentXml) },
+      { name: 'styles.xml', data: strToU8(stylesXml) },
+      { name: 'META-INF/manifest.xml', data: strToU8(manifestXml) }
+    ];
+    return zipBlob(files, 'application/vnd.oasis.opendocument.spreadsheet');
+  }
+
+  // —— Trigger de téléchargement ——————————————————————————————————————————
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // —— Orchestrateur ———————————————————————————————————————————————————————
+  function run(classIds, format) {
+    if (!classIds || !classIds.length) return;
+    const ext = (format === 'ods') ? 'ods' : 'xlsx';
+    const ymd = todayYMD();
+    let i = 0;
+    const step = () => {
+      if (i >= classIds.length) {
+        toast('✅ ' + classIds.length + ' fichier(s) ' + ext.toUpperCase() + ' généré(s)');
+        return;
+      }
+      const cid = classIds[i++];
+      const cls = S.classes[cid];
+      if (!cls) { step(); return; }
+      try {
+        const wb = buildWorkbookForClass(cid);
+        const blob = (ext === 'ods') ? emitODS(wb) : emitXLSX(wb);
+        const fname = safeFilename(cls.nom) + '-notes-' + ymd + '.' + ext;
+        downloadBlob(blob, fname);
+      } catch (e) {
+        console.error('[exportNotes:' + cid + ']', e);
+        toast('Erreur sur ' + (cls.nom || cid) + ' : ' + (e?.message || e));
+      }
+      setTimeout(step, 200);
+    };
+    step();
+  }
+
+  return { run };
+})();
+
 function createDemo(opts) {
   const force = !!(opts && opts.force);
   if (!force) {
@@ -23836,6 +24933,12 @@ function _evalListToggleReverse() {
   try { localStorage.setItem('planClasse_evalListReverse', cur ? '0' : '1'); } catch (e) {}
   renderEvalNotes();
 }
+function _evalListToggleReverseType() {
+  let cur = false;
+  try { cur = localStorage.getItem('planClasse_evalListReverseType') === '1'; } catch (e) {}
+  try { localStorage.setItem('planClasse_evalListReverseType', cur ? '0' : '1'); } catch (e) {}
+  renderEvalNotes();
+}
 
 function renderEvalNotes() {
   _evhelpApply('notes');
@@ -23888,22 +24991,33 @@ function renderEvalNotes() {
   // ─── Tri configurable + persistant (localStorage) ───
   const sortMode = (() => { try { return localStorage.getItem('planClasse_evalListSort') || 'date'; } catch (e) { return 'date'; } })();
   const reverse  = (() => { try { return localStorage.getItem('planClasse_evalListReverse') === '1'; } catch (e) { return false; } })();
+  // Sens du type indépendamment du secondaire (uniquement utilisé en modes groupés)
+  const reverseType = (() => { try { return localStorage.getItem('planClasse_evalListReverseType') === '1'; } catch (e) { return false; } })();
   // Date "primaire" : date de la classe active si dispo, sinon date globale
   const _evDate = (ev) => _evalDateFor(ev, cls.id) || ev.date || '';
-  // Comparateurs (ordre "naturel" du mode ; reverse inverse le signe ensuite).
+  // Comparateurs : en modes groupés, type et secondaire sont inversibles indépendamment.
   // date  : desc (plus récent en premier)
   // name  : asc alphabétique
   // type-date : type asc (A, B, C), puis date desc
   // type-name : type asc, puis nom asc
+  const rs = reverse     ? -1 : 1;
+  const rt = reverseType ? -1 : 1;
   const cmps = {
-    date: (a, b) => _evDate(b).localeCompare(_evDate(a)),
-    name: (a, b) => (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' }),
-    'type-date': (a, b) => (a.type || '').localeCompare(b.type || '') || _evDate(b).localeCompare(_evDate(a)),
-    'type-name': (a, b) => (a.type || '').localeCompare(b.type || '')
-                         || (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' }),
+    date: (a, b) => rs * _evDate(b).localeCompare(_evDate(a)),
+    name: (a, b) => rs * (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' }),
+    'type-date': (a, b) => {
+      const t = (a.type || '').localeCompare(b.type || '');
+      if (t !== 0) return rt * t;
+      return rs * _evDate(b).localeCompare(_evDate(a));
+    },
+    'type-name': (a, b) => {
+      const t = (a.type || '').localeCompare(b.type || '');
+      if (t !== 0) return rt * t;
+      return rs * (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' });
+    },
   };
   const cmp = cmps[sortMode] || cmps.date;
-  const evs = allEvs.slice().sort((a, b) => reverse ? -cmp(a, b) : cmp(a, b));
+  const evs = allEvs.slice().sort(cmp);
   const grouped = (sortMode === 'type-date' || sortMode === 'type-name');
 
   // Toolbar de tri (au-dessus de la liste)
@@ -23920,7 +25034,13 @@ function renderEvalNotes() {
     html += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
   }
   html += '</select>';
-  html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
+  if (grouped) {
+    const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
+    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${reverseType ? 'C→A' : 'A→C'}</button>`;
+    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${reverse ? '↑ inversé' : '↓ normal'}</button>`;
+  } else {
+    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
+  }
   html += '</div>';
 
   html += '<div style="display:flex;flex-direction:column;gap:8px">';
@@ -26168,6 +27288,94 @@ function _evalTableurSortedSids(cls) {
   return sids;
 }
 
+// — Mode d'affichage compact du nom dans les tableaux d'éval ————————————————
+// Persisté dans localStorage (état d'affichage purement UI). Valeurs :
+//   'full' : NOM Prénom (défaut)
+//   'auto' : Prénom + nb minimum d'initiales du nom pour distinguer les élèves
+//            qui partagent le même prénom dans la classe.
+// Toggle via clic gauche sur l'en-tête « Élève » de chaque tableau.
+function _compactNameMode() {
+  try { return localStorage.getItem('planClasse_compactNameMode') || 'full'; } catch(_) { return 'full'; }
+}
+function _toggleCompactNameMode() {
+  const cur = _compactNameMode();
+  const next = (cur === 'full') ? 'auto' : 'full';
+  try { localStorage.setItem('planClasse_compactNameMode', next); } catch(_) {}
+  if (document.getElementById('meval-tableur')?.classList?.contains('on')) {
+    try { _evalTableurRender(); } catch(_) {}
+  }
+  if (document.getElementById('tab-bilan')?.classList?.contains('on')) {
+    try { renderBilanTab(); } catch(_) {}
+  }
+  if (document.getElementById('tab-comp')?.classList?.contains('on')) {
+    try { renderCompetencesTab(); } catch(_) {}
+  }
+  if (document.getElementById('meval-bilan-comps')?.classList?.contains('on')) {
+    try { _evalRenderBilanComps(); } catch(_) {}
+  }
+  toast(next === 'auto' ? '🔠 Noms abrégés (clic sur Élève pour rétablir)' : '🔠 Noms complets');
+}
+// Pour un ensemble d'élèves, calcule pour chaque sid le nombre k de lettres
+// du nom à afficher pour que (prénom + nom[:k]) soit unique dans la classe.
+// k = 0 si le prénom est déjà unique. Renvoie un Map<sid, k>.
+function _buildAbbrMap(students) {
+  const m = new Map();
+  if (!Array.isArray(students) || students.length === 0) return m;
+  // Groupe par prénom normalisé (lowercase + sans accents)
+  const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const byPrenom = new Map();
+  for (const stu of students) {
+    if (!stu?.id) continue;
+    const key = norm(stu.prenom);
+    if (!byPrenom.has(key)) byPrenom.set(key, []);
+    byPrenom.get(key).push(stu);
+  }
+  for (const [, group] of byPrenom) {
+    if (group.length === 1) { m.set(group[0].id, 0); continue; }
+    // Cherche le plus petit k tel que tous les noms du groupe aient un préfixe-k distinct
+    const maxLen = Math.max(...group.map(s => (s.nom || '').length));
+    let k = 1;
+    for (; k <= maxLen; k++) {
+      const seen = new Set();
+      let collision = false;
+      for (const stu of group) {
+        const p = norm((stu.nom || '').slice(0, k));
+        if (seen.has(p)) { collision = true; break; }
+        seen.add(p);
+      }
+      if (!collision) break;
+    }
+    if (k > maxLen) k = maxLen; // garde-fou : noms identiques → on prend tout
+    for (const stu of group) m.set(stu.id, k);
+  }
+  return m;
+}
+// Map<sid, k> du contexte actuel de rendu. Renseigné par chaque renderer
+// juste avant sa boucle d'élèves via _setCurAbbrMap(students). Utilisé par
+// _fmtStuNameInnerHtml en mode 'auto'.
+var _CUR_ABBR_MAP = null;  // var (et non let) : ce bloc est situé APRES init() (~L24159), un let serait en TDZ au 1er render.
+function _setCurAbbrMap(students) {
+  _CUR_ABBR_MAP = (_compactNameMode() === 'auto') ? _buildAbbrMap(students) : null;
+}
+function _fmtStuNameInnerHtml(stu) {
+  const nom = (stu?.nom || '').toUpperCase();
+  const prenom = stu?.prenom || '';
+  if (!_CUR_ABBR_MAP || !nom) {
+    return `<strong>${_esc(nom)}</strong> ${_esc(prenom)}`;
+  }
+  const k = _CUR_ABBR_MAP.get(stu.id) || 0;
+  if (k === 0) return `<strong>${_esc(prenom)}</strong>`;
+  const abbr = nom.slice(0, k) + (nom.length > k ? '.' : '');
+  return `${_esc(prenom)} <strong>${_esc(abbr)}</strong>`;
+}
+// Attribut HTML pour rendre l'en-tête "Élève" cliquable (toggle full/auto).
+// Inséré dans le <th> de chaque tableau d'éval. Fonction (hoistée) pour éviter
+// les soucis de TDZ d'un const top-level qui serait référencé par d'autres
+// renderers situés plus loin dans le fichier.
+function _NAME_HEAD_ATTRS() {
+  return ` onclick="_toggleCompactNameMode()" style="cursor:pointer;user-select:none" title="Clic gauche : basculer entre nom complet et nom abrégé (juste assez d'initiales pour distinguer les élèves qui ont le même prénom)"`;
+}
+
 function _evalTableurRender() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -26229,7 +27437,7 @@ function _evalTableurRender() {
   // Les Σ totaux d'exos sont REGROUPÉS APRÈS toutes les questions (pas interleavés).
   if (isTypeC && exoGroups.length > 0) {
     html += '<tr>';
-    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
     for (const g of exoGroups) {
       const ctxAttr = g.id ? ` oncontextmenu="event.preventDefault();_tableurExoContextMenu(event,'${_esc(g.id)}')"` : '';
       const cur = g.id ? 'cursor:context-menu;' : '';
@@ -26255,7 +27463,7 @@ function _evalTableurRender() {
 
   html += '<tr>';
   if (!isTypeC || exoGroups.length === 0) {
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   }
   orderedMNs.forEach((mn, ci) => {
     const tooltip = mn.name ? `${mn.label || '?'} — ${mn.name}` : (mn.label || '(sans nom)');
@@ -26346,13 +27554,14 @@ function _evalTableurRender() {
   // Stocke l'ordre des mn pour les inputs (ci correspond à orderedMNs)
   const mnOrder = orderedMNs;
   // Lignes élèves
+  _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
   sids.forEach((sid, ri) => {
     const stu = S.eleves[sid];
     if (!stu) return;
     const values = ev.notes?.[sid]?.values || {};
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     mnOrder.forEach((mn, ci) => {
       const v = values[mn.id];
       const dispVal = (v === 'NN') ? (S.evalPrefs?.codeNonNote || 'NN')
@@ -27174,7 +28383,7 @@ function _evalRenderBilanComps() {
     }
     if (curSpan > 0) domGroups[domGroups.length - 1].span = curSpan;
     html += '<tr>';
-    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
     for (const g of domGroups) {
       html += `<th colspan="${g.span}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.88em;color:var(--ink-blue);background:var(--paper)" title="${_esc(g.label)}">${_esc(g.label)}</th>`;
     }
@@ -27185,7 +28394,7 @@ function _evalRenderBilanComps() {
 
   html += '<tr>';
   if (sortMode !== 'domain') {
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   }
   for (const c of comps) {
     html += `<th style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm)" title="${_esc(c.name || '')}">${_esc(c.code)}</th>`;
@@ -27195,6 +28404,7 @@ function _evalRenderBilanComps() {
     html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;width:60px;min-width:60px;max-width:60px;white-space:nowrap">Rang<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${totalRanked}</span></th>`;
   }
   html += '</tr></thead><tbody>';
+  _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
 
   for (let ri = 0; ri < sids.length; ri++) {
     const sid = sids[ri];
@@ -27202,7 +28412,7 @@ function _evalRenderBilanComps() {
     if (!stu) continue;
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
       // Comp non évaluée → afficher "0" (niveau "non évalué"), pas "—"
@@ -27592,7 +28802,7 @@ function _evalTableurRenderB(ev, cls) {
 
   // Ligne 1 : en-têtes de passation (avec colspan)
   html += '<tr>';
-  html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+  html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   for (const p of sortedPass) {
     const nbComps = (p.competenceIds || []).length || 1;
     const passDate = _passDateFor(p, cls.id);
@@ -27653,13 +28863,14 @@ function _evalTableurRenderB(ev, cls) {
     }
   }
   html += '</tr></thead><tbody>';
+  _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
 
   sids.forEach((sid, ri) => {
     const stu = S.eleves[sid];
     if (!stu) return;
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     let ci = 0;
     for (const p of sortedPass) {
       p.niveaux = p.niveaux || {};
@@ -30209,7 +31420,7 @@ function renderBilanTab() {
   html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
   html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
-  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px">Élève</th>';
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   // 1 colonne par éval — header avec : code court · coef éditable (sans ×) · date
   for (const ev of evs) {
     // Utilise _evalDateFor (gère per-classe + fallback sur les sous-dates des
@@ -30283,13 +31494,14 @@ function renderBilanTab() {
   // moyValues par période de synthèse : moyValuesByPer[perIdx] = [moy1, moy2, ...]
   const moyValuesByPer = synthData.map(() => []);
 
+  _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
   for (let i = 0; i < sids.length; i++) {
     const sid = sids[i];
     const stu = S.eleves[sid];
     if (!stu) continue;
     const rowBg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${rowBg}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1">${_fmtStuNameInnerHtml(stu)}</td>`;
     // Détermine quelles facultatives sont effectivement comptées pour cet élève
     // (par période de synthèse ou global selon le filtre). On précalcule l'union
     // sur les périodes de synthèse pour rester rapide.
@@ -31106,7 +32318,7 @@ function renderCompetencesTab() {
   html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
   html += '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
-  html += '<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)">Élève</th>';
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   for (const col of cols) {
     html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help" title="${_esc(col.tip)}">${_esc(col.code)}</th>`;
   }
@@ -31131,6 +32343,7 @@ function renderCompetencesTab() {
     html += `<th ${attr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque${suffix}</th>`;
   });
   html += '</tr></thead><tbody>';
+  _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
 
   for (let _si = 0; _si < sids.length; _si++) {
     const sid = sids[_si];
@@ -31138,7 +32351,7 @@ function renderCompetencesTab() {
     if (!stu) continue;
     const bg = _si % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${bg}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap"><strong>${_esc(stu.nom?.toUpperCase() || '')}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     let sumMean = 0, nbMean = 0;
     for (const col of cols) {
       // Pour chaque colonne (compétence unique OU domaine), on agrège les niveaux
@@ -31628,7 +32841,7 @@ function _evalExportRender() {
   const wrap = document.getElementById('meval-export-wrap');
   let html = '<table id="meval-export-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
-  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em">Élève</th>`;
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   if (_evalExportColsState.note) html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono)">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
   if (_evalExportColsState.comps) {
     for (const c of comps) {
@@ -31962,7 +33175,7 @@ function _qcmcamExtractDate(s) {
 }
 
 function _qcmcamNorm(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[-'’]/g, ' ').trim();
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-'’]/g, ' ').trim();
 }
 
 function _qcmcamParseCsv(text) {
