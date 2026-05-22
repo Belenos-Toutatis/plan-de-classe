@@ -4939,7 +4939,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T22:00:00Z';
+const APP_VERSION   = '2026-05-22T22:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -33315,7 +33315,7 @@ function _evalPasteApply() {
 // toutes les questions n'ont pas été soumises (cellules vides padées en fin) :
 // on prend donc la dernière cellule numérique non vide de la ligne.
 
-const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, dirHandle: null, files: [] };
+const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, dirHandle: null, files: [], userPicks: {} };
 const QCMCAM_DIR_KEY = 'qcmcam-import-dir';
 const QCMCAM_SORT_KEY = 'planClasse_qcmcamImportSort'; // 'date' | 'name'
 
@@ -33337,7 +33337,15 @@ function _qcmcamExtractDate(s) {
 }
 
 function _qcmcamNorm(s) {
-  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-'’]/g, ' ').trim();
+  // NFD + suppression des accents, casse minuscule, traits d'union / apostrophes /
+  // POINTS → espace (le point tombe après le préfixe de nom inséré par l'export
+  // « Léo MART. »), puis écrasement des espaces multiples.
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[-'’.]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
 
 function _qcmcamParseCsv(text) {
@@ -33419,22 +33427,47 @@ function _qcmcamExtractRows(grid) {
 function _qcmcamMatchStudent(rawName, students) {
   const norm = _qcmcamNorm(rawName);
   if (!norm) return { status: 'empty' };
-  const parts = norm.split(/\s+/);
-  const prenomQ = parts[0];
-  const nomPrefix = parts.slice(1).join('');
 
-  // 1. Prénom exact
-  let cands = students.filter(s => _qcmcamNorm(s.prenom) === prenomQ);
-  // 2. Fallback : prénom qui commence par la chaîne (Léa-Marie pour "Léa", etc.)
-  if (cands.length === 0) {
-    cands = students.filter(s => _qcmcamNorm(s.prenom).startsWith(prenomQ));
+  // 1. Match EXACT sur le prénom COMPLET normalisé (incluant les tirets convertis
+  //    en espaces). C'est le cas naturel quand l'export contient un prénom sans
+  //    désambiguïsation : « Lou-Anna » → « lou anna ». On l'essaie d'abord pour
+  //    ne PAS confondre « Lou-Anna » avec « Louanne » via le fallback startsWith.
+  let cands = students.filter(s => _qcmcamNorm(s.prenom) === norm);
+  if (cands.length === 1) return { status: 'ok',    sid: cands[0].id };
+  if (cands.length > 1)  return { status: 'ambig', sids: cands.map(s => s.id) };
+
+  // 2. Découpe « prénom + préfixe de nom » (format d'export désambiguïsé
+  //    « Léo MART. » ou saisie manuelle « Léo M »). On exige un match EXACT sur
+  //    le prénom (pas de startsWith), puis on filtre par préfixe de nom.
+  const parts = norm.split(/\s+/);
+  if (parts.length >= 2) {
+    const prenomQ2  = parts[0];
+    const nomPref2  = parts.slice(1).join('');
+    const cands2 = students.filter(s => _qcmcamNorm(s.prenom) === prenomQ2);
+    if (cands2.length > 0) {
+      if (nomPref2) {
+        const filt = cands2.filter(s => _qcmcamNorm(s.nom).startsWith(nomPref2));
+        if (filt.length === 1) return { status: 'ok',    sid: filt[0].id };
+        if (filt.length > 1)   return { status: 'ambig', sids: filt.map(s => s.id) };
+        // Aucun nom ne match : si un seul prénom-candidat, on l'accepte ; sinon ambigu.
+        if (cands2.length === 1) return { status: 'ok',    sid: cands2[0].id };
+        return { status: 'ambig', sids: cands2.map(s => s.id) };
+      }
+      if (cands2.length === 1) return { status: 'ok',    sid: cands2[0].id };
+      return { status: 'ambig', sids: cands2.map(s => s.id) };
+    }
   }
+
+  // 3. Dernier recours : startsWith sur le prénom (gère les raccourcis manuels
+  //    type « Léa » pour « Léa-Marie »). Désambiguïsation par début de nom si dispo.
+  const prenomQ = parts[0];
+  cands = students.filter(s => _qcmcamNorm(s.prenom).startsWith(prenomQ));
   if (cands.length === 0) return { status: 'none' };
   if (cands.length === 1) return { status: 'ok', sid: cands[0].id };
-  // Désambiguïsation par début de nom de famille
+  const nomPrefix = parts.slice(1).join('');
   if (nomPrefix) {
     const filt = cands.filter(s => _qcmcamNorm(s.nom).startsWith(nomPrefix));
-    if (filt.length === 1) return { status: 'ok', sid: filt[0].id };
+    if (filt.length === 1) return { status: 'ok',    sid: filt[0].id };
     if (filt.length === 0) return { status: 'ambig', sids: cands.map(s => s.id) };
     return { status: 'ambig', sids: filt.map(s => s.id) };
   }
@@ -33481,6 +33514,7 @@ function _evalQcmcamOpen() {
   _qcmcamState.filename = '';
   _qcmcamState.detectedDate = null;
   _qcmcamState.files = [];
+  _qcmcamState.userPicks = {};
   const fbInput = document.getElementById('meval-qcmcam-file-fallback');
   if (fbInput) fbInput.value = '';
   document.getElementById('meval-qcmcam-apply-btn').disabled = true;
@@ -33625,6 +33659,7 @@ async function _evalQcmcamSelectFromDir(name) {
     const { rows, maxPoints } = _qcmcamExtractRows(grid);
     _qcmcamState.rows = rows;
     _qcmcamState.maxPoints = maxPoints;
+    _qcmcamState.userPicks = {}; // remise à zéro à chaque fichier
     _evalQcmcamRenderPreview();
     _evalQcmcamRenderPicker(); // pour le highlight de la ligne sélectionnée
   } catch (e) {
@@ -33637,6 +33672,7 @@ function _evalQcmcamFileSelected(input) {
   if (!file) return;
   _qcmcamState.filename = file.name || '';
   _qcmcamState.detectedDate = _qcmcamExtractDate(file.name || '');
+  _qcmcamState.userPicks = {}; // remise à zéro à chaque fichier
   const reader = new FileReader();
   reader.onload = e => {
     try {
@@ -33676,15 +33712,72 @@ function _evalQcmcamRenderPreview() {
   const mn   = ev.miniNotes.find(m => m.id === mnId);
   const maxNote = mn?.max || 0;
 
+  // Tous les élèves de la classe (pour les pickers manuels en cas d'inconnu),
+  // triés par nom puis prénom pour faciliter la lecture.
+  const studentsSorted = students.slice().sort((a, b) =>
+    (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr')
+  );
   const matches = rows.map(r => {
-    const m = _qcmcamMatchStudent(r.nom, students);
+    let m = _qcmcamMatchStudent(r.nom, students);
+    // Override par le choix utilisateur (clé : nom brut CSV)
+    const picked = _qcmcamState.userPicks?.[r.nom];
+    if (picked === '__skip__') {
+      m = { status: 'skip', userPicked: true };
+    } else if (picked && S.eleves?.[picked]) {
+      m = { status: 'ok', sid: picked, userPicked: true };
+    }
     return { row: r, match: m };
   });
   _qcmcamState.matches = matches;
 
-  let nbOk = 0, nbNone = 0, nbAmbig = 0, nbNoScore = 0, nbHorsLim = 0, nbAbs = 0;
+  // Mémoire des sids déjà attribués (auto ou manuel) — précalculée avant rendu
+  // pour marquer correctement les options « (déjà pris) » dans chaque picker.
+  const usedSids = new Set();
+  for (const { match } of matches) {
+    if (match.status === 'ok') usedSids.add(match.sid);
+  }
+
+  let nbOk = 0, nbNone = 0, nbAmbig = 0, nbNoScore = 0, nbHorsLim = 0, nbAbs = 0, nbSkip = 0;
   const lines = [];
   const absCode = (S.evalPrefs?.codeAbsent || 'A').toUpperCase();
+  // Helper : construit un <select> pour désambiguïser une ligne ambigüe/inconnue.
+  // `candSids` : sous-ensemble proposé en premier (ou null → tous les élèves).
+  function buildPicker(rawName, candSids) {
+    const picked = _qcmcamState.userPicks?.[rawName] || '';
+    const rawAttr = _escAttr(rawName);
+    const optHead = `<option value="">— choisir un élève —</option>`;
+    const optSkip = `<option value="__skip__"${picked === '__skip__' ? ' selected' : ''}>✗ Ignorer cette ligne</option>`;
+    let optsCandidates = '';
+    if (Array.isArray(candSids) && candSids.length > 0) {
+      const candSet = new Set(candSids);
+      optsCandidates = '<optgroup label="Candidats détectés">' +
+        candSids.map(sid => {
+          const s = S.eleves?.[sid]; if (!s) return '';
+          const sel = (sid === picked) ? ' selected' : '';
+          return `<option value="${_escAttr(sid)}"${sel}>${_esc(s.prenom)} ${_esc(s.nom)}</option>`;
+        }).join('') + '</optgroup>';
+      // Tous les autres élèves (en deuxième optgroup pour permettre une correction
+      // « hors candidats » si l'algo s'est trompé sur le set initial).
+      const others = studentsSorted.filter(s => !candSet.has(s.id));
+      if (others.length > 0) {
+        optsCandidates += '<optgroup label="Autres élèves de la classe">' +
+          others.map(s => {
+            const sel = (s.id === picked) ? ' selected' : '';
+            const taken = usedSids.has(s.id) && s.id !== picked ? ' (déjà pris)' : '';
+            return `<option value="${_escAttr(s.id)}"${sel}>${_esc(s.prenom)} ${_esc(s.nom)}${taken}</option>`;
+          }).join('') + '</optgroup>';
+      }
+    } else {
+      // Pas de candidats détectés → toute la liste
+      optsCandidates = studentsSorted.map(s => {
+        const sel = (s.id === picked) ? ' selected' : '';
+        const taken = usedSids.has(s.id) && s.id !== picked ? ' (déjà pris)' : '';
+        return `<option value="${_escAttr(s.id)}"${sel}>${_esc(s.prenom)} ${_esc(s.nom)}${taken}</option>`;
+      }).join('');
+    }
+    return `<select onchange="_qcmcamPick('${rawAttr}', this.value)" style="font-size:.88em;padding:1px 4px;max-width:240px">${optHead}${optSkip}${optsCandidates}</select>`;
+  }
+
   for (const { row, match } of matches) {
     let cls = '', label = '', note = row.score;
     if (match.status === 'ok') {
@@ -33695,16 +33788,24 @@ function _evalQcmcamRenderPreview() {
         nbHorsLim++; cls = 'color:var(--margin-red)';
         label = `${note} → clampé à ${Math.max(0, Math.min(note, maxNote))}`;
       } else { nbOk++; cls = 'color:var(--ink-deep)'; label = `${note}`; }
-      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px">→</td><td style="padding:2px 6px">${_esc(stu ? `${stu.prenom} ${stu.nom}` : '?')}</td><td style="padding:2px 6px;${cls};font-family:var(--font-mono);text-align:right">${label}</td></tr>`);
+      const tagOk = match.userPicked
+        ? '<span title="Choix manuel" style="color:var(--ink-blue);font-weight:600">✎</span>'
+        : '→';
+      const stuName = stu ? `${stu.prenom} ${stu.nom}` : '?';
+      // Si choisi manuellement, on affiche aussi un picker pour permettre de changer d'avis.
+      const cellEleve = match.userPicked
+        ? buildPicker(row.nom, null)
+        : _esc(stuName);
+      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;text-align:center">${tagOk}</td><td style="padding:2px 6px">${cellEleve}</td><td style="padding:2px 6px;${cls};font-family:var(--font-mono);text-align:right">${label}</td></tr>`);
+    } else if (match.status === 'skip') {
+      nbSkip++;
+      lines.push(`<tr style="opacity:.55"><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--pencil);text-align:center">✗</td><td style="padding:2px 6px;color:var(--pencil)">${buildPicker(row.nom, null)}</td><td style="padding:2px 6px;color:var(--pencil);font-style:italic;text-align:right">ignoré</td></tr>`);
     } else if (match.status === 'ambig') {
       nbAmbig++;
-      const names = (match.sids || []).map(sid => {
-        const s = S.eleves?.[sid]; return s ? `${s.prenom} ${s.nom}` : '?';
-      }).join(', ');
-      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--margin-red)">⚠ ambigu</td><td style="padding:2px 6px;color:var(--margin-red)" colspan="2">${_esc(names)}</td></tr>`);
+      lines.push(`<tr style="background:#fff8e1"><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--margin-red);text-align:center" title="Plusieurs élèves correspondent — choisis lequel">⚠</td><td style="padding:2px 6px" colspan="2">${buildPicker(row.nom, match.sids || [])}</td></tr>`);
     } else {
       nbNone++;
-      lines.push(`<tr><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--margin-red)">✗ inconnu</td><td style="padding:2px 6px" colspan="2">—</td></tr>`);
+      lines.push(`<tr style="background:#fde8e7"><td style="padding:2px 6px">${_esc(row.nom)}</td><td style="padding:2px 6px;color:var(--margin-red);text-align:center" title="Aucun élève reconnu — choisis-en un manuellement ou ignore la ligne">✗</td><td style="padding:2px 6px" colspan="2">${buildPicker(row.nom, null)}</td></tr>`);
     }
   }
 
@@ -33758,17 +33859,33 @@ function _evalQcmcamRenderPreview() {
     </div>`;
   }
 
+  const hintAmbigOrNone = (nbAmbig + nbNone) > 0
+    ? `<div style="margin-top:6px;padding:6px 10px;background:#fffaeb;border-left:3px solid #d97706;border-radius:3px;font-size:.86em;color:var(--ink-deep)">💡 Sélectionne le bon élève dans la liste déroulante de chaque ligne ambigüe (⚠) ou inconnue (✗), ou choisis <em>« Ignorer cette ligne »</em>.</div>`
+    : '';
   previewEl.innerHTML = `
     <strong>${rows.length} ligne${rows.length>1?'s':''} dans le CSV</strong> · ✓ ${nbOk} reconnue${nbOk>1?'s':''}
     ${nbAbs?` · <span style="color:var(--margin-red)">🚫 ${nbAbs} absent${nbAbs>1?'s':''}</span>`:''}
     ${nbAmbig?` · <span style="color:var(--margin-red)">⚠ ${nbAmbig} ambigu${nbAmbig>1?'s':''}</span>`:''}
     ${nbNone?` · <span style="color:var(--margin-red)">✗ ${nbNone} inconnu${nbNone>1?'s':''}</span>`:''}
+    ${nbSkip?` · <span style="color:var(--pencil)">⊘ ${nbSkip} ignoré${nbSkip>1?'s':''}</span>`:''}
     ${nbNoScore?` · <span style="color:var(--pencil)">${nbNoScore} sans score</span>`:''}
     ${nbHorsLim?` · <span style="color:var(--margin-red)">⚠ ${nbHorsLim} hors barème (clampé)</span>`:''}
+    ${hintAmbigOrNone}
     ${baremeBlock}
     ${dateBlock}
     ${tableHtml}`;
   applyBtn.disabled = (nbOk === 0 && nbHorsLim === 0 && nbAbs === 0);
+}
+
+// Choix manuel pour une ligne ambigüe / inconnue dans le preview QCMcam.
+// `rawName` est le nom brut côté CSV (clé stable du picker), `sid` est l'id de
+// l'élève choisi, ou '' pour ré-évaluer le match auto, ou '__skip__' pour
+// ignorer la ligne.
+function _qcmcamPick(rawName, sid) {
+  _qcmcamState.userPicks = _qcmcamState.userPicks || {};
+  if (!sid) delete _qcmcamState.userPicks[rawName];
+  else _qcmcamState.userPicks[rawName] = sid;
+  _evalQcmcamRenderPreview();
 }
 
 function _evalQcmcamApply() {
