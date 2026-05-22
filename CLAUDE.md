@@ -1178,6 +1178,28 @@ Helper **`_contrastTextColor(bg)`** (formule YIQ, threshold 150) renvoie `'var(-
 ### Hors barème (commit f3e1371)
 Plus de `confirm()` bloquant : une note hors `[0, max]` est conservée d'office avec fond rose persistant + toast non-bloquant. Ctrl+Z l'annule grâce au système d'undo armé. `_evalTableurConfirmIfOutOfRange` est désormais un no-op (gardé pour compat HTML rendu).
 
+### Mini-calculatrice dans les cellules (Type A / C, tableur)
+
+L'enseignant peut taper une expression arithmétique dans une cellule de note (`1+2+4`, `0,5*3`, `(8+7)/2`, `=5+3`…) ; au commit (blur, déclenché aussi par Tab/Enter via `_evalTableurKey` qui appelle `focus()` sur la cellule suivante), l'expression est évaluée et la cellule affiche le résultat formaté FR (virgule décimale, arrondi 2 décimales, zéros de queue retirés via `_fmtNote`).
+
+- **`_evalArithExpr(s)`** — parser récursif descendant, **jamais `eval` / `Function`**. Liste blanche stricte : chiffres, point décimal, `+ - * /`, parenthèses uniquement. Supporte signes unaires, virgule ou point décimal, et un `=` initial style tableur. Retourne `null` si la chaîne ne contient pas d'opérateur (laisse alors `parseFloat` habituel agir) OU si le parsing échoue (division par 0 → null, parenthèses déséquilibrées → null, double point dans un nombre → null, etc.).
+- **`_hasArithOperator(raw)`** — détecte la présence d'un opérateur AU-DELÀ d'un signe initial (sinon `-5` ou `+5` seraient pris pour des expressions).
+- **`_evalTableurMaybeApplyExpr(inputEl)`** — appelé en tête de `_evalTableurConfirmIfOutOfRange` (le handler onblur). Si l'input contient un opérateur ET que l'évaluation réussit → remplace `inputEl.value` par `_fmtNote(v)` puis rejoue `_evalTableurUpdate(inputEl)` pour persister la valeur, recolorer la cellule, et rafraîchir total + Σ exo + brut + compétences inline + footer stats. Si l'expression est mal formée (`1++2-`, `(1+2`…) → toast non bloquant `⚠ Expression invalide` sans rien écraser, le prof voit sa saisie et corrige.
+
+Limité au tableur (Type A / C). La fiche par élève (Type A) n'a pas d'onblur dédié donc reste inchangée — scope volontairement restreint.
+
+### Auto-scroll quand la cellule focusée passe sous le thead/tfoot sticky
+
+Le tableur d'éval a un `<thead>` sticky-top et `<tfoot>` sticky-bottom dans le conteneur de scroll `#meval-tableur-wrap`. Naïvement, le focus sur une cellule en bord de viewport (au ras du haut ou du bas) laisse la cellule **cachée derrière** la zone figée : le curseur clignote dans le vide. Le `.focus()` du navigateur considère l'élément « in viewport » même s'il est couvert.
+
+- **`_evalTableurEnsureInputVisible(inputEl)`** — mesure `theadH` et `tfootH` (sticky), mesure la largeur de la colonne « Élève » sticky-left de la même ligne, calcule `wrapRect` et `inpRect`, puis ajuste `wrap.scrollTop` / `wrap.scrollLeft` si la cellule est masquée. Padding de 4px pour ne pas coller pile contre la zone sticky. Limité aux inputs/selects/textareas situés dans `tbody` ou `tfoot` du tableur — les contrôles du thead (date, code, max…) sont exclus pour ne pas scroller à tort quand on modifie l'en-tête.
+- **Listener `focusin` délégué** : posé une seule fois sur `#meval-tableur-wrap` via une IIFE auto-installante (`wrap.dataset.scrollFixInstalled`). Le wrap statique survit aux re-render du tableur (seul l'innerHTML est remplacé), donc le listener persiste. Couvre clic, Tab/Enter (via `target.focus()` → `focusin`), et tout focus programmatique.
+
+### Commentaires d'éval — fermeture auto sur ajout + refresh modales sur undo/redo
+
+- **Auto-close** : `_evalCommentsAddFreeText` (Enter ou « + Ajouter ») et `_evalCommentsAddFromLib` (chip de la bibliothèque) appellent `closeMod2('meval-comments')` en fin d'exécution → un commentaire = une action terminée, retour direct au tableur. Le hook `_modalReturnTo['meval-comments']` (cf. `_evalCommentsOpen`) re-render le tableur pour rafraîchir le badge 💬 sur la cellule. Pour ajouter plusieurs commentaires, le prof rouvre la modale. `_evalCommentsRemove` (✕ sur un commentaire existant) reste sans fermeture — pour pouvoir nettoyer plusieurs entrées à la suite.
+- **Refresh undo/redo** : `_refreshOpenEvalModals()` appelé en fin d'`undoLast` et `redoLast`. Si `meval-tableur` ou `meval-qcmcam` sont ouverts, appelle `_evalTableurRender()` / `_evalQcmcamRenderPreview()` pour mettre à jour le badge 💬 / les notes / les stats / l'aperçu d'import affichés au-dessus. Sans ça, Ctrl+Z annulait bien en mémoire mais le DOM des modales restait figé jusqu'à la prochaine navigation.
+
 ### Import CSV QCMcam (Type A / C, tableur)
 
 Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des notes »), visible uniquement pour Type A et C. Ouvre la modale `meval-qcmcam` qui importe un fichier `resultats.csv` exporté depuis qcmcam.net (« Exporter liste élèves.csv »).
@@ -1197,11 +1219,24 @@ Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des note
 
 **Date** : motif `AAAA-MM-JJ` cherché dans le nom du fichier via `_qcmcamExtractDate`. Si trouvée, checkbox « 📅 Appliquer à la mini-note » (cochée par défaut sauf si identique). Toujours appliquée à la nouvelle mini-note en mode `create`.
 
-**Matching élève → ligne CSV** (`_qcmcamMatchStudent`) : la colonne `Nom` du CSV contient en réalité le **prénom** éventuellement suivi des premières lettres du nom de famille. Normalisation (`_qcmcamNorm` : NFD, accents, tirets, apostrophes, casse).
-1. Prénom exact (1 candidat → ok)
-2. Fallback : prénom commençant par la chaîne (Léa-Marie pour `Léa`)
-3. Si ambigu : désambiguïsation par début de nom de famille
-4. Sinon : statut `ambig` (rouge dans l'aperçu)
+**Normalisation** (`_qcmcamNorm`) : NFD → suppression des accents → minuscules → traits d'union `-`, apostrophes droite `'` ou courbe `’`, ET points `.` remplacés par espace → écrasement des espaces multiples. Le point couvre le format d'export désambiguïsé `getDisplayName` (`« Léo MART. »`), sinon `'martin'.startsWith('mart.')` échouait. Un prénom composé comme `Lou-Anna` devient ainsi `'lou anna'` (et non `'louanna'`).
+
+**Matching élève → ligne CSV** (`_qcmcamMatchStudent`) — 3 étages, du plus strict au plus permissif. Indispensable pour ne pas confondre `Lou-Anna` (prénom composé) avec `Louanne` (autre prénom proche) :
+
+1. **Match EXACT sur le prénom complet normalisé** (incluant les tirets convertis en espaces). `'lou anna'` du CSV → matche directement l'élève dont le prénom normalise à `'lou anna'`. Si 1 candidat → `ok`. Si plusieurs → `ambig`. **Ce niveau ne descend PAS au fallback** : si exactement un élève s'appelle vraiment `Lou-Anna`, on le renvoie immédiatement sans ouvrir la porte au prefix-match qui aurait aussi capturé `Louanne`.
+2. **Découpe `prénom + préfixe nom`** (cas `Léo MART.` ou saisie manuelle `Léo M`). On exige un match EXACT sur le prénom (pas de startsWith), puis on filtre par préfixe de nom. Si 1 candidat après filtre → `ok` ; si plusieurs ou aucun match nom + plusieurs prénoms → `ambig`.
+3. **Fallback `startsWith`** sur le prénom (pour les raccourcis manuels type `Léa` qu'on veut bien matcher avec `Léa-Marie` quand il n'y a pas d'autre `Léa` exact). Désambiguïsation par préfixe nom si dispo.
+
+Tests de régression (12 cas dans une seed démo classique) : Lou-Anna ≠ Louanne, Léo MART. / MER. désambigués correctement, Léa (exact) ≠ Léa-Marie, prénom unique ok, etc.
+
+**UI de désambiguïsation** : pour chaque ligne `ambig` ou `none`, le preview affiche un `<select>` permettant de choisir manuellement l'élève (ou « ✗ Ignorer cette ligne ») :
+- 1er optgroup **« Candidats détectés »** = les sids renvoyés par le matcher (pour `ambig`)
+- 2e optgroup **« Autres élèves de la classe »** = tous les autres élèves de la classe (pour corriger si le matcher s'est trompé sur le set initial ; pour `none`, seule cette liste est présentée)
+- Option `__skip__` = ignore explicite (la ligne ne sera pas appliquée, comptabilisée séparément dans le récap)
+- Options marquées **« (déjà pris) »** si l'élève est déjà attribué à une autre ligne (info uniquement, n'empêche pas la sélection — l'utilisateur reste maître)
+- Les lignes résolues manuellement gardent leur picker (✎ vs → pour signaler) afin de pouvoir changer d'avis
+
+Choix persistés dans `_qcmcamState.userPicks = { [rawCsvName]: sid | '__skip__' }`. Reset à chaque ouverture de modale et à chaque changement de fichier (le picker manuel ne traverse pas les fichiers).
 
 **Picker fichier** :
 - Handle du **dossier d'import** stocké dans IndexedDB sous la clé `'qcmcam-import-dir'`. Au 1er import → bouton « 📂 Choisir le dossier… ». Aux suivants → liste directe.
@@ -1209,10 +1244,11 @@ Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des note
   - **🕐 Plus récents en premier** (défaut, basé sur `lastModified`)
   - **🔤 Nom (A→Z)** (tri naturel français, `numeric: true`)
   - Préférence persistée dans `localStorage.planClasse_qcmcamImportSort`
+- **Champ de filtre 🔍** (`_qcmcamSetFilter` → `_qcmcamState.filter`) : input texte au-dessus de la liste, filtre par sous-chaîne du nom de fichier (insensible à la casse). Compteur `N / M` à droite quand un filtre est actif. Bouton `✕` et touche `Échap` pour effacer (avec `stopPropagation` pour ne pas fermer la modale). Restauration automatique du focus + position curseur après chaque re-render (sans ça, taper rapidement viderait le focus à chaque caractère).
 - Boutons « ↻ changer » (re-pick dossier), « ↻ » (refresh), « 📄 Ou un fichier ailleurs… » (fallback `<input type="file">`).
 - Fallback navigateur : si `showDirectoryPicker` indisponible (Safari/Firefox), seul l'input natif est affiché.
 
-**Application** (`_evalQcmcamApply`) : `pushUndo()` une fois, applique `'A'` ou `clamp(score, 0, mn.max)`, met à jour `mn.max`/`mn.date` selon les choix, save, toast récap.
+**Application** (`_evalQcmcamApply`) : `pushUndo()` une fois, applique `'A'` ou `clamp(score, 0, mn.max)` UNIQUEMENT pour les lignes `match.status === 'ok'` (donc ni les `ambig` non résolus, ni les `none` non résolus, ni les `skip`). Met à jour `mn.max`/`mn.date` selon les choix, save, toast récap.
 
 ### Bug fix : commentaires d'éval stockés comme string
 
@@ -1266,30 +1302,6 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 4. **Options avancées** : countsForMean, facultative + 3 modes, weighting (Type B), meanRule (Type B/C — caché Type A)
 
 À ✓ Créer → bascule directement sur le tableur (ouvre Structure si la mini-note/passation initiale manque, puis revient au tableur via `_modalReturnTo['meval-structure']`). Le bouton ⚙ dans la toolbar du tableur permet d'ajuster les options avancées plus tard.
-
-### Import CSV QCMcam — picker dossier mémorisé
-
-Bouton **📂** dans la toolbar du tableur Type A/C. Modale `meval-qcmcam` :
-- Sélecteur de mini-note cible
-- **Picker fichier** : handle du dossier d'import stocké dans IndexedDB (`'qcmcam-import-dir'`). Liste des `.csv`/`.tsv` du dossier, triable :
-  - 🕐 Plus récents en premier (défaut, `lastModified`)
-  - 🔤 Nom (A→Z, tri naturel français)
-  - Préférence persistée dans `localStorage.planClasse_qcmcamImportSort`
-- Fallback `<input type="file">` pour Safari/Firefox ou fichier ponctuel.
-
-**Parsing** : TSV (séparateur tabulation), guillemets droits optionnels, CRLF. Header `id / Nom / Q1..Qn / Score`. Ligne « Bonne réponse » skippée (id vide).
-- **Score** : dernière cellule numérique non vide après la colonne Nom (gère le padding loin à droite quand toutes les questions n'ont pas été soumises).
-- **Absent** : si toutes les colonnes Q* de l'élève sont vides → `score = 'A'`.
-- **Barème détecté** : `max(réponses non vides par élève) || nb de "Bonne réponse" renseignées || qIdx.length`. Cf. `_qcmcamExtractRows`.
-
-**3 modes proposés** quand barème détecté ≠ `mn.max` :
-- `update` (défaut) — modifie `mn.max`
-- `create` — crée une nouvelle mini-note avec le bon barème (utile si la mini-note a déjà été notée pour d'autres classes — préserve l'historique)
-- `keep` — laisse `mn.max` inchangé, clampe
-
-**Date** : motif `AAAA-MM-JJ` cherché dans le nom du fichier (`_qcmcamExtractDate`). Si trouvée, checkbox « 📅 Appliquer à la mini-note ».
-
-**Matching élève → ligne CSV** (`_qcmcamMatchStudent`) : la colonne `Nom` du CSV contient le prénom éventuellement suivi des premières lettres du nom de famille. Normalisation (`_qcmcamNorm` : NFD, accents, tirets, apostrophes, casse). Cascade : prénom exact → prénom commençant par la chaîne → désambiguïsation par début de nom de famille → `ambig` (rouge dans l'aperçu).
 
 ### Bilan des évaluations — toolbar et colonnes
 
