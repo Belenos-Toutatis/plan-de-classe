@@ -4939,7 +4939,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T21:30:00Z';
+const APP_VERSION   = '2026-05-22T22:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -24901,6 +24901,84 @@ function _parseMiniNoteInput(raw) {
   return Number.isFinite(n) ? n : null;
 }
 
+// ─── Évaluation d'une expression arithmétique saisie dans une cellule ───
+// Mini-calculatrice pour saisir directement « 1+2+4 » au lieu de faire la somme
+// à la main. Au commit (Tab/Enter ou perte de focus) la cellule affiche le
+// résultat. Parser récursif descendant ; on n'utilise JAMAIS eval / Function
+// pour ne pas ouvrir de porte d'injection.
+//
+// Supporte : nombres entiers/décimaux (avec virgule ou point), `+ - * /`,
+// parenthèses, signe unaire `+` / `-`, et un éventuel `=` initial style tableur.
+// Retourne `null` si la chaîne ne contient AUCUN opérateur (on laisse alors le
+// flux habituel `parseFloat` agir) ou si le parsing échoue.
+function _evalArithExpr(s) {
+  if (typeof s !== 'string') return null;
+  let src = s.trim();
+  if (!src) return null;
+  if (src[0] === '=') src = src.slice(1).trim();
+  src = src.replace(/,/g, '.').replace(/\s+/g, '');
+  if (!src) return null;
+  // Pré-test : l'utilisateur a-t-il tapé un opérateur ? (sinon, pas une expression)
+  if (!/[+\-*/()]/.test(src)) return null;
+  // Liste blanche stricte : digits, point, opérateurs, parenthèses uniquement.
+  if (!/^[0-9.+\-*/()]+$/.test(src)) return null;
+  let i = 0;
+  function parseExpr() {
+    let v = parseTerm();
+    if (v === null) return null;
+    while (i < src.length && (src[i] === '+' || src[i] === '-')) {
+      const op = src[i++];
+      const r = parseTerm();
+      if (r === null) return null;
+      v = (op === '+') ? v + r : v - r;
+    }
+    return v;
+  }
+  function parseTerm() {
+    let v = parseFactor();
+    if (v === null) return null;
+    while (i < src.length && (src[i] === '*' || src[i] === '/')) {
+      const op = src[i++];
+      const r = parseFactor();
+      if (r === null) return null;
+      if (op === '/' && r === 0) return null;
+      v = (op === '*') ? v * r : v / r;
+    }
+    return v;
+  }
+  function parseFactor() {
+    if (i >= src.length) return null;
+    if (src[i] === '+') { i++; return parseFactor(); }
+    if (src[i] === '-') { i++; const v = parseFactor(); return v === null ? null : -v; }
+    if (src[i] === '(') {
+      i++;
+      const v = parseExpr();
+      if (v === null || src[i] !== ')') return null;
+      i++;
+      return v;
+    }
+    const start = i;
+    while (i < src.length && /[0-9.]/.test(src[i])) i++;
+    if (i === start) return null;
+    const piece = src.slice(start, i);
+    if ((piece.match(/\./g) || []).length > 1) return null; // ex. « 5.5.5 »
+    const n = parseFloat(piece);
+    return Number.isFinite(n) ? n : null;
+  }
+  const v = parseExpr();
+  if (v === null || i !== src.length || !Number.isFinite(v)) return null;
+  return v;
+}
+
+// Vrai si la chaîne contient au moins un opérateur arithmétique au-delà d'un
+// éventuel signe initial (sinon « -5 » ou « +5 » seraient pris à tort pour des
+// expressions).
+function _hasArithOperator(raw) {
+  if (typeof raw !== 'string') return false;
+  const t = raw.trim().replace(/^=/, '').replace(/^[+-]/, '').replace(/\s+/g, '');
+  return /[+\-*/()]/.test(t);
+}
+
 // ── Onglet Notes — rendu de la liste d'évaluations ──
 // ── Mode d'emploi pliable des onglets Évaluation (Devoirs / Bilan / Compétences) ──
 // Chaque onglet a un <p class="evhelp" id="evhelp-{key}"> avec un bouton ✕ pour
@@ -27960,8 +28038,31 @@ function _evalTableurUpdateTotalCell(cellTotal, ev, sid) {
 // Au blur d'une cellule de note (Type A/C), si la valeur saisie est hors barème
 // (négative ou > mn.max), on demande confirmation via confirm() bloquant. Si
 // l'utilisateur refuse, on restaure la valeur précédente (capturée au focus).
+// Au commit (blur, déclenché aussi par Tab/Enter qui appellent focus() sur la
+// cellule suivante) : si la saisie ressemble à une expression arithmétique
+// (« 1+2+4 », « 0,5*3 », « (2+3)/2 »…), on remplace le texte de la cellule par
+// le résultat calculé puis on rejoue le pipeline standard pour persister la
+// valeur, recolorer, mettre à jour total + stats. Si l'expression est invalide
+// on prévient par un toast non bloquant sans rien écraser.
+function _evalTableurMaybeApplyExpr(inputEl) {
+  if (!inputEl) return false;
+  const raw = (inputEl.value || '').trim();
+  if (!raw || !_hasArithOperator(raw)) return false;
+  const v = _evalArithExpr(raw);
+  if (v == null) {
+    toast('⚠ Expression invalide : ' + raw);
+    return false;
+  }
+  inputEl.value = _fmtNote(v);
+  _evalTableurUpdate(inputEl);
+  return true;
+}
+
 function _evalTableurConfirmIfOutOfRange(inputEl) {
   if (!inputEl) return;
+  // Étape 1 — mini-calculatrice (si la cellule contient un opérateur)
+  _evalTableurMaybeApplyExpr(inputEl);
+  // Étape 2 — détection hors barème sur la valeur finale
   const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
   const parsed = _parseMiniNoteInput(inputEl.value);
   const outOfRange = (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax));
