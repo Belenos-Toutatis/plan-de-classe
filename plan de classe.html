@@ -3600,6 +3600,8 @@ kbd {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <h2 id="meval-export-title" style="margin:0">💾 Export ENT</h2>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label id="meval-export-class-label" style="font-size:.85em;color:var(--pencil);display:none">Classe :</label>
+        <select id="meval-export-class" onchange="_evalExportRender()" style="padding:4px 8px;font-size:.88em;display:none"></select>
         <label style="font-size:.85em;color:var(--pencil)">Tri :</label>
         <select id="meval-export-sort" onchange="_evalExportRender()" style="padding:4px 8px;font-size:.88em"></select>
         <button class="btn btn-g btn-sm" onclick="_evalExportCopyAll()" title="Copie tout le tableau (TSV) au presse-papier">📋 Copier tout</button>
@@ -32885,10 +32887,26 @@ function _evalExportOpen() {
   if (!ev) return;
   document.getElementById('meval-export-evalid').value = evalId;
   document.getElementById('meval-export-title').textContent = `💾 Export ENT — ${ev.nomCourt}${ev.nomLong ? ' · ' + ev.nomLong : ''}`;
+  // Peuple le sélecteur de classe (uniquement si l'éval couvre plusieurs classes vivantes)
+  const classSel = document.getElementById('meval-export-class');
+  const classLbl = document.getElementById('meval-export-class-label');
+  const aliveCids = _evalClassIds(ev).filter(cid => S.classes?.[cid]);
+  const defaultCid = (S.cur && aliveCids.includes(S.cur)) ? S.cur : _evalPrimaryAliveClassId(ev);
+  if (aliveCids.length > 1) {
+    classSel.innerHTML = aliveCids.map(cid => `<option value="${_esc(cid)}">${_esc(S.classes[cid].nom || '?')}</option>`).join('');
+    classSel.value = defaultCid;
+    classSel.style.display = '';
+    classLbl.style.display = '';
+  } else {
+    classSel.innerHTML = `<option value="${_esc(defaultCid)}">${_esc(S.classes?.[defaultCid]?.nom || '?')}</option>`;
+    classSel.value = defaultCid;
+    classSel.style.display = 'none';
+    classLbl.style.display = 'none';
+  }
   // Peuple le sélecteur de tri (idem tableur)
   const sortSel = document.getElementById('meval-export-sort');
   sortSel.innerHTML = '<option value="nom-prenom">Nom Prénom (défaut ENT)</option><option value="prenom-nom">Prénom Nom</option>';
-  const cls = S.classes?.[_evalPrimaryAliveClassId(ev)];
+  const cls = S.classes?.[defaultCid];
   const salle = cls ? S.salles?.[cls.activeRoom] : null;
   for (const p of (salle?.collectPatterns || [])) {
     const opt = document.createElement('option');
@@ -32957,7 +32975,12 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
 
 // Construit les données de l'export sous forme d'un tableau de lignes [{ name, note, comps:[{cid, level}], remarque }]
 function _evalExportBuildRows(ev) {
-  const cls = S.classes?.[_evalPrimaryAliveClassId(ev)];
+  const classSel = document.getElementById('meval-export-class');
+  const selCid = classSel?.value;
+  const cid = (selCid && _evalIncludesClass(ev, selCid) && S.classes?.[selCid])
+    ? selCid
+    : _evalPrimaryAliveClassId(ev);
+  const cls = S.classes?.[cid];
   if (!cls) return { rows: [], comps: [] };
   const sortSel = document.getElementById('meval-export-sort');
   const sortMode = sortSel?.value || 'nom-prenom';
