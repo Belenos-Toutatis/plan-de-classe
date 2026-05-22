@@ -4939,7 +4939,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-22T20:30:00Z';
+const APP_VERSION   = '2026-05-22T21:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -28100,6 +28100,67 @@ function _evalTableurKey(e, inputEl) {
   const target = document.querySelector(`#meval-tableur-tbl input[data-ri="${targetRi}"][data-ci="${targetCi}"]`);
   if (target) { target.focus(); target.select(); }
 }
+
+// Ramène un input du tableur (Type A/B/C) dans la zone réellement visible du conteneur
+// de scroll, en compensant la hauteur du <thead> sticky (en haut) et du <tfoot> sticky
+// (en bas), ainsi que la colonne « Élève » sticky-left. Sans ça, un clic ou une
+// navigation Tab/Enter/Flèches vers une ligne située au ras du haut/bas peut laisser
+// la cellule cachée derrière l'en-tête figé : le curseur clignote dans le vide.
+function _evalTableurEnsureInputVisible(inputEl) {
+  const wrap = document.getElementById('meval-tableur-wrap');
+  if (!wrap || !inputEl) return;
+  // On limite l'effet aux inputs/selects situés dans le <tbody> ou <tfoot> du tableur.
+  // Les contrôles du <thead> (date, code, max…) ne doivent pas déclencher de scroll.
+  if (!inputEl.closest('#meval-tableur-tbl tbody, #meval-tableur-tbl tfoot')) return;
+  const table = inputEl.closest('table#meval-tableur-tbl');
+  if (!table) return;
+  const theadH = table.tHead ? table.tHead.getBoundingClientRect().height : 0;
+  const tfootH = table.tFoot ? table.tFoot.getBoundingClientRect().height : 0;
+  // Largeur de la colonne sticky-left (cellule « Élève » de la même ligne).
+  const row = inputEl.closest('tr');
+  let leftW = 0;
+  if (row) {
+    const sticky = row.querySelector('td[style*="position:sticky"], th[style*="position:sticky"]');
+    if (sticky) leftW = sticky.getBoundingClientRect().width;
+  }
+  const wrapRect = wrap.getBoundingClientRect();
+  const inpRect  = inputEl.getBoundingClientRect();
+  const PAD = 4;
+  // Vertical : décale le scroll si la cellule est masquée par le thead/tfoot sticky.
+  const topCovered = wrapRect.top + theadH;
+  const botCovered = wrapRect.bottom - tfootH;
+  if (inpRect.top < topCovered + PAD) {
+    wrap.scrollTop -= (topCovered + PAD - inpRect.top);
+  } else if (inpRect.bottom > botCovered - PAD) {
+    wrap.scrollTop += (inpRect.bottom - (botCovered - PAD));
+  }
+  // Horizontal : pareil pour la colonne « Élève » sticky-left (et le bord droit).
+  const leftCovered = wrapRect.left + leftW;
+  if (inpRect.left < leftCovered + PAD) {
+    wrap.scrollLeft -= (leftCovered + PAD - inpRect.left);
+  } else if (inpRect.right > wrapRect.right - PAD) {
+    wrap.scrollLeft += (inpRect.right - (wrapRect.right - PAD));
+  }
+}
+
+// Listener délégué installé une seule fois sur le conteneur de scroll du tableur :
+// la div #meval-tableur-wrap est créée en HTML statique et son innerHTML est
+// remplacé à chaque render, donc un listener posé dessus survit aux rerenders.
+(function _installTableurScrollFix() {
+  function install() {
+    const wrap = document.getElementById('meval-tableur-wrap');
+    if (!wrap || wrap.dataset.scrollFixInstalled === '1') return;
+    wrap.dataset.scrollFixInstalled = '1';
+    wrap.addEventListener('focusin', (e) => {
+      const t = e.target;
+      if (!t) return;
+      if (t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') return;
+      _evalTableurEnsureInputVisible(t);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
+  else install();
+})();
 
 // ═══════════════ BILAN COMPÉTENCES (Type B & C) ═══════════════
 
