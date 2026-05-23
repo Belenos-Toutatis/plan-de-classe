@@ -2801,6 +2801,31 @@ kbd {
 </div>
 
 <!-- Historique des incidents -->
+<!-- Rendre les notes : vue épurée projetable / imprimable pour distribuer les résultats -->
+<div id="mrendu" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <h2 id="mrendu-title" style="margin:0">👀 Rendre les notes</h2>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-g btn-sm" onclick="_renduPrint()" title="Imprimer cette vue épurée">🖨 Imprimer</button>
+        <button class="btn btn-g" onclick="closeMod2('mrendu')">Fermer</button>
+      </div>
+    </div>
+    <p id="mrendu-sub" style="margin:0 0 8px;color:var(--pencil);font-size:.85em"></p>
+    <input type="hidden" id="mrendu-evalid">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:.85em">
+      <span style="color:var(--pencil);font-weight:600">Colonnes affichées :</span>
+      <div id="mrendu-cols" style="display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:200px"></div>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-g btn-sm" onclick="_renduToggleAll(true)" style="padding:2px 8px;font-size:.85em">☑ Tout</button>
+        <button class="btn btn-g btn-sm" onclick="_renduToggleAll(false)" style="padding:2px 8px;font-size:.85em">☐ Aucune</button>
+      </div>
+    </div>
+    <div id="mrendu-body" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
+    <p style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Imprime pour distribuer une copie papier, ou projette tel quel en classe.</p>
+  </div>
+</div>
+
 <!-- Détail du calcul d'une note (clic sur ligne dans Historique → Notes) -->
 <div id="mnotedet" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:720px;width:100%;max-height:88vh;overflow-y:auto">
@@ -4228,6 +4253,7 @@ kbd {
         <button class="btn btn-g btn-sm" id="meval-tableur-qcmcam-btn" onclick="_evalQcmcamOpen()" title="📂 Importer un fichier CSV exporté de qcmcam.net (matching par prénom)" aria-label="Importer CSV QCMcam" style="display:none;padding:4px 6px">📂</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="📋 Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">📋</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="💾 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px">💾</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Rendre les notes : vue épurée projetable / imprimable" aria-label="Rendre les notes" style="padding:4px 6px">👀</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
       </div>
     </div>
@@ -5075,7 +5101,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T17:30:00Z';
+const APP_VERSION   = '2026-05-23T18:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11761,6 +11787,211 @@ function renderHistNotes(stu) {
       <span style="min-width:60px;text-align:right">${note20Cell}</span>
     </div>`;
   }).join('');
+}
+
+// ═══════════════ « Rendre les notes » — vue épurée projetable / imprimable ═══════════════
+// État de sélection des colonnes (clé éval → Set de keys cochées) — éphémère en mémoire,
+// reset à chaque ouverture pour repartir d'une valeur par défaut sensée.
+let _renduState = { evalId: null, classId: null, checked: new Set() };
+
+// Enumère les colonnes disponibles pour une éval donnée. Renvoie [{ key, label, kind, ... }]
+function _renduListCols(ev) {
+  const cols = [];
+  if (!ev) return cols;
+  if (ev.type === 'B') {
+    const sortedPass = (ev.passations || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    for (const p of sortedPass) {
+      for (const cid of (p.competenceIds || [])) {
+        const c = S.competences?.[cid];
+        cols.push({ key: `pass:${p.id}:${cid}`, label: `${p.code || '?'} · ${c?.code || cid}`, kind: 'pass-comp', passId: p.id, cid });
+      }
+    }
+  } else {
+    // Type A / C : mini-notes
+    for (const mn of (ev.miniNotes || [])) {
+      cols.push({ key: `mn:${mn.id}`, label: mn.label || '?', kind: 'mn', mnId: mn.id, max: mn.max });
+    }
+    // Type C : Σ exercice
+    if (ev.type === 'C' && Array.isArray(ev.exercices)) {
+      for (const e of ev.exercices) {
+        cols.push({ key: `exo:${e.id}`, label: `Σ ${e.label || '?'}`, kind: 'exo-sum', exoId: e.id });
+      }
+    }
+  }
+  // Note finale /noteMax et /20
+  cols.push({ key: 'noteMax', label: `Note /${ev.noteMax || 20}`, kind: 'note-max' });
+  cols.push({ key: 'note20',  label: 'Note /20',                  kind: 'note-20' });
+  // Compétences évaluées (toutes types)
+  const evalComps = _evalListEvaluatedCompetences(ev, 'code');
+  for (const c of evalComps) {
+    cols.push({ key: `comp:${c.id}`, label: `🧩 ${c.code}`, kind: 'comp', cid: c.id, name: c.name });
+  }
+  cols.push({ key: 'remarque', label: '📝 Remarque', kind: 'remarque' });
+  return cols;
+}
+
+function _evalOpenRendu(evalId) {
+  const ev = S.evaluations?.[evalId];
+  if (!ev) { toast('⚠ Évaluation introuvable', 'warn'); return; }
+  document.getElementById('mrendu-evalid').value = evalId;
+  // Détermine la classe active : si appelé depuis le tableur, lit son select de classe,
+  // sinon prend S.cur si l'éval la couvre, sinon la première classe vivante.
+  const tableurCid = (document.getElementById('meval-tableur-classpicker')?.querySelector('input[type="radio"]:checked')?.value) || null;
+  const cid = (tableurCid && _evalIncludesClass(ev, tableurCid)) ? tableurCid
+            : (S.cur && _evalIncludesClass(ev, S.cur)) ? S.cur
+            : _evalPrimaryAliveClassId(ev);
+  _renduState.evalId  = evalId;
+  _renduState.classId = cid;
+  // Sélection par défaut : Note /20 + Remarque + compétences (si présentes)
+  _renduState.checked = new Set(['note20', 'remarque']);
+  for (const c of _renduListCols(ev)) {
+    if (c.kind === 'comp') _renduState.checked.add(c.key);
+  }
+  // Titre + sous-titre
+  document.getElementById('mrendu-title').textContent = `👀 Rendre les notes — ${ev.nomCourt || '?'}`;
+  const cls = S.classes?.[cid];
+  const dateLbl = (() => { const d = _evalDateFor(ev, cid); return d ? _fmtDateFr(d) : ''; })();
+  document.getElementById('mrendu-sub').textContent =
+    `${cls?.nom || '?'}${ev.nomLong ? ' · ' + ev.nomLong : ''}${dateLbl ? ' · 📅 ' + dateLbl : ''} · Type ${ev.type} · /${ev.noteMax ?? 20}`;
+  _renduRender();
+  openMod('mrendu');
+}
+
+function _renduToggle(key) {
+  if (_renduState.checked.has(key)) _renduState.checked.delete(key);
+  else _renduState.checked.add(key);
+  _renduRender();
+}
+function _renduToggleAll(on) {
+  const ev = S.evaluations?.[_renduState.evalId];
+  if (!ev) return;
+  if (on) _renduState.checked = new Set(_renduListCols(ev).map(c => c.key));
+  else    _renduState.checked = new Set();
+  _renduRender();
+}
+
+function _renduRender() {
+  const ev = S.evaluations?.[_renduState.evalId];
+  const cls = S.classes?.[_renduState.classId];
+  if (!ev || !cls) return;
+  const cols = _renduListCols(ev);
+  // Chips colonnes
+  const wrap = document.getElementById('mrendu-cols');
+  wrap.innerHTML = cols.map(c => {
+    const on = _renduState.checked.has(c.key);
+    return `<button class="chip ${on ? 'on' : ''}" onclick="_renduToggle('${_esc(c.key)}')" style="padding:2px 9px;border-radius:11px;border:1px solid var(--rule-line);cursor:pointer;background:${on ? 'var(--ink-blue)' : 'var(--paper-warm)'};color:${on ? '#fff' : 'var(--ink-deep)'};font-size:.82em;font-family:var(--font-mono)">${_esc(c.label)}</button>`;
+  }).join('');
+  // Tableau
+  const selCols = cols.filter(c => _renduState.checked.has(c.key));
+  const body = document.getElementById('mrendu-body');
+  // Élèves présents à la date de l'éval pour la classe
+  const refDate = _evalDateFor(ev, cls.id) || todayKey();
+  const sids = (cls.eleves || [])
+    .filter(sid => _stuActiveOn(S.eleves[sid], refDate))
+    .sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+      const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
+  if (sids.length === 0) {
+    body.innerHTML = '<p style="padding:14px;color:var(--pencil);font-style:italic">Aucun élève à afficher pour cette éval / classe.</p>';
+    return;
+  }
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  // Header
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:.92em" class="rendu-tbl">';
+  html += '<thead><tr>';
+  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:left;font-family:var(--font-serif)">Élève</th>`;
+  for (const c of selCols) {
+    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:center;font-family:var(--font-mono);font-size:.82em">${_esc(c.label)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    if (!stu) continue;
+    html += `<tr>`;
+    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);font-family:var(--font-serif);white-space:nowrap"><strong>${_esc((stu.nom || '').toUpperCase())}</strong> ${_esc(stu.prenom || '')}</td>`;
+    for (const c of selCols) {
+      let cellHtml = '';
+      let cellStyle = 'padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.88em';
+      if (c.kind === 'mn') {
+        const v = ev.notes?.[sid]?.values?.[c.mnId];
+        if (v === 'A') cellHtml = 'A';
+        else if (v === 'NN') cellHtml = 'NN';
+        else if (v == null || v === '') cellHtml = '—';
+        else cellHtml = `${String(v).replace('.', ',')} <span style="color:var(--pencil);font-size:.78em">/${c.max}</span>`;
+      } else if (c.kind === 'exo-sum') {
+        const sum = _computeStudentExoSum(ev, sid, c.exoId);
+        const exo = ev.exercices?.find(e => e.id === c.exoId);
+        const max = (ev.miniNotes || []).filter(m => m.exerciceId === c.exoId).reduce((s, m) => s + (m.max || 0), 0);
+        cellHtml = (sum == null) ? '—' : `${_fmtNote(sum)} <span style="color:var(--pencil);font-size:.78em">/${max}</span>`;
+      } else if (c.kind === 'pass-comp') {
+        const pass = ev.passations?.find(p => p.id === c.passId);
+        const niv  = pass?.niveaux?.[sid]?.[c.cid];
+        if (niv === 'A') cellHtml = 'A';
+        else if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
+          const bg = colors[niv - 1] || '';
+          // pass-comp = niveau ponctuel — on peut le considérer comme "compétence" donc on garde la couleur
+          cellStyle += `;background:${bg};color:${_contrastTextColor(bg)};font-weight:700`;
+          cellHtml = _formatNiveau(niv);
+        } else cellHtml = '—';
+      } else if (c.kind === 'note-max') {
+        const n = _computeStudentEvalNote(ev, sid);
+        cellHtml = (n == null) ? '—' : _fmtNote(n);
+      } else if (c.kind === 'note-20') {
+        const n20 = _evalNoteSur20Rounded(ev, sid);
+        cellHtml = (n20 == null) ? '—' : `<strong>${_fmtNote(n20)}</strong>`;
+      } else if (c.kind === 'comp') {
+        const niv = _evalStudentLevelForComp(ev, sid, c.cid);
+        if (niv == null) cellHtml = '—';
+        else {
+          const lvlInt = Math.max(1, Math.min(4, Math.round(niv)));
+          const bg = colors[lvlInt - 1] || '';
+          cellStyle += `;background:${bg};color:${_contrastTextColor(bg)};font-weight:700`;
+          cellHtml = _formatNiveau(lvlInt);
+        }
+      } else if (c.kind === 'remarque') {
+        const r = (ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '').toString();
+        cellStyle = 'padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:left;font-family:var(--font-sans);font-size:.85em;font-style:italic';
+        cellHtml = _esc(r);
+      }
+      html += `<td style="${cellStyle}">${cellHtml}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+// Impression : isole #mrendu-body et applique un style d'impression léger.
+function _renduPrint() {
+  const body = document.getElementById('mrendu-body');
+  if (!body) return;
+  const title = document.getElementById('mrendu-title')?.textContent || 'Notes';
+  const sub   = document.getElementById('mrendu-sub')?.textContent || '';
+  // Conteneur d'impression dédié — supprimé après window.print()
+  const oldAreaId = '__renduPrintArea__';
+  document.getElementById(oldAreaId)?.remove();
+  const printArea = document.createElement('div');
+  printArea.id = oldAreaId;
+  printArea.innerHTML = `<h2 style="margin:0 0 4px;font-family:Georgia,serif">${_esc(title)}</h2><p style="margin:0 0 12px;color:#555;font-size:.85em">${_esc(sub)}</p>${body.innerHTML}`;
+  const style = document.createElement('style');
+  style.id = '__renduPrintStyle__';
+  style.textContent = `@page { size: A4 landscape; margin: 12mm; }
+    @media print {
+      body > * { display: none !important; }
+      body > #${oldAreaId} { display: block !important; }
+      table.rendu-tbl { width: 100%; border-collapse: collapse; font-size: 11pt; }
+      table.rendu-tbl th, table.rendu-tbl td { border: 1px solid #888; padding: 3px 6px; }
+      table.rendu-tbl th { background: #eee !important; }
+    }`;
+  document.head.appendChild(style);
+  document.body.appendChild(printArea);
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => { printArea.remove(); style.remove(); }, 500);
+  }, 50);
 }
 
 // Affiche le tableau qui a produit la note finale d'un élève sur une éval.
@@ -25886,6 +26117,7 @@ function renderEvalNotes() {
         ${_evalListEvaluatedCompetences(ev, 'code').length > 0 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenBilanCompsForEval('${_esc(ev.id)}')" title="Bilan compétences : niveau atteint par élève sur chaque compétence évaluée">📊</button>` : ''}
         ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🔀</button>` : ''}
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV">💾</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Rendre les notes : vue épurée (sans couleurs sauf compétences) à projeter ou imprimer">👀</button>
         <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">✕</button>
       </div>
     </div>`;
@@ -27722,6 +27954,13 @@ function _evalOpenExportFromTableur() {
   const id = document.getElementById('meval-tableur-evalid')?.value;
   if (!id) { toast('⚠ Évaluation introuvable', 'warn'); return; }
   _evalOpenExportFor(id);
+}
+
+// Ouvre Rendre les notes depuis la toolbar du tableur.
+function _evalOpenRenduFromTableur() {
+  const id = document.getElementById('meval-tableur-evalid')?.value;
+  if (!id) { toast('⚠ Évaluation introuvable', 'warn'); return; }
+  _evalOpenRendu(id);
 }
 
 function _evalOpenExportFor(evalId) {
