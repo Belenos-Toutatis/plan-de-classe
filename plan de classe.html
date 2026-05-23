@@ -5075,7 +5075,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T17:15:00Z';
+const APP_VERSION   = '2026-05-23T17:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11830,9 +11830,14 @@ function _evalShowNoteDetail(evalId, sid) {
     const values   = ev.notes?.[sid]?.values || {};
     const comments = ev.notes?.[sid]?.comments || {};
     const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+    // Type A : 1 colonne date par mini-note (Type C : la date de l'éval suffit
+    // — toutes les questions sont passées le jour du devoir).
+    const showMnDate = (ev.type === 'A');
     html += `<table style="width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>`;
     if (isTypeC) html += `<th style="${hdr}">Exercice</th>`;
-    html += `<th style="${hdr}">Question</th><th style="${hdr};text-align:center">Barème</th><th style="${hdr};text-align:center">Saisi</th><th style="${hdr};text-align:center">Effectif</th><th style="${hdr}">Commentaires</th></tr></thead><tbody>`;
+    html += `<th style="${hdr}">Question</th>`;
+    if (showMnDate) html += `<th style="${hdr};text-align:center">Date</th>`;
+    html += `<th style="${hdr};text-align:center">Barème</th><th style="${hdr};text-align:center">Saisi</th><th style="${hdr};text-align:center">Effectif</th><th style="${hdr}">Commentaires</th></tr></thead><tbody>`;
     let sumVal = 0, sumMax = 0, hasAny = false;
     const exoSums = {}; // exoSums[exoId] = {got, max}
     let curExoId = null;
@@ -11869,7 +11874,13 @@ function _evalShowNoteDetail(evalId, sid) {
       }
       const com = (comments[mn.id] || []).filter(Boolean);
       const comCell = com.length ? `<span title="${_escAttr(com.join(' · '))}">💬 ${com.length}</span>` : '';
-      html += `<tr>${exoCell}<td style="${cellTxt}"><strong>${_esc(mn.label || '?')}</strong></td><td style="${cellNum};color:var(--pencil)">/${mn.max}</td><td style="${cellNum}">${saisiCell}</td><td style="${cellNum}">${effCell}</td><td style="${cellTxt};color:var(--pencil);font-size:.85em">${comCell}</td></tr>`;
+      // Date Type A : par mn, sinon date globale de l'éval pour la classe
+      let dateCell = '';
+      if (showMnDate) {
+        const mnDate = _mnDateFor(mn, stu.classe_id) || _evalDateFor(ev, stu.classe_id) || '';
+        dateCell = `<td style="${cellNum};color:var(--pencil);font-size:.85em">${mnDate ? _fmtDateFr(mnDate) : '—'}</td>`;
+      }
+      html += `<tr>${exoCell}<td style="${cellTxt}"><strong>${_esc(mn.label || '?')}</strong></td>${dateCell}<td style="${cellNum};color:var(--pencil)">/${mn.max}</td><td style="${cellNum}">${saisiCell}</td><td style="${cellNum}">${effCell}</td><td style="${cellTxt};color:var(--pencil);font-size:.85em">${comCell}</td></tr>`;
     }
     html += '</tbody>';
     // Footer : sous-totaux exos (Type C) + total
