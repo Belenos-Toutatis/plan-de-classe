@@ -5101,7 +5101,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T18:20:00Z';
+const APP_VERSION   = '2026-05-23T18:35:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -18584,6 +18584,25 @@ function todayKey() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// Renvoie true si l'élève a au moins une saisie (note numérique, A ou NN) sur
+// au moins une éval comptée de la classe + période donnée. Sert à inclure dans
+// les bilans les élèves partis qui ont laissé une trace dans la période, même
+// s'ils ne sont plus présents en fin de période.
+function _stuHasAnyNoteInPeriod(sid, classId, periode) {
+  if (!sid) return false;
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!_evalIncludesClass(ev, classId)) continue;
+    if (periode && ev.periode !== periode) continue;
+    if (ev.countsForMean === false) continue;
+    if (_computeStudentEvalNote(ev, sid) != null) return true;
+    const reason = (typeof _studentNoteAbsenceReason === 'function')
+      ? _studentNoteAbsenceReason(ev, sid)
+      : null;
+    if (reason === 'A' || reason === 'NN') return true;
+  }
+  return false;
+}
+
 // ── Arrivées/départs d'élèves en cours d'année ──────────────────────────────
 // Renvoie true si l'élève est actif (présent) à la date `ymd` (YYYY-MM-DD).
 // Conventions :
@@ -29515,13 +29534,15 @@ function _bilanCrossTabBuild() {
     const cls = S.classes?.[cid];
     if (!cls) continue;
     const byCiv = { F: [], M: [], total: [] };
-    // Date de référence : pour un devoir précis, on prend SA date (présence à
-    // la date du devoir). Pour la moyenne période, fin de période (présents en
-    // fin de période — convention « bulletin »).
+    // Date de référence : pour un devoir précis, présence à la date du devoir.
+    // Pour la moyenne période, présents en fin de période OU partis mais ayant
+    // au moins une note dans la période.
     const _refDate = ev ? (_evalDateFor(ev, cid) || todayKey()) : _periodEndDate(periode || '');
     for (const sid of (cls.eleves || [])) {
       const stu = S.eleves[sid];
-      if (!_stuActiveOn(stu, _refDate)) continue;
+      const _activeRef  = _stuActiveOn(stu, _refDate);
+      const _hasNoteRef = !ev && _stuHasAnyNoteInPeriod(sid, cid, periode);
+      if (!_activeRef && !_hasNoteRef) continue;
       let note;
       if (ev) {
         // Note /20 arrondie à la granulométrie de l'éval — cohérence avec
@@ -32917,12 +32938,13 @@ function renderBilanTab() {
     return;
   }
 
-  // Tri élèves alpha nom-prénom + filtre arrivées/départs : on n'affiche que
-  // les élèves présents à la fin de la période sélectionnée (S1 / S2 / T... ou
-  // fin d'année scolaire en mode Toutes). C'est la liste « bulletin » naturelle.
+  // Élèves affichés : présents à la fin de la période OU partis mais ayant
+  // laissé au moins une note dans la période (un élève parti en cours de
+  // semestre figure quand même au bilan du semestre).
   const _bilanRefDate = _periodEndDate(periode || '');
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _bilanRefDate))
+    .filter(sid => _stuActiveOn(S.eleves[sid], _bilanRefDate)
+                 || _stuHasAnyNoteInPeriod(sid, cls.id, periode))
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
@@ -33411,10 +33433,12 @@ function _bilanBuildRows() {
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
     .sort((a, b) => (_evalDateFor(a, cls.id) || '').localeCompare(_evalDateFor(b, cls.id) || ''));
-  // Même filtre arrivées/départs que le rendu visuel : présents en fin de période.
+  // Même filtre que le rendu visuel : présents en fin de période OU partis
+  // mais ayant des notes dans la période.
   const _refDate = _periodEndDate(periode || '');
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _refDate))
+    .filter(sid => _stuActiveOn(S.eleves[sid], _refDate)
+                 || _stuHasAnyNoteInPeriod(sid, cls.id, periode))
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       return ((sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase())
@@ -34095,11 +34119,12 @@ function renderCompetencesTab() {
       };
     });
   }
-  // Tri élèves alpha nom-prénom + filtre arrivées/départs : présents en fin
-  // de période (cohérent avec le Bilan des notes — convention « bulletin »).
+  // Élèves affichés : présents en fin de période OU partis mais ayant laissé
+  // au moins une saisie dans la période (cohérent avec le Bilan des notes).
   const _compRefDate = _periodEndDate(periode || '');
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _compRefDate))
+    .filter(sid => _stuActiveOn(S.eleves[sid], _compRefDate)
+                 || _stuHasAnyNoteInPeriod(sid, cls.id, periode))
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();

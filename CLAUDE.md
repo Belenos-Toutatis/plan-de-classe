@@ -260,6 +260,7 @@ Migration auto dans `postLoadHook` (les anciens enregistrements reçoivent `null
 
 ### Helpers
 - **`_stuActiveOn(stu, ymd?)`** — `true` si l'élève est actif à la date donnée (défaut : aujourd'hui). Règle : actif ssi `arrivalDate <= ymd < departureDate` (champs `null` = absence de borne). Placé juste après `todayKey()`.
+- **`_stuHasAnyNoteInPeriod(sid, classId, periode)`** — `true` si l'élève a au moins une saisie (note numérique, A ou NN) sur ≥ 1 éval comptée de la classe + période. Permet aux bilans d'inclure les élèves partis qui ont laissé des notes dans la période (un élève parti en cours de S1 figure quand même au bilan S1).
 - **`_periodEndDate(periode)`** — renvoie la date de fin (YYYY-MM-DD) de la période donnée pour l'année scolaire courante. Semestre : S1 → 31/01, S2 → 31/08. Trimestre : T1 → 30/11, T2 → dernier jour de février (gère bissextiles via `new Date(y, 2, 0)`), T3 → 31/08. Période vide (« Toutes ») → fin d'année scolaire (31/08). Logique calquée sur `_currentPeriode` (année scolaire = septembre courant → août suivant).
 
 ### Édition
@@ -272,7 +273,7 @@ Migration auto dans `postLoadHook` (les anciens enregistrements reçoivent `null
 - **Compteur `tg-count`** (Plan Prof) : `inFilter` filtré par `_stuActiveOn` → les inactifs ne sont ni placés ni à placer.
 - **Onglet Élèves** (`renderStudents`) : ligne italique + opacity 0,55 + badge `📅 DD/MM/YYYY` (futur) ou `🚪 DD/MM/YYYY` (parti).
 - **Tableur d'évaluation** (`_evalTableurSortedSids`, fiche `_evalOpenSaisie`) : `refDate = _evalDateFor(ev, cls.id) || todayKey()`. Un élève arrivé après ou parti avant la date de l'éval n'apparaît pas dans le tableur — cohérent avec « il n'était pas là ce jour-là ».
-- **Bilan des notes** (`renderBilanTab`, `_bilanBuildRows`, `_bilanCrossTabBuild`) : `refDate = _periodEndDate(periode)`. On affiche les élèves présents en fin de période sélectionnée (S1, S2, T…) — convention « bulletin ». En mode Toutes, réf = fin d'année (31/08).
+- **Bilan des notes** (`renderBilanTab`, `_bilanBuildRows`, `_bilanCrossTabBuild`) : élève affiché ssi `_stuActiveOn(stu, _periodEndDate(periode))` **OU** `_stuHasAnyNoteInPeriod(sid, cls.id, periode)`. Conséquence : un élève parti en cours de période figure quand même au bilan s'il a laissé des notes (sinon il disparaît). En mode Toutes, réf = fin d'année (31/08).
 - **Bilan des compétences** (`renderCompetencesTab`) : même filtre que le Bilan des notes.
 
 ### Hors scope (volontairement non filtré)
