@@ -101,13 +101,13 @@ La nav `#nav` est structurée en **deux groupes** séparés par un filet vertica
 
 ### Groupe 2 — "Évaluations" (3 onglets actifs)
 1. **📊 Devoirs** (`tab-notes`) — création/édition d'évaluations Type A (mini-notes /20), Type B (compétences par passations), Type C (sommative avec exercices). Saisie en tableur ou en fiche par élève. Multi-classes. Tableau d'évaluations avec stats.
-2. **🎯 Bilan par compétences** (`tab-comp`) — vue transverse classe : niveau moyen par élève sur chaque compétence évaluée. Sticky header + remarque classe et éléments travaillés synchronisés avec l'onglet Bilan des évaluations.
-3. **📜 Bilan des évaluations** (`tab-bilan`) — agrégation période : moyenne /20 par élève, rang, remarque bulletin (par élève × période). Sticky thead/tfoot via `position:sticky` dans `.bilan-table-scroll` (max-height calc(100vh - 220px)), masquage individuel de colonnes (Moy/Rang/Rem) en multi-période via `_bilanHiddenCols` (Set mémoire seule), paste multi-lignes depuis tableur (`_onBilanRemarquePaste`).
+2. **🎯 Bilan des compétences** (`tab-comp`, ex « Bilan par compétences ») — vue transverse classe : niveau moyen par élève sur chaque compétence évaluée. Sticky header + remarque classe et éléments travaillés synchronisés avec l'onglet Bilan des notes.
+3. **📜 Bilan des notes** (`tab-bilan`, ex « Bilan des évaluations ») — agrégation période : moyenne /20 par élève, rang, remarque bulletin (par élève × période). Sticky thead/tfoot via `position:sticky` dans `.bilan-table-scroll` (max-height calc(100vh - 220px)), masquage individuel de colonnes (Moy/Rang/Rem) en multi-période via `_bilanHiddenCols` (Set mémoire seule), paste multi-lignes depuis tableur (`_onBilanRemarquePaste`). Bouton **🔀 Comparer classes** : ouvre la modale `mbilan-crosstab` (tableau croisé classes × civilité — moy · σ · médiane — sur la période entière ou un sous-ensemble d'évals).
 
 Le label porte une infobulle *« Volet fonctionnel mais encore en cours de finalisation »* — les types A/B/C de saisie + les deux vues d'agrégation sont opérationnels. **Type D (sommative par compétence sans questions intermédiaires) à venir.**
 
 ### Bulletin — remarques et éléments travaillés
-- **`S.bulletinRemarques[classId][sid][periode] = "texte"`** : brouillon de remarque bulletin par (élève × période). Partagé entre Bilan par compétences et Bilan des évaluations.
+- **`S.bulletinRemarques[classId][sid][periode] = "texte"`** : brouillon de remarque bulletin par (élève × période). Partagé entre Bilan des compétences et Bilan des notes.
 - **`S.bulletinClassRemarques[classId][periode] = "texte"`** : remarque générale classe par période. Synchronisée entre les 2 onglets bilan via `_renderBilanBottomSection`.
 - **`S.bulletinWorkedItems[classId][periode] = [item1, item2, …]`** : liste des éléments travaillés sur la période. Synchronisée idem.
 
@@ -1303,7 +1303,7 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 
 À ✓ Créer → bascule directement sur le tableur (ouvre Structure si la mini-note/passation initiale manque, puis revient au tableur via `_modalReturnTo['meval-structure']`). Le bouton ⚙ dans la toolbar du tableur permet d'ajuster les options avancées plus tard.
 
-### Bilan des évaluations — toolbar et colonnes
+### Bilan des notes — toolbar et colonnes
 
 - **Pastille type** (`A`/`B`/`C`) dans chaque en-tête de colonne d'éval (classe `eval-type-badge`).
 - **Clic gauche** sur l'en-tête de colonne ouvre la saisie en mode tableur (au lieu d'un clic droit). Tooltip de survol : type + nom + nom long + date + /noteMax + mention facultative + descriptif. Aucune mention « clic droit pour ouvrir ».
@@ -1313,7 +1313,36 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
   - **Cellules non comptées** pour un élève : fond hachuré gris léger superposé à la couleur de barème. Tooltip : `★ Facultative — NON comptée pour cet élève (mode : X)`. Calcul via `_computeStudentFacultativeCounted(classId, sid, periode)` qui miroie la logique de moyenne pour tracker les facultatives effectivement comptées.
 - **Colonne 🎓 Conseil** (par période) à droite de Remarque : 4 boutons-pastilles `F` (vert) · `E` (bleu) · `AT` (orange) · `AC` (rouge). F et E mutuellement exclusifs. AT et AC cumulables entre eux et avec F/E. Storage `S.conseilClasse[classId][sid][periode] = { F, E, AT, AC }`. Footer du tableau : totaux par période sous forme de pastilles. `_toggleConseilClasse` préserve la position de scroll de `.bilan-table-scroll` lors du re-render.
 
-### Bilan par compétences — toolbar
+### Comparer classes — modale `mbilan-crosstab`
+
+Accessible depuis le bouton **🔀 Comparer classes** de la toolbar du Bilan des notes. Désactivé si moins de 2 classes ont des notes pour la période courante.
+
+État local `_bilanXState = { periode, mode, classIds:Set, evalIds:Set }`. Le titre indique la période sélectionnée.
+
+- **Période** : sélecteur S1/S2 (ou T1/T2/T3) + « Toutes ». Initialisé sur la période active du bilan. Changer la période recalcule les classes éligibles et les évals éligibles, en préservant la sélection courante quand elle reste valide.
+- **Classes** : chips multi-sélection (toutes cochées par défaut, parmi `_bilanClassesWithEvals(periode)`). Boutons rapides **Tout** / **Aucune**.
+- **Périmètre** (radios) :
+  - 🎯 **Moyenne période** (défaut) — `_computeStudentMeanForPeriod(classId, sid, periode)` (mêmes règles que le tableau du bilan : coef, facultatives `improveOnly`/`bonus`/`over10`, évals diagnostiques exclues).
+  - 🎯 **Évaluations sélectionnées** — chips de la sous-liste `_bilanCollectEligibleEvals(periode, classIds)` triées par date asc + nomCourt, avec label `[type] nomCourt · date`. Helper `_computeStudentMeanForEvalSet(classId, sid, evalIdSet)` clone la logique de `_computeStudentMeanForPeriod` restreinte au sous-ensemble (toujours pondéré par coef).
+- **Tableau croisé** : ligne `Classe` + 3 colonnes `👧 Filles · 👦 Garçons · Total`. Cellule = `moy (n) · σ · méd` (helper `_evalCrossTabCellHTML` partagé avec le tableau croisé per-éval). Ligne footer **Toutes classes** = pool unique (pas moyenne des moyennes).
+- **📋 Copier** → `_bilanCrossTabCopy()` : TSV 13 colonnes (Classe + 3 stats × 4 valeurs : moy / n / σ / méd).
+
+État UI seulement — aucune mutation `S`, donc pas de `pushUndo`. Modale ne survit pas à `closeMod2`.
+
+### Tableau croisé per-éval — médiane
+
+Le tableau croisé `meval-crosstab` (accessible depuis le bouton 🔀 d'une éval multi-classes — liste Devoirs, tableur, modale Bilan compétences) affiche désormais la médiane dans chaque cellule (`moy (n) · σ · méd`). La copie TSV inclut les colonnes correspondantes (`F méd`, `M méd`, `Total méd`).
+
+### Boutons par devoir (liste Devoirs)
+
+Dans la liste `#evals-list-wrap`, chaque ligne `.bsg-row` propose : `⚙ Réglages · 📋 Dupliquer · 📊 Bilan compétences? · 🔀 Comparer classes? · 💾 Export ENT · ✕ Supprimer`.
+
+- **📊** visible si `_evalListEvaluatedCompetences(ev, 'code').length > 0` (l'éval évalue ≥ 1 compétence). Wrapper `_evalOpenBilanCompsForEval(evalId)` qui force `meval-tableur-evalid` puis appelle `_evalOpenBilanComps()`.
+- **🔀** visible si `_evalClassIds(ev)` ∩ classes vivantes ≥ 2. Wrapper `_evalOpenCrossTabForEval(evalId)` symétrique.
+
+Le sélecteur de classe (`#meval-bilan-class`) est intégré au header de la modale `meval-bilan-comps` : peuplé par `_evalOpenBilanComps()` avec les classes vivantes de l'éval, défaut `S.cur` si l'éval la couvre, sinon `_evalPrimaryAliveClassId(ev)`. Caché si éval mono-classe. `_evalTableurActiveCls(ev)` consulte ce select en priorité quand `meval-bilan-comps` est ouverte — ainsi la modale fonctionne même ouverte directement depuis la liste Devoirs sans passer par le tableur.
+
+### Bilan des compétences — toolbar
 
 - Sélecteur d'affichage : `🧩 Codes compétences` (défaut) / `🏛 Domaines du socle`. En mode domaine, 1 colonne par domaine, niveau = moyenne arithmétique des compétences évaluées du domaine. Tooltip détaillé.
 - Toggle `🎯 Arrondir aux entiers` : affiche `Math.round(niveau)` au lieu de la décimale. Pris en compte par `📋 Copier`, `💾 CSV` et `📤 Export ENT`. Préférence persistée.
@@ -1321,7 +1350,7 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 
 ### Onglets Évaluation — mode d'emploi pliable
 
-Les 3 onglets du volet Évaluation (Devoirs, Bilan évaluations, Bilan compétences) ont chacun un paragraphe descriptif en haut. Boutons :
+Les 3 onglets du volet Évaluation (Devoirs, Bilan des notes, Bilan des compétences) ont chacun un paragraphe descriptif en haut. Boutons :
 - **✕** en haut à droite du paragraphe pour le masquer.
 - **?** à gauche de Période (initialement caché) qui réapparaît quand le paragraphe est masqué, pour le ré-afficher.
 
@@ -1341,7 +1370,7 @@ Bouton « ↓ ordre normal / ↑ inversé » pour basculer dans chaque mode. Per
 
 ### Affichage compact des noms (`_compactNameMode` + `_buildAbbrMap`)
 
-Toggle global (persisté `localStorage.planClasse_compactNameMode` : `'full' | 'auto'`) qui change l'affichage des noms dans **5 tableaux d'éval** : tableur de saisie Type A/C (`_evalTableurRender`), tableur Type B (`_evalTableurRenderB`), bilan compétences popup tableur (`_evalRenderBilanComps`), Bilan des évaluations (`renderBilanTab`), Bilan par compétences (`renderCompetencesTab`).
+Toggle global (persisté `localStorage.planClasse_compactNameMode` : `'full' | 'auto'`) qui change l'affichage des noms dans **5 tableaux d'éval** : tableur de saisie Type A/C (`_evalTableurRender`), tableur Type B (`_evalTableurRenderB`), bilan compétences popup tableur (`_evalRenderBilanComps`), Bilan des notes (`renderBilanTab`), Bilan des compétences (`renderCompetencesTab`).
 
 - **`'full'`** (défaut) : `<strong>NOM</strong> Prénom`
 - **`'auto'`** : pour chaque groupe d'élèves avec le même prénom dans la classe, calcule le **plus petit k** tel que `nom[:k]` soit unique au sein du groupe. Si prénom unique → juste le prénom. Sinon → `Prénom <strong>Nn.</strong>`. Ex. 3 « Léo MARTIN / MERCIER / MARCHAND » → `Léo MART. / Léo MERC. / Léo MARC.` (k=4 minimum).
