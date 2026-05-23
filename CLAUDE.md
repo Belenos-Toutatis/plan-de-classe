@@ -281,6 +281,44 @@ Migration auto dans `postLoadHook` (les anciens enregistrements reçoivent `null
 - Attendance / appels : les enregistrements passés restent intacts (un élève parti garde ses absences historiques).
 - Évaluations existantes : la note d'un élève reste dans `ev.notes[sid].values` même si l'élève est parti après — c'est l'agrégation et l'affichage qui les masquent.
 
+## Transfert d'élève entre classes en cours d'année (évals "orphelines")
+
+Un élève transféré (via la modale Modifier → champ « Classe ») garde toutes ses notes dans `ev.notes[sid]` (indexées par sid, jamais par classe). Pour que ses notes de la classe précédente apparaissent quand même dans le bilan de la nouvelle classe, le système identifie automatiquement les **évals orphelines** : évals non rattachées à la classe courante mais où ≥ 1 élève affiché a une saisie.
+
+### Modèle complémentaire
+- `stu.previousClasses = [{classId, leftOn: 'YYYY-MM-DD'}, ...]` — log automatique ajouté par `_moveStudentToClass`. Traçabilité pure (pas utilisé par les calculs).
+
+### Helpers
+- **`_studentHasAnyDataInEval(ev, sid)`** — `true` si l'élève a une saisie (note numérique, A, NN pour A/C ; niveau ≥ 1 ou A pour B) dans l'éval, indépendamment de la classe d'attachement. Source de vérité pour détecter les orphelines.
+- **`_evalOriginClassLabel(ev, currentClassId)`** — renvoie le nom de la 1re classe encore vivante référencée par l'éval qui n'est pas la classe demandée (pour les tooltips).
+
+### Effets sur les calculs (déjà transparents)
+- `_computeStudentMeanForPeriod(classId, sid, periode)` — filtre élargi : `_evalIncludesClass(e, classId) || _studentHasAnyDataInEval(e, sid)`. La moyenne d'un élève transféré inclut donc ses notes des classes précédentes.
+- `_aggregateStudentCompetence(classId, sid, cid, periode)` — même filtre élargi pour les niveaux de compétences.
+- **Pas d'impact sur les autres élèves de la classe** : les évals orphelines n'ont aucune saisie pour eux, donc n'entrent ni dans leur moyenne ni dans leur agrégation compétence.
+
+### Effets visuels — Bilan des notes
+- Collecte des évals affichées = union (`ownEvs` + `orphanEvs`) puis tri standard. `orphanEvs` = évals non attachées avec ≥ 1 sid affiché ayant une saisie.
+- En-tête de colonne orpheline : marqueur **⤴** ambre + fond rayé léger (`repeating-linear-gradient`) + tooltip enrichi (« ⤴ Éval venant d'une autre classe : `<nom>` »).
+- Cellules pour les élèves NON concernés (pas de saisie) : `·` discret sur fond rayé ambre, tooltip *« Élève non concerné — n'était pas dans la classe pour cette évaluation »*. Distinct de A (gris uni), NN (italique) et `—` (vide hors orpheline).
+- Cellules pour l'élève transféré : rendu standard (note + couleur), mêmes tooltips que pour ses propres évals.
+
+### Effets visuels — Bilan des compétences
+- Collecte des compétences affichées = union via 2 boucles distinctes (`ownCompIds` puis ajout des compétences orphelines depuis les évals où `sidsForOrphan` a une saisie).
+- `orphanCompIds` = `compIds \ ownCompIds`. Marqueur ⤴ + fond rayé en mode `code` ; en mode `domain`, un domaine est orphelin si toutes ses compétences le sont.
+
+### Toggle « ⤴ Évals d'autres classes »
+- Bouton dans la toolbar de tri du Bilan des notes ; bandeau au-dessus du tableau du Bilan des compétences.
+- Visible uniquement si ≥ 1 orpheline potentiellement détectable (sinon le bouton ne sert à rien), OU si actuellement masqué (pour pouvoir réactiver). Le bandeau est conservé dans le Bilan des compétences même quand toutes les compétences sont orphelines et masquées (sinon l'utilisateur n'aurait pas de moyen de les réafficher).
+- Persistance `localStorage.planClasse_bilanHideOrphans` (`'1'` masque, défaut `'0'`).
+- Helper `_bilanToggleHideOrphans()` (partagé entre les 2 onglets bilan).
+
+### Hors scope volontaire
+- Tableur de saisie d'une éval : reste lié à la classe d'attachement (n'affiche pas les élèves transférés des autres classes).
+- Plan de classe, appel, attendance : aucun impact, la classe « active » reste celle de `stu.classe_id` courant.
+- Export ENT d'une éval seule : inchangé (ne liste que les élèves de la classe de l'éval).
+- Export ENT du bilan compétences / des notes : bénéficie naturellement de la moyenne enrichie (puisque `_computeStudentMeanForPeriod` inclut désormais les orphelines).
+
 ## Attributs spéciaux par élève
 - **ULIS** : élève ULIS hors inclusion dans la classe (case en transparence en Plan Prof)
 - **ULIS inclusion** : élève ULIS inclus régulièrement dans la classe
