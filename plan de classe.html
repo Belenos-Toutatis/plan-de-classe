@@ -5101,7 +5101,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T18:10:00Z';
+const APP_VERSION   = '2026-05-23T18:20:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -33192,7 +33192,17 @@ function renderBilanTab() {
           : `\n★ Facultative — NON comptée pour cet élève (mode : ${ev.facultative.mode || 'improveOnly'})`)
         : '';
       if (n == null) {
-        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${_brk}${facStyle}">—</td>`;
+        // Note non numérique : affiche A (absent) ou NN (non noté) au lieu d'un vide,
+        // selon la raison détectée par _studentNoteDisplay. Fond gris pour absent.
+        const _disp = _studentNoteDisplay(ev, sid);
+        if (_disp.kind === 'A') {
+          const _aBg = '#9ca3af';
+          html += `<td onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}background:${_aBg};color:${_contrastTextColor(_aBg)};font-weight:700;cursor:pointer" title="${_esc(ev.nomCourt)} · A — Absent\nClic = éditer la remarque élève">${_esc(_disp.text)}</td>`;
+        } else if (_disp.kind === 'NN') {
+          html += `<td onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}color:var(--pencil);font-style:italic;cursor:pointer" title="${_esc(ev.nomCourt)} · NN — Non noté\nClic = éditer la remarque élève">${_esc(_disp.text)}</td>`;
+        } else {
+          html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${_brk}${facStyle}">—</td>`;
+        }
       } else {
         evValues[k].push(n);
         const bg = _noteColor(n, 20);
