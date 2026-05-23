@@ -4065,6 +4065,23 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Éditer la remarque élève sur un devoir (depuis Bilan des notes) ── -->
+<div id="mbilan-stuRem" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px;width:100%">
+    <h2 id="mbilan-stuRem-title" style="margin:0 0 6px">📝 Remarque élève</h2>
+    <p id="mbilan-stuRem-sub" style="margin:0 0 12px;color:var(--pencil);font-size:.88em"></p>
+    <input type="hidden" id="mbilan-stuRem-sid">
+    <input type="hidden" id="mbilan-stuRem-evalid">
+    <textarea id="mbilan-stuRem-text" rows="4" maxlength="240" placeholder="(facultatif — visible dans le tableur et en survol de la note)" style="width:100%;padding:8px;border:1px solid var(--rule-line);border-radius:4px;font-family:var(--font-sans);font-size:.95em;line-height:1.4;resize:vertical;min-height:80px"></textarea>
+    <p style="margin:4px 0 0;font-size:.78em;color:var(--pencil);text-align:right"><span id="mbilan-stuRem-len">0</span>/240</p>
+    <div class="ma" style="margin-top:12px">
+      <button class="btn btn-g" onclick="closeMod2('mbilan-stuRem')">Annuler</button>
+      <button class="btn btn-d" onclick="_bilanStuRemDelete()" id="mbilan-stuRem-del" style="display:none">🗑 Effacer</button>
+      <button class="btn btn-p" onclick="_bilanStuRemSave()">✓ Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Menu Passation (clic droit sur en-tête passation Type B) ── -->
 <div id="meval-pass-menu" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:520px;width:100%;max-height:92vh;overflow-y:auto">
@@ -5006,7 +5023,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T08:15:00Z';
+const APP_VERSION   = '2026-05-23T08:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -32465,7 +32482,7 @@ function renderBilanTab() {
         const cellStyle = (isFac && !facCounts)
           ? `background-color:${bg};background-image:repeating-linear-gradient(135deg,rgba(120,120,120,.32) 0,rgba(120,120,120,.32) 4px,transparent 4px,transparent 9px);`
           : `background:${bg};`;
-        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${cellStyle}color:${col};cursor:help" title="${_esc(tipN)}">${_fmtNote(n)}</td>`;
+        html += `<td onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${cellStyle}color:${col};cursor:pointer" title="${_esc(tipN)}\nClic = éditer la remarque élève">${_fmtNote(n)}</td>`;
       }
     }
     // Moyenne + Rang par période de synthèse (skip si col masquée)
@@ -32689,6 +32706,61 @@ function _bilanTogglePeriodGroup() {
   } catch (e) {}
   try { localStorage.setItem('planClasse_bilanPeriodGroup', on ? 'off' : 'asc'); } catch (e) {}
   if (typeof renderBilanTab === 'function') renderBilanTab();
+}
+
+// ─── Édition rapide d'une remarque élève sur un devoir (clic sur cellule note du Bilan) ───
+function _bilanOpenStuRem(sid, evalId) {
+  const ev  = S.evaluations?.[evalId];
+  const stu = S.eleves?.[sid];
+  if (!ev || !stu) { toast('⚠ Contexte introuvable', 'warn'); return; }
+  document.getElementById('mbilan-stuRem-sid').value    = sid;
+  document.getElementById('mbilan-stuRem-evalid').value = evalId;
+  const nom = `${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim();
+  document.getElementById('mbilan-stuRem-title').textContent = `📝 Remarque — ${nom}`;
+  const dateLbl = (() => { const d = _evalDateFor(ev, stu.classe_id); return d ? _fmtDateFr(d) : ''; })();
+  document.getElementById('mbilan-stuRem-sub').textContent =
+    `Devoir : ${ev.nomCourt || '?'}${ev.nomLong ? ' — ' + ev.nomLong : ''}${dateLbl ? ' · ' + dateLbl : ''}`;
+  // Lecture : priorise ev.studentRemarks[sid] (la canonique du tableur),
+  // fallback ev.notes[sid].remarque (legacy / fiche).
+  const cur = (ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '').toString();
+  const ta  = document.getElementById('mbilan-stuRem-text');
+  ta.value  = cur;
+  document.getElementById('mbilan-stuRem-len').textContent = cur.length;
+  document.getElementById('mbilan-stuRem-del').style.display = cur ? '' : 'none';
+  // Compteur live
+  ta.oninput = () => {
+    document.getElementById('mbilan-stuRem-len').textContent = (ta.value || '').length;
+    document.getElementById('mbilan-stuRem-del').style.display = ta.value ? '' : 'none';
+  };
+  openMod('mbilan-stuRem');
+  setTimeout(() => { ta.focus(); ta.select(); }, 50);
+}
+
+function _bilanStuRemSave() {
+  const sid    = document.getElementById('mbilan-stuRem-sid').value;
+  const evalId = document.getElementById('mbilan-stuRem-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const v = (document.getElementById('mbilan-stuRem-text').value || '').trim();
+  pushUndo();
+  ev.studentRemarks = ev.studentRemarks || {};
+  if (v) ev.studentRemarks[sid] = v;
+  else   delete ev.studentRemarks[sid];
+  // Nettoie aussi l'éventuel champ legacy ev.notes[sid].remarque pour éviter
+  // qu'il ressurgisse via le fallback de lecture.
+  if (ev.notes?.[sid] && 'remarque' in ev.notes[sid]) delete ev.notes[sid].remarque;
+  ev.updatedAt = Date.now();
+  save();
+  closeMod2('mbilan-stuRem');
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+  toast(v ? '📝 Remarque enregistrée' : '🗑 Remarque effacée');
+}
+
+function _bilanStuRemDelete() {
+  document.getElementById('mbilan-stuRem-text').value = '';
+  document.getElementById('mbilan-stuRem-len').textContent = '0';
+  document.getElementById('mbilan-stuRem-del').style.display = 'none';
+  _bilanStuRemSave();
 }
 
 function _bilanCopyAll() {
