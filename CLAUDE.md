@@ -1305,6 +1305,8 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 
 ### Bilan des notes — toolbar et colonnes
 
+- **Tri des devoirs** : sélecteur avec 4 modes (Date · Nom · Type+date · Type+nom), boutons d'inversion indépendants (Type A→C / C→A en modes groupés). Persistance via `localStorage.planClasse_bilanSortMode` + `planClasse_bilanSortReverse` + `planClasse_bilanSortReverseType` (clés dédiées, indépendantes de la liste Devoirs). Défaut : Date asc (chronologique, oldest gauche).
+- **Tooltip cellule note** : enrichi de la **remarque saisie au devoir pour l'élève** quand elle existe (lue dans `ev.studentRemarks[sid]` avec fallback `ev.notes[sid].remarque`), sur une seconde ligne préfixée 📝.
 - **Pastille type** (`A`/`B`/`C`) dans chaque en-tête de colonne d'éval (classe `eval-type-badge`).
 - **Clic gauche** sur l'en-tête de colonne ouvre la saisie en mode tableur (au lieu d'un clic droit). Tooltip de survol : type + nom + nom long + date + /noteMax + mention facultative + descriptif. Aucune mention « clic droit pour ouvrir ».
 - **Tri des évaluations** : date croissante (plus anciennes à gauche), tri secondaire par nom court en cas d'égalité, évals sans date en fin de tableau.

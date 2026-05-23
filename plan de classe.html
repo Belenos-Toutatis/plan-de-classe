@@ -31858,21 +31858,44 @@ function renderBilanTab() {
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
 
   // Évals de la classe + période (incluses dans la moyenne).
-  // Tri : date croissante (plus anciennes à gauche, plus récentes à droite),
-  // les évals sans date en fin de tableau. Tri secondaire par nom court pour
-  // garantir un ordre stable en cas d'égalité.
+  // Tri configurable (4 modes — mêmes options que la liste des Devoirs, mais
+  // persistance et défauts dédiés). Défaut : date asc (chronologique), les
+  // évals sans date en fin.
+  const sortMode    = (() => { try { return localStorage.getItem('planClasse_bilanSortMode') || 'date'; } catch (e) { return 'date'; } })();
+  const sortReverse = (() => { try { return localStorage.getItem('planClasse_bilanSortReverse') === '1'; } catch (e) { return false; } })();
+  const sortReverseType = (() => { try { return localStorage.getItem('planClasse_bilanSortReverseType') === '1'; } catch (e) { return false; } })();
+  const _evDate = (ev) => _evalDateFor(ev, cls.id) || ev.date || '';
+  const _rsB = sortReverse     ? -1 : 1;
+  const _rtB = sortReverseType ? -1 : 1;
+  const _byDateAsc = (a, b) => {
+    const da = _evDate(a), db = _evDate(b);
+    if (!da && !db) return (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db) || (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
+  };
+  const _byNameAsc = (a, b) => (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr', { numeric: true, sensitivity: 'base' });
+  const _cmpsB = {
+    date: (a, b) => _rsB * _byDateAsc(a, b),
+    name: (a, b) => _rsB * _byNameAsc(a, b),
+    'type-date': (a, b) => {
+      const t = (a.type || '').localeCompare(b.type || '');
+      if (t !== 0) return _rtB * t;
+      return _rsB * _byDateAsc(a, b);
+    },
+    'type-name': (a, b) => {
+      const t = (a.type || '').localeCompare(b.type || '');
+      if (t !== 0) return _rtB * t;
+      return _rsB * _byNameAsc(a, b);
+    },
+  };
+  const _cmpB = _cmpsB[sortMode] || _cmpsB.date;
   const evs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, cls.id))
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
-    .sort((a, b) => {
-      const da = _evalDateFor(a, cls.id) || '';
-      const db = _evalDateFor(b, cls.id) || '';
-      if (!da && !db) return (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
-      if (!da) return 1;   // a sans date → fin
-      if (!db) return -1;
-      return da.localeCompare(db) || (a.nomCourt || '').localeCompare(b.nomCourt || '', 'fr');
-    });
+    .sort(_cmpB);
+  const _bilanGrouped = (sortMode === 'type-date' || sortMode === 'type-name');
 
   // Cache des notes /20 par (sid × evalId)
   const noteSur20 = (ev, sid) => {
@@ -31903,6 +31926,29 @@ function renderBilanTab() {
 
   // Bandeau "Colonnes masquées" si applicable
   let html = '';
+  // Toolbar de tri (au-dessus du tableau) — mêmes options que la liste des Devoirs
+  {
+    const opts = [
+      { v: 'date',      lbl: '📅 Date' },
+      { v: 'name',      lbl: '🔤 Nom' },
+      { v: 'type-date', lbl: '📂 Type, puis date' },
+      { v: 'type-name', lbl: '📂 Type, puis nom' },
+    ];
+    html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:.86em;flex-wrap:wrap">';
+    html += '<span style="color:var(--pencil)">Tri des devoirs :</span>';
+    html += `<select onchange="_bilanSetSortMode(this.value)" style="padding:3px 8px;font-size:.9em">`;
+    for (const o of opts) html += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
+    html += '</select>';
+    if (_bilanGrouped) {
+      const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
+      html += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${sortReverseType ? 'C→A' : 'A→C'}</button>`;
+      html += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+    } else {
+      const lbl = sortMode === 'name' ? 'Nom' : 'Date';
+      html += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+    }
+    html += '</div>';
+  }
   if (synthData.length > 1) {
     const allKeys = synthData.flatMap(sd => [`bilan:moy:${sd.perCode}`, `bilan:rang:${sd.perCode}`, `bilan:rem:${sd.perCode}`]);
     html += _bilanHiddenBanner(allKeys, k => {
@@ -32030,7 +32076,10 @@ function renderBilanTab() {
         const bg = _noteColor(n, 20);
         const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
         const _posLbl = _evalSeatLabelAtTime(ev, cls, sid);
-        const _stuRem = (ev.notes?.[sid]?.remarque || '').trim();
+        // La remarque tableur est dans ev.studentRemarks[sid] (Type A/B/C) — fallback
+        // sur ev.notes[sid].remarque pour les éventuels enregistrements legacy / Type A/C
+        // saisie en mode fiche.
+        const _stuRem = ((ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '') + '').trim();
         const _remTip = _stuRem ? `\n📝 Remarque : ${_stuRem}` : '';
         const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}${facTip}${_remTip}`;
         // Style fond : si facultative non comptée, on superpose les hachures sur la couleur de barème.
@@ -32230,6 +32279,22 @@ function _bilanBuildRows() {
     return { name: `${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim(), moy, notes, remarque };
   }).filter(Boolean);
   return { rows, evs };
+}
+
+// Handlers du sélecteur de tri du Bilan des notes
+function _bilanSetSortMode(mode) {
+  try { localStorage.setItem('planClasse_bilanSortMode', mode); } catch (e) {}
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+}
+function _bilanToggleSortReverse() {
+  const cur = (() => { try { return localStorage.getItem('planClasse_bilanSortReverse') === '1'; } catch (e) { return false; } })();
+  try { localStorage.setItem('planClasse_bilanSortReverse', cur ? '0' : '1'); } catch (e) {}
+  if (typeof renderBilanTab === 'function') renderBilanTab();
+}
+function _bilanToggleSortReverseType() {
+  const cur = (() => { try { return localStorage.getItem('planClasse_bilanSortReverseType') === '1'; } catch (e) { return false; } })();
+  try { localStorage.setItem('planClasse_bilanSortReverseType', cur ? '0' : '1'); } catch (e) {}
+  if (typeof renderBilanTab === 'function') renderBilanTab();
 }
 
 function _bilanCopyAll() {
