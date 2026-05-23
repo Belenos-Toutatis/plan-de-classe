@@ -25304,13 +25304,14 @@ function renderEvalNotes() {
       tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${reverse ? '↑' : '↓'}</button>`;
     }
     if (_showPerToggle) {
-      const a = _perOrderEv[0], z = _perOrderEv[_perOrderEv.length - 1];
+      const asc  = _perOrderEv.join(' → ');                          // ex. "S1 → S2" ou "T1 → T2 → T3"
+      const desc = _perOrderEv.slice().reverse().join(' → ');        // ex. "S2 → S1" ou "T3 → T2 → T1"
       const perTips = {
-        asc:  `Périodes groupées (${a} → ${z}) — clic : inverser`,
-        desc: `Périodes groupées (${z} → ${a}) — clic : ne plus grouper`,
-        off:  `Non groupé — clic : grouper (${a} → ${z})`,
+        asc:  `Périodes groupées (${asc}) — clic : inverser`,
+        desc: `Périodes groupées (${desc}) — clic : ne plus grouper`,
+        off:  `Non groupé — clic : grouper (${asc})`,
       };
-      const perLbls = { asc: '↓', desc: '↑', off: '⊘' };
+      const perLbls = { asc: asc, desc: desc, off: '⊘ Non groupé' };
       tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListCyclePeriodGroup()" style="padding:3px 8px;font-family:var(--font-mono)" title="${perTips[periodGroupMode]}">${perLbls[periodGroupMode]}</button>`;
     }
     _evalTbHost.innerHTML = tbHtml;
@@ -32024,18 +32025,20 @@ function renderBilanTab() {
   const sortMode    = (() => { try { return localStorage.getItem('planClasse_bilanSortMode') || 'date'; } catch (e) { return 'date'; } })();
   const sortReverse = (() => { try { return localStorage.getItem('planClasse_bilanSortReverse') === '1'; } catch (e) { return false; } })();
   const sortReverseType = (() => { try { return localStorage.getItem('planClasse_bilanSortReverseType') === '1'; } catch (e) { return false; } })();
-  // Cycle 3 états du groupement par période — visible seulement en mode Toutes.
-  // Migration depuis l'ancienne clé booléenne planClasse_bilanGroupByPeriod.
-  const bilanPeriodGroup = (() => {
+  // Toggle 2 états du groupement par période (visible seulement en mode Toutes).
+  // Migration depuis l'ancienne clé booléenne planClasse_bilanGroupByPeriod
+  // ET depuis l'ancien cycle 3 états planClasse_bilanPeriodGroup (asc/desc → on, off → off).
+  // En mode groupé, l'ordre est toujours ascendant (S1 à gauche) — sens naturel de lecture.
+  const groupByPeriod = (() => {
     try {
       const v = localStorage.getItem('planClasse_bilanPeriodGroup');
-      if (v === 'asc' || v === 'desc' || v === 'off') return v;
+      if (v === 'off') return false;
+      if (v === 'asc' || v === 'desc') return true;
       const legacy = localStorage.getItem('planClasse_bilanGroupByPeriod');
-      if (legacy === '0') return 'off';
-      return 'asc';
-    } catch (e) { return 'asc'; }
+      if (legacy === '0') return false;
+      return true;
+    } catch (e) { return true; }
   })();
-  const groupByPeriod = (bilanPeriodGroup !== 'off');
   const _evDate = (ev) => _evalDateFor(ev, cls.id) || ev.date || '';
   const _rsB = sortReverse     ? -1 : 1;
   const _rtB = sortReverseType ? -1 : 1;
@@ -32073,9 +32076,8 @@ function renderBilanTab() {
   const _perOrder = _periodeOptions().map(o => o.code);
   const _perIdx = (p) => { const i = _perOrder.indexOf(p); return i < 0 ? 999 : i; };
   if (periode === '' && groupByPeriod && _perOrder.length > 1) {
-    const dir = bilanPeriodGroup === 'desc' ? -1 : 1;
     evs = evs.slice().sort((a, b) => {
-      const pd = dir * (_perIdx(a.periode) - _perIdx(b.periode));
+      const pd = _perIdx(a.periode) - _perIdx(b.periode);
       return pd !== 0 ? pd : _cmpB(a, b);
     });
   }
@@ -32132,16 +32134,15 @@ function renderBilanTab() {
         const lbl = sortMode === 'name' ? 'Nom' : 'Date';
         tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${sortReverse ? '↑' : '↓'}</button>`;
       }
-      // Cycle 3 états du groupement par période — visible uniquement en mode Toutes
+      // Toggle 2 états (groupé / non groupé) — visible uniquement en mode Toutes.
+      // En mode groupé, l'ordre est forcément ascendant (S1 à gauche, sens de lecture).
       if (periode === '' && _perOrder.length > 1) {
-        const a = _perOrder[0], z = _perOrder[_perOrder.length - 1];
-        const perTips = {
-          asc:  `Périodes groupées (${a} → ${z}) — clic : inverser`,
-          desc: `Périodes groupées (${z} → ${a}) — clic : ne plus grouper`,
-          off:  `Non groupé — clic : grouper (${a} → ${z})`,
-        };
-        const perLbls = { asc: '↓', desc: '↑', off: '⊘' };
-        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanCyclePeriodGroup()" style="padding:3px 8px;font-family:var(--font-mono)" title="${perTips[bilanPeriodGroup]}">${perLbls[bilanPeriodGroup]}</button>`;
+        const asc = _perOrder.join(' → ');
+        const lbl = groupByPeriod ? asc : '⊘ Non groupé';
+        const tip = groupByPeriod
+          ? `Périodes groupées (${asc}) — clic : ne plus grouper`
+          : `Non groupé — clic : grouper (${asc})`;
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanTogglePeriodGroup()" style="padding:3px 8px;font-family:var(--font-mono)" title="${tip}">${lbl}</button>`;
       }
       tb.innerHTML = tbHtml;
     }
@@ -32499,18 +32500,18 @@ function _bilanToggleSortReverseType() {
   try { localStorage.setItem('planClasse_bilanSortReverseType', cur ? '0' : '1'); } catch (e) {}
   if (typeof renderBilanTab === 'function') renderBilanTab();
 }
-function _bilanCyclePeriodGroup() {
-  let cur = 'asc';
+function _bilanTogglePeriodGroup() {
+  let on = true;
   try {
     const v = localStorage.getItem('planClasse_bilanPeriodGroup');
-    if (v === 'asc' || v === 'desc' || v === 'off') cur = v;
+    if (v === 'off') on = false;
+    else if (v === 'asc' || v === 'desc') on = true;
     else {
       const legacy = localStorage.getItem('planClasse_bilanGroupByPeriod');
-      if (legacy === '0') cur = 'off';
+      if (legacy === '0') on = false;
     }
   } catch (e) {}
-  const next = { asc: 'desc', desc: 'off', off: 'asc' }[cur];
-  try { localStorage.setItem('planClasse_bilanPeriodGroup', next); } catch (e) {}
+  try { localStorage.setItem('planClasse_bilanPeriodGroup', on ? 'off' : 'asc'); } catch (e) {}
   if (typeof renderBilanTab === 'function') renderBilanTab();
 }
 

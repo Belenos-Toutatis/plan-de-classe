@@ -1377,12 +1377,14 @@ Bouton « ↓ ordre normal / ↑ inversé » pour basculer dans chaque mode. Per
 
 **Toolbar de tri** intégrée au header `.sh` à côté du titre via le placeholder `#eval-sort-toolbar` (peuplé par `renderEvalNotes`, vidé en début de render).
 
-**Cycle 3 états du groupement par période** (mode Toutes, ≥ 2 périodes) — bouton compact qui cycle au clic :
-- `↓` (asc — défaut) : groupé, périodes dans l'ordre canonique (S1 → S2)
-- `↑` (desc) : groupé, ordre inverse (S2 → S1)
-- `⊘` (off) : pas de groupement
+**Cycle 3 états du groupement par période** (Devoirs, mode Toutes, ≥ 2 périodes) — bouton avec libellés explicites qui cycle au clic :
+- `S1 → S2` (asc — défaut) — ordre canonique
+- `S2 → S1` (desc) — ordre inverse
+- `⊘ Non groupé` (off)
 
-Tooltip détaillé sur survol. Persistance via `localStorage.planClasse_evalListPeriodGroup` (`'asc' | 'desc' | 'off'`), avec fallback de migration depuis l'ancienne clé booléenne `planClasse_evalListGroupByPeriod`. En modes regroupés par type, l'en-tête de type est ré-imbriqué sous chaque période. Miroir équivalent dans le Bilan des notes via `planClasse_bilanPeriodGroup`.
+Pour le mode trimestre : `T1 → T2 → T3` et `T3 → T2 → T1` (concat de toutes les périodes). Persistance via `localStorage.planClasse_evalListPeriodGroup` (`'asc' | 'desc' | 'off'`), avec fallback de migration depuis l'ancienne clé booléenne `planClasse_evalListGroupByPeriod`. En modes regroupés par type, l'en-tête de type est ré-imbriqué sous chaque période.
+
+**Bilan des notes — toggle 2 états seulement** : `S1 → S2` ↔ `⊘ Non groupé`. Pas de mode inversé car les colonnes se lisent toujours dans le sens naturel (oldest gauche). Stocké dans `planClasse_bilanPeriodGroup` (`'asc' | 'off'`, avec migration ancienne valeur `'desc'` → traitée comme `'asc'`).
 
 **Labels concis** : tous les boutons d'inversion utilisent uniquement la flèche `↑` / `↓` (sans « inversé » / « normal ») ; le bouton type type utilise `A→C` / `C→A` (sans préfixe « Type : »).
 
