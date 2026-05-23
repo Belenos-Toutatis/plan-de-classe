@@ -2801,11 +2801,24 @@ kbd {
 </div>
 
 <!-- Historique des incidents -->
+<!-- Détail du calcul d'une note (clic sur ligne dans Historique → Notes) -->
+<div id="mnotedet" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:720px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2 id="mnotedet-title" style="margin:0 0 6px">📊 Détail de la note</h2>
+    <p id="mnotedet-sub" style="margin:0 0 10px;color:var(--pencil);font-size:.88em"></p>
+    <div id="mnotedet-body"></div>
+    <div class="ma" style="margin-top:10px">
+      <button class="btn btn-g" onclick="closeMod2('mnotedet')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <div id="mhist" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:620px;width:100%">
     <h2 id="mhist-title">🕓 Historique</h2>
     <div id="mhist-tabs" style="display:flex;gap:6px;margin-bottom:8px;border-bottom:1px solid #ddd">
       <button class="btn btn-sm" id="mhist-tab-incidents" onclick="setHistTab('incidents')">📦 Incidents</button>
+      <button class="btn btn-sm" id="mhist-tab-notes" onclick="setHistTab('notes')">📊 Notes</button>
       <button class="btn btn-sm" id="mhist-tab-attendance" onclick="setHistTab('attendance')">🚫 Absences & retards</button>
     </div>
     <p style="font-size:.88em;color:#666;margin-bottom:8px" id="mhist-summary"></p>
@@ -5062,7 +5075,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T16:30:00Z';
+const APP_VERSION   = '2026-05-23T17:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11621,12 +11634,14 @@ function setHistTab(tab) {
 
 function _setHistTabsUI() {
   const tInc = document.getElementById('mhist-tab-incidents');
+  const tNot = document.getElementById('mhist-tab-notes');
   const tAtt = document.getElementById('mhist-tab-attendance');
   const clearBtn = document.getElementById('mhist-clear-btn');
   if (!tInc || !tAtt) return;
   const onStyle  = 'background:#3498db;color:#fff;border-bottom:2px solid #1e40af';
   const offStyle = 'background:#f5f5f5;color:#555';
   tInc.style.cssText = _histTab === 'incidents' ? onStyle : offStyle;
+  if (tNot) tNot.style.cssText = _histTab === 'notes' ? onStyle : offStyle;
   tAtt.style.cssText = _histTab === 'attendance' ? onStyle : offStyle;
   // Le bouton "Tout effacer" n'a de sens que pour les incidents (modifiable depuis l'élève)
   if (clearBtn) clearBtn.style.display = _histTab === 'incidents' ? '' : 'none';
@@ -11641,6 +11656,10 @@ function renderHist() {
 
   if (_histTab === 'attendance') {
     renderHistAttendance(s);
+    return;
+  }
+  if (_histTab === 'notes') {
+    renderHistNotes(s);
     return;
   }
   // Onglet "incidents" (par défaut)
@@ -11683,6 +11702,191 @@ function renderHist() {
       <button class="btn btn-d btn-sm" onclick="deleteHistEntry(${h._idx})" title="Supprimer cette entrée">✕</button>
     </div>`;
   }).join('');
+}
+
+// Liste toutes les évaluations où l'élève a une note saisie (ou un niveau pour Type B),
+// triées par date desc. Clic sur une ligne → modale détaillée du calcul de la note.
+function renderHistNotes(stu) {
+  const sid = stu.id;
+  const items = [];
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!_evalIncludesClass(ev, stu.classe_id)) continue;
+    const note = _computeStudentEvalNote(ev, sid); // déjà arrondi par granulométrie
+    if (note == null) continue;
+    const date = _evalDateFor(ev, stu.classe_id) || '';
+    items.push({
+      evalId: ev.id,
+      nomCourt: ev.nomCourt || '?',
+      nomLong: ev.nomLong || '',
+      type: ev.type || '?',
+      periode: ev.periode || '',
+      date,
+      note,
+      noteMax: ev.noteMax || 20,
+      note20: (note / (ev.noteMax || 20)) * 20,
+    });
+  }
+  // Tri date décroissante (plus récent en premier), tie-break par nomCourt
+  items.sort((a, b) => {
+    const d = (b.date || '').localeCompare(a.date || '');
+    return d !== 0 ? d : a.nomCourt.localeCompare(b.nomCourt, 'fr');
+  });
+  const summary = document.getElementById('mhist-summary');
+  const meanG = (S.evalPrefs?.meanGranularity ?? 0.01);
+  const note20Vals = items.map(i => i.note20);
+  const avg = note20Vals.length ? note20Vals.reduce((s, v) => s + v, 0) / note20Vals.length : null;
+  const avgDisp = (avg != null && meanG > 0) ? Math.round(avg / meanG) * meanG : avg;
+  if (summary) {
+    summary.textContent = items.length
+      ? `📊 ${items.length} note${items.length > 1 ? 's' : ''}${avgDisp != null ? ' · moyenne /20 : ' + _fmtNote(avgDisp) : ''}`
+      : 'Aucune note saisie pour cet élève.';
+  }
+  const list = document.getElementById('mhist-list');
+  if (!items.length) {
+    list.innerHTML = '<p style="padding:14px;text-align:center;color:#888;font-size:.9em">Aucune note pour le moment.</p>';
+    return;
+  }
+  list.innerHTML = items.map(it => {
+    const dateFr = it.date ? _fmtDateFr(it.date) : '—';
+    const typeBdg = `<span style="display:inline-block;background:var(--paper-deep);color:var(--ink-blue);font-family:var(--font-mono);font-size:.72em;padding:1px 5px;border-radius:8px;font-weight:600">${it.type}</span>`;
+    const periodeLbl = it.periode ? `<span style="color:var(--pencil);font-size:.78em">${_esc(it.periode)}</span>` : '';
+    const noteCell = `${_fmtNote(it.note)}/${it.noteMax}`;
+    const note20Cell = `<strong style="font-family:var(--font-mono)">${_fmtNote(it.note20)}/20</strong>`;
+    const tip = `${it.nomCourt}${it.nomLong ? ' — ' + it.nomLong : ''}\nClic = détail du calcul`;
+    return `<div onclick="_evalShowNoteDetail('${_esc(it.evalId)}','${_esc(sid)}')" style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:.9em;gap:10px;cursor:pointer" title="${_escAttr(tip)}">
+      <span style="font-family:var(--font-mono);min-width:90px;color:var(--ink-blue)">${dateFr}</span>
+      <span style="min-width:34px;text-align:center">${typeBdg}</span>
+      <span style="flex:1"><strong>${_esc(it.nomCourt)}</strong>${it.nomLong ? ' <span style="color:var(--pencil);font-size:.85em">— ' + _esc(it.nomLong) + '</span>' : ''} ${periodeLbl}</span>
+      <span style="color:var(--pencil);min-width:60px;text-align:right">${noteCell}</span>
+      <span style="min-width:60px;text-align:right">${note20Cell}</span>
+    </div>`;
+  }).join('');
+}
+
+// Affiche le tableau qui a produit la note finale d'un élève sur une éval.
+//   - Type A/C : 1 ligne par mini-note avec code, max, valeur saisie, commentaires.
+//   - Type C   : groupé par exercice avec sous-total.
+//   - Type B   : 1 ligne par (passation × compétence) avec niveau atteint.
+function _evalShowNoteDetail(evalId, sid) {
+  const ev  = S.evaluations?.[evalId];
+  const stu = S.eleves?.[sid];
+  if (!ev || !stu) { toast('⚠ Contexte introuvable', 'warn'); return; }
+  document.getElementById('mnotedet-title').textContent = `📊 Détail — ${ev.nomCourt}`;
+  const note    = _computeStudentEvalNote(ev, sid);
+  const note20  = (note != null) ? (note / (ev.noteMax || 20)) * 20 : null;
+  const dateLbl = (() => { const d = _evalDateFor(ev, stu.classe_id); return d ? _fmtDateFr(d) : ''; })();
+  const ll = [];
+  if (ev.nomLong) ll.push(_esc(ev.nomLong));
+  if (dateLbl)    ll.push('📅 ' + dateLbl);
+  ll.push(`Type ${ev.type}`);
+  if (ev.periode) ll.push(_esc(ev.periode));
+  ll.push(`coef ${ev.coef ?? 1}`);
+  if (note != null) ll.push(`<strong>Note : ${_fmtNote(note)}/${ev.noteMax} (= ${_fmtNote(note20)}/20)</strong>`);
+  document.getElementById('mnotedet-sub').innerHTML = `${_esc(stu.prenom)} ${(stu.nom||'').toUpperCase()} · ` + ll.join(' · ');
+
+  const body = document.getElementById('mnotedet-body');
+  let html = '';
+  const cellNum = 'padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono)';
+  const cellTxt = 'padding:4px 8px;border-bottom:1px solid var(--rule-line-soft)';
+  const hdr     = 'padding:6px 8px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);font-family:var(--font-mono);font-size:.85em;color:var(--ink-blue);text-align:left';
+
+  if (ev.type === 'B') {
+    const sortedPass = (ev.passations || []).slice().sort((a, b) => (_passDateFor(a, stu.classe_id) || '').localeCompare(_passDateFor(b, stu.classe_id) || ''));
+    html += `<table style="width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>`;
+    html += `<th style="${hdr}">Passation</th><th style="${hdr}">Date</th><th style="${hdr}">Compétence</th><th style="${hdr};text-align:center">Niveau</th></tr></thead><tbody>`;
+    let anyRow = false;
+    for (const p of sortedPass) {
+      const pd = _passDateFor(p, stu.classe_id);
+      const pdFr = pd ? _fmtDateFr(pd) : '—';
+      const niv = p.niveaux?.[sid] || {};
+      for (const cid of (p.competenceIds || [])) {
+        const c = S.competences?.[cid];
+        const v = niv[cid];
+        if (v == null) continue;
+        anyRow = true;
+        let nivCell;
+        if (v === 'A') nivCell = `<span style="background:#9ca3af;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">A</span>`;
+        else if (typeof v === 'number' && v >= 1 && v <= 4) {
+          const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+          const bg = colors[v - 1] || 'var(--paper-warm)';
+          nivCell = `<span style="background:${bg};color:${_contrastTextColor(bg)};padding:2px 8px;border-radius:4px;font-weight:600">${_formatNiveau(v)}</span>`;
+        } else nivCell = '—';
+        html += `<tr><td style="${cellTxt}"><strong>${_esc(p.code || '?')}</strong></td><td style="${cellTxt};color:var(--pencil)">${pdFr}</td><td style="${cellTxt}">${_esc(c?.code || cid)}${c?.name ? ' <span style="color:var(--pencil);font-size:.85em">— ' + _esc(c.name) + '</span>' : ''}</td><td style="${cellNum}">${nivCell}</td></tr>`;
+      }
+    }
+    if (!anyRow) html += `<tr><td colspan="4" style="${cellTxt};color:var(--pencil);font-style:italic;text-align:center">Aucun niveau saisi.</td></tr>`;
+    html += '</tbody></table>';
+    const mrule = ev.meanRule || S.evalPrefs?.meanRule || 'arithmetic';
+    const ruleLbl = mrule === 'last' ? 'dernière saisie' : mrule === 'best' ? 'meilleure saisie' : mrule === 'weightedRecency' ? 'pondéré récence' : 'moyenne arithmétique';
+    html += `<p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic">Règle d'agrégation : ${ruleLbl}. Pondération entre compétences : ${ev.weighting || 'equal'}.</p>`;
+  } else {
+    // Type A / C : mini-notes (regroupées par exercice en Type C)
+    const isTypeC = (ev.type === 'C');
+    const exos = isTypeC && Array.isArray(ev.exercices) ? ev.exercices : [];
+    const values   = ev.notes?.[sid]?.values || {};
+    const comments = ev.notes?.[sid]?.comments || {};
+    const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+    html += `<table style="width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>`;
+    if (isTypeC) html += `<th style="${hdr}">Exercice</th>`;
+    html += `<th style="${hdr}">Question</th><th style="${hdr};text-align:center">Barème</th><th style="${hdr};text-align:center">Saisi</th><th style="${hdr};text-align:center">Effectif</th><th style="${hdr}">Commentaires</th></tr></thead><tbody>`;
+    let sumVal = 0, sumMax = 0, hasAny = false;
+    const exoSums = {}; // exoSums[exoId] = {got, max}
+    let curExoId = null;
+    for (const mn of (ev.miniNotes || [])) {
+      const exoId = isTypeC ? (mn.exerciceId || null) : null;
+      const exo   = exos.find(e => e.id === exoId);
+      const exoCell = isTypeC ? (exoId !== curExoId ? `<td style="${cellTxt};font-family:var(--font-mono);color:var(--ink-blue);font-weight:600">${_esc(exo?.label || '?')}</td>` : `<td style="${cellTxt}"></td>`) : '';
+      curExoId = exoId;
+      const v = values[mn.id];
+      const isExc = excluded.has(mn.id);
+      let saisiCell, effCell;
+      if (isExc) {
+        saisiCell = `<span style="color:var(--pencil);font-style:italic" title="Question retirée (aménagement)">(retirée)</span>`;
+        effCell   = '—';
+      } else if (v === 'NN') {
+        saisiCell = `<span style="color:var(--pencil)">NN</span>`;
+        effCell   = '—';
+      } else if (v === 'A') {
+        saisiCell = `<span style="background:#9ca3af;color:#fff;padding:1px 6px;border-radius:4px">A</span>`;
+        effCell   = '—';
+      } else if (v == null || v === '') {
+        saisiCell = `<span style="color:var(--pencil-soft)">—</span>`;
+        effCell   = '—';
+      } else {
+        const n = parseFloat(v);
+        const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+        saisiCell = `<strong>${_fmtNote(n)}</strong>`;
+        effCell   = `<strong>${_fmtNote(eff)}</strong>`;
+        sumVal += eff; sumMax += mn.max; hasAny = true;
+        if (isTypeC && exoId) {
+          exoSums[exoId] = exoSums[exoId] || { got: 0, max: 0 };
+          exoSums[exoId].got += eff; exoSums[exoId].max += mn.max;
+        }
+      }
+      const com = (comments[mn.id] || []).filter(Boolean);
+      const comCell = com.length ? `<span title="${_escAttr(com.join(' · '))}">💬 ${com.length}</span>` : '';
+      html += `<tr>${exoCell}<td style="${cellTxt}"><strong>${_esc(mn.label || '?')}</strong></td><td style="${cellNum};color:var(--pencil)">/${mn.max}</td><td style="${cellNum}">${saisiCell}</td><td style="${cellNum}">${effCell}</td><td style="${cellTxt};color:var(--pencil);font-size:.85em">${comCell}</td></tr>`;
+    }
+    html += '</tbody>';
+    // Footer : sous-totaux exos (Type C) + total
+    if (isTypeC && Object.keys(exoSums).length) {
+      html += '<tfoot>';
+      for (const e of exos) {
+        const s = exoSums[e.id];
+        if (!s) continue;
+        html += `<tr style="background:var(--paper-warm)"><td style="${cellTxt};font-family:var(--font-mono);font-weight:700;color:var(--ink-blue)" colspan="${isTypeC ? 4 : 3}">Σ ${_esc(e.label)}</td><td style="${cellNum};font-weight:700">${_fmtNote(s.got)}/${s.max}</td><td style="${cellTxt}"></td></tr>`;
+      }
+      html += '</tfoot>';
+    }
+    html += '</table>';
+    if (hasAny) {
+      const total = (sumVal * (ev.noteMax || 20)) / sumMax;
+      const rounded = _roundNoteToGranularity(total, ev);
+      html += `<p style="margin:10px 0 0;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;font-family:var(--font-mono);font-size:.92em">Total : <strong>${_fmtNote(sumVal)}</strong>/${sumMax} → × ${ev.noteMax} / ${sumMax} = <strong>${_fmtNote(total)}</strong>${rounded !== total ? ' (arrondi : <strong>' + _fmtNote(rounded) + '</strong>)' : ''} /${ev.noteMax}</p>`;
+    }
+  }
+  body.innerHTML = html;
+  openMod('mnotedet');
 }
 
 // Aggrège tous les appels où cet élève figure (absent ou retard), toutes classes confondues
@@ -12000,7 +12204,7 @@ function renderStudents() {
         <td style="white-space:nowrap">${ppreBtn} ${gevascoBtn} ${ulisBtn} ${ulisInclBtn} ${upe2aBtn} ${upe2aInclBtn} ${paiBtn} ${notesBtn}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-g btn-sm" onclick="openEdit('${s.id}')" title="Modifier">✏️</button>
-          <button class="btn btn-g btn-sm" onclick="openHist('${s.id}')" title="Historique des incidents">🕓</button>
+          <button class="btn btn-g btn-sm" onclick="openHist('${s.id}')" title="Historique : incidents, notes, absences, retards">🕓</button>
           <button class="btn btn-g btn-sm" onclick="resetOne('${s.id}')" title="Remettre compteurs à 0">↺</button>
           <button class="btn btn-d btn-sm" onclick="deleteStudent('${s.id}')" title="Supprimer">🗑</button>
         </td>
@@ -29457,65 +29661,86 @@ function _evalBilanCopy() {
 }
 
 // Copie TSV de tout le tableau (en-tête + données) — prêt à coller dans Excel/LibreOffice/Pronote
+// Copie générique du tableur affiché : parse le DOM #meval-tableur-tbl pour
+// extraire TOUTES les colonnes visibles (Type A/B/C identique). Gère colspan
+// et rowspan dans le thead pour reconstruire les libellés.
 function _evalTableurCopyAll() {
-  const evalId = document.getElementById('meval-tableur-evalid').value;
-  const ev = S.evaluations?.[evalId];
-  if (!ev) return;
-  const cls = _evalTableurActiveCls(ev);
-  if (!cls) return;
-  const sids = _evalTableurSortedSids(cls);
-  // Type B : copie les niveaux de la passation active
-  if (ev.type === 'B') {
-    const passId = document.getElementById('meval-tableur').dataset.passId;
-    const pass = ev.passations?.find(p => p.id === passId);
-    if (!pass) { toast('⚠ Pas de passation active', 'warn'); return; }
-    const headers = ['Élève'];
-    for (const cid of (pass.competenceIds || [])) headers.push(S.competences?.[cid]?.code || '?');
-    const lines = [headers.join('\t')];
-    for (const sid of sids) {
-      const stu = S.eleves[sid];
-      if (!stu) continue;
-      const cells = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
-      const niv = pass.niveaux?.[sid] || {};
-      for (const cid of (pass.competenceIds || [])) {
-        const v = niv[cid];
-        if (v === 'A') cells.push(_formatNiveau('A'));
-        else if (typeof v === 'number' && v >= 1 && v <= 4) cells.push(_formatNiveau(v));
-        else cells.push('');
+  const tbl = document.getElementById('meval-tableur-tbl');
+  if (!tbl) return;
+
+  // — En-têtes : on construit une grille col → [textRow0, textRow1, ...] en
+  //   tenant compte des colspan/rowspan (cas Type B : passation en row 0 avec
+  //   colspan=N + compétences en row 1).
+  const theadRows = Array.from(tbl.querySelectorAll('thead tr'));
+  const headerGrid = [];
+  const taken = {}; // taken[`${row},${col}`] = true pour les slots couverts par rowspan
+  let maxCols = 0;
+  theadRows.forEach((tr, rowIdx) => {
+    let colIdx = 0;
+    for (const cell of tr.children) {
+      while (taken[`${rowIdx},${colIdx}`]) colIdx++;
+      const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
+      const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10);
+      const text = _evalTableurExtractCellText(cell);
+      for (let c = 0; c < colspan; c++) {
+        const tc = colIdx + c;
+        if (!headerGrid[tc]) headerGrid[tc] = [];
+        // On ne pose le texte qu'une fois par colonne (1re col du colspan)
+        if (c === 0) headerGrid[tc][rowIdx] = text;
+        for (let r = 0; r < rowspan; r++) taken[`${rowIdx + r},${tc}`] = true;
+        if (tc + 1 > maxCols) maxCols = tc + 1;
       }
-      lines.push(cells.join('\t'));
+      colIdx += colspan;
     }
-    const tsv = lines.join('\n');
-    navigator.clipboard.writeText(tsv).then(
-      () => toast(`📋 Passation ${pass.code} copiée`),
-      () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
-    );
-    return;
+  });
+  // Combine les libellés multi-rangées d'une même colonne en une seule string
+  // séparée par " / " (passation / compétence par exemple).
+  const headers = [];
+  for (let i = 0; i < maxCols; i++) {
+    const arr = headerGrid[i] || [];
+    headers.push(arr.filter(s => s != null && s !== '').join(' / '));
   }
-  const headers = ['Élève'];
-  for (const mn of ev.miniNotes) headers.push(`${mn.label || '?'} (/${mn.max})`);
-  headers.push(`Total (/${ev.noteMax})`);
+
+  // — Corps : on prend chaque <tr data-sid> et on extrait le texte de chaque <td>.
   const lines = [headers.join('\t')];
-  for (const sid of sids) {
-    const stu = S.eleves[sid];
-    if (!stu) continue;
-    const cells = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
-    const values = ev.notes?.[sid]?.values || {};
-    for (const mn of ev.miniNotes) {
-      const v = values[mn.id];
-      if (v === 'NN' || v === 'A') cells.push(v);
-      else if (v == null || v === '') cells.push('');
-      else cells.push(String(v).replace('.', ','));
+  const bodyRows = tbl.querySelectorAll('tbody tr[data-sid]');
+  for (const tr of bodyRows) {
+    const cells = [];
+    for (const td of tr.children) {
+      cells.push(_evalTableurExtractCellText(td));
     }
-    const total = _computeStudentEvalNote(ev, sid);
-    cells.push(total == null ? '' : _fmtNote(total));
     lines.push(cells.join('\t'));
   }
+
   const tsv = lines.join('\n');
   navigator.clipboard.writeText(tsv).then(
     () => toast('📋 Tableau copié — colle-le dans Excel/Pronote/un ENT'),
-    () => toast('⚠ Copie automatique impossible — sélectionne le tableau à la souris et fais Ctrl+C', 'warn')
+    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris et fais Ctrl+C', 'warn')
   );
+}
+
+// Extrait la valeur d'une cellule pour la copie TSV. Priorité aux inputs
+// (valeurs saisies), sinon textContent en nettoyant les badges parasites
+// (💬 nb commentaires, 👥 icône groupes, ★ facultative).
+function _evalTableurExtractCellText(cell) {
+  if (!cell) return '';
+  const inputs = cell.querySelectorAll('input, select, textarea');
+  if (inputs.length === 1) {
+    return (inputs[0].value || '').replace(/[\t\n]/g, ' ').trim();
+  }
+  if (inputs.length > 1) {
+    // En-têtes avec code + date + slot par ex. : concat des valeurs non vides.
+    const vals = [];
+    for (const inp of inputs) {
+      const v = (inp.value || '').trim();
+      if (v) vals.push(v.replace(/[\t\n]/g, ' '));
+    }
+    return vals.join(' · ');
+  }
+  // Pas d'input : textContent du clone en retirant les badges floats absolus.
+  const clone = cell.cloneNode(true);
+  clone.querySelectorAll('.tab-com-badge').forEach(el => el.remove());
+  return clone.textContent.replace(/[\t\n]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // ─── Plan classe overlay (Type B) — saisie compétences sur plan visuel ───
