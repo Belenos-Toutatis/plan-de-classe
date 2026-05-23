@@ -1317,17 +1317,19 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 
 Accessible depuis le bouton **🔀 Comparer classes** de la toolbar du Bilan des notes. Désactivé si moins de 2 classes ont des notes pour la période courante.
 
-État local `_bilanXState = { periode, mode, classIds:Set, evalIds:Set }`. Le titre indique la période sélectionnée.
+État local `_bilanXState = { periode, selectedEvalId }`. `selectedEvalId === null` → mode « Moyenne période ».
 
-- **Période** : sélecteur S1/S2 (ou T1/T2/T3) + « Toutes ». Initialisé sur la période active du bilan. Changer la période recalcule les classes éligibles et les évals éligibles, en préservant la sélection courante quand elle reste valide.
-- **Classes** : chips multi-sélection (toutes cochées par défaut, parmi `_bilanClassesWithEvals(periode)`). Boutons rapides **Tout** / **Aucune**.
-- **Périmètre** (radios) :
-  - 🎯 **Moyenne période** (défaut) — `_computeStudentMeanForPeriod(classId, sid, periode)` (mêmes règles que le tableau du bilan : coef, facultatives `improveOnly`/`bonus`/`over10`, évals diagnostiques exclues).
-  - 🎯 **Évaluations sélectionnées** — chips de la sous-liste `_bilanCollectEligibleEvals(periode, classIds)` triées par date asc + nomCourt, avec label `[type] nomCourt · date`. Helper `_computeStudentMeanForEvalSet(classId, sid, evalIdSet)` clone la logique de `_computeStudentMeanForPeriod` restreinte au sous-ensemble (toujours pondéré par coef).
+- **Période** : sélecteur S1/S2 (ou T1/T2/T3) + « Toutes ». Initialisé sur la période active du bilan. Changer la période re-render la rangée de pastilles ; si l'éval sélectionnée n'appartient plus à la nouvelle période, retombe automatiquement sur Moyenne.
+- **Pastilles devoirs** : une chip par éval comptée éligible (`_bilanCollectEligibleEvals(periode)`, toutes classes confondues, triées date asc puis nomCourt), label `[type] nomCourt` en mono. **Pastille finale `📊 Moyenne`** (séparateur visuel avant) sélectionne le mode moyenne période pondérée. Sélection unique (radio-style).
+- **Classes lignes** automatiques selon la pastille active :
+  - Mode Moyenne → toutes les classes ayant ≥ 1 éval comptée pour la période.
+  - Devoir précis → classes vivantes incluses dans l'éval (`_evalClassIds`).
 - **Tableau croisé** : ligne `Classe` + 3 colonnes `👧 Filles · 👦 Garçons · Total`. Cellule = `moy (n) · σ · méd` (helper `_evalCrossTabCellHTML` partagé avec le tableau croisé per-éval). Ligne footer **Toutes classes** = pool unique (pas moyenne des moyennes).
+  - Mode Moyenne : note utilisée = `_computeStudentMeanForPeriod(classId, sid, periode)` (coef + facultatives `improveOnly`/`bonus`/`over10`, évals diagnostiques exclues).
+  - Devoir précis : note utilisée = `_computeStudentEvalNote(ev, sid)` ramenée /20 via `(raw / (ev.noteMax || 20)) * 20`.
 - **📋 Copier** → `_bilanCrossTabCopy()` : TSV 13 colonnes (Classe + 3 stats × 4 valeurs : moy / n / σ / méd).
 
-État UI seulement — aucune mutation `S`, donc pas de `pushUndo`. Modale ne survit pas à `closeMod2`.
+État UI seulement — aucune mutation `S`, donc pas de `pushUndo`. Le sélecteur de classes (initialement prévu) a été retiré : les classes lignes sont déjà la dimension principale du tableau, choisir lesquelles afficher n'apportait rien.
 
 ### Tableau croisé per-éval — médiane
 

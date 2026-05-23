@@ -3993,38 +3993,13 @@ kbd {
         <button class="btn btn-g btn-sm" onclick="_bilanCrossTabCopy()" title="Copie le tableau au format TSV">📋 Copier</button>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px;font-size:.9em">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <strong style="color:var(--pencil);font-weight:600">Périmètre :</strong>
-        <label style="display:inline-flex;gap:4px;align-items:center;cursor:pointer">
-          <input type="radio" name="mbilan-crosstab-mode" value="periode" onchange="_bilanCrossTabSetMode('periode')" checked>
-          Moyenne de la période
-        </label>
-        <label style="display:inline-flex;gap:4px;align-items:center;cursor:pointer">
-          <input type="radio" name="mbilan-crosstab-mode" value="evals" onchange="_bilanCrossTabSetMode('evals')">
-          Évaluations sélectionnées
-        </label>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-        <strong style="color:var(--pencil);font-weight:600;padding-top:3px">Classes :</strong>
-        <div id="mbilan-crosstab-classes" style="display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:200px"></div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-g btn-sm" onclick="_bilanCrossTabToggleClasses(true)" style="padding:2px 8px;font-size:.85em">Tout</button>
-          <button class="btn btn-g btn-sm" onclick="_bilanCrossTabToggleClasses(false)" style="padding:2px 8px;font-size:.85em">Aucune</button>
-        </div>
-      </div>
-      <div id="mbilan-crosstab-evals-wrap" style="display:none;gap:8px;align-items:flex-start;flex-wrap:wrap">
-        <strong style="color:var(--pencil);font-weight:600;padding-top:3px">Évaluations :</strong>
-        <div id="mbilan-crosstab-evals" style="display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:200px"></div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-g btn-sm" onclick="_bilanCrossTabToggleEvals(true)" style="padding:2px 8px;font-size:.85em">Toutes</button>
-          <button class="btn btn-g btn-sm" onclick="_bilanCrossTabToggleEvals(false)" style="padding:2px 8px;font-size:.85em">Aucune</button>
-        </div>
-      </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:.9em">
+      <strong style="color:var(--pencil);font-weight:600">Devoir :</strong>
+      <div id="mbilan-crosstab-evals" style="display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:200px"></div>
     </div>
     <div id="mbilan-crosstab-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
     <p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5">
-      Moyenne /20 agrégée par <strong>classe</strong> (ligne) × <strong>civilité</strong> (colonnes <em>Filles</em>, <em>Garçons</em>, <em>Total</em>). Cellule : <em>moy (n) · σ · méd</em>. En mode <em>Évaluations sélectionnées</em>, la moyenne pondérée par coef est restreinte au sous-ensemble coché. Élèves sans civilité saisie inclus uniquement dans la colonne Total.
+      Note /20 agrégée par <strong>classe</strong> (ligne) × <strong>civilité</strong> (colonnes <em>Filles</em>, <em>Garçons</em>, <em>Total</em>). Cellule : <em>moy (n) · σ · méd</em>. Clic sur une pastille pour basculer la vue : un devoir précis (sa note) ou <strong>📊 Moyenne</strong> (moyenne pondérée par coef de la période). Élèves sans civilité saisie inclus uniquement dans la colonne Total.
     </p>
     <div class="ma" style="margin-top:10px">
       <button class="btn btn-p" onclick="closeMod2('mbilan-crosstab')">Fermer</button>
@@ -28472,16 +28447,15 @@ function _evalOpenCrossTabForEval(evalId) {
 }
 
 // ═══════════════ COMPARER CLASSES (Bilan des notes) ═══════════════
-// État local de la modale. classIds = Set ; evalIds = Set (mode 'evals' uniquement).
-let _bilanXState = { periode: '', mode: 'periode', classIds: new Set(), evalIds: new Set() };
+// État local de la modale. selectedEvalId = null → mode « Moyenne période ».
+let _bilanXState = { periode: '', selectedEvalId: null };
 
-// Renvoie toutes les évaluations comptées éligibles pour la période et les classes
-// sélectionnées. Triées par date asc puis nomCourt.
-function _bilanCollectEligibleEvals(periode, classIdSet) {
+// Renvoie toutes les évaluations comptées éligibles pour la période donnée
+// (toutes classes confondues). Triées par date asc puis nomCourt.
+function _bilanCollectEligibleEvals(periode) {
   const evs = Object.values(S.evaluations || {})
     .filter(e => e.countsForMean !== false)
-    .filter(e => !periode || e.periode === periode)
-    .filter(e => _evalClassIds(e).some(cid => classIdSet.has(cid)));
+    .filter(e => !periode || e.periode === periode);
   evs.sort((a, b) => {
     const da = _evalDateFor(a) || '';
     const db = _evalDateFor(b) || '';
@@ -28502,7 +28476,6 @@ function _bilanClassesWithEvals(periode) {
     );
     if (has) out.push(cid);
   }
-  // Tri par nom de classe
   out.sort((a, b) => (S.classes[a].nom || '').localeCompare(S.classes[b].nom || '', 'fr'));
   return out;
 }
@@ -28510,17 +28483,12 @@ function _bilanClassesWithEvals(periode) {
 function _bilanOpenCrossTab() {
   const initPeriode = document.getElementById('bilan-period-filter')?.value || '';
   _bilanXState.periode = initPeriode;
-  _bilanXState.mode = 'periode';
-  const classIds = _bilanClassesWithEvals(initPeriode);
-  if (classIds.length < 2) {
+  _bilanXState.selectedEvalId = null; // défaut : Moyenne
+  if (_bilanClassesWithEvals(initPeriode).length < 2) {
     toast('💡 Pas assez de classes avec notes pour cette période', 'info');
     return;
   }
-  _bilanXState.classIds = new Set(classIds);
-  // Pré-coche toutes les évals éligibles (utilisé dès qu'on bascule en mode 'evals')
-  const evs = _bilanCollectEligibleEvals(initPeriode, _bilanXState.classIds);
-  _bilanXState.evalIds = new Set(evs.map(e => e.id));
-  // Init UI
+  // Sélecteur de période
   const periodSel = document.getElementById('mbilan-crosstab-period');
   let optsHtml = '<option value="">Toutes</option>';
   for (const p of _periodeOptions()) {
@@ -28528,9 +28496,6 @@ function _bilanOpenCrossTab() {
   }
   periodSel.innerHTML = optsHtml;
   periodSel.value = initPeriode;
-  // Reset mode radios
-  document.querySelectorAll('input[name="mbilan-crosstab-mode"]').forEach(r => { r.checked = (r.value === 'periode'); });
-  document.getElementById('mbilan-crosstab-evals-wrap').style.display = 'none';
   _bilanRenderCrossTab();
   openMod('mbilan-crosstab');
 }
@@ -28538,73 +28503,35 @@ function _bilanOpenCrossTab() {
 function _bilanCrossTabOnPeriodChange() {
   const periode = document.getElementById('mbilan-crosstab-period').value;
   _bilanXState.periode = periode;
-  // Recalcule les classes éligibles et préserve la sélection précédente quand elle reste éligible
-  const eligible = new Set(_bilanClassesWithEvals(periode));
-  const next = new Set();
-  for (const cid of _bilanXState.classIds) if (eligible.has(cid)) next.add(cid);
-  if (next.size === 0) for (const cid of eligible) next.add(cid);
-  _bilanXState.classIds = next;
-  // Recalcule les évals éligibles
-  const evs = _bilanCollectEligibleEvals(periode, _bilanXState.classIds);
-  const evIds = new Set(evs.map(e => e.id));
-  const nextEvals = new Set();
-  for (const id of _bilanXState.evalIds) if (evIds.has(id)) nextEvals.add(id);
-  // Si plus rien de cohérent, re-coche tout
-  if (nextEvals.size === 0) for (const id of evIds) nextEvals.add(id);
-  _bilanXState.evalIds = nextEvals;
-  _bilanRenderCrossTab();
-}
-
-function _bilanCrossTabSetMode(mode) {
-  if (mode !== 'periode' && mode !== 'evals') return;
-  _bilanXState.mode = mode;
-  document.getElementById('mbilan-crosstab-evals-wrap').style.display = (mode === 'evals') ? 'flex' : 'none';
-  _bilanRenderCrossTab();
-}
-
-function _bilanCrossTabToggleClass(cid) {
-  if (_bilanXState.classIds.has(cid)) _bilanXState.classIds.delete(cid);
-  else _bilanXState.classIds.add(cid);
-  // Recalcule la liste des évals éligibles (peut élargir / réduire)
-  const evs = _bilanCollectEligibleEvals(_bilanXState.periode, _bilanXState.classIds);
-  const evIds = new Set(evs.map(e => e.id));
-  // Garde la sélection existante restreinte au nouveau set + ajoute les nouvelles si on n'avait rien
-  const nextEvals = new Set();
-  for (const id of _bilanXState.evalIds) if (evIds.has(id)) nextEvals.add(id);
-  _bilanXState.evalIds = nextEvals;
-  _bilanRenderCrossTab();
-}
-
-function _bilanCrossTabToggleClasses(on) {
-  const eligible = _bilanClassesWithEvals(_bilanXState.periode);
-  _bilanXState.classIds = on ? new Set(eligible) : new Set();
-  if (!on) _bilanXState.evalIds = new Set();
-  else {
-    const evs = _bilanCollectEligibleEvals(_bilanXState.periode, _bilanXState.classIds);
-    _bilanXState.evalIds = new Set(evs.map(e => e.id));
+  // Si l'éval sélectionnée n'appartient plus à la nouvelle période → retombe sur Moyenne
+  if (_bilanXState.selectedEvalId) {
+    const ev = S.evaluations?.[_bilanXState.selectedEvalId];
+    if (!ev || (periode && ev.periode !== periode) || ev.countsForMean === false) {
+      _bilanXState.selectedEvalId = null;
+    }
   }
   _bilanRenderCrossTab();
 }
 
-function _bilanCrossTabToggleEval(evalId) {
-  if (_bilanXState.evalIds.has(evalId)) _bilanXState.evalIds.delete(evalId);
-  else _bilanXState.evalIds.add(evalId);
+function _bilanCrossTabSelect(evalId) {
+  // evalId = null ou '__mean' → Moyenne
+  _bilanXState.selectedEvalId = (evalId && evalId !== '__mean') ? evalId : null;
   _bilanRenderCrossTab();
 }
 
-function _bilanCrossTabToggleEvals(on) {
-  const evs = _bilanCollectEligibleEvals(_bilanXState.periode, _bilanXState.classIds);
-  _bilanXState.evalIds = on ? new Set(evs.map(e => e.id)) : new Set();
-  _bilanRenderCrossTab();
-}
-
-// Renvoie pour chaque classe sélectionnée : { classNom, classId, F, M, total }
-// avec F/M/total = stats `_statsForNumbers` ou null.
+// Renvoie pour chaque classe éligible : { classNom, classId, F, M, total }.
+// Le périmètre dépend de _bilanXState.selectedEvalId :
+//   - null  → moyenne pondérée période (classes ayant ≥1 éval comptée)
+//   - evId  → note finale de cette éval pour chaque élève (classes de l'éval)
 function _bilanCrossTabBuild() {
   const periode = _bilanXState.periode;
-  const mode = _bilanXState.mode;
-  const evalIdSet = _bilanXState.evalIds;
-  const classIds = Array.from(_bilanXState.classIds).sort((a, b) =>
+  const evalId = _bilanXState.selectedEvalId;
+  const ev = evalId ? S.evaluations?.[evalId] : null;
+  // Détermine les classes lignes : celles éligibles pour la vue active
+  let classIds;
+  if (ev) classIds = _evalClassIds(ev).filter(cid => S.classes?.[cid]);
+  else    classIds = _bilanClassesWithEvals(periode);
+  classIds = classIds.slice().sort((a, b) =>
     (S.classes[a]?.nom || '').localeCompare(S.classes[b]?.nom || '', 'fr')
   );
   const rows = [];
@@ -28616,8 +28543,14 @@ function _bilanCrossTabBuild() {
     for (const sid of (cls.eleves || [])) {
       const stu = S.eleves[sid];
       let note;
-      if (mode === 'evals') note = _computeStudentMeanForEvalSet(cid, sid, evalIdSet);
-      else                  note = _computeStudentMeanForPeriod(cid, sid, periode);
+      if (ev) {
+        const raw = _computeStudentEvalNote(ev, sid);
+        if (raw == null || !Number.isFinite(raw)) continue;
+        // Ramène à /20 pour cohérence avec la vue Moyenne
+        note = (raw / (ev.noteMax || 20)) * 20;
+      } else {
+        note = _computeStudentMeanForPeriod(cid, sid, periode);
+      }
       if (note == null || !Number.isFinite(note)) continue;
       byCiv.total.push(note);
       if (stu?.civilite === 'F') byCiv.F.push(note);
@@ -28650,49 +28583,33 @@ function _bilanRenderCrossTab() {
   const periodeLbl = _bilanXState.periode
     ? (_periodeOptions().find(p => p.code === _bilanXState.periode)?.label || _bilanXState.periode)
     : 'Toutes périodes';
-  if (titleEl) titleEl.textContent = `🔀 Comparer les classes — ${periodeLbl}`;
+  const evSel = _bilanXState.selectedEvalId ? S.evaluations?.[_bilanXState.selectedEvalId] : null;
+  const scopeLbl = evSel ? `Devoir : ${evSel.nomCourt}` : 'Moyenne période';
+  if (titleEl) titleEl.textContent = `🔀 Comparer les classes — ${periodeLbl} · ${scopeLbl}`;
 
-  // Chips classes
-  const classWrap = document.getElementById('mbilan-crosstab-classes');
-  const eligibleClasses = _bilanClassesWithEvals(_bilanXState.periode);
-  if (eligibleClasses.length === 0) {
-    classWrap.innerHTML = '<span style="color:var(--pencil);font-style:italic">Aucune classe avec note pour cette période</span>';
-  } else {
-    classWrap.innerHTML = eligibleClasses.map(cid => {
-      const on = _bilanXState.classIds.has(cid);
-      const cls = S.classes[cid];
-      return `<button class="chip ${on ? 'on' : ''}" onclick="_bilanCrossTabToggleClass('${_esc(cid)}')" style="padding:3px 10px;border-radius:12px;border:1px solid var(--rule-line);cursor:pointer;background:${on ? 'var(--ink-blue)' : 'var(--paper-warm)'};color:${on ? '#fff' : 'var(--ink-deep)'};font-size:.85em">${_esc(cls?.nom || '?')}</button>`;
-    }).join('');
-  }
-
-  // Chips évaluations (mode 'evals')
+  // Pastilles devoirs + Moyenne en fin de ligne
   const evalsWrap = document.getElementById('mbilan-crosstab-evals');
-  if (_bilanXState.mode === 'evals') {
-    const evs = _bilanCollectEligibleEvals(_bilanXState.periode, _bilanXState.classIds);
-    if (evs.length === 0) {
-      evalsWrap.innerHTML = '<span style="color:var(--pencil);font-style:italic">Aucune éval disponible pour les classes sélectionnées</span>';
-    } else {
-      evalsWrap.innerHTML = evs.map(e => {
-        const on = _bilanXState.evalIds.has(e.id);
-        const date = _evalDateFor(e) || '';
-        const dateLbl = date ? _fmtDateFr(date) : '—';
-        const typeBadge = e.type === 'B' ? 'B' : (e.type === 'C' ? 'C' : 'A');
-        return `<button class="chip ${on ? 'on' : ''}" onclick="_bilanCrossTabToggleEval('${_esc(e.id)}')" title="${_escAttr((e.nomLong || '') + ' · coef ' + (e.coef ?? 1) + ' · ' + dateLbl)}" style="padding:3px 8px;border-radius:12px;border:1px solid var(--rule-line);cursor:pointer;background:${on ? 'var(--ink-blue)' : 'var(--paper-warm)'};color:${on ? '#fff' : 'var(--ink-deep)'};font-size:.82em;font-family:var(--font-mono)">[${typeBadge}] ${_esc(e.nomCourt || '?')} · ${dateLbl}</button>`;
-      }).join('');
+  if (evalsWrap) {
+    const evs = _bilanCollectEligibleEvals(_bilanXState.periode);
+    let html = '';
+    for (const e of evs) {
+      const on = _bilanXState.selectedEvalId === e.id;
+      const date = _evalDateFor(e) || '';
+      const dateLbl = date ? _fmtDateFr(date) : '—';
+      const typeBadge = e.type === 'B' ? 'B' : (e.type === 'C' ? 'C' : 'A');
+      const tip = `${e.nomLong || e.nomCourt || ''} · ${e.type} · coef ${e.coef ?? 1} · ${dateLbl}`;
+      html += `<button class="chip ${on ? 'on' : ''}" onclick="_bilanCrossTabSelect('${_esc(e.id)}')" title="${_escAttr(tip)}" style="padding:3px 10px;border-radius:12px;border:1px solid var(--rule-line);cursor:pointer;background:${on ? 'var(--ink-blue)' : 'var(--paper-warm)'};color:${on ? '#fff' : 'var(--ink-deep)'};font-size:.85em;font-family:var(--font-mono)">[${typeBadge}] ${_esc(e.nomCourt || '?')}</button>`;
     }
+    // Séparateur visuel + pastille Moyenne (toujours présente, à droite)
+    const onMean = _bilanXState.selectedEvalId == null;
+    html += `<span style="display:inline-block;width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>`;
+    html += `<button class="chip ${onMean ? 'on' : ''}" onclick="_bilanCrossTabSelect(null)" title="Moyenne /20 pondérée par coef de la période (cohérente avec la colonne Moy du Bilan des notes)" style="padding:3px 10px;border-radius:12px;border:1px solid var(--rule-line);cursor:pointer;background:${onMean ? 'var(--ink-blue)' : 'var(--paper-warm)'};color:${onMean ? '#fff' : 'var(--ink-deep)'};font-size:.85em;font-weight:600">📊 Moyenne</button>`;
+    evalsWrap.innerHTML = html;
   }
 
   // Tableau croisé
   const wrap = document.getElementById('mbilan-crosstab-wrap');
   if (!wrap) return;
-  if (_bilanXState.classIds.size === 0) {
-    wrap.innerHTML = '<p style="padding:14px;color:var(--pencil);font-style:italic">Sélectionne au moins une classe.</p>';
-    return;
-  }
-  if (_bilanXState.mode === 'evals' && _bilanXState.evalIds.size === 0) {
-    wrap.innerHTML = '<p style="padding:14px;color:var(--pencil);font-style:italic">Sélectionne au moins une évaluation.</p>';
-    return;
-  }
   const { rows, grand } = _bilanCrossTabBuild();
   if (rows.length === 0) {
     wrap.innerHTML = '<p style="padding:14px;color:var(--pencil);font-style:italic">Aucune donnée disponible.</p>';
@@ -28725,11 +28642,11 @@ function _bilanRenderCrossTab() {
 }
 
 function _bilanCrossTabCopy() {
-  if (_bilanXState.classIds.size === 0) {
-    toast('⚠ Aucune classe sélectionnée', 'warn');
+  const { rows, grand } = _bilanCrossTabBuild();
+  if (rows.length === 0) {
+    toast('⚠ Aucune donnée à copier', 'warn');
     return;
   }
-  const { rows, grand } = _bilanCrossTabBuild();
   const header = ['Classe', 'F moy', 'F n', 'F σ', 'F méd', 'M moy', 'M n', 'M σ', 'M méd', 'Total moy', 'Total n', 'Total σ', 'Total méd'];
   const lines = [header.join('\t')];
   const fmt = v => v == null ? '' : _fmtNote(v).replace('.', ',');
@@ -31852,53 +31769,6 @@ function _computeStudentMeanForPeriod(classId, sid, periode) {
     }
   }
   if (den === 0 && num > 0) return num; // cas bonus pur sans aucune obligatoire — improbable mais cohérent
-  if (den === 0) return null;
-  return num / den;
-}
-
-// Variante de _computeStudentMeanForPeriod restreinte à un sous-ensemble d'évals
-// (par id). Utilisée par la modale "Comparer classes" du Bilan des notes en mode
-// "Évaluations sélectionnées". Même règles de pondération (coef + facultatives).
-function _computeStudentMeanForEvalSet(classId, sid, evalIdSet) {
-  if (!evalIdSet || evalIdSet.size === 0) return null;
-  const evs = Object.values(S.evaluations || {})
-    .filter(e => evalIdSet.has(e.id))
-    .filter(e => _evalIncludesClass(e, classId))
-    .filter(e => e.countsForMean !== false);
-  if (evs.length === 0) return null;
-  const noteMaxRef = 20;
-  const obligatoires = evs.filter(e => !e.facultative?.active);
-  const facultatives = evs.filter(e =>  e.facultative?.active);
-  let num = 0, den = 0;
-  for (const ev of obligatoires) {
-    const note = _computeStudentEvalNote(ev, sid);
-    if (note == null) continue;
-    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
-    const coef = (ev.coef != null ? ev.coef : 1);
-    num += coef * noteSur20;
-    den += coef;
-  }
-  for (const ev of facultatives) {
-    const note = _computeStudentEvalNote(ev, sid);
-    if (note == null) continue;
-    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
-    const coef = (ev.coef != null ? ev.coef : 1);
-    const mode = ev.facultative.mode || 'improveOnly';
-    if (mode === 'over10') {
-      if (noteSur20 > 10) { num += coef * noteSur20; den += coef; }
-    } else if (mode === 'bonus') {
-      if (noteSur20 > 10) { num += coef * (noteSur20 - 10); }
-    } else {
-      const num2 = num + coef * noteSur20;
-      const den2 = den + coef;
-      const moyAvec = (den2 > 0) ? num2 / den2 : null;
-      const moyActuelle = (den > 0) ? num / den : null;
-      if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
-        num = num2; den = den2;
-      }
-    }
-  }
-  if (den === 0 && num > 0) return num;
   if (den === 0) return null;
   return num / den;
 }
