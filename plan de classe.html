@@ -3363,6 +3363,15 @@ kbd {
           <option value="0.5">Demi-point (12 · 12,5)</option>
           <option value="1">Entier (12 · 13)</option>
         </select>
+        <label>Granulométrie moyenne</label>
+        <select id="evalprefs-meanGranularity" style="padding:4px 8px;font-size:.9em" title="Précision d'arrondi pour la moyenne générale /20 (Bilan des notes, colonnes Moy)">
+          <option value="0">Aucune (toutes décimales)</option>
+          <option value="0.01">Centième (12,34)</option>
+          <option value="0.1">Dixième (12,3)</option>
+          <option value="0.25">Quart de point</option>
+          <option value="0.5">Demi-point</option>
+          <option value="1">Entier (12 · 13)</option>
+        </select>
       </div>
     </div>
 
@@ -5023,7 +5032,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T08:40:00Z';
+const APP_VERSION   = '2026-05-23T09:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5683,6 +5692,10 @@ const DEFAULT_EVAL_PREFS = {
   //   0.1 = dixième (12.1, 12.2…)
   //   0   = aucune (toutes les décimales, défaut historique)
   defaultGranularity: 0,
+  // Granulométrie de la moyenne générale (Bilan des notes, colonnes Moy /20).
+  // Indépendante de la granulométrie des évaluations individuelles : la moyenne
+  // pondérée par coef agrège des notes /20 et est arrondie selon ce pas avant affichage.
+  meanGranularity: 0.01,
   // Mode auto pour la palette niveaux : si true, on ré-applique _defaultColorsForNb(nb)
   // à chaque enregistrement (et la palette s'adapte automatiquement quand on change nbLevels).
   maitriseColorsAuto: false,
@@ -5768,6 +5781,7 @@ function migrateEvalDefaults() {
   if (!['nom-prenom','prenom-nom'].includes(ep.defaultSort)) ep.defaultSort = 'nom-prenom';
   if (!['question','student','column'].includes(ep.defaultEnterBehavior)) ep.defaultEnterBehavior = 'question';
   if (typeof ep.defaultGranularity !== 'number' || ep.defaultGranularity < 0) ep.defaultGranularity = 0;
+  if (typeof ep.meanGranularity !== 'number' || ep.meanGranularity < 0) ep.meanGranularity = DEFAULT_EVAL_PREFS.meanGranularity;
   if (!Array.isArray(ep.noteThresholds) || ep.noteThresholds.length === 0) {
     ep.noteThresholds = DEFAULT_EVAL_PREFS.noteThresholds.map(t => ({ ...t }));
   }
@@ -24605,6 +24619,7 @@ function _evalPrefsRenderAll(prefs) {
   const ds = document.getElementById('evalprefs-defaultSort'); if (ds) ds.value = prefs.defaultSort || 'nom-prenom';
   const de = document.getElementById('evalprefs-defaultEnter'); if (de) de.value = prefs.defaultEnterBehavior || 'question';
   const dg = document.getElementById('evalprefs-defaultGranularity'); if (dg) dg.value = String(prefs.defaultGranularity ?? 0);
+  const mg = document.getElementById('evalprefs-meanGranularity'); if (mg) mg.value = String(prefs.meanGranularity ?? 0.01);
   // ── Seuils de couleur note ──
   const wtAuto = document.getElementById('evalprefs-thresholdsAuto');
   if (wtAuto) wtAuto.checked = !!prefs.noteThresholdsAuto;
@@ -24915,6 +24930,8 @@ function _evalPrefsSave() {
   S.evalPrefs.defaultEnterBehavior = document.getElementById('evalprefs-defaultEnter')?.value || 'question';
   const dGran = parseFloat(document.getElementById('evalprefs-defaultGranularity')?.value);
   S.evalPrefs.defaultGranularity = (Number.isFinite(dGran) && dGran >= 0) ? dGran : 0;
+  const mGran = parseFloat(document.getElementById('evalprefs-meanGranularity')?.value);
+  S.evalPrefs.meanGranularity = (Number.isFinite(mGran) && mGran >= 0) ? mGran : 0;
   // Seuils note /20 (auto ou manuel)
   const thresholdsAuto = !!document.getElementById('evalprefs-thresholdsAuto')?.checked;
   S.evalPrefs.noteThresholdsAuto = thresholdsAuto;
@@ -32277,11 +32294,15 @@ function renderBilanTab() {
   // Marqueurs : evPeriodBreak[k] = true si l'éval k commence un nouveau bloc période
   const evPeriodBreak = evs.map((ev, k) => k > 0 && periode === '' && groupByPeriod && ev.periode !== evs[k-1].periode);
 
-  // Cache des notes /20 par (sid × evalId)
+  // Cache des notes /20 par (sid × evalId).
+  // Granulométrie : on respecte celle de l'éval (ev.granularity, ou défaut global)
+  // appliquée à la valeur ramenée /20. Ainsi, une éval avec granularité 0,5
+  // affiche dans le bilan des notes alignées sur ce pas.
   const noteSur20 = (ev, sid) => {
     const n = _computeStudentEvalNote(ev, sid);
     if (n == null) return null;
-    return (n / (ev.noteMax || 20)) * 20;
+    const v = (n / (ev.noteMax || 20)) * 20;
+    return _roundNoteToGranularity(v, ev);
   };
   // Liste des "périodes de synthèse" : si periode == '' (Toutes), on affiche
   // une colonne Moyenne + Rang + Remarque PAR PÉRIODE (S1, S2 ou T1/T2/T3).
@@ -32486,16 +32507,19 @@ function renderBilanTab() {
       }
     }
     // Moyenne + Rang par période de synthèse (skip si col masquée)
+    const _meanGran = (S.evalPrefs?.meanGranularity ?? 0.01);
+    const _roundMean = (v) => (v == null || _meanGran <= 0) ? v : Math.round(v / _meanGran) * _meanGran;
     synthData.forEach((sd, sdIdx) => {
       const moy = sd.studentMoy.get(sid);
+      const moyDisp = _roundMean(moy);
       const rank = sd.rankMap.get(sid);
       if (moy != null) moyValuesByPer[sdIdx].push(moy);
       const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
       if (!_isBilanColHidden(moyKey(sd))) {
-        if (moy != null) {
-          const moyBg = _noteColor(moy, 20);
+        if (moyDisp != null) {
+          const moyBg = _noteColor(moyDisp, 20);
           const moyColor = moyBg ? _contrastTextColor(moyBg) : 'var(--ink-blue)';
-          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};${sep}">${_fmtNote(moy)}</td>`;
+          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};${sep}">${_fmtNote(moyDisp)}</td>`;
         } else {
           html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
         }
@@ -32575,10 +32599,14 @@ function renderBilanTab() {
         html += `<td style="background:var(--paper-warm);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
       } else {
         const s = _statsForNumbers(vals);
-        const bg = _noteColor(s.avg, 20);
+        // Arrondi à la granulométrie de la moyenne générale (pour cohérence
+        // avec les cellules de moyenne par élève).
+        const _mg = (S.evalPrefs?.meanGranularity ?? 0.01);
+        const avgDisp = (_mg > 0) ? Math.round(s.avg / _mg) * _mg : s.avg;
+        const bg = _noteColor(avgDisp, 20);
         const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
         const lbl = 'Moyenne classe' + (synthData.length > 1 ? ' ' + sd.perCode : '');
-        html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;${sep}" title="${_esc(_statsTip(vals, lbl))}">${_fmtNote(s.avg)}</td>`;
+        html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;${sep}" title="${_esc(_statsTip(vals, lbl))}">${_fmtNote(avgDisp)}</td>`;
       }
     }
     if (!_isBilanColHidden(rangKey(sd))) {
