@@ -2545,6 +2545,7 @@ kbd {
     <div class="sh">
       <h2>📊 Devoirs</h2>
       <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation (choix d'une ou plusieurs classes)">+ Nouvelle évaluation</button>
+      <span id="eval-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em;margin-left:24px;flex-wrap:wrap"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <button class="btn btn-g btn-sm" id="evhelp-btn-notes" onclick="_evhelpToggle('notes')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
@@ -25065,10 +25066,19 @@ function _evalListToggleReverseType() {
   try { localStorage.setItem('planClasse_evalListReverseType', cur ? '0' : '1'); } catch (e) {}
   renderEvalNotes();
 }
-function _evalListToggleGroupByPeriod() {
-  let cur = true;
-  try { const v = localStorage.getItem('planClasse_evalListGroupByPeriod'); cur = v == null ? true : v === '1'; } catch (e) {}
-  try { localStorage.setItem('planClasse_evalListGroupByPeriod', cur ? '0' : '1'); } catch (e) {}
+// Cycle 3 états du groupement par période : asc → desc → off → asc
+function _evalListCyclePeriodGroup() {
+  let cur = 'asc';
+  try {
+    const v = localStorage.getItem('planClasse_evalListPeriodGroup');
+    if (v === 'asc' || v === 'desc' || v === 'off') cur = v;
+    else {
+      const legacy = localStorage.getItem('planClasse_evalListGroupByPeriod');
+      if (legacy === '0') cur = 'off';
+    }
+  } catch (e) {}
+  const next = { asc: 'desc', desc: 'off', off: 'asc' }[cur];
+  try { localStorage.setItem('planClasse_evalListPeriodGroup', next); } catch (e) {}
   renderEvalNotes();
 }
 
@@ -25077,6 +25087,9 @@ function renderEvalNotes() {
   const cls = getCls();
   const wrap = document.getElementById('evals-list-wrap');
   if (!wrap) return;
+  // Reset la toolbar de tri (sera re-peuplée plus bas si une classe est sélectionnée)
+  const _tbResetEv = document.getElementById('eval-sort-toolbar');
+  if (_tbResetEv) _tbResetEv.innerHTML = '';
 
   // Sélecteur de période — distingue "pas encore initialisé" de "Toutes" (vide explicite)
   const sel = document.getElementById('eval-period-filter');
@@ -25151,15 +25164,26 @@ function renderEvalNotes() {
   const cmp = cmps[sortMode] || cmps.date;
   let evs = allEvs.slice().sort(cmp);
   const grouped = (sortMode === 'type-date' || sortMode === 'type-name');
-  // Toggle "Grouper par période" — actif uniquement en mode Toutes (periode === '')
-  // avec ≥ 2 périodes disponibles. Quand on, re-tri avec la période en clé primaire.
-  const groupByPeriodEv = (() => { try { const v = localStorage.getItem('planClasse_evalListGroupByPeriod'); return v == null ? true : v === '1'; } catch (e) { return true; } })();
+  // Toggle "Grouper par période" — 3 états : 'asc' (S1 → S2), 'desc' (S2 → S1),
+  // 'off' (non groupé). Actif uniquement en mode Toutes (periode === '') avec
+  // ≥ 2 périodes disponibles. Migration de l'ancienne clé '1'/'0' → 'asc'/'off'.
+  const periodGroupMode = (() => {
+    try {
+      const v = localStorage.getItem('planClasse_evalListPeriodGroup');
+      if (v === 'asc' || v === 'desc' || v === 'off') return v;
+      // fallback : ancienne clé booléenne
+      const legacy = localStorage.getItem('planClasse_evalListGroupByPeriod');
+      if (legacy === '0') return 'off';
+      return 'asc';
+    } catch (e) { return 'asc'; }
+  })();
   const _perOrderEv = _periodeOptions().map(o => o.code);
   const _perIdxEv = (p) => { const i = _perOrderEv.indexOf(p); return i < 0 ? 999 : i; };
   const _showPerToggle = (periode === '' && _perOrderEv.length > 1);
-  if (_showPerToggle && groupByPeriodEv) {
+  if (_showPerToggle && periodGroupMode !== 'off') {
+    const dir = periodGroupMode === 'desc' ? -1 : 1;
     evs = evs.slice().sort((a, b) => {
-      const pd = _perIdxEv(a.periode) - _perIdxEv(b.periode);
+      const pd = dir * (_perIdxEv(a.periode) - _perIdxEv(b.periode));
       return pd !== 0 ? pd : cmp(a, b);
     });
   }
@@ -25171,31 +25195,42 @@ function renderEvalNotes() {
     { v: 'type-date', lbl: '📂 Type, puis date' },
     { v: 'type-name', lbl: '📂 Type, puis nom' },
   ];
-  let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:.86em;flex-wrap:wrap">';
-  html += '<span style="color:var(--pencil)">Tri :</span>';
-  html += `<select onchange="_evalListSetSortMode(this.value)" style="padding:3px 8px;font-size:.9em">`;
-  for (const o of opts) {
-    html += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
+  // Toolbar de tri : placée dans le header .sh (placeholder #eval-sort-toolbar)
+  // — peuplée à chaque render. Reset puis remplit.
+  let html = '';
+  const _evalTbHost = document.getElementById('eval-sort-toolbar');
+  if (_evalTbHost) {
+    let tbHtml = '<span style="color:var(--pencil)">Tri :</span>';
+    tbHtml += `<select onchange="_evalListSetSortMode(this.value)" style="padding:3px 8px;font-size:.9em">`;
+    for (const o of opts) {
+      tbHtml += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
+    }
+    tbHtml += '</select>';
+    if (grouped) {
+      const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${reverseType ? 'C→A' : 'A→C'}</button>`;
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${reverse ? '↑ inversé' : '↓ normal'}</button>`;
+    } else {
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
+    }
+    if (_showPerToggle) {
+      const perLbls = {
+        asc:  `↓ ${_perOrderEv[0]} → ${_perOrderEv[_perOrderEv.length - 1]}`,
+        desc: `↑ ${_perOrderEv[_perOrderEv.length - 1]} → ${_perOrderEv[0]}`,
+        off:  '⊘ Non groupé',
+      };
+      const nextLbl = { asc: 'desc', desc: 'off', off: 'asc' };
+      const tip = 'Groupement par période : clic pour passer à l\'état suivant (↓ S1→S2 · ↑ S2→S1 · ⊘ Non groupé)';
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListCyclePeriodGroup()" style="padding:3px 8px" title="${tip}">${perLbls[periodGroupMode]}</button>`;
+    }
+    _evalTbHost.innerHTML = tbHtml;
   }
-  html += '</select>';
-  if (grouped) {
-    const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
-    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${reverseType ? 'C→A' : 'A→C'}</button>`;
-    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${reverse ? '↑ inversé' : '↓ normal'}</button>`;
-  } else {
-    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
-  }
-  if (_showPerToggle) {
-    const onLbl = groupByPeriodEv ? '✓' : '○';
-    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleGroupByPeriod()" style="padding:3px 8px" title="Séparer visuellement les évaluations par période (${_perOrderEv.join('/')})">${onLbl} Grouper par période</button>`;
-  }
-  html += '</div>';
 
   html += '<div style="display:flex;flex-direction:column;gap:8px">';
   let lastType = null;
   let lastPeriode = null;
   const typeLabels = { A: 'TYPE A — Mini-notes', B: 'TYPE B — Compétences', C: 'TYPE C — Sommative' };
-  const _periodeBlockOn = (_showPerToggle && groupByPeriodEv);
+  const _periodeBlockOn = (_showPerToggle && periodGroupMode !== 'off');
   for (const ev of evs) {
     // Insère un en-tête de groupe période (uniquement en mode Toutes + toggle on)
     if (_periodeBlockOn && ev.periode !== lastPeriode) {
