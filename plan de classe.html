@@ -2688,6 +2688,9 @@ kbd {
     <div class="fg"><label>Groupe</label>
       <select id="ns-grp"><option value="">— Aucun groupe —</option><option value="1">🔵 Groupe 1</option><option value="2">🟠 Groupe 2</option><option value="3">🟣 Groupe 3</option></select>
     </div>
+    <div class="fg"><label for="ns-arrival">📅 Arrivée <span style="font-size:.78em;color:#888">(facultatif — vide = présent depuis la rentrée)</span></label>
+      <input type="date" id="ns-arrival" title="Premier jour de présence de l'élève. Vide = présent depuis la rentrée.">
+    </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('ms')">Annuler</button>
       <button class="btn btn-p" onclick="addStudent()">Ajouter</button>
@@ -2767,6 +2770,15 @@ kbd {
     </div>
     <div class="fg"><label>Notes (affichées au survol de la place)</label>
       <textarea id="es-notes" rows="3" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em;resize:vertical" placeholder="Aménagements, PAP, observations…"></textarea>
+    </div>
+    <div style="font-size:.78em;color:#777;margin:10px 0 4px">Arrivée / départ en cours d'année (laisser vide si présent toute l'année)</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="fg" style="flex:1;min-width:160px"><label for="es-arrival">📅 Arrivée</label>
+        <input type="date" id="es-arrival" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em" title="Premier jour de présence (vide = présent depuis la rentrée)">
+      </div>
+      <div class="fg" style="flex:1;min-width:160px"><label for="es-departure">🚪 Départ</label>
+        <input type="date" id="es-departure" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em" title="Premier jour d'absence (vide = toujours présent)">
+      </div>
     </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('me')">Annuler</button>
@@ -5050,7 +5062,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T10:10:00Z';
+const APP_VERSION   = '2026-05-23T16:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5550,6 +5562,9 @@ function postLoadHook() {
   for (const stu of Object.values(S.eleves || {})) {
     if (!Array.isArray(stu.tags)) stu.tags = [];
     if (typeof stu.civilite === 'undefined') stu.civilite = null; // 'M' | 'F' | null
+    // Arrivées/départs en cours d'année : null = présent par défaut
+    if (typeof stu.arrivalDate   === 'undefined') stu.arrivalDate   = null;
+    if (typeof stu.departureDate === 'undefined') stu.departureDate = null;
   }
   // Migration : chaque salle a un map posTagId pour les places affectées à un tag
   // (mutuellement exclusif avec room.groupes — une place est soit dans une zone
@@ -10822,14 +10837,16 @@ function addStudent() {
   if (!nom || !prn) return alert('Remplissez nom et prénom.');
   const grp = parseInt(document.getElementById('ns-grp').value) || null;
   const civ = document.getElementById('ns-civ').value || null;
+  const arr = (document.getElementById('ns-arrival')?.value || '').trim() || null;
 
   const id = uid();
-  S.eleves[id] = { id, nom, prenom: prn, classe_id: cls.id, oublis: 0, non_travail: 0, groupe: grp, civilite: civ, tags: [] };
+  S.eleves[id] = { id, nom, prenom: prn, classe_id: cls.id, oublis: 0, non_travail: 0, groupe: grp, civilite: civ, tags: [], arrivalDate: arr, departureDate: null };
   cls.eleves.push(id);
   document.getElementById('ns-nom').value = '';
   document.getElementById('ns-prn').value = '';
   document.getElementById('ns-grp').value = '';
   document.getElementById('ns-civ').value = '';
+  const _arrEl = document.getElementById('ns-arrival'); if (_arrEl) _arrEl.value = '';
   closeMod2('ms');
   save();
   renderStudents();
@@ -11082,6 +11099,8 @@ function openEdit(id) {
   document.getElementById('es-upe2a-incl').checked  = !!s.upe2a_incl;
   document.getElementById('es-pai').checked         = !!s.pai;
   document.getElementById('es-notes').value         = s.notes || '';
+  document.getElementById('es-arrival').value       = s.arrivalDate   || '';
+  document.getElementById('es-departure').value     = s.departureDate || '';
   openMod('me');
 }
 
@@ -11099,6 +11118,15 @@ function saveEdit() {
   // PAI (médical) — cumulable, lecture directe
   s.pai       = !!document.getElementById('es-pai').checked;
   s.notes     = document.getElementById('es-notes').value.trim();
+  // Arrivée / départ en cours d'année (premier jour d'absence pour le départ)
+  const _arr = (document.getElementById('es-arrival').value || '').trim();
+  const _dep = (document.getElementById('es-departure').value || '').trim();
+  if (_arr && _dep && _arr >= _dep) {
+    toast('⚠ La date de départ doit être strictement après la date d\'arrivée');
+    return;
+  }
+  s.arrivalDate   = _arr || null;
+  s.departureDate = _dep || null;
 
   // Changement de classe ?
   const newClsId = document.getElementById('es-cls')?.value;
@@ -11928,11 +11956,21 @@ function renderStudents() {
     const civColor = s.civilite === 'M' ? '#3498db' : s.civilite === 'F' ? '#e91e63' : '#bbb';
     const civSym   = civiliteLabel(s.civilite);
     const civBtn = `<button class="btn btn-sm" onclick="event.stopPropagation();cycleCivilite('${s.id}')" onmousedown="event.stopPropagation()" title="Civilité : ${_escAttr(civiliteFullLabel(s.civilite))} — clic pour cycler" style="background:transparent;color:${civColor};font-size:1.05em;padding:0 5px;font-weight:700;min-width:22px">${civSym}</button>`;
+    // Arrivée / départ : badge visuel à côté du nom (élève futur ou parti)
+    const _td = todayKey();
+    const _isFuture = !!(s.arrivalDate   && _td <  s.arrivalDate);
+    const _isGone   = !!(s.departureDate && _td >= s.departureDate);
+    const _inactive = _isFuture || _isGone;
+    const _fmtFr = (ymd) => { if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd || ''; const [y,m,d]=ymd.split('-'); return `${d}/${m}/${y}`; };
+    let _lifeBadge = '';
+    if (_isFuture) _lifeBadge = `<span title="Arrive le ${_fmtFr(s.arrivalDate)}" style="background:#dbeafe;color:#1e40af;font-size:.7em;font-family:var(--font-mono);padding:1px 5px;border-radius:8px;margin-left:6px;font-weight:600">📅 ${_fmtFr(s.arrivalDate)}</span>`;
+    else if (_isGone) _lifeBadge = `<span title="Parti le ${_fmtFr(s.departureDate)}" style="background:#fee2e2;color:#991b1b;font-size:.7em;font-family:var(--font-mono);padding:1px 5px;border-radius:8px;margin-left:6px;font-weight:600">🚪 ${_fmtFr(s.departureDate)}</span>`;
+    const _rowStyle = _inactive ? 'opacity:.55;font-style:italic' : '';
     return `
-      <tr data-sid="${s.id}" class="${sel.trim()}"
+      <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)"
           onmouseenter="onEleveRowMouseEnter('${s.id}')">
-        <td>${civBtn}<strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</td>
+        <td>${civBtn}<strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}${_lifeBadge}</td>
         <td>${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>
@@ -12488,6 +12526,8 @@ function renderTeacherGrid() {
   const inFilter  = allEleves.filter(s =>
     (groupFilter === 0 || s.groupe === groupFilter)
     && (_tagFilter.size === 0 || studentHasAllTags(s, _tagFilter))
+    // Élève inactif aujourd'hui (pas encore arrivé / déjà parti) : exclu du compteur
+    && _stuActiveOn(s)
   );
   const placedSet = new Set(Object.values(cls.seating));
   const placedN   = inFilter.filter(s => placedSet.has(s.id)).length;
@@ -12671,8 +12711,12 @@ function buildSnapshotCell(salle, row, col, seating) {
 function buildCell(cls, row, col) {
   const key   = `${row},${col}`;
   const noTbl = cls.configuration.positions_vides.includes(key);
-  const sid   = cls.seating[key];
-  const stu   = sid ? S.eleves[sid] : null;
+  let   sid   = cls.seating[key];
+  let   stu   = sid ? S.eleves[sid] : null;
+  // Élève pas encore arrivé / déjà parti à la date du jour : on traite la
+  // place comme vide (le sid reste dans seating, c'est purement un masque
+  // d'affichage). Le siège pourra réaccueillir l'élève dès qu'il devient actif.
+  if (stu && !_stuActiveOn(stu)) { sid = null; stu = null; }
   const ipad  = ipadGet(cls, key, groupFilter);
   const seatG = (cls.groupes || {})[key] || 0;     // groupe de la PLACE (0=non assigné)
   const seatTagId = (cls.posTagId || {})[key] || null;
@@ -13413,11 +13457,20 @@ function renderUnplaced() {
   const search = document.getElementById('unpl-search');
   if (!cls) { el.innerHTML = ''; if (search) search.style.display = 'none'; return; }
 
-  const placed = new Set(Object.values(cls.seating));
+  // Un sid dans seating mais dont l'élève est inactif (pas encore arrivé /
+  // déjà parti) ne compte PAS comme "placé" — son siège est traité comme vide
+  // par buildCell, donc l'élève redevient candidat à un autre placement futur.
+  const placedActive = new Set(
+    Object.entries(cls.seating)
+      .filter(([_, sid]) => sid && _stuActiveOn(S.eleves[sid]))
+      .map(([_, sid]) => sid)
+  );
   // En classe recomposée, certains élèves viennent d'autres classes : on les distingue par badge
   const isVirtual = !!cls.virtual;
   const allUnplaced = (cls.eleves || []).map(id => S.eleves[id])
-    .filter(s => s && !placed.has(s.id))
+    // On masque les élèves inactifs (pas encore arrivés / déjà partis) de la
+    // liste des « non placés » — ils ne sont pas à placer dans le contexte actuel.
+    .filter(s => s && _stuActiveOn(s) && !placedActive.has(s.id))
     .sort((a,b) => a.nom.localeCompare(b.nom));
 
   if (search) search.style.display = allUnplaced.length ? '' : 'none';
@@ -13774,8 +13827,10 @@ function renderStudentView() {
     for (let c = 0; c < cols; c++) {
       const key = `${r},${c}`;
       const nt  = cls.configuration.positions_vides.includes(key);
-      const sid = cls.seating[key];
-      const stu = sid ? S.eleves[sid] : null;
+      let sid = cls.seating[key];
+      let stu = sid ? S.eleves[sid] : null;
+      // Élève inactif (pas encore arrivé / déjà parti) → siège vide en Vue Élève.
+      if (stu && !_stuActiveOn(stu)) { sid = null; stu = null; }
       const aeshIdxHere = aeshAtKey(cls, key);
 
       const cell = document.createElement('div');
@@ -18052,6 +18107,46 @@ let _viewingAttRecord = null;
 function todayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── Arrivées/départs d'élèves en cours d'année ──────────────────────────────
+// Renvoie true si l'élève est actif (présent) à la date `ymd` (YYYY-MM-DD).
+// Conventions :
+//   - arrivalDate null → présent depuis toujours (rentrée).
+//   - departureDate null → toujours présent.
+//   - departureDate = 1er jour d'absence → actif si ymd < departureDate.
+// Si ymd est omis, on prend la date du jour.
+function _stuActiveOn(stu, ymd) {
+  if (!stu) return false;
+  const d = ymd || todayKey();
+  if (stu.arrivalDate   && d <  stu.arrivalDate)   return false;
+  if (stu.departureDate && d >= stu.departureDate) return false;
+  return true;
+}
+
+// Date de fin (YYYY-MM-DD) de la période donnée pour l'année scolaire courante.
+// Logique calquée sur _currentPeriode : si on est >= septembre, l'année scolaire
+// commence cette année (yStart) et se termine l'an prochain (yEnd) ; sinon yStart = Y-1.
+// periode == '' (Toutes) → fin de l'année scolaire (31/08).
+function _periodEndDate(periode) {
+  const now = new Date();
+  const Y = now.getFullYear();
+  const M = now.getMonth(); // 0=jan
+  const yStart = (M >= 8) ? Y : Y - 1;
+  const yEnd   = yStart + 1;
+  const mk = (y, mo, d) => `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const mode = S.evalPrefs?.periodMode || 'semestre';
+  if (mode === 'trimestre') {
+    if (periode === 'T1') return mk(yStart, 11, 30);
+    if (periode === 'T2') {
+      const lastFeb = new Date(yEnd, 2, 0).getDate(); // jour 0 du mois 2 (mars) = dernier jour de février
+      return mk(yEnd, 2, lastFeb);
+    }
+    return mk(yEnd, 8, 31); // T3 ou défaut (Toutes)
+  }
+  // Semestres (défaut)
+  if (periode === 'S1') return mk(yEnd, 1, 31);
+  return mk(yEnd, 8, 31); // S2 ou défaut (Toutes)
 }
 
 // Vérifie qu'on est encore dans le créneau enregistré.
@@ -27063,14 +27158,18 @@ function _evalOpenSaisie() {
     toast('⚠ Aucun élève dans cette classe', 'warn');
     return;
   }
-  // Trie alphabétique nom-prénom (défaut ENT)
-  const sids = cls.eleves.slice().sort((a, b) => {
-    const sa = S.eleves[a], sb = S.eleves[b];
-    if (!sa || !sb) return 0;
-    const ka = (sa.nom || '').toLowerCase() + '|' + (sa.prenom || '').toLowerCase();
-    const kb = (sb.nom || '').toLowerCase() + '|' + (sb.prenom || '').toLowerCase();
-    return ka.localeCompare(kb, 'fr');
-  });
+  // Trie alphabétique nom-prénom (défaut ENT). Filtre les élèves arrivés
+  // après ou partis avant la date de l'éval (présence à la date du devoir).
+  const _refDate = _evalDateFor(ev, cls.id) || todayKey();
+  const sids = cls.eleves.slice()
+    .filter(sid => _stuActiveOn(S.eleves[sid], _refDate))
+    .sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      if (!sa || !sb) return 0;
+      const ka = (sa.nom || '').toLowerCase() + '|' + (sa.prenom || '').toLowerCase();
+      const kb = (sb.nom || '').toLowerCase() + '|' + (sb.prenom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
   if (sids.length === 0) return;
   document.getElementById('meval-saisie-evalid').value = evalId;
   document.getElementById('meval-saisie-sid').value = sids[0];
@@ -27681,19 +27780,22 @@ function _evalTableurChangeSlot(slotId) {
 
 function _evalTableurSortedSids(cls) {
   const mode = document.getElementById('meval-tableur-sort')?.value || 'nom-prenom';
+  // Date de référence pour la présence : date de l'éval pour la classe active,
+  // fallback aujourd'hui. Un élève arrivé après ou parti avant la date de l'éval
+  // n'apparaît pas dans le tableur (il n'était pas là le jour du devoir).
+  const _evalId  = document.getElementById('meval-tableur-evalid')?.value;
+  const _ev      = S.evaluations?.[_evalId];
+  const _refDate = (_ev ? _evalDateFor(_ev, cls.id) : null) || todayKey();
+  const _activeFilter = (sid) => _stuActiveOn(S.eleves[sid], _refDate);
   // Pattern de ramassage : mode = 'pat-<patternId>'
   if (mode.startsWith('pat-')) {
     const patternId = mode.slice(4);
-    // Utilise le seating snapshoté à la date de l'éval pour LA CLASSE active
-    // (multi-classes : chaque classe a son propre snapshot via _evalSeatingHashFor)
-    const evalId = document.getElementById('meval-tableur-evalid')?.value;
-    const ev = S.evaluations?.[evalId];
-    const hash = _evalSeatingHashFor(ev, cls.id);
+    const hash = _evalSeatingHashFor(_ev, cls.id);
     const snapSeating = hash ? _getSeatingSnapshot(hash) : null;
     const ordered = _sidsOrderedByPattern(cls, patternId, snapSeating);
-    if (ordered) return ordered;
+    if (ordered) return ordered.filter(_activeFilter);
   }
-  const sids = (cls.eleves || []).slice();
+  const sids = (cls.eleves || []).slice().filter(_activeFilter);
   if (mode === 'prenom-nom') {
     sids.sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
@@ -28930,8 +29032,13 @@ function _bilanCrossTabBuild() {
     const cls = S.classes?.[cid];
     if (!cls) continue;
     const byCiv = { F: [], M: [], total: [] };
+    // Date de référence : pour un devoir précis, on prend SA date (présence à
+    // la date du devoir). Pour la moyenne période, fin de période (présents en
+    // fin de période — convention « bulletin »).
+    const _refDate = ev ? (_evalDateFor(ev, cid) || todayKey()) : _periodEndDate(periode || '');
     for (const sid of (cls.eleves || [])) {
       const stu = S.eleves[sid];
+      if (!_stuActiveOn(stu, _refDate)) continue;
       let note;
       if (ev) {
         // Note /20 arrondie à la granulométrie de l'éval — cohérence avec
@@ -32306,13 +32413,18 @@ function renderBilanTab() {
     return;
   }
 
-  // Tri élèves alpha nom-prénom
-  const sids = cls.eleves.slice().sort((a, b) => {
-    const sa = S.eleves[a], sb = S.eleves[b];
-    const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
-    const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
-    return ka.localeCompare(kb, 'fr');
-  });
+  // Tri élèves alpha nom-prénom + filtre arrivées/départs : on n'affiche que
+  // les élèves présents à la fin de la période sélectionnée (S1 / S2 / T... ou
+  // fin d'année scolaire en mode Toutes). C'est la liste « bulletin » naturelle.
+  const _bilanRefDate = _periodEndDate(periode || '');
+  const sids = cls.eleves.slice()
+    .filter(sid => _stuActiveOn(S.eleves[sid], _bilanRefDate))
+    .sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+      const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
 
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
 
@@ -32785,11 +32897,15 @@ function _bilanBuildRows() {
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
     .sort((a, b) => (_evalDateFor(a, cls.id) || '').localeCompare(_evalDateFor(b, cls.id) || ''));
-  const sids = cls.eleves.slice().sort((a, b) => {
-    const sa = S.eleves[a], sb = S.eleves[b];
-    return ((sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase())
-      .localeCompare((sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase(), 'fr');
-  });
+  // Même filtre arrivées/départs que le rendu visuel : présents en fin de période.
+  const _refDate = _periodEndDate(periode || '');
+  const sids = cls.eleves.slice()
+    .filter(sid => _stuActiveOn(S.eleves[sid], _refDate))
+    .sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      return ((sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase())
+        .localeCompare((sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase(), 'fr');
+    });
   // Granulométrie d'éval appliquée — alignée avec l'affichage du Bilan.
   const noteSur20 = (ev, sid) => _evalNoteSur20Rounded(ev, sid);
   const rows = sids.map(sid => {
@@ -33465,13 +33581,17 @@ function renderCompetencesTab() {
       };
     });
   }
-  // Tri élèves alpha nom-prénom
-  const sids = cls.eleves.slice().sort((a, b) => {
-    const sa = S.eleves[a], sb = S.eleves[b];
-    const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
-    const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
-    return ka.localeCompare(kb, 'fr');
-  });
+  // Tri élèves alpha nom-prénom + filtre arrivées/départs : présents en fin
+  // de période (cohérent avec le Bilan des notes — convention « bulletin »).
+  const _compRefDate = _periodEndDate(periode || '');
+  const sids = cls.eleves.slice()
+    .filter(sid => _stuActiveOn(S.eleves[sid], _compRefDate))
+    .sort((a, b) => {
+      const sa = S.eleves[a], sb = S.eleves[b];
+      const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+      const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+      return ka.localeCompare(kb, 'fr');
+    });
 
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
   // Bandeau "Colonnes masquées" si applicable

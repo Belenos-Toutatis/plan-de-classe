@@ -248,6 +248,38 @@ Ordre des migrations dans `postLoadHook()` :
 | 120  | Terminale  | terracotta   |
 | 999  | Inconnu    | gris         |
 
+## Arrivées / départs en cours d'année
+
+Un élève peut arriver ou quitter l'établissement à toute date — pas seulement à la rentrée.
+
+### Modèle (champs ajoutés à `stu`)
+- `stu.arrivalDate` — `'YYYY-MM-DD' | null`. `null` = présent depuis la rentrée.
+- `stu.departureDate` — `'YYYY-MM-DD' | null`. **Premier jour d'absence** (convention contractuelle). `null` = toujours présent.
+
+Migration auto dans `postLoadHook` (les anciens enregistrements reçoivent `null` pour les deux champs).
+
+### Helpers
+- **`_stuActiveOn(stu, ymd?)`** — `true` si l'élève est actif à la date donnée (défaut : aujourd'hui). Règle : actif ssi `arrivalDate <= ymd < departureDate` (champs `null` = absence de borne). Placé juste après `todayKey()`.
+- **`_periodEndDate(periode)`** — renvoie la date de fin (YYYY-MM-DD) de la période donnée pour l'année scolaire courante. Semestre : S1 → 31/01, S2 → 31/08. Trimestre : T1 → 30/11, T2 → dernier jour de février (gère bissextiles via `new Date(y, 2, 0)`), T3 → 31/08. Période vide (« Toutes ») → fin d'année scolaire (31/08). Logique calquée sur `_currentPeriode` (année scolaire = septembre courant → août suivant).
+
+### Édition
+- **Ajout d'élève** (`addStudent`, modale `ms`) : champ optionnel `#ns-arrival` (Date d'arrivée). `departureDate` reste null à l'ajout.
+- **Modifier élève** (`openEdit`/`saveEdit`, modale `me`) : deux champs date `#es-arrival` et `#es-departure`. Validation : `arrivalDate < departureDate` strict (toast d'erreur sinon).
+
+### Effets
+- **Plan de classe** (`buildCell`, `renderStudentView`) : si `!_stuActiveOn(stu)`, la cellule est rendue comme vide (le sid reste dans `seating` — c'est un masque d'affichage, l'assignation peut réservir l'élève dès qu'il (re)devient actif).
+- **Liste « non placés »** (`renderUnplaced`) : exclut les inactifs (et un sid d'inactif présent dans `seating` ne compte pas comme placé).
+- **Compteur `tg-count`** (Plan Prof) : `inFilter` filtré par `_stuActiveOn` → les inactifs ne sont ni placés ni à placer.
+- **Onglet Élèves** (`renderStudents`) : ligne italique + opacity 0,55 + badge `📅 DD/MM/YYYY` (futur) ou `🚪 DD/MM/YYYY` (parti).
+- **Tableur d'évaluation** (`_evalTableurSortedSids`, fiche `_evalOpenSaisie`) : `refDate = _evalDateFor(ev, cls.id) || todayKey()`. Un élève arrivé après ou parti avant la date de l'éval n'apparaît pas dans le tableur — cohérent avec « il n'était pas là ce jour-là ».
+- **Bilan des notes** (`renderBilanTab`, `_bilanBuildRows`, `_bilanCrossTabBuild`) : `refDate = _periodEndDate(periode)`. On affiche les élèves présents en fin de période sélectionnée (S1, S2, T…) — convention « bulletin ». En mode Toutes, réf = fin d'année (31/08).
+- **Bilan des compétences** (`renderCompetencesTab`) : même filtre que le Bilan des notes.
+
+### Hors scope (volontairement non filtré)
+- Snapshots de positions ou d'incidents : lecture seule de l'état historique, pas de filtre.
+- Attendance / appels : les enregistrements passés restent intacts (un élève parti garde ses absences historiques).
+- Évaluations existantes : la note d'un élève reste dans `ev.notes[sid].values` même si l'élève est parti après — c'est l'agrégation et l'affichage qui les masquent.
+
 ## Attributs spéciaux par élève
 - **ULIS** : élève ULIS hors inclusion dans la classe (case en transparence en Plan Prof)
 - **ULIS inclusion** : élève ULIS inclus régulièrement dans la classe
