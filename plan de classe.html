@@ -5051,7 +5051,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T09:15:00Z';
+const APP_VERSION   = '2026-05-23T09:25:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -32063,6 +32063,17 @@ function _updateTpBanner() { const b = document.getElementById('tp-banner'); if 
 // comptées dans la moyenne d'un élève sur une période donnée. Miroir de la
 // logique de _computeStudentMeanForPeriod mais focalisé sur le tracking. Utilisé
 // par le Bilan des évaluations pour griser visuellement les cellules ignorées.
+// Helper : note d'un élève pour une éval, ramenée /20 ET arrondie à la
+// granulométrie propre à l'éval (ou défaut global). C'est la valeur affichée
+// dans le Bilan, donc cohérente avec ce que l'utilisateur voit dans les cellules.
+// Renvoie null si l'élève n'a pas de note pour cette éval.
+function _evalNoteSur20Rounded(ev, sid) {
+  const n = _computeStudentEvalNote(ev, sid);
+  if (n == null) return null;
+  const v20 = (n / (ev.noteMax || 20)) * 20;
+  return _roundNoteToGranularity(v20, ev);
+}
+
 function _computeStudentFacultativeCounted(classId, sid, periode) {
   const counted = new Set();
   const evs = Object.values(S.evaluations || {})
@@ -32071,20 +32082,17 @@ function _computeStudentFacultativeCounted(classId, sid, periode) {
     .filter(e => e.countsForMean !== false);
   const oblig = evs.filter(e => !e.facultative?.active);
   const facultatives = evs.filter(e => e.facultative?.active);
-  const noteMaxRef = 20;
   let num = 0, den = 0;
   for (const ev of oblig) {
-    const note = _computeStudentEvalNote(ev, sid);
-    if (note == null) continue;
-    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const noteSur20 = _evalNoteSur20Rounded(ev, sid);
+    if (noteSur20 == null) continue;
     const coef = (ev.coef != null ? ev.coef : 1);
     num += coef * noteSur20;
     den += coef;
   }
   for (const ev of facultatives) {
-    const note = _computeStudentEvalNote(ev, sid);
-    if (note == null) continue;
-    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const noteSur20 = _evalNoteSur20Rounded(ev, sid);
+    if (noteSur20 == null) continue;
     const coef = (ev.coef != null ? ev.coef : 1);
     const mode = ev.facultative.mode || 'improveOnly';
     if (mode === 'over10') {
@@ -32113,16 +32121,16 @@ function _computeStudentMeanForPeriod(classId, sid, periode) {
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false);
   if (evs.length === 0) return null;
-  const noteMaxRef = 20; // référence /20 pour toutes les évals
   // 1ère passe : sépare facultatives des obligatoires
   const obligatoires = evs.filter(e => !e.facultative?.active);
   const facultatives = evs.filter(e =>  e.facultative?.active);
-  // Calcule la moyenne obligatoire (toutes les évals non-facultatives)
+  // Chaque note utilisée pour le calcul est celle AFFICHÉE dans le Bilan
+  // (note /20 arrondie à la granulométrie propre à l'éval) — pour que le
+  // calcul corresponde exactement à ce que l'utilisateur voit.
   let num = 0, den = 0;
   for (const ev of obligatoires) {
-    const note = _computeStudentEvalNote(ev, sid);
-    if (note == null) continue;
-    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const noteSur20 = _evalNoteSur20Rounded(ev, sid);
+    if (noteSur20 == null) continue;
     const coef = (ev.coef != null ? ev.coef : 1);
     num += coef * noteSur20;
     den += coef;
@@ -32130,9 +32138,8 @@ function _computeStudentMeanForPeriod(classId, sid, periode) {
   const moyOblig = (den > 0) ? num / den : null;
   // Applique les facultatives
   for (const ev of facultatives) {
-    const note = _computeStudentEvalNote(ev, sid);
-    if (note == null) continue;
-    const noteSur20 = (note / (ev.noteMax || 20)) * noteMaxRef;
+    const noteSur20 = _evalNoteSur20Rounded(ev, sid);
+    if (noteSur20 == null) continue;
     const coef = (ev.coef != null ? ev.coef : 1);
     const mode = ev.facultative.mode || 'improveOnly';
     if (mode === 'over10') {
@@ -32313,16 +32320,9 @@ function renderBilanTab() {
   // Marqueurs : evPeriodBreak[k] = true si l'éval k commence un nouveau bloc période
   const evPeriodBreak = evs.map((ev, k) => k > 0 && periode === '' && groupByPeriod && ev.periode !== evs[k-1].periode);
 
-  // Cache des notes /20 par (sid × evalId).
-  // Granulométrie : on respecte celle de l'éval (ev.granularity, ou défaut global)
-  // appliquée à la valeur ramenée /20. Ainsi, une éval avec granularité 0,5
-  // affiche dans le bilan des notes alignées sur ce pas.
-  const noteSur20 = (ev, sid) => {
-    const n = _computeStudentEvalNote(ev, sid);
-    if (n == null) return null;
-    const v = (n / (ev.noteMax || 20)) * 20;
-    return _roundNoteToGranularity(v, ev);
-  };
+  // Notes /20 par (sid × evalId) avec granulométrie d'éval appliquée.
+  // Helper global pour rester cohérent avec le calcul de moyenne.
+  const noteSur20 = (ev, sid) => _evalNoteSur20Rounded(ev, sid);
   // Liste des "périodes de synthèse" : si periode == '' (Toutes), on affiche
   // une colonne Moyenne + Rang + Remarque PAR PÉRIODE (S1, S2 ou T1/T2/T3).
   // Sinon, une seule colonne pour la période active.
