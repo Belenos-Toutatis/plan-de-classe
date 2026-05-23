@@ -1212,7 +1212,17 @@ Volet ouvert via les 3 onglets du groupe 2 de la nav. Le modèle vit dans `S.eva
 
 ### Types d'évaluation
 - **Type A** — somme de mini-notes, total proportionné à `ev.noteMax` (souvent /20). Saisie au tableur `meval-tableur` ou en fiche `meval-saisie`. Modèle : `ev.miniNotes[] = { id, label, max, name?, date?, dates? }`, `ev.notes[sid] = { values: { [mnId]: number | 'NN' | 'A' | null }, comments?, excluded?, dateIndiv?, remarque? }`.
-- **Type B** — suivi de compétences par passations. Modèle : `ev.passations[] = { id, code, date|dates, competenceIds[], niveaux: { [sid]: { [cid]: niveau|0|'A' } } }`. Pas de mini-notes ; le bilan agrège les niveaux via `S.evalPrefs.meanRule` (override possible par éval via `ev.meanRule`).
+- **Type B** — suivi de compétences par passations. Modèle : `ev.passations[] = { id, code, date|dates, competenceIds[], niveaux: { [sid]: { [cid]: niveau|0|'A' } } }`. Pas de mini-notes ; le bilan agrège les niveaux via `S.evalPrefs.meanRule` (override possible par éval via `ev.meanRule`). Voir aussi *Calcul Note /20 (Type B)* ci-dessous.
+
+### Calcul Note /20 (Type B)
+Helper `_computeStudentEvalNoteB(ev, sid)`. Trois modes de pondération via `ev.weighting` :
+- **`equal`** (« Compétences pondérées ») — pour CHAQUE saisie `(passation × compétence)` valide, conversion `niveau → points` via `S.evalPrefs.maitrisePoints` (`[5,8,15,20]` par défaut), puis moyenne arithmétique des points sur toutes les entrées. Une compétence vue 3 fois pèse 3×. `coef` est identique avec pondération par `p.coef`.
+- **`perCompetence`** (« Compétences à égalité ») — pour CHAQUE compétence : convertit chaque saisie en points, applique la règle de moyenne (`ev.meanRule` ou `S.evalPrefs.meanRule` : `arithmetic`/`last`/`best`/`weightedRecency`) sur les **POINTS** (pas les niveaux), puis moyenne arithmétique des compétences. Toutes les compétences pèsent autant, peu importe le nombre de saisies.
+  - Convertir au niveau de l'entrée préserve la non-linéarité de la grille. Exemple : C3 saisie deux fois N1 puis N2 → avec grille `[5,8,15,20]`, la valeur compétence est `(5+8)/2 = 6,5` pts ≠ `niveauToPts(avg(1,2)) = niveauToPts(1,5) = 6,5` (coïncidence ici par linéarité 5→8) mais avec N1+N4 → `(5+20)/2 = 12,5` ≠ `niveauToPts(2,5) = 11,5`.
+
+Une infobulle au survol de la cellule **Note /20** dans le tableur explique le calcul ligne à ligne (helper `_evalNoteTipB`).
+
+`_computeStudentCompetenceLevel(ev, sid, cid)` reste sur les NIVEAUX (pour l'affichage du niveau atteint, ex. bilan compétences) — c'est uniquement le calcul de la note /20 qui a basculé sur la conversion à l'entrée.
 - **Type C** — sommative avec exercices + questions. Comme Type A mais les `miniNotes` sont regroupées par `exerciceId`. `ev.exercices[] = { id, label, name? }`. Le bilan compétences inline (colonnes à droite du tableur) calcule automatiquement le niveau atteint sur chaque compétence évaluée.
 - **Type D (à venir)** — sommative par compétence sans questions intermédiaires.
 
