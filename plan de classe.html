@@ -39,8 +39,18 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .hdr-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:.83em;white-space:nowrap;position:relative}
 .hdr-btn:hover{background:rgba(255,255,255,.22)}
 .hdr-btn.has-update::after{content:'';position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:#e74c3c;border:1.5px solid #2c3e50;border-radius:50%;box-shadow:0 0 6px rgba(231,76,60,.7);animation:hdrPulse 2.2s ease-in-out infinite}
-/* Tableur Type C : surligne la ligne en cours d'édition (focusin) — couleur encre, discret */
-#meval-tableur-wrap tr.meval-active-row td { background-image: linear-gradient(rgba(26,37,47,.06), rgba(26,37,47,.06)) !important; box-shadow: inset 0 1px 0 var(--ink-blue-soft), inset 0 -1px 0 var(--ink-blue-soft); }
+/* Tableur Type C : surligne la ligne en cours d'édition (focusin).
+   Filet rouge marqué haut/bas (métaphore cahier), voile encre 14 % pour booster
+   visuellement même sur les cellules déjà colorées. Pas d'animation : on veut
+   un repère stable de la ligne courante, pas un truc qui clignote. */
+#meval-tableur-wrap tr.meval-active-row td {
+  background-image: linear-gradient(rgba(26,37,47,.14), rgba(26,37,47,.14)) !important;
+  box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red);
+  position: relative;
+}
+/* Renforce le contour gauche/droite sur la 1re et la dernière cellule de la ligne active */
+#meval-tableur-wrap tr.meval-active-row td:first-child { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset 2px 0 0 var(--margin-red); }
+#meval-tableur-wrap tr.meval-active-row td:last-child  { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset -2px 0 0 var(--margin-red); }
 @keyframes hdrPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.85}}
 #hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
 
@@ -4988,7 +4998,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T07:00:00Z';
+const APP_VERSION   = '2026-05-23T07:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -27942,12 +27952,14 @@ function _evalTableurRender() {
         : 'width:46px;';
       const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
       // Si une expression arithmétique a été utilisée pour calculer la note,
-      // on l'affiche en tooltip (préfixe 🧮) sinon tooltip standard.
+      // on l'affiche en tooltip (préfixe 🧮) — sinon tooltip standard. Le title
+      // est posé à la fois sur le <td> (zone large) ET sur l'<input> (cohérence).
       const _storedExpr = ev.notes?.[sid]?.exprs?.[mn.id];
       const _cellTitle  = _storedExpr
-        ? `🧮 ${_storedExpr} = ${_esc(dispVal)} · clic droit = commentaires`
+        ? `🧮 ${_storedExpr} = ${_esc(dispVal)}\n(clic droit = commentaires)`
         : 'Clic droit = commentaires (bonus / malus / annotations)';
-      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_escAttr(_cellTitle)}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      const _titleAttr  = _escAttr(_cellTitle);
+      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
     if (isTypeC && exoGroups.length > 0) {
@@ -28172,10 +28184,15 @@ function _evalTableurUpdate(inputEl) {
   } else {
     inputEl.style.background = '';
     // Restaure le tooltip standard ou celui d'une expression mémorisée.
+    // Le title est posé sur le <td> ET sur l'<input> pour que le survol marche
+    // partout dans la cellule.
     const _expr = ev.notes?.[sid]?.exprs?.[mnId];
-    inputEl.title = _expr
-      ? `🧮 ${_expr} = ${inputEl.value} · clic droit = commentaires`
-      : '';
+    const _t = _expr
+      ? `🧮 ${_expr} = ${inputEl.value}\n(clic droit = commentaires)`
+      : 'Clic droit = commentaires (bonus / malus / annotations)';
+    inputEl.title = _t;
+    const _td = inputEl.closest('td');
+    if (_td) _td.title = _t;
     delete inputEl.dataset.outOfRange;
   }
 
@@ -28358,16 +28375,18 @@ function _evalTableurMaybeApplyExpr(inputEl) {
     return false;
   }
   inputEl.value = _fmtNote(v);
-  _evalTableurUpdate(inputEl);
-  // Persiste l'expression pour pouvoir l'afficher en tooltip plus tard
+  // Persiste l'expression AVANT _evalTableurUpdate pour que ce dernier
+  // pose le tooltip automatiquement (cohérence et pas de race condition).
   if (ev && sid && mnId) {
     ev.notes[sid] = ev.notes[sid] || { values: {} };
     ev.notes[sid].exprs = ev.notes[sid].exprs || {};
     ev.notes[sid].exprs[mnId] = raw;
-    ev.updatedAt = Date.now();
-    _evalTableurDirty = true;
-    inputEl.title = `🧮 ${raw} = ${inputEl.value} · clic droit = commentaires`;
   }
+  _evalTableurUpdate(inputEl);
+  // Sauvegarde immédiate (pas attendre la debounce) pour résister à un
+  // refresh rapide juste après le calcul.
+  if (_evalTableurSaveTimer) { clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null; }
+  if (_evalTableurDirty) { save(); _evalTableurDirty = false; }
   return true;
 }
 
