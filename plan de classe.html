@@ -5101,7 +5101,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T20:12:00Z';
+const APP_VERSION   = '2026-05-23T20:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -34720,7 +34720,14 @@ function _evalExportOpen() {
   const classSel = document.getElementById('meval-export-class');
   const classLbl = document.getElementById('meval-export-class-label');
   const aliveCids = _evalClassIds(ev).filter(cid => S.classes?.[cid]);
-  const defaultCid = (S.cur && aliveCids.includes(S.cur)) ? S.cur : _evalPrimaryAliveClassId(ev);
+  // Si on ouvre l'export depuis le tableur, prioriser la classe affichée dans le tableur
+  // (sinon l'utilisateur qui a basculé sur une autre classe se retrouvait avec la
+  // classe courante S.cur — confusion).
+  const _tableurCid = document.getElementById('meval-tableur')?.dataset.classid;
+  let defaultCid;
+  if (_tableurCid && aliveCids.includes(_tableurCid)) defaultCid = _tableurCid;
+  else if (S.cur && aliveCids.includes(S.cur)) defaultCid = S.cur;
+  else defaultCid = _evalPrimaryAliveClassId(ev);
   if (aliveCids.length > 1) {
     classSel.innerHTML = aliveCids.map(cid => `<option value="${_esc(cid)}">${_esc(S.classes[cid].nom || '?')}</option>`).join('');
     classSel.value = defaultCid;
