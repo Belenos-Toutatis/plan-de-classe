@@ -865,6 +865,8 @@ Total max : ~80 backups sur 4 mois.
 
 Sauvegarde lisible des évaluations dans un format pérenne hors-app, **un fichier par classe**, mis en forme avec couleurs. Accessible via le **menu Données → 📤 Exporter les notes**. Ouvre la modale `mexport-notes` : sélection multi-classes (chips avec compteurs élèves/évals, classe active pré-cochée, ☑ Tout / ☐ Aucune) + radio XLSX/ODS (XLSX par défaut). Génération séquentielle (espace 200 ms entre fichiers), toast récap à la fin.
 
+**Choix du dossier de destination** : la modale propose un sélecteur `📂 Choisir un dossier…` (File System Access API — Chromium). Quand un dossier est choisi, les fichiers sont écrits directement dedans via `dirHandle.getFileHandle(..., {create:true}).createWritable()` ; sinon, fallback `downloadBlob` vers le dossier de téléchargement du navigateur. Le handle est persisté en IndexedDB sous la clé `'notes-export-dir'` via `idbSaveHandleKey` / `idbLoadHandleKey` (mêmes helpers que la sync auto et le picker QCMcam). Bouton `↻ Téléchargement` pour repasser au mode classique. Permission revalidée au moment du run (re-demande si besoin après reload).
+
 ### Architecture
 Module IIFE `_NotesExport` situé juste avant `createDemo()` (~ligne 21663). 3 couches :
 
@@ -1375,12 +1377,14 @@ Bouton « ↓ ordre normal / ↑ inversé » pour basculer dans chaque mode. Per
 
 **Toolbar de tri** intégrée au header `.sh` à côté du titre via le placeholder `#eval-sort-toolbar` (peuplé par `renderEvalNotes`, vidé en début de render).
 
-**Cycle 3 états du groupement par période** (mode Toutes, ≥ 2 périodes) — bouton qui cycle au clic :
-- `↓ S1 → S2` (asc — défaut) : groupé, périodes dans l'ordre canonique
-- `↑ S2 → S1` (desc) : groupé, périodes en ordre inverse
-- `⊘ Non groupé` (off) : pas de groupement (mélange selon le tri sélectionné)
+**Cycle 3 états du groupement par période** (mode Toutes, ≥ 2 périodes) — bouton compact qui cycle au clic :
+- `↓` (asc — défaut) : groupé, périodes dans l'ordre canonique (S1 → S2)
+- `↑` (desc) : groupé, ordre inverse (S2 → S1)
+- `⊘` (off) : pas de groupement
 
-Persistance via `localStorage.planClasse_evalListPeriodGroup` (`'asc' | 'desc' | 'off'`), avec fallback de migration depuis l'ancienne clé booléenne `planClasse_evalListGroupByPeriod`. En modes regroupés par type, l'en-tête de type est ré-imbriqué sous chaque période.
+Tooltip détaillé sur survol. Persistance via `localStorage.planClasse_evalListPeriodGroup` (`'asc' | 'desc' | 'off'`), avec fallback de migration depuis l'ancienne clé booléenne `planClasse_evalListGroupByPeriod`. En modes regroupés par type, l'en-tête de type est ré-imbriqué sous chaque période. Miroir équivalent dans le Bilan des notes via `planClasse_bilanPeriodGroup`.
+
+**Labels concis** : tous les boutons d'inversion utilisent uniquement la flèche `↑` / `↓` (sans « inversé » / « normal ») ; le bouton type type utilise `A→C` / `C→A` (sans préfixe « Type : »).
 
 ### Affichage compact des noms (`_compactNameMode` + `_buildAbbrMap`)
 

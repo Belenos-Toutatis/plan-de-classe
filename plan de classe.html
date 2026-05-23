@@ -4254,6 +4254,18 @@ kbd {
     </p>
 
     <div class="about-section" style="margin-bottom:10px">
+      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📁 Dossier de destination</span>
+        <span id="exnotes-dir-name" style="font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue);font-weight:normal"></span>
+      </h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-w" style="padding:3px 10px;font-size:.85em" onclick="_exnotesPickDir()">📂 Choisir un dossier…</button>
+        <button class="btn btn-w" style="padding:3px 10px;font-size:.85em" onclick="_exnotesResetDir()" title="Repasser au dossier de téléchargement du navigateur">↻ Téléchargement</button>
+      </div>
+      <p id="exnotes-dir-hint" style="font-size:.78em;color:var(--pencil);margin:6px 0 0;line-height:1.4"></p>
+    </div>
+
+    <div class="about-section" style="margin-bottom:10px">
       <h3 style="margin-top:0">📐 Format</h3>
       <label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;cursor:pointer">
         <input type="radio" name="exnotes-fmt" value="xlsx" checked> <strong>XLSX</strong>
@@ -21717,7 +21729,11 @@ function* _demoNameGen(seed) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // — Helpers UI de la modale d'export —————————————————————————————————————
-function openExportNotes() {
+// Handle de dossier choisi pour l'export (File System Access API) — persiste dans IDB.
+let _exnotesDirHandle = null;
+const EXNOTES_DIR_KEY = 'notes-export-dir';
+
+async function openExportNotes() {
   if (!Object.keys(S.classes || {}).length) {
     toast('Aucune classe à exporter');
     return;
@@ -21725,6 +21741,52 @@ function openExportNotes() {
   _exnotesRenderClasses();
   _exnotesUpdateSummary();
   openMod('mexport-notes');
+  // Charge le handle persisté + affiche le nom
+  _exnotesDirHandle = null;
+  if (window.showDirectoryPicker) {
+    try {
+      const h = await idbLoadHandleKey(EXNOTES_DIR_KEY);
+      if (h) {
+        // Vérifie la permission (sans la demander si pas accordée — clic utilisateur requis)
+        const perm = await h.queryPermission?.({ mode: 'readwrite' });
+        if (perm === 'granted') _exnotesDirHandle = h;
+        else _exnotesDirHandle = h; // garde le handle, on demandera la permission au moment du run
+      }
+    } catch (e) {}
+  }
+  _exnotesUpdateDirUI();
+}
+function _exnotesUpdateDirUI() {
+  const nameEl = document.getElementById('exnotes-dir-name');
+  const hintEl = document.getElementById('exnotes-dir-hint');
+  if (!window.showDirectoryPicker) {
+    if (nameEl) nameEl.textContent = '';
+    if (hintEl) hintEl.textContent = 'Sélection de dossier non supportée par ce navigateur — les fichiers iront dans votre dossier de téléchargement habituel.';
+    return;
+  }
+  if (_exnotesDirHandle) {
+    if (nameEl) nameEl.textContent = '📂 ' + (_exnotesDirHandle.name || '(dossier)');
+    if (hintEl) hintEl.textContent = 'Les fichiers seront écrits directement dans ce dossier.';
+  } else {
+    if (nameEl) nameEl.textContent = '(dossier de téléchargement)';
+    if (hintEl) hintEl.textContent = 'Aucun dossier choisi — les fichiers iront dans le dossier de téléchargement du navigateur.';
+  }
+}
+async function _exnotesPickDir() {
+  if (!window.showDirectoryPicker) { toast('⚠ Sélection de dossier non supportée par ce navigateur', 'warn'); return; }
+  try {
+    const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+    _exnotesDirHandle = h;
+    await idbSaveHandleKey(h, EXNOTES_DIR_KEY);
+    _exnotesUpdateDirUI();
+  } catch (e) {
+    if (e?.name !== 'AbortError') toast('⚠ Sélection annulée ou impossible', 'warn');
+  }
+}
+async function _exnotesResetDir() {
+  _exnotesDirHandle = null;
+  try { await idbSaveHandleKey(null, EXNOTES_DIR_KEY); } catch (e) {}
+  _exnotesUpdateDirUI();
 }
 function _exnotesRenderClasses() {
   const host = document.getElementById('exnotes-classes-list');
@@ -21765,13 +21827,28 @@ document.addEventListener('change', e => {
   if (e.target?.name === 'exnotes-fmt') _exnotesUpdateSummary();
 });
 
-function _exnotesRun() {
+async function _exnotesRun() {
   const classIds = _exnotesSelectedIds();
   if (!classIds.length) { toast('Sélectionnez au moins une classe'); return; }
   const fmt = document.querySelector('input[name="exnotes-fmt"]:checked')?.value || 'xlsx';
+  // Si un dossier est choisi, s'assure que la permission est accordée (peut nécessiter
+  // une re-demande après un rechargement de page).
+  let dirHandle = _exnotesDirHandle;
+  if (dirHandle && dirHandle.queryPermission) {
+    try {
+      const perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        const req = await dirHandle.requestPermission({ mode: 'readwrite' });
+        if (req !== 'granted') {
+          toast('⚠ Permission refusée sur le dossier — fallback téléchargement', 'warn');
+          dirHandle = null;
+        }
+      }
+    } catch (e) { dirHandle = null; }
+  }
   closeMod2('mexport-notes');
   try {
-    _NotesExport.run(classIds, fmt);
+    _NotesExport.run(classIds, fmt, dirHandle);
   } catch (e) {
     console.error('[exportNotes]', e);
     toast('Erreur d\'export : ' + (e?.message || e), 'error');
@@ -22732,32 +22809,44 @@ const _NotesExport = (function () {
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
   }
 
+  // Écrit un blob directement dans un dossier choisi (FSAPI). Throw en cas d'échec.
+  async function writeBlobToDir(dirHandle, filename, blob) {
+    const file = await dirHandle.getFileHandle(filename, { create: true });
+    const ws = await file.createWritable();
+    await ws.write(blob);
+    await ws.close();
+  }
+
   // —— Orchestrateur ———————————————————————————————————————————————————————
-  function run(classIds, format) {
+  async function run(classIds, format, dirHandle) {
     if (!classIds || !classIds.length) return;
     const ext = (format === 'ods') ? 'ods' : 'xlsx';
     const ymd = todayYMD();
-    let i = 0;
-    const step = () => {
-      if (i >= classIds.length) {
-        toast('✅ ' + classIds.length + ' fichier(s) ' + ext.toUpperCase() + ' généré(s)');
-        return;
-      }
-      const cid = classIds[i++];
+    let ok = 0;
+    for (const cid of classIds) {
       const cls = S.classes[cid];
-      if (!cls) { step(); return; }
+      if (!cls) continue;
       try {
         const wb = buildWorkbookForClass(cid);
         const blob = (ext === 'ods') ? emitODS(wb) : emitXLSX(wb);
         const fname = safeFilename(cls.nom) + '-notes-' + ymd + '.' + ext;
-        downloadBlob(blob, fname);
+        if (dirHandle) {
+          await writeBlobToDir(dirHandle, fname, blob);
+        } else {
+          downloadBlob(blob, fname);
+        }
+        ok++;
       } catch (e) {
         console.error('[exportNotes:' + cid + ']', e);
         toast('Erreur sur ' + (cls.nom || cid) + ' : ' + (e?.message || e));
       }
-      setTimeout(step, 200);
-    };
-    step();
+      if (!dirHandle) await new Promise(r => setTimeout(r, 200));
+    }
+    if (dirHandle) {
+      toast('✅ ' + ok + ' fichier(s) ' + ext.toUpperCase() + ' écrits dans 📂 ' + (dirHandle.name || 'le dossier choisi'));
+    } else {
+      toast('✅ ' + ok + ' fichier(s) ' + ext.toUpperCase() + ' téléchargés');
+    }
   }
 
   return { run };
@@ -25208,20 +25297,21 @@ function renderEvalNotes() {
     tbHtml += '</select>';
     if (grouped) {
       const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
-      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${reverseType ? 'C→A' : 'A→C'}</button>`;
-      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${reverse ? '↑ inversé' : '↓ normal'}</button>`;
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">${reverseType ? 'C→A' : 'A→C'}</button>`;
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${reverse ? '↑' : '↓'}</button>`;
     } else {
-      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
+      const lbl = sortMode === 'name' ? 'Nom' : 'Date';
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${reverse ? '↑' : '↓'}</button>`;
     }
     if (_showPerToggle) {
-      const perLbls = {
-        asc:  `↓ ${_perOrderEv[0]} → ${_perOrderEv[_perOrderEv.length - 1]}`,
-        desc: `↑ ${_perOrderEv[_perOrderEv.length - 1]} → ${_perOrderEv[0]}`,
-        off:  '⊘ Non groupé',
+      const a = _perOrderEv[0], z = _perOrderEv[_perOrderEv.length - 1];
+      const perTips = {
+        asc:  `Périodes groupées (${a} → ${z}) — clic : inverser`,
+        desc: `Périodes groupées (${z} → ${a}) — clic : ne plus grouper`,
+        off:  `Non groupé — clic : grouper (${a} → ${z})`,
       };
-      const nextLbl = { asc: 'desc', desc: 'off', off: 'asc' };
-      const tip = 'Groupement par période : clic pour passer à l\'état suivant (↓ S1→S2 · ↑ S2→S1 · ⊘ Non groupé)';
-      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListCyclePeriodGroup()" style="padding:3px 8px" title="${tip}">${perLbls[periodGroupMode]}</button>`;
+      const perLbls = { asc: '↓', desc: '↑', off: '⊘' };
+      tbHtml += `<button class="btn btn-g btn-sm" onclick="_evalListCyclePeriodGroup()" style="padding:3px 8px;font-family:var(--font-mono)" title="${perTips[periodGroupMode]}">${perLbls[periodGroupMode]}</button>`;
     }
     _evalTbHost.innerHTML = tbHtml;
   }
@@ -31934,8 +32024,18 @@ function renderBilanTab() {
   const sortMode    = (() => { try { return localStorage.getItem('planClasse_bilanSortMode') || 'date'; } catch (e) { return 'date'; } })();
   const sortReverse = (() => { try { return localStorage.getItem('planClasse_bilanSortReverse') === '1'; } catch (e) { return false; } })();
   const sortReverseType = (() => { try { return localStorage.getItem('planClasse_bilanSortReverseType') === '1'; } catch (e) { return false; } })();
-  // Toggle "grouper par période" (visible seulement en mode Toutes — periode === '')
-  const groupByPeriod = (() => { try { const v = localStorage.getItem('planClasse_bilanGroupByPeriod'); return v == null ? true : v === '1'; } catch (e) { return true; } })();
+  // Cycle 3 états du groupement par période — visible seulement en mode Toutes.
+  // Migration depuis l'ancienne clé booléenne planClasse_bilanGroupByPeriod.
+  const bilanPeriodGroup = (() => {
+    try {
+      const v = localStorage.getItem('planClasse_bilanPeriodGroup');
+      if (v === 'asc' || v === 'desc' || v === 'off') return v;
+      const legacy = localStorage.getItem('planClasse_bilanGroupByPeriod');
+      if (legacy === '0') return 'off';
+      return 'asc';
+    } catch (e) { return 'asc'; }
+  })();
+  const groupByPeriod = (bilanPeriodGroup !== 'off');
   const _evDate = (ev) => _evalDateFor(ev, cls.id) || ev.date || '';
   const _rsB = sortReverse     ? -1 : 1;
   const _rtB = sortReverseType ? -1 : 1;
@@ -31973,8 +32073,9 @@ function renderBilanTab() {
   const _perOrder = _periodeOptions().map(o => o.code);
   const _perIdx = (p) => { const i = _perOrder.indexOf(p); return i < 0 ? 999 : i; };
   if (periode === '' && groupByPeriod && _perOrder.length > 1) {
+    const dir = bilanPeriodGroup === 'desc' ? -1 : 1;
     evs = evs.slice().sort((a, b) => {
-      const pd = _perIdx(a.periode) - _perIdx(b.periode);
+      const pd = dir * (_perIdx(a.periode) - _perIdx(b.periode));
       return pd !== 0 ? pd : _cmpB(a, b);
     });
   }
@@ -32025,16 +32126,22 @@ function renderBilanTab() {
       tbHtml += '</select>';
       if (_bilanGrouped) {
         const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
-        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${sortReverseType ? 'C→A' : 'A→C'}</button>`;
-        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">${sortReverseType ? 'C→A' : 'A→C'}</button>`;
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${sortReverse ? '↑' : '↓'}</button>`;
       } else {
         const lbl = sortMode === 'name' ? 'Nom' : 'Date';
-        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${sortReverse ? '↑' : '↓'}</button>`;
       }
-      // Toggle "Grouper par période" — visible uniquement en mode Toutes
+      // Cycle 3 états du groupement par période — visible uniquement en mode Toutes
       if (periode === '' && _perOrder.length > 1) {
-        const onLbl = groupByPeriod ? '✓' : '○';
-        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleGroupByPeriod()" style="padding:3px 8px" title="Séparer visuellement les évaluations par période (${_perOrder.join('/')}) avec un trait vertical">${onLbl} Grouper par période</button>`;
+        const a = _perOrder[0], z = _perOrder[_perOrder.length - 1];
+        const perTips = {
+          asc:  `Périodes groupées (${a} → ${z}) — clic : inverser`,
+          desc: `Périodes groupées (${z} → ${a}) — clic : ne plus grouper`,
+          off:  `Non groupé — clic : grouper (${a} → ${z})`,
+        };
+        const perLbls = { asc: '↓', desc: '↑', off: '⊘' };
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanCyclePeriodGroup()" style="padding:3px 8px;font-family:var(--font-mono)" title="${perTips[bilanPeriodGroup]}">${perLbls[bilanPeriodGroup]}</button>`;
       }
       tb.innerHTML = tbHtml;
     }
@@ -32392,9 +32499,18 @@ function _bilanToggleSortReverseType() {
   try { localStorage.setItem('planClasse_bilanSortReverseType', cur ? '0' : '1'); } catch (e) {}
   if (typeof renderBilanTab === 'function') renderBilanTab();
 }
-function _bilanToggleGroupByPeriod() {
-  const cur = (() => { try { const v = localStorage.getItem('planClasse_bilanGroupByPeriod'); return v == null ? true : v === '1'; } catch (e) { return true; } })();
-  try { localStorage.setItem('planClasse_bilanGroupByPeriod', cur ? '0' : '1'); } catch (e) {}
+function _bilanCyclePeriodGroup() {
+  let cur = 'asc';
+  try {
+    const v = localStorage.getItem('planClasse_bilanPeriodGroup');
+    if (v === 'asc' || v === 'desc' || v === 'off') cur = v;
+    else {
+      const legacy = localStorage.getItem('planClasse_bilanGroupByPeriod');
+      if (legacy === '0') cur = 'off';
+    }
+  } catch (e) {}
+  const next = { asc: 'desc', desc: 'off', off: 'asc' }[cur];
+  try { localStorage.setItem('planClasse_bilanPeriodGroup', next); } catch (e) {}
   if (typeof renderBilanTab === 'function') renderBilanTab();
 }
 
