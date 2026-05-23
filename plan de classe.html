@@ -5075,7 +5075,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T17:00:00Z';
+const APP_VERSION   = '2026-05-23T17:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11819,6 +11819,10 @@ function _evalShowNoteDetail(evalId, sid) {
     const mrule = ev.meanRule || S.evalPrefs?.meanRule || 'arithmetic';
     const ruleLbl = mrule === 'last' ? 'dernière saisie' : mrule === 'best' ? 'meilleure saisie' : mrule === 'weightedRecency' ? 'pondéré récence' : 'moyenne arithmétique';
     html += `<p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic">Règle d'agrégation : ${ruleLbl}. Pondération entre compétences : ${ev.weighting || 'equal'}.</p>`;
+    // Récap note finale pour Type B (calculée à partir des niveaux + règle d'agrégation)
+    if (note != null) {
+      html += `<p style="margin:10px 0 0;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;font-family:var(--font-mono);font-size:.92em">Note finale : <strong>${_fmtNote(note)}</strong>/${ev.noteMax}${note20 != null ? ' &nbsp;(= <strong>' + _fmtNote(note20) + '</strong>/20)' : ''}</p>`;
+    }
   } else {
     // Type A / C : mini-notes (regroupées par exercice en Type C)
     const isTypeC = (ev.type === 'C');
@@ -11884,6 +11888,31 @@ function _evalShowNoteDetail(evalId, sid) {
       const rounded = _roundNoteToGranularity(total, ev);
       html += `<p style="margin:10px 0 0;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;font-family:var(--font-mono);font-size:.92em">Total : <strong>${_fmtNote(sumVal)}</strong>/${sumMax} → × ${ev.noteMax} / ${sumMax} = <strong>${_fmtNote(total)}</strong>${rounded !== total ? ' (arrondi : <strong>' + _fmtNote(rounded) + '</strong>)' : ''} /${ev.noteMax}</p>`;
     }
+  }
+  // Bilan compétences évaluées (commun aux 3 types — Type B: agrégation
+  // multi-passations ; Type C: ratio points obtenus/max sur les questions
+  // liées ; Type A: idem si des compétences sont rattachées aux mini-notes).
+  const compsEval = _evalListEvaluatedCompetences(ev, 'code');
+  if (compsEval.length > 0) {
+    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    html += `<h3 style="margin:14px 0 6px;font-family:var(--font-serif);font-size:1.05em;color:var(--ink-blue)">🧩 Bilan compétences évaluées</h3>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>`;
+    html += `<th style="${hdr}">Compétence</th><th style="${hdr};text-align:center">Niveau atteint</th></tr></thead><tbody>`;
+    for (const c of compsEval) {
+      const niv = _evalStudentLevelForComp(ev, sid, c.id);
+      let nivCell;
+      if (niv == null) {
+        nivCell = `<span style="color:var(--pencil);font-style:italic">non atteint</span>`;
+      } else {
+        const lvlInt = Math.max(1, Math.min(4, Math.round(niv)));
+        const bg = colors[lvlInt - 1] || 'var(--paper-warm)';
+        const col = _contrastTextColor(bg);
+        const dec = (Math.abs(niv - Math.round(niv)) > 0.05) ? ` <span style="opacity:.75;font-size:.85em">(${niv.toFixed(2).replace('.', ',')})</span>` : '';
+        nivCell = `<span style="background:${bg};color:${col};padding:2px 10px;border-radius:4px;font-weight:600">${_formatNiveau(lvlInt)}</span>${dec}`;
+      }
+      html += `<tr><td style="${cellTxt}"><strong>${_esc(c.code)}</strong>${c.name ? ' <span style="color:var(--pencil);font-size:.88em">— ' + _esc(c.name) + '</span>' : ''}</td><td style="${cellNum}">${nivCell}</td></tr>`;
+    }
+    html += '</tbody></table>';
   }
   body.innerHTML = html;
   openMod('mnotedet');
