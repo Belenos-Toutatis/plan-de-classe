@@ -2566,7 +2566,8 @@ kbd {
   <div id="tab-bilan" class="tab">
     <div class="sh">
       <h2>📜 Bilan des notes</h2>
-      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+        <span id="bilan-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em"></span>
         <button class="btn btn-g btn-sm" id="evhelp-btn-bilan" onclick="_evhelpToggle('bilan')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="bilan-period-filter" onchange="_syncBilanPeriode('bilan-period-filter');renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
@@ -31804,6 +31805,9 @@ function renderBilanTab() {
   const cls = getCls();
   const wrap = document.getElementById('bilan-wrap');
   if (!wrap) return;
+  // Reset la toolbar de tri en haut (sera re-peuplée plus bas si une classe est sélectionnée)
+  const _tbReset = document.getElementById('bilan-sort-toolbar');
+  if (_tbReset) _tbReset.innerHTML = '';
   const sel = document.getElementById('bilan-period-filter');
   if (sel) {
     // Restaure la période persistée (synchronisée avec l'onglet Bilan par compétences).
@@ -31925,30 +31929,32 @@ function renderBilanTab() {
   const totalRanked = _refSynth.total;
 
   // Bandeau "Colonnes masquées" si applicable
-  let html = '';
-  // Toolbar de tri (au-dessus du tableau) — mêmes options que la liste des Devoirs
+  // Peuple la toolbar de tri en haut (à côté du titre dans la sh row)
   {
-    const opts = [
-      { v: 'date',      lbl: '📅 Date' },
-      { v: 'name',      lbl: '🔤 Nom' },
-      { v: 'type-date', lbl: '📂 Type, puis date' },
-      { v: 'type-name', lbl: '📂 Type, puis nom' },
-    ];
-    html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:.86em;flex-wrap:wrap">';
-    html += '<span style="color:var(--pencil)">Tri des devoirs :</span>';
-    html += `<select onchange="_bilanSetSortMode(this.value)" style="padding:3px 8px;font-size:.9em">`;
-    for (const o of opts) html += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
-    html += '</select>';
-    if (_bilanGrouped) {
-      const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
-      html += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${sortReverseType ? 'C→A' : 'A→C'}</button>`;
-      html += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
-    } else {
-      const lbl = sortMode === 'name' ? 'Nom' : 'Date';
-      html += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+    const tb = document.getElementById('bilan-sort-toolbar');
+    if (tb) {
+      const opts = [
+        { v: 'date',      lbl: '📅 Date' },
+        { v: 'name',      lbl: '🔤 Nom' },
+        { v: 'type-date', lbl: '📂 Type, puis date' },
+        { v: 'type-name', lbl: '📂 Type, puis nom' },
+      ];
+      let tbHtml = '<span style="color:var(--pencil)">Tri devoirs :</span>';
+      tbHtml += `<select onchange="_bilanSetSortMode(this.value)" style="padding:3px 8px;font-size:.9em">`;
+      for (const o of opts) tbHtml += `<option value="${o.v}"${sortMode === o.v ? ' selected' : ''}>${o.lbl}</option>`;
+      tbHtml += '</select>';
+      if (_bilanGrouped) {
+        const secondaryLabel = (sortMode === 'type-date') ? 'Date' : 'Nom';
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverseType()" style="padding:3px 8px" title="Inverser le sens des types (A→C ou C→A)">Type : ${sortReverseType ? 'C→A' : 'A→C'}</button>`;
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser le tri ${secondaryLabel.toLowerCase()} à l'intérieur de chaque type">${secondaryLabel} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+      } else {
+        const lbl = sortMode === 'name' ? 'Nom' : 'Date';
+        tbHtml += `<button class="btn btn-g btn-sm" onclick="_bilanToggleSortReverse()" style="padding:3px 8px" title="Inverser l'ordre">${lbl} : ${sortReverse ? '↑ inversé' : '↓ normal'}</button>`;
+      }
+      tb.innerHTML = tbHtml;
     }
-    html += '</div>';
   }
+  let html = '';
   if (synthData.length > 1) {
     const allKeys = synthData.flatMap(sd => [`bilan:moy:${sd.perCode}`, `bilan:rang:${sd.perCode}`, `bilan:rem:${sd.perCode}`]);
     html += _bilanHiddenBanner(allKeys, k => {
