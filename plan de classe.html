@@ -39,18 +39,23 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .hdr-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:.83em;white-space:nowrap;position:relative}
 .hdr-btn:hover{background:rgba(255,255,255,.22)}
 .hdr-btn.has-update::after{content:'';position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:#e74c3c;border:1.5px solid #2c3e50;border-radius:50%;box-shadow:0 0 6px rgba(231,76,60,.7);animation:hdrPulse 2.2s ease-in-out infinite}
-/* Tableur Type C : surligne la ligne en cours d'édition (focusin).
-   Filet rouge marqué haut/bas (métaphore cahier), voile encre 14 % pour booster
+/* Tableur Type C : surligne la ligne ET la colonne en cours d'édition (focusin).
+   Filet rouge marqué (métaphore cahier), voile encre 14 % pour booster
    visuellement même sur les cellules déjà colorées. Pas d'animation : on veut
-   un repère stable de la ligne courante, pas un truc qui clignote. */
-#meval-tableur-wrap tr.meval-active-row td {
+   un repère stable de la cellule courante, pas un truc qui clignote. */
+#meval-tableur-wrap tr.meval-active-row td,
+#meval-tableur-wrap td.meval-active-col {
   background-image: linear-gradient(rgba(26,37,47,.14), rgba(26,37,47,.14)) !important;
-  box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red);
   position: relative;
 }
-/* Renforce le contour gauche/droite sur la 1re et la dernière cellule de la ligne active */
-#meval-tableur-wrap tr.meval-active-row td:first-child { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset 2px 0 0 var(--margin-red); }
-#meval-tableur-wrap tr.meval-active-row td:last-child  { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset -2px 0 0 var(--margin-red); }
+/* Ligne active : trait horizontal haut/bas ; renforcé sur les extrémités */
+#meval-tableur-wrap tr.meval-active-row td               { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red); }
+#meval-tableur-wrap tr.meval-active-row td:first-child   { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset 2px 0 0 var(--margin-red); }
+#meval-tableur-wrap tr.meval-active-row td:last-child    { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset -2px 0 0 var(--margin-red); }
+/* Colonne active : trait vertical gauche/droite */
+#meval-tableur-wrap td.meval-active-col                  { box-shadow: inset 2px 0 0 var(--margin-red), inset -2px 0 0 var(--margin-red); }
+/* Intersection (croisée ligne + colonne) : encadrement complet */
+#meval-tableur-wrap tr.meval-active-row td.meval-active-col { box-shadow: inset 2px 0 0 var(--margin-red), inset -2px 0 0 var(--margin-red), inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red); }
 @keyframes hdrPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.85}}
 #hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
 
@@ -4998,7 +5003,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T07:45:00Z';
+const APP_VERSION   = '2026-05-23T08:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -28594,24 +28599,34 @@ function _evalTableurEnsureInputVisible(inputEl) {
       if (!t) return;
       if (t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') return;
       _evalTableurEnsureInputVisible(t);
-      // Surligne la ligne active en Type C (rendu correction plus facile à suivre).
+      // Surligne la ligne ET la colonne active en Type C (correction plus facile à suivre).
       const evalId = document.getElementById('meval-tableur-evalid')?.value;
       const ev = S.evaluations?.[evalId];
       if (ev?.type === 'C') {
+        // Reset
         wrap.querySelectorAll('tr.meval-active-row').forEach(tr => tr.classList.remove('meval-active-row'));
+        wrap.querySelectorAll('td.meval-active-col').forEach(td => td.classList.remove('meval-active-col'));
+        // Ligne
         const tr = t.closest('tr');
         if (tr && tr.hasAttribute('data-sid')) tr.classList.add('meval-active-row');
+        // Colonne : tous les TDs contenant un input/select avec le même data-ci
+        const ci = t.getAttribute('data-ci');
+        if (ci != null) {
+          wrap.querySelectorAll(`tbody [data-ci="${ci}"]`).forEach(inp => {
+            const td = inp.closest('td');
+            if (td) td.classList.add('meval-active-col');
+          });
+        }
       }
     });
     wrap.addEventListener('focusout', (e) => {
-      // Retire le surlignage si le focus quitte la ligne courante (vers une autre
-      // ligne ou hors du tableur). On le fait à micro-tâche pour laisser le temps
-      // au focusin suivant de poser la nouvelle classe.
+      // Retire le surlignage si le focus quitte le tableur (vers hors du wrap).
+      // Si on bouge dans le wrap, le focusin suivant repose les bonnes classes.
       setTimeout(() => {
         const active = document.activeElement;
-        wrap.querySelectorAll('tr.meval-active-row').forEach(tr => {
-          if (!active || !tr.contains(active)) tr.classList.remove('meval-active-row');
-        });
+        if (active && wrap.contains(active)) return; // toujours dans le tableur
+        wrap.querySelectorAll('tr.meval-active-row').forEach(tr => tr.classList.remove('meval-active-row'));
+        wrap.querySelectorAll('td.meval-active-col').forEach(td => td.classList.remove('meval-active-col'));
       }, 0);
     });
   }
