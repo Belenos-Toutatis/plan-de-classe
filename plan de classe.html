@@ -36,8 +36,10 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 #cls-sel{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:4px;font-size:.95em;cursor:pointer;min-width:160px}
 #cls-sel option{color:#333;background:#fff}
 #hdr-yr{color:#aaa;font-size:.82em}
-.hdr-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:.83em;white-space:nowrap}
+.hdr-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:.83em;white-space:nowrap;position:relative}
 .hdr-btn:hover{background:rgba(255,255,255,.22)}
+.hdr-btn.has-update::after{content:'';position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:#e74c3c;border:1.5px solid #2c3e50;border-radius:50%;box-shadow:0 0 6px rgba(231,76,60,.7);animation:hdrPulse 2.2s ease-in-out infinite}
+@keyframes hdrPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.85}}
 #hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
 
 /* ─── NAV ─── */
@@ -2007,7 +2009,7 @@ kbd {
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
-    <button class="hdr-btn" onclick="openAbout()" title="À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour">ⓘ</button>
+    <button id="btn-about" class="hdr-btn" onclick="openAbout()" title="À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour">ⓘ</button>
     <button id="btn-theme" class="hdr-btn theme-toggle" onclick="toggleAppTheme()" title="Basculer entre thème clair (papier) et sombre (veillée)">◐</button>
   </div>
 </div>
@@ -4983,7 +4985,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T06:10:00Z';
+const APP_VERSION   = '2026-05-23T06:20:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -8186,6 +8188,58 @@ async function checkForUpdate() {
         Votre version actuelle : <code>${_escAttr(APP_VERSION)}</code>
       </p>
     `;
+  }
+}
+
+// Vérif passive au démarrage : pose la pastille rouge sur le bouton ⓘ si
+//   - en ligne (github.io) : dès qu'une version plus récente existe
+//   - en local : seulement si la version locale est ≥ 7 jours plus ancienne
+// Cache 6h dans localStorage pour ne pas saturer l'API GitHub (60 req/h/IP).
+const _UPDATE_BADGE_CACHE_KEY = 'planClasse_updateCheck';
+const _UPDATE_BADGE_TTL_MS    = 6 * 3600 * 1000;
+const _UPDATE_BADGE_LOCAL_MS  = 7 * 24 * 3600 * 1000;
+
+async function _passiveUpdateCheck() {
+  const btn = document.getElementById('btn-about');
+  if (!btn) return;
+  const isOnline = window.location.hostname.endsWith('github.io');
+  let latestDate = null;
+  // Tente le cache d'abord
+  try {
+    const raw = localStorage.getItem(_UPDATE_BADGE_CACHE_KEY);
+    if (raw) {
+      const c = JSON.parse(raw);
+      if (c && c.ts && (Date.now() - c.ts < _UPDATE_BADGE_TTL_MS) && c.latestDate) {
+        latestDate = c.latestDate;
+      }
+    }
+  } catch (e) {}
+  // Sinon fetch GitHub
+  if (!latestDate) {
+    try {
+      const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits/main`;
+      const r = await fetch(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
+      if (!r.ok) return;
+      const data = await r.json();
+      latestDate = data.commit?.author?.date || data.commit?.committer?.date;
+      if (!latestDate) return;
+      try { localStorage.setItem(_UPDATE_BADGE_CACHE_KEY, JSON.stringify({ ts: Date.now(), latestDate })); } catch (e) {}
+    } catch (e) { return; /* offline ou rate-limit : pas de pastille, on retentera plus tard */ }
+  }
+  // Décide d'afficher la pastille
+  if (APP_VERSION >= latestDate) {
+    btn.classList.remove('has-update');
+    btn.title = 'À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour';
+    return;
+  }
+  const ageMs = Date.parse(latestDate) - Date.parse(APP_VERSION);
+  const shouldShow = isOnline || (Number.isFinite(ageMs) && ageMs >= _UPDATE_BADGE_LOCAL_MS);
+  if (shouldShow) {
+    btn.classList.add('has-update');
+    const ageLabel = isOnline ? 'une nouvelle version est disponible' : `votre version a plus d'une semaine (${Math.round(ageMs / (24*3600*1000))} jours)`;
+    btn.title = `🆕 Mise à jour : ${ageLabel}\n\nClic pour ouvrir À propos → Vérifier les mises à jour`;
+  } else {
+    btn.classList.remove('has-update');
   }
 }
 
@@ -24206,6 +24260,11 @@ function init() {
   tryRestoreDirHandle();    // tente de récupérer le répertoire JSON depuis IndexedDB
   tryRestoreQcmDirHandle(); // tente de récupérer le répertoire QCMCam depuis IndexedDB
   maybeShowRgpdBanner();    // bandeau RGPD au tout premier lancement (1 fois max)
+
+  // Vérif passive des mises à jour (différée pour ne pas ralentir le 1er render).
+  // En ligne (github.io) : pastille dès qu'une version plus récente existe.
+  // En local : pastille seulement si la version a > 7 jours de retard.
+  setTimeout(() => { _passiveUpdateCheck().catch(() => {}); }, 2000);
 
   // Modal de bienvenue : à l'issue de l'installation des données fictives uniquement
   if (demoJustInstalled) {

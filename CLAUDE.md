@@ -1012,6 +1012,13 @@ Comportement :
 
 Helper `_formatRelDate(isoDate)` : convertit une date ISO en `JJ/MM/AAAA (il y a Xh / Xj / Xmois / Xan)` pour affichage human-friendly.
 
+**Pastille rouge passive sur le bouton ⓘ** (`#btn-about`, classe `.has-update`) : posée par `_passiveUpdateCheck()` appelé 2 s après `init()`.
+- En ligne (`window.location.hostname.endsWith('github.io')`) : pastille dès qu'une version plus récente existe sur GitHub.
+- En local : pastille seulement si la version locale est ≥ 7 jours plus ancienne que le dernier commit (constantes `_UPDATE_BADGE_LOCAL_MS`).
+- Résultat de l'appel GitHub mis en cache 6 h (`localStorage.planClasse_updateCheck = {ts, latestDate}`) pour éviter de saturer la limite 60 req/h/IP.
+- CSS : `.hdr-btn.has-update::after` affiche un disque rouge `#e74c3c` 9 px en haut à droite, animation `hdrPulse` 2.2 s. Tooltip enrichi (« 🆕 Mise à jour : votre version a plus d'une semaine (X jours)… »).
+- Si offline ou rate-limit : pas de pastille (échec silencieux, on retentera au prochain démarrage).
+
 ## Config Salle — modes d'édition (4 onglets)
 
 L'onglet **Config Salle** propose 4 modes d'édition (chips en haut), tous appliqués à la salle active :
