@@ -5051,7 +5051,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T09:25:00Z';
+const APP_VERSION   = '2026-05-23T09:45:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -25062,7 +25062,12 @@ function _evalsForClass(classId, periode) {
 // Retourne null si aucune saisie exploitable.
 function _computeStudentEvalNote(evalObj, sid) {
   if (!evalObj) return null;
-  if (evalObj.type === 'B') return _computeStudentEvalNoteB(evalObj, sid);
+  if (evalObj.type === 'B') {
+    // Type B passe par sa propre fonction puis on applique la granulométrie
+    // pour garder une seule source de vérité.
+    const nB = _computeStudentEvalNoteB(evalObj, sid);
+    return (nB == null) ? null : _roundNoteToGranularity(nB, evalObj);
+  }
   const notes = evalObj.notes?.[sid]?.values || {};
   const comments = evalObj.notes?.[sid]?.comments || {};
   const excluded = evalObj.notes?.[sid]?.excluded || [];
@@ -25080,7 +25085,11 @@ function _computeStudentEvalNote(evalObj, sid) {
     hasAny = true;
   }
   if (!hasAny || sumMax <= 0) return null;
-  return (sumVal * evalObj.noteMax) / sumMax;
+  const raw = (sumVal * evalObj.noteMax) / sumMax;
+  // Granulométrie appliquée à la source : tous les appelants reçoivent la
+  // note canonique. Évite que la note "brute" ressurgisse ailleurs (export,
+  // copie, stats, etc.) et garantit cohérence affichage ↔ calcul.
+  return _roundNoteToGranularity(raw, evalObj);
 }
 
 // Formate une note pour affichage : 14.5 → "14,5", 14 → "14", null → "—"
@@ -28933,10 +28942,10 @@ function _bilanCrossTabBuild() {
       const stu = S.eleves[sid];
       let note;
       if (ev) {
-        const raw = _computeStudentEvalNote(ev, sid);
-        if (raw == null || !Number.isFinite(raw)) continue;
-        // Ramène à /20 pour cohérence avec la vue Moyenne
-        note = (raw / (ev.noteMax || 20)) * 20;
+        // Note /20 arrondie à la granulométrie de l'éval — cohérence avec
+        // l'affichage du Bilan et le calcul de moyenne période.
+        note = _evalNoteSur20Rounded(ev, sid);
+        if (note == null || !Number.isFinite(note)) continue;
       } else {
         note = _computeStudentMeanForPeriod(cid, sid, periode);
       }
@@ -32063,15 +32072,15 @@ function _updateTpBanner() { const b = document.getElementById('tp-banner'); if 
 // comptées dans la moyenne d'un élève sur une période donnée. Miroir de la
 // logique de _computeStudentMeanForPeriod mais focalisé sur le tracking. Utilisé
 // par le Bilan des évaluations pour griser visuellement les cellules ignorées.
-// Helper : note d'un élève pour une éval, ramenée /20 ET arrondie à la
-// granulométrie propre à l'éval (ou défaut global). C'est la valeur affichée
-// dans le Bilan, donc cohérente avec ce que l'utilisateur voit dans les cellules.
+// Helper : note d'un élève pour une éval, ramenée /20. La granulométrie
+// est appliquée à la source par _computeStudentEvalNote (sur l'échelle
+// d'origine de l'éval), puis on ne fait que rescaler — pas de second
+// arrondi qui produirait une valeur incompatible avec la note canonique.
 // Renvoie null si l'élève n'a pas de note pour cette éval.
 function _evalNoteSur20Rounded(ev, sid) {
   const n = _computeStudentEvalNote(ev, sid);
   if (n == null) return null;
-  const v20 = (n / (ev.noteMax || 20)) * 20;
-  return _roundNoteToGranularity(v20, ev);
+  return (n / (ev.noteMax || 20)) * 20;
 }
 
 function _computeStudentFacultativeCounted(classId, sid, periode) {
@@ -32525,7 +32534,11 @@ function renderBilanTab() {
         // saisie en mode fiche.
         const _stuRem = ((ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '') + '').trim();
         const _remTip = _stuRem ? `\n📝 Remarque : ${_stuRem}` : '';
-        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note brute : ${_fmtNote(_computeStudentEvalNote(ev, sid))} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}${facTip}${_remTip}`;
+        // Note "brute" = note sur l'échelle d'origine (avant rescale /20), arrondie
+        // à la granulométrie de l'éval — pour qu'elle corresponde exactement à ce qui
+        // est saisi dans le tableur (pas de version flottante différente cachée).
+        const _origRounded = _roundNoteToGranularity(_computeStudentEvalNote(ev, sid), ev);
+        const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note : ${_fmtNote(_origRounded)} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}${facTip}${_remTip}`;
         // Style fond : si facultative non comptée, on superpose les hachures sur la couleur de barème.
         const cellStyle = (isFac && !facCounts)
           ? `background-color:${bg};background-image:repeating-linear-gradient(135deg,rgba(120,120,120,.32) 0,rgba(120,120,120,.32) 4px,transparent 4px,transparent 9px);`
@@ -32724,11 +32737,8 @@ function _bilanBuildRows() {
     return ((sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase())
       .localeCompare((sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase(), 'fr');
   });
-  const noteSur20 = (ev, sid) => {
-    const n = _computeStudentEvalNote(ev, sid);
-    if (n == null) return null;
-    return (n / (ev.noteMax || 20)) * 20;
-  };
+  // Granulométrie d'éval appliquée — alignée avec l'affichage du Bilan.
+  const noteSur20 = (ev, sid) => _evalNoteSur20Rounded(ev, sid);
   const rows = sids.map(sid => {
     const stu = S.eleves[sid];
     if (!stu) return null;
