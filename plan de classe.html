@@ -5051,7 +5051,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T09:45:00Z';
+const APP_VERSION   = '2026-05-23T10:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -29706,6 +29706,12 @@ function _evalTableurRenderB(ev, cls) {
         </div>
       </th>`;
   }
+  // Colonnes synthèse à droite : Note /20 + niveau atteint par compétence évaluée
+  const inlineCompsB = _evalListEvaluatedCompetences(ev, 'code');
+  html += `<th rowspan="2" style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft);min-width:64px" title="Note finale calculée /20 (à partir des niveaux et de la règle de moyenne)">Note<br><span style="font-size:.74em;color:var(--pencil);font-weight:normal">/20</span></th>`;
+  for (const c of inlineCompsB) {
+    html += `<th rowspan="2" style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.78em;font-weight:700;color:var(--ink-blue);background:var(--paper-warm);border-left:1px solid var(--rule-line-soft);min-width:38px" title="${_escAttr((c.code || '?') + (c.name ? ' — ' + c.name : '') + '\nNiveau atteint sur cette compétence (calculé automatiquement)')}">${_esc(c.code || '?')}</th>`;
+  }
   // Colonne Remarque (facultative, par élève) — rowspan 2 pour aligner sur les deux lignes
   html += `<th rowspan="2" style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
   html += '</tr>';
@@ -29764,6 +29770,23 @@ function _evalTableurRenderB(ev, cls) {
         ci++;
       });
     }
+    // Note finale /20 (calculée via _evalNoteSur20Rounded → granulométrie respectée)
+    {
+      const note20 = _evalNoteSur20Rounded(ev, sid);
+      const bg = (note20 != null) ? _noteColor(note20, 20) : '';
+      const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
+      html += `<td class="meval-row-total" data-sid="${_esc(sid)}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft)">${note20 != null ? _fmtNote(note20) : '—'}</td>`;
+    }
+    // Niveau par compétence évaluée (calculé)
+    const colorsB = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    for (const c of inlineCompsB) {
+      const niv = _evalStudentLevelForComp(ev, sid, c.id);
+      const isNull = (niv == null);
+      const dispNiv = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
+      const cellBg = isNull ? 'var(--paper-warm)' : colorsB[Math.max(0, Math.min(3, Math.round(niv) - 1))];
+      const cellColor = _contrastTextColor(cellBg);
+      html += `<td data-row-comp="${_esc(c.id)}" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
+    }
     // Cellule Remarque (par élève)
     const remark = ev.studentRemarks?.[sid] || '';
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="${remark ? _escAttr(remark) : 'Remarque facultative pour cet élève'}"></td>`;
@@ -29785,6 +29808,29 @@ function _evalTableurRenderB(ev, cls) {
       const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
       html += `<td data-stat-b-passid="${_esc(p.id)}" data-stat-b-cid="${_esc(cid)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${borderLeft}">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
     });
+  }
+  // Stats μ de la Note /20 (calculée sur les notes effectives des élèves)
+  {
+    const noteVals = sids
+      .map(sid => _evalNoteSur20Rounded(ev, sid))
+      .filter(v => typeof v === 'number' && Number.isFinite(v));
+    const avg = noteVals.length
+      ? (noteVals.reduce((s, v) => s + v, 0) / noteVals.length)
+      : null;
+    const _mg = (S.evalPrefs?.meanGranularity ?? 0.01);
+    const avgDisp = (avg != null && _mg > 0) ? Math.round(avg / _mg) * _mg : avg;
+    const bg = (avgDisp != null) ? _noteColor(avgDisp, 20) : '';
+    const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
+    const lblTip = `μ Note /20 (${noteVals.length} élève${noteVals.length > 1 ? 's' : ''})`;
+    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.85em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft);cursor:help" title="${_escAttr(lblTip)}">${avgDisp != null ? _fmtNote(avgDisp) : '—'}</td>`;
+  }
+  // μ par compétence évaluée (niveau moyen)
+  for (const c of inlineCompsB) {
+    const lvls = sids
+      .map(sid => _evalStudentLevelForComp(ev, sid, c.id))
+      .filter(v => typeof v === 'number' && Number.isFinite(v));
+    const avg = lvls.length ? (lvls.reduce((s, v) => s + v, 0) / lvls.length) : null;
+    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="Niveau moyen sur ${_esc(c.code)}">${avg != null ? avg.toFixed(1) : '—'}</td>`;
   }
   // Colonne Remarque : pas de stats
   html += `<td style="border-left:2px solid var(--ink-blue-soft);background:var(--paper-warm)"></td>`;
@@ -30064,6 +30110,21 @@ function _evalTableurBUpdate(inputEl) {
   save();
   // Met à jour la cellule de stats du footer pour (passation × compétence)
   _evalTableurRefreshFooterStatsB(ev, passId, cid);
+  // Rafraîchit les cellules dérivées de la ligne courante : Note /20 + niveaux
+  // par compétence (colonnes synthèse à droite, alignées sur Type C).
+  const row = inputEl.closest('tr');
+  if (row) {
+    const cellTotal = row.querySelector('.meval-row-total');
+    if (cellTotal) {
+      const note20 = _evalNoteSur20Rounded(ev, sid);
+      const bg = (note20 != null) ? _noteColor(note20, 20) : '';
+      const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
+      cellTotal.textContent = (note20 != null) ? _fmtNote(note20) : '—';
+      cellTotal.style.background = bg || 'var(--paper-warm)';
+      cellTotal.style.color = col;
+    }
+    _evalTableurRefreshRowDerived(ev, row);
+  }
 }
 
 // Recalcule en place la stat footer correspondant à la passation × compétence
