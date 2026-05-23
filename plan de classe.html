@@ -25065,6 +25065,12 @@ function _evalListToggleReverseType() {
   try { localStorage.setItem('planClasse_evalListReverseType', cur ? '0' : '1'); } catch (e) {}
   renderEvalNotes();
 }
+function _evalListToggleGroupByPeriod() {
+  let cur = true;
+  try { const v = localStorage.getItem('planClasse_evalListGroupByPeriod'); cur = v == null ? true : v === '1'; } catch (e) {}
+  try { localStorage.setItem('planClasse_evalListGroupByPeriod', cur ? '0' : '1'); } catch (e) {}
+  renderEvalNotes();
+}
 
 function renderEvalNotes() {
   _evhelpApply('notes');
@@ -25143,8 +25149,20 @@ function renderEvalNotes() {
     },
   };
   const cmp = cmps[sortMode] || cmps.date;
-  const evs = allEvs.slice().sort(cmp);
+  let evs = allEvs.slice().sort(cmp);
   const grouped = (sortMode === 'type-date' || sortMode === 'type-name');
+  // Toggle "Grouper par période" — actif uniquement en mode Toutes (periode === '')
+  // avec ≥ 2 périodes disponibles. Quand on, re-tri avec la période en clé primaire.
+  const groupByPeriodEv = (() => { try { const v = localStorage.getItem('planClasse_evalListGroupByPeriod'); return v == null ? true : v === '1'; } catch (e) { return true; } })();
+  const _perOrderEv = _periodeOptions().map(o => o.code);
+  const _perIdxEv = (p) => { const i = _perOrderEv.indexOf(p); return i < 0 ? 999 : i; };
+  const _showPerToggle = (periode === '' && _perOrderEv.length > 1);
+  if (_showPerToggle && groupByPeriodEv) {
+    evs = evs.slice().sort((a, b) => {
+      const pd = _perIdxEv(a.periode) - _perIdxEv(b.periode);
+      return pd !== 0 ? pd : cmp(a, b);
+    });
+  }
 
   // Toolbar de tri (au-dessus de la liste)
   const opts = [
@@ -25167,12 +25185,25 @@ function renderEvalNotes() {
   } else {
     html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleReverse()" style="padding:3px 8px" title="Inverser l'ordre">${reverse ? '↑ inversé' : '↓ ordre normal'}</button>`;
   }
+  if (_showPerToggle) {
+    const onLbl = groupByPeriodEv ? '✓' : '○';
+    html += `<button class="btn btn-g btn-sm" onclick="_evalListToggleGroupByPeriod()" style="padding:3px 8px" title="Séparer visuellement les évaluations par période (${_perOrderEv.join('/')})">${onLbl} Grouper par période</button>`;
+  }
   html += '</div>';
 
   html += '<div style="display:flex;flex-direction:column;gap:8px">';
   let lastType = null;
+  let lastPeriode = null;
   const typeLabels = { A: 'TYPE A — Mini-notes', B: 'TYPE B — Compétences', C: 'TYPE C — Sommative' };
+  const _periodeBlockOn = (_showPerToggle && groupByPeriodEv);
   for (const ev of evs) {
+    // Insère un en-tête de groupe période (uniquement en mode Toutes + toggle on)
+    if (_periodeBlockOn && ev.periode !== lastPeriode) {
+      const perLbl = ev.periode ? `PÉRIODE — ${ev.periode}` : 'PÉRIODE — (non définie)';
+      html += `<div style="font-family:var(--font-serif);font-size:.95em;letter-spacing:0.04em;color:var(--ink-blue);margin:${lastPeriode ? '14px' : '0'} 0 -2px;padding:4px 6px;border-bottom:2px solid var(--ink-blue-soft);font-weight:600">${_esc(perLbl)}</div>`;
+      lastPeriode = ev.periode;
+      lastType = null; // réinitialise pour rouvrir un sous-en-tête type si applicable
+    }
     // Insère un en-tête de groupe quand le type change (uniquement en modes "regroupé")
     if (grouped && ev.type !== lastType) {
       html += `<div style="font-family:var(--font-mono);font-size:.78em;letter-spacing:0.08em;color:var(--pencil);margin:${lastType ? '8px' : '0'} 0 -2px;padding:2px 6px;border-bottom:1px dashed var(--rule-line)">${_esc(typeLabels[ev.type] || ev.type || '?')}</div>`;

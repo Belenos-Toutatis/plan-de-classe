@@ -1373,6 +1373,8 @@ Bouton « ↓ ordre normal / ↑ inversé » pour basculer dans chaque mode. Per
 
 **Sens du type indépendant du tri secondaire** (modes groupés uniquement) : un 2e bouton **`Type : A→C / C→A`** apparaît à côté du bouton d'inversion secondaire (`Date : ↓/↑` ou `Nom : ↓/↑`). Permet d'avoir par exemple Type C → B → A en haut, et au sein de chaque type un tri par date croissante. Persistance via `localStorage.planClasse_evalListReverseType`. Le comparateur applique `rt = reverseType ? -1 : 1` au résultat du compare des types, et `rs = reverse ? -1 : 1` au compare secondaire ; les deux sont composés indépendamment dans la même closure.
 
+**Toggle « Grouper par période »** (mode Toutes, ≥ 2 périodes) : actif par défaut, persisté `localStorage.planClasse_evalListGroupByPeriod`. Trie d'abord par ordre canonique des périodes (S1/S2 ou T1/T2/T3) avant le tri sélectionné, et insère un en-tête `PÉRIODE — Sn` serif sur fond bleu encre entre les blocs. En modes regroupés par type, l'en-tête de type est ré-imbriqué sous chaque période. Miroir du même toggle dans le Bilan des notes.
+
 ### Affichage compact des noms (`_compactNameMode` + `_buildAbbrMap`)
 
 Toggle global (persisté `localStorage.planClasse_compactNameMode` : `'full' | 'auto'`) qui change l'affichage des noms dans **5 tableaux d'éval** : tableur de saisie Type A/C (`_evalTableurRender`), tableur Type B (`_evalTableurRenderB`), bilan compétences popup tableur (`_evalRenderBilanComps`), Bilan des notes (`renderBilanTab`), Bilan des compétences (`renderCompetencesTab`).
