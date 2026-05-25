@@ -5201,7 +5201,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T21:45:00Z';
+const APP_VERSION   = '2026-05-25T22:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -19182,17 +19182,19 @@ function _studentHasAnyDataInEval(ev, sid) {
   return false;
 }
 
-// Pour un élève dans le bilan d'une classe, renvoie l'identifiant de l'éval "d'origine"
-// (utile pour les tooltips d'évals orphelines : "venant de la classe X"). Renvoie la 1re
-// classe encore vivante référencée par l'éval qui n'est pas la classe demandée.
+// Pour un élève dans le bilan d'une classe, renvoie un label décrivant la (les)
+// classe(s) d'origine de l'éval orpheline. Liste TOUTES les classes vivantes
+// référencées par l'éval (sauf la classe courante) — pertinent pour les évals
+// multi-classes (ex. « 6A / 6B »).
 function _evalOriginClassLabel(ev, currentClassId) {
   if (!ev) return '';
+  const names = [];
   for (const cid of _evalClassIds(ev)) {
     if (cid === currentClassId) continue;
     const c = S.classes?.[cid];
-    if (c?.nom) return c.nom;
+    if (c?.nom) names.push(c.nom);
   }
-  return '';
+  return names.join(' / ');
 }
 
 // ── Arrivées/départs d'élèves en cours d'année ──────────────────────────────
@@ -34385,7 +34387,7 @@ function _computeStudentMeanForPeriod(classId, sid, periode, channelFilter) {
   // courante (ou celle passée — argument `channelFilter` conservé pour compat).
   const cls = S.classes?.[classId];
   let _did = channelFilter; // peut contenir un disciplineId, 'primary'/'secondary' (legacy) ou undefined
-  if (_did === undefined && cls && _clsHasMultipleDisciplines(cls)) _did = _currentDiscipline(classId);
+  if (_did === undefined && cls) _did = _currentDiscipline(classId);
   // Normalise 'primary'/'secondary' (anciens callsites) en disciplineId
   if (_did === 'primary' && cls) _did = _clsDisciplineIds(cls)[0];
   else if (_did === 'secondary' && cls) _did = _clsDisciplineIds(cls)[1] || _clsDisciplineIds(cls)[0];
@@ -34598,8 +34600,12 @@ function renderBilanTab() {
   };
   const _cmpB = _cmpsB[sortMode] || _cmpsB.date;
   // 1) Évals attachées à la classe courante (comportement historique)
-  const _bilanDid = _clsHasMultipleDisciplines(cls) ? _currentDiscipline(cls.id) : null;
-  const _bilanChannelFilter = (e) => !_bilanDid || _evalMatchesDiscipline(e, _bilanDid);
+  // Filtre par discipline : TOUJOURS appliqué (même en mono-discipline) pour
+  // que les évals orphelines d'une autre discipline ne polluent pas la vue.
+  // Ex. classe « 6B DF » (discipline = Devoir Fait) ne doit pas afficher les
+  // évals de PC venant de la 6B classe entière même si les élèves y ont des notes.
+  const _bilanDid = _currentDiscipline(cls.id);
+  const _bilanChannelFilter = (e) => _evalMatchesDiscipline(e, _bilanDid);
   const ownEvs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, cls.id))
     .filter(e => !periode || e.periode === periode)
@@ -35761,8 +35767,9 @@ function renderCompetencesTab() {
   const _hideOrphansComp = (() => { try { return localStorage.getItem('planClasse_bilanHideOrphans') === '1'; } catch (e) { return false; } })();
   // Compétences évaluées dans la classe + période. On marque celles "orphelines" :
   // venant uniquement d'évals d'autres classes (où un élève transféré a des saisies).
-  const _compDid = _clsHasMultipleDisciplines(cls) ? _currentDiscipline(cls.id) : null;
-  const _compChannelFilter = (e) => !_compDid || _evalMatchesDiscipline(e, _compDid);
+  // Filtre par discipline : TOUJOURS appliqué (cf. note dans renderBilanTab).
+  const _compDid = _currentDiscipline(cls.id);
+  const _compChannelFilter = (e) => _evalMatchesDiscipline(e, _compDid);
   const compIds = new Set();
   const ownCompIds = new Set();
   for (const ev of Object.values(S.evaluations || {})) {
