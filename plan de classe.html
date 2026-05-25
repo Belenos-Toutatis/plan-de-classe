@@ -5215,7 +5215,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T00:00:00Z';
+const APP_VERSION   = '2026-05-26T00:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -30950,8 +30950,20 @@ function _bilanCrossTabBuild() {
   const ev = evalId ? S.evaluations?.[evalId] : null;
   // Détermine les classes lignes : celles éligibles pour la vue active
   let classIds;
-  if (ev) classIds = _evalClassIds(ev).filter(cid => S.classes?.[cid]);
-  else    classIds = _bilanClassesWithEvals(periode);
+  if (ev) {
+    // Mode « devoir précis » : restreint aux classes attachées à l'éval
+    classIds = _evalClassIds(ev).filter(cid => S.classes?.[cid]);
+  } else {
+    // Mode « Moyenne période » : restreint aux classes du MÊME NIVEAU que la
+    // classe active. Comparer une 6e avec une 3e n'a pas grand sens pour la
+    // moyenne période.
+    classIds = _bilanClassesWithEvals(periode);
+    const curCls = getCls();
+    if (curCls) {
+      const curLevel = classLevelOrder(curCls.nom);
+      classIds = classIds.filter(cid => classLevelOrder(S.classes[cid]?.nom || '') === curLevel);
+    }
+  }
   classIds = classIds.slice().sort((a, b) =>
     (S.classes[a]?.nom || '').localeCompare(S.classes[b]?.nom || '', 'fr')
   );
