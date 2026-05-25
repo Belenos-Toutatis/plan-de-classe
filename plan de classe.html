@@ -5154,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T09:40:00Z';
+const APP_VERSION   = '2026-05-24T10:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -26956,12 +26956,17 @@ function _evalEditRenderClasses(ev) {
       </label>`;
     if (checked) {
       const isManual = !!ev.datesManual?.[c.id];
+      // Type C : mode auto désactivé (une éval sommative se passe le jour J, pas
+      // d'accumulation de constituants — cohérent avec la modale Nouvelle éval).
+      const _autoAllowed = (ev.type !== 'C');
       // Bouton "↻ Auto" visible uniquement si la date a été réglée manuellement
-      // (clique pour repasser en mode auto = recalculée depuis les sous-dates).
-      // Hint "(auto)" sinon, pour signaler que la date est calculée automatiquement.
-      const autoCtl = isManual
-        ? `<button type="button" class="btn btn-g btn-sm" data-cid="${_esc(c.id)}" onclick="_evalEditPerClassResetAuto('${_esc(c.id)}')" title="Repasser cette classe en mode automatique (date = dernière mini-note / passation)" style="padding:1px 6px;font-size:.78em">↻ Auto</button>`
-        : `<span style="font-size:.78em;color:var(--pencil);font-style:italic" title="Date calculée automatiquement depuis la dernière mini-note (Type A) ou passation (Type B). Édite le champ pour passer en mode manuel.">(auto)</span>`;
+      // ET si le mode auto est autorisé pour ce type. Hint "(auto)" sinon.
+      let autoCtl = '';
+      if (_autoAllowed) {
+        autoCtl = isManual
+          ? `<button type="button" class="btn btn-g btn-sm" data-cid="${_esc(c.id)}" onclick="_evalEditPerClassResetAuto('${_esc(c.id)}')" title="Repasser cette classe en mode automatique (date = dernière mini-note / passation)" style="padding:1px 6px;font-size:.78em">↻ Auto</button>`
+          : `<span style="font-size:.78em;color:var(--pencil);font-style:italic" title="Date calculée automatiquement depuis la dernière mini-note (Type A) ou passation (Type B). Édite le champ pour passer en mode manuel.">(auto)</span>`;
+      }
       html += `<span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
         <input type="date" value="${_esc(dateCur)}" data-cid="${_esc(c.id)}" data-field="date" onchange="_evalEditPerClass(this)"
           style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe (édition = passage en mode manuel)">
@@ -27046,6 +27051,17 @@ function _evalEditPerClass(inputEl) {
     ev.datesManual = ev.datesManual || {};
     ev.datesManual[cid] = true;
     _evalSetDateFor(ev, cid, inputEl.value);
+    // Type C : une éval sommative a UNE date par classe — propage à toutes les
+    // mini-notes de cette classe pour que le tableur (qui lit mn.dates[cid]||mn.date)
+    // affiche bien la même date que les Réglages. Sans ça, la date d'en-tête de
+    // colonne du tableur restait l'ancienne valeur.
+    if (ev.type === 'C') {
+      for (const mn of (ev.miniNotes || [])) {
+        mn.dates = mn.dates || {};
+        if (inputEl.value) mn.dates[cid] = inputEl.value;
+        else delete mn.dates[cid];
+      }
+    }
     // Mise à jour ciblée des options de créneau pour cette classe — on évite
     // _evalEditRenderClasses(ev) qui rebuilde l'innerHTML de toute la section
     // et casserait la saisie clavier (focus perdu entre segments date).
@@ -31410,6 +31426,26 @@ function _tableurEditMn(inputEl) {
       const allDates = Object.values(mn.dates).filter(Boolean);
       if (allDates.length > 0) mn.date = allDates.reduce((m, x) => x > m ? x : m, '');
       else delete mn.date;
+      // Type C : une éval sommative = une date par classe. Propage à toutes les
+      // autres mini-notes de cette classe + force la date per-classe de l'éval
+      // (même en mode manuel) pour que les Réglages affichent la même valeur que
+      // les en-têtes du tableur. Re-rend les autres inputs date du tableur.
+      if (ev.type === 'C') {
+        for (const m2 of (ev.miniNotes || [])) {
+          if (m2.id === mn.id) continue;
+          m2.dates = m2.dates || {};
+          if (d) m2.dates[cid] = d; else delete m2.dates[cid];
+          const allD2 = Object.values(m2.dates).filter(Boolean);
+          if (allD2.length > 0) m2.date = allD2.reduce((m, x) => x > m ? x : m, '');
+          else delete m2.date;
+        }
+        ev.dates = ev.dates || {};
+        if (d) ev.dates[cid] = d; else delete ev.dates[cid];
+        // Met à jour visuellement les autres inputs date du tableur sans rebuild complet
+        document.querySelectorAll(
+          `#meval-tableur-tbl input[data-field="date"][data-classid="${CSS.escape(cid)}"]`
+        ).forEach(inp => { if (inp !== inputEl) inp.value = d; });
+      }
       // Quand la date change, les options du select créneau de la même
       // colonne deviennent obsolètes — on les rebuilde et on remet la valeur
       // courante si elle est encore présente.
