@@ -5154,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T09:20:00Z';
+const APP_VERSION   = '2026-05-24T09:40:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -26613,10 +26613,18 @@ function _evalNewClassRowHTML(c) {
   }
   // Mode auto = pas de date dans _evalNewState.dates[c.id] (la date sera dérivée
   // de la 1re mini-note ou passation ajoutée). Mode manuel = une date est posée.
-  const isAuto = !date;
-  const modeBtn = isAuto
-    ? `<span style="font-size:.78em;color:var(--pencil);font-style:italic;padding:0 4px" title="Mode auto : la date sera prise sur la 1re mini-note / passation ajoutée">(auto)</span>`
-    : `<button type="button" class="btn btn-g btn-sm" onclick="_evalNewSetClassAuto('${_esc(c.id)}')" style="padding:2px 6px;font-size:.78em" title="Repasser cette classe en mode automatique (date dérivée de la 1re mini-note / passation)">↻ Auto</button>`;
+  // Type C : mode auto désactivé (une éval sommative se passe le jour J, pas
+  // d'accumulation de constituants). Le bouton « ↻ Auto » et le marqueur « (auto) »
+  // sont masqués pour ce type.
+  const _typeNow = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
+  const _autoAllowed = (_typeNow !== 'C');
+  const isAuto = !date && _autoAllowed;
+  let modeBtn = '';
+  if (_autoAllowed) {
+    modeBtn = isAuto
+      ? `<span style="font-size:.78em;color:var(--pencil);font-style:italic;padding:0 4px" title="Mode auto : la date sera prise sur la 1re mini-note / passation ajoutée">(auto)</span>`
+      : `<button type="button" class="btn btn-g btn-sm" onclick="_evalNewSetClassAuto('${_esc(c.id)}')" style="padding:2px 6px;font-size:.78em" title="Repasser cette classe en mode automatique (date dérivée de la 1re mini-note / passation)">↻ Auto</button>`;
+  }
   return `<div data-cid="${_esc(c.id)}" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px;border-radius:3px;background:var(--paper);border:1px solid var(--rule-line)">
     <strong style="font-size:.92em">${_esc(c.nom)}</strong>
     <span style="color:var(--pencil);font-size:.85em">${_esc(c.année || '')}</span>
@@ -26681,6 +26689,16 @@ function _evalNewOnTypeChange() {
   if (wW) wW.style.display = (type === 'B') ? '' : 'none';
   const mr = document.getElementById('meval-new-meanRule-wrap');
   if (mr) mr.style.display = (type === 'A') ? 'none' : '';
+  // Type C : le mode date "auto" n'a pas de sens (la note vient d'une seule séance
+  // de contrôle dont la date est connue à la création). Re-remplit les dates vides
+  // des classes cochées avec aujourd'hui pour forcer un mode manuel, puis re-render.
+  if (type === 'C') {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const cid of _evalNewGetCheckedClassIds()) {
+      if (_evalNewState.dates[cid] == null) _evalNewState.dates[cid] = today;
+    }
+    if (typeof _evalNewRenderClassRows === 'function') _evalNewRenderClassRows();
+  }
 }
 
 function _evalNewToggleFacMode() {
