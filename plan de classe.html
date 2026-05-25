@@ -628,12 +628,20 @@ body.rendu-projecting #mrendu-header,
 body.rendu-projecting #mrendu-sub,
 body.rendu-projecting #mrendu-cols-row,
 body.rendu-projecting #mrendu-hint{display:none !important}
-body.rendu-projecting #mrendu-body{font-size:2.2em;line-height:1.35;padding:8px 4px;border:none;background:var(--paper)}
-body.rendu-projecting #mrendu-body table.rendu-tbl{font-size:1em}
+body.rendu-projecting #mrendu-body{font-size:2.2em;line-height:1.35;padding:8px 4px;border:none;background:var(--paper);text-align:center}
+/* Largeur auto pour ne pas étirer artificiellement les colonnes : si la table
+   tient dans la largeur de l'écran, elle est centrée — nom et notes restent
+   proches, l'œil de l'élève balaye moins (lecture plus rapide depuis le fond). */
+body.rendu-projecting #mrendu-body table.rendu-tbl{font-size:1em;width:auto;max-width:100%;margin:0 auto;text-align:left;display:inline-table}
 body.rendu-projecting #mrendu-body table.rendu-tbl th,
 body.rendu-projecting #mrendu-body table.rendu-tbl td{padding:10px 18px;border-bottom:2px solid var(--rule-line)}
 body.rendu-projecting #mrendu-body table.rendu-tbl thead th{position:sticky;top:0;background:var(--paper-warm);z-index:2;font-size:.85em}
 body.rendu-projecting body::before{display:none}
+/* Toolbar zoom flottante : à gauche de la sortie. Ergonomique pour ajuster
+   en direct si la salle est plus longue ou plus courte que prévu. */
+.rendu-zoom-bar{position:fixed;top:18px;right:240px;z-index:9999;display:flex;gap:6px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:8px;padding:6px;box-shadow:0 2px 12px rgba(0,0,0,.3)}
+.rendu-zoom-bar button{padding:8px 12px;border:1px solid var(--rule-line);border-radius:5px;background:var(--paper-warm);color:var(--ink-blue);font-family:var(--font-mono);font-size:1em;font-weight:700;cursor:pointer;min-width:42px}
+.rendu-zoom-bar button:hover{background:var(--ink-blue);color:#fff}
 .btn-toggle-moved.pulse{animation:btnMovedPulse 0.9s ease-in-out infinite;border-color:#ff1493 !important}
 @keyframes btnMovedPulse{
   0%,100%{box-shadow:0 0 0 0   rgba(255,20,147,.7),0 0 12px 2px rgba(255,20,147,.5)}
@@ -2837,6 +2845,11 @@ kbd {
     </div>
     <div id="mrendu-body" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
     <p id="mrendu-hint" style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Bouton 📽 <strong>Projeter</strong> pour passer en plein écran avec grands caractères, ou 🖨 pour imprimer.</p>
+    <div id="mrendu-zoom-bar" class="rendu-zoom-bar" style="display:none">
+      <button onclick="_renduZoom(-1)" title="Réduire la taille (Ctrl-)">🔍−</button>
+      <button onclick="_renduZoom(0)" id="mrendu-zoom-pct" title="Revenir à 100% (Ctrl+0)">100%</button>
+      <button onclick="_renduZoom(1)" title="Agrandir (Ctrl+)">🔍+</button>
+    </div>
     <button id="mrendu-exit-project" onclick="_renduExitProject()" title="Quitter la projection (Échap)" style="display:none;position:fixed;top:18px;right:18px;z-index:9999;padding:10px 18px;border:2px solid var(--ink-blue);border-radius:8px;background:var(--paper);color:var(--ink-blue);font-family:var(--font-sans);font-size:1.1em;font-weight:700;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.3)">❌ Quitter la projection</button>
   </div>
 </div>
@@ -5116,7 +5129,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T22:10:00Z';
+const APP_VERSION   = '2026-05-23T22:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11993,17 +12006,43 @@ function _renduRender() {
 // Mode projection : transforme la modale en plein écran avec grands caractères,
 // pour que les élèves voient leur note depuis le fond de la classe. Esc / clic
 // sur le bouton ❌ sort du mode.
+// Zoom : 1.0 = baseline (2.2em). Multiplie le font-size du body de la modale.
+let _renduZoomLevel = 1.0;
+const _RENDU_ZOOM_MIN = 0.5;
+const _RENDU_ZOOM_MAX = 4.0;
+const _RENDU_ZOOM_STEP = 1.15;
+function _renduApplyZoom() {
+  const body = document.getElementById('mrendu-body');
+  if (body) body.style.fontSize = (2.2 * _renduZoomLevel) + 'em';
+  const pctBtn = document.getElementById('mrendu-zoom-pct');
+  if (pctBtn) pctBtn.textContent = Math.round(_renduZoomLevel * 100) + '%';
+}
+function _renduZoom(delta) {
+  if (delta === 0) _renduZoomLevel = 1.0;
+  else if (delta > 0) _renduZoomLevel = Math.min(_RENDU_ZOOM_MAX, _renduZoomLevel * _RENDU_ZOOM_STEP);
+  else _renduZoomLevel = Math.max(_RENDU_ZOOM_MIN, _renduZoomLevel / _RENDU_ZOOM_STEP);
+  _renduApplyZoom();
+}
 function _renduStartProject() {
   document.body.classList.add('rendu-projecting');
   const exitBtn = document.getElementById('mrendu-exit-project');
   if (exitBtn) exitBtn.style.display = '';
-  // Esc pour quitter (capture en mode bouillage pour passer avant le handler global de la modale)
+  const zoomBar = document.getElementById('mrendu-zoom-bar');
+  if (zoomBar) zoomBar.style.display = '';
+  _renduZoomLevel = 1.0;
+  _renduApplyZoom();
+  // Esc / Ctrl±0 : raccourcis clavier en projection
   document.addEventListener('keydown', _renduProjectEscHandler, true);
 }
 function _renduExitProject() {
   document.body.classList.remove('rendu-projecting');
   const exitBtn = document.getElementById('mrendu-exit-project');
   if (exitBtn) exitBtn.style.display = 'none';
+  const zoomBar = document.getElementById('mrendu-zoom-bar');
+  if (zoomBar) zoomBar.style.display = 'none';
+  // Reset font-size pour ne pas polluer le mode normal
+  const body = document.getElementById('mrendu-body');
+  if (body) body.style.fontSize = '';
   document.removeEventListener('keydown', _renduProjectEscHandler, true);
 }
 function _renduProjectEscHandler(e) {
@@ -12011,6 +12050,16 @@ function _renduProjectEscHandler(e) {
     e.stopPropagation();
     e.preventDefault();
     _renduExitProject();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+    e.stopPropagation(); e.preventDefault(); _renduZoom(1); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+    e.stopPropagation(); e.preventDefault(); _renduZoom(-1); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+    e.stopPropagation(); e.preventDefault(); _renduZoom(0); return;
   }
 }
 
