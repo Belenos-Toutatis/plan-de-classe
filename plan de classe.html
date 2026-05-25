@@ -2063,6 +2063,8 @@ kbd {
         <button onclick="closeAllDd();document.getElementById('imp-file').click()" title="Charger un fichier JSON (export précédent ou backup) — remplace l'état actuel après confirmation. Annulable via Ctrl+Z.">⬆ Importer (.json)</button>
         <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
         <button onclick="closeAllDd();openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe, mis en forme avec couleurs">📤 Exporter les notes</button>
+        <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
+        <button onclick="closeAllDd();openBackupSettings()" title="Stratégie de sauvegarde automatique : intervalle minimum + politique de rétention des backups horodatés">⚙ Stratégie de sauvegarde…</button>
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -4460,6 +4462,23 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Stratégie de sauvegarde automatique ── -->
+<div id="mbackup-settings" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%">
+    <h2>⚙ Stratégie de sauvegarde automatique</h2>
+    <p style="font-size:.86em;color:var(--pencil);margin-bottom:12px;line-height:1.5">
+      Quand la <strong>Sync ON</strong> est active, l'app écrit automatiquement <code>plan-classe-auto.json</code> dans ton dossier et crée régulièrement des <strong>backups horodatés</strong> (<code>plan-classe-bk-…</code>). Choisis la stratégie selon la place disque que tu acceptes et la profondeur d'historique que tu veux conserver.
+    </p>
+    <div id="mbk-options" style="display:flex;flex-direction:column;gap:10px"></div>
+    <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:12px;line-height:1.4">
+      💡 Cette politique <strong>ne s'applique qu'aux backups horodatés</strong>. Le fichier de sync principal (<code>plan-classe-auto.json</code>) est toujours écrit à chaque modification quel que soit le choix (sauf en mode « ⏸ Désactivée », où aucun backup horodaté n'est créé — le fichier principal reste lui synchronisé).
+    </p>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('mbackup-settings')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Export des notes (XLSX / ODS, un fichier par classe) ── -->
 <div id="mexport-notes" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:680px;width:100%">
@@ -5215,7 +5234,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T00:15:00Z';
+const APP_VERSION   = '2026-05-26T00:45:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -22492,11 +22511,66 @@ let qcmDirHandle = null;
 // ═══════════════════════════════════════════════════════════
 const AUTO_SAVE_FILENAME = 'plan-classe-auto.json';
 const BACKUP_PREFIX = 'plan-classe-bk-';
-const BACKUP_MIN_INTERVAL_MS = 10 * 60 * 1000; // 10 min minimum entre 2 backups
-// Rétention par paliers : plus c'est ancien, plus c'est espacé.
-// Pour chaque "bucket" temporel ci-dessous, on conserve UN seul backup (le plus récent du bucket).
-// Total ≈ 6 + 47 + 12 + 15 ≈ 80 backups max sur 120 jours.
-const BACKUP_RETENTION_MAX_AGE_MS = 120 * 24 * 3600 * 1000; // 120 jours
+// ── Stratégie de sauvegarde automatique (configurable via menu Données) ──
+// Chaque preset définit :
+//   - minIntervalMs : durée mini entre 2 backups horodatés
+//   - tiers[] : paliers de rétention { maxAgeMs, bucketSizeMs } — un backup
+//     gardé par bucket de cette taille tant que l'âge < maxAgeMs ; au-delà :
+//     supprimé. `enabled: false` → aucun backup horodaté créé.
+const MINUTE = 60 * 1000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
+const BACKUP_STRATEGIES = {
+  off: {
+    label: '⏸ Désactivée',
+    desc: 'Aucun backup horodaté n\'est créé. La sync auto continue (fichier principal).',
+    enabled: false,
+    minIntervalMs: Infinity,
+    tiers: [],
+  },
+  light: {
+    label: '💾 Légère',
+    desc: '1 backup / heure, conservés 7 jours. ≈ 7 backups max.',
+    enabled: true,
+    minIntervalMs: 30 * MINUTE,
+    tiers: [
+      { maxAgeMs: 7 * DAY, bucketSizeMs: 24 * HOUR },
+    ],
+  },
+  standard: {
+    label: '📚 Standard (recommandée)',
+    desc: '10 min de granularité < 1 h, puis 1/h < 48 h, 1/jour < 14 j, 1/sem < 120 j. ≈ 80 backups sur 4 mois.',
+    enabled: true,
+    minIntervalMs: 10 * MINUTE,
+    tiers: [
+      { maxAgeMs:       HOUR, bucketSizeMs: 10 * MINUTE },
+      { maxAgeMs:  2 * DAY,   bucketSizeMs:      HOUR   },
+      { maxAgeMs: 14 * DAY,   bucketSizeMs:      DAY    },
+      { maxAgeMs:120 * DAY,   bucketSizeMs:  7 * DAY    },
+    ],
+  },
+  extended: {
+    label: '🗄 Étendue',
+    desc: '5 min < 1 h, 1/h < 7 j, 1/jour < 60 j, 1/sem < 1 an. ≈ 130 backups sur 1 an.',
+    enabled: true,
+    minIntervalMs: 5 * MINUTE,
+    tiers: [
+      { maxAgeMs:       HOUR, bucketSizeMs:  5 * MINUTE },
+      { maxAgeMs:  7 * DAY,   bucketSizeMs:      HOUR   },
+      { maxAgeMs: 60 * DAY,   bucketSizeMs:      DAY    },
+      { maxAgeMs:365 * DAY,   bucketSizeMs:  7 * DAY    },
+    ],
+  },
+};
+function _currentBackupStrategy() {
+  const key = localStorage.getItem('planClasse_backupStrategy') || 'standard';
+  return BACKUP_STRATEGIES[key] || BACKUP_STRATEGIES.standard;
+}
+function _currentBackupStrategyKey() {
+  const key = localStorage.getItem('planClasse_backupStrategy') || 'standard';
+  return BACKUP_STRATEGIES[key] ? key : 'standard';
+}
+// Compat : conservés pour usage interne mais lus depuis la stratégie courante.
+function _backupMinIntervalMs() { return _currentBackupStrategy().minIntervalMs; }
+const BACKUP_RETENTION_MAX_AGE_MS = 365 * DAY; // borne haute (la plus stricte des stratégies)
 let autoSyncEnabled = localStorage.getItem('planClasse_autoSync') === '1';
 let _autoSaveTimer  = null;
 let _lastDiskWriteTs = 0;
@@ -22572,9 +22646,10 @@ async function autoSaveDoIt() {
     _dirtySinceExport = false;
     _updateDirtyIndicator();
 
-    // Backup horodaté (max 1 toutes les 10 min)
+    // Backup horodaté — fréquence dépendante de la stratégie courante.
+    // Si stratégie 'off' → minIntervalMs = Infinity → aucun backup créé.
     const now = Date.now();
-    if (now - _lastBackupTs >= BACKUP_MIN_INTERVAL_MS) {
+    if (_currentBackupStrategy().enabled && (now - _lastBackupTs >= _backupMinIntervalMs())) {
       _lastBackupTs = now;
       localStorage.setItem('planClasse_lastBackupTs', String(now));
       const d = new Date(now);
@@ -22612,15 +22687,47 @@ function _parseBackupName(name) {
 //   < 120j : tranches de 1 sem.   → ~15 backups (4 mois)
 //   > 120j : "expired" → supprimé
 function _bucketKey(ts, ageMs) {
-  const HOUR = 3600000, DAY = 24 * HOUR;
-  if (ageMs < HOUR)        return 'm-' + Math.floor(ts / (10 * 60 * 1000));
-  if (ageMs < 2 * DAY)     return 'h-' + Math.floor(ts / HOUR);
-  if (ageMs < 14 * DAY)    return 'd-' + Math.floor(ts / DAY);
-  if (ageMs < 120 * DAY)   return 'w-' + Math.floor(ts / (7 * DAY));
+  // Cherche le 1er palier de la stratégie courante dont maxAgeMs est ≥ ageMs.
+  const strat = _currentBackupStrategy();
+  if (!strat.enabled) return 'expired'; // stratégie 'off' → nettoie tout l'historique
+  for (let i = 0; i < strat.tiers.length; i++) {
+    const t = strat.tiers[i];
+    if (ageMs < t.maxAgeMs) return i + '-' + Math.floor(ts / t.bucketSizeMs);
+  }
   return 'expired';
 }
 
 // Conserve un backup récent par bucket temporel (plus c'est ancien, plus c'est espacé)
+// ── UI : modale « Stratégie de sauvegarde » ──
+function openBackupSettings() {
+  const wrap = document.getElementById('mbk-options');
+  if (!wrap) return;
+  const cur = _currentBackupStrategyKey();
+  const html = Object.entries(BACKUP_STRATEGIES).map(([key, s]) => {
+    const isCur = (key === cur);
+    return `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid ${isCur ? 'var(--ink-blue)' : 'var(--rule-line)'};border-radius:4px;cursor:pointer;background:${isCur ? 'var(--paper-warm)' : 'var(--paper)'}">
+      <input type="radio" name="bk-strategy" value="${_escAttr(key)}" ${isCur ? 'checked' : ''} onchange="setBackupStrategy(this.value)" style="margin-top:3px">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:.95em">${s.label}</div>
+        <div style="font-size:.82em;color:var(--pencil);margin-top:2px">${_esc(s.desc)}</div>
+      </div>
+    </label>`;
+  }).join('');
+  wrap.innerHTML = html;
+  openMod('mbackup-settings');
+}
+function setBackupStrategy(key) {
+  if (!BACKUP_STRATEGIES[key]) return;
+  localStorage.setItem('planClasse_backupStrategy', key);
+  toast(`💾 Stratégie : ${BACKUP_STRATEGIES[key].label}`);
+  // Re-render des radios pour mettre à jour la bordure de sélection
+  openBackupSettings();
+  // Nettoyage immédiat pour appliquer la nouvelle rétention si plus stricte
+  if (autoSyncEnabled && dirHandle) {
+    try { cleanupOldBackups(); } catch (_) {}
+  }
+}
+
 async function cleanupOldBackups() {
   if (!dirHandle) return;
   try {
