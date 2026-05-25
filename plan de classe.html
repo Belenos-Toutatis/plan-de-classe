@@ -1244,6 +1244,14 @@ input.meval-niveau-input {
   background: transparent !important;
   border-color: transparent !important;
 }
+/* Mode sobriété : retire les fonds colorés ET le texte clair associé (sinon
+   texte blanc sur fond blanc devient invisible). Classes posées sur <body> via
+   _evalTableurSobrApply(). Les cellules à dégrader portent les classes
+   `meval-cell-note` ou `meval-cell-comp` (ajoutées dans les fonctions de rendu). */
+body.tableur-sobr-notes #meval-tableur-wrap .meval-cell-note,
+body.tableur-sobr-notes #meval-tableur-wrap .meval-cell-note input.meval-niveau-input { background: transparent !important; color: var(--ink-deep) !important; }
+body.tableur-sobr-comps #meval-tableur-wrap .meval-cell-comp,
+body.tableur-sobr-comps #meval-tableur-wrap .meval-cell-comp input.meval-niveau-input { background: transparent !important; color: var(--ink-deep) !important; }
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder { color: var(--pencil-soft) !important; }
 html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
@@ -4291,6 +4299,14 @@ kbd {
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="📋 Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">📋</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="💾 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px">💾</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
+        <span style="position:relative;display:inline-block">
+          <button class="btn btn-g btn-sm" id="meval-tableur-sobr-btn" onclick="_evalTableurSobrToggleMenu(event)" title="🎨 Sobriété : retirer les fonds colorés (notes et/ou compétences) — choix indépendants persistés." aria-label="Sobriété" style="padding:4px 6px">🎨</button>
+          <div id="meval-tableur-sobr-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--paper);border:1px solid var(--ink-blue-soft);border-radius:5px;box-shadow:0 2px 10px rgba(0,0,0,.18);padding:8px 12px;z-index:50;white-space:nowrap;font-size:.88em">
+            <div style="font-weight:600;margin-bottom:6px;color:var(--ink-blue);font-family:var(--font-serif)">🎨 Sobriété — fonds colorés</div>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 0"><input type="checkbox" id="meval-tableur-sobr-notes" onchange="_evalTableurSobrApply()"> Notes chiffrées (mini-notes, Σ, Note finale)</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 0"><input type="checkbox" id="meval-tableur-sobr-comps" onchange="_evalTableurSobrApply()"> Niveaux de compétences (1–4, A)</label>
+          </div>
+        </span>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
       </div>
     </div>
@@ -5138,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T07:45:00Z';
+const APP_VERSION   = '2026-05-24T08:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -28677,6 +28693,56 @@ function _NAME_HEAD_ATTRS() {
   return ` onclick="_toggleCompactNameMode()" style="cursor:pointer;user-select:none" title="Clic gauche : basculer entre nom complet et nom abrégé (juste assez d'initiales pour distinguer les élèves qui ont le même prénom)"`;
 }
 
+// ─── Mode "sobriété" : retire les fonds colorés des notes et/ou compétences ───
+// Persisté dans localStorage, appliqué via classes sur <body> (tableur-sobr-notes /
+// tableur-sobr-comps). Les cellules à dégrader portent les classes meval-cell-note
+// ou meval-cell-comp ajoutées dans les fonctions de rendu.
+function _evalTableurSobrApply() {
+  const notesOn = document.getElementById('meval-tableur-sobr-notes')?.checked || false;
+  const compsOn = document.getElementById('meval-tableur-sobr-comps')?.checked || false;
+  document.body.classList.toggle('tableur-sobr-notes', notesOn);
+  document.body.classList.toggle('tableur-sobr-comps', compsOn);
+  try { localStorage.setItem('planClasse_tableurSobrNotes', notesOn ? '1' : '0'); } catch (e) {}
+  try { localStorage.setItem('planClasse_tableurSobrComps', compsOn ? '1' : '0'); } catch (e) {}
+  // Indique l'état actif via la couleur du bouton
+  const btn = document.getElementById('meval-tableur-sobr-btn');
+  if (btn) btn.style.background = (notesOn || compsOn) ? 'var(--ink-blue)' : '';
+  if (btn) btn.style.color = (notesOn || compsOn) ? '#fff' : '';
+}
+function _evalTableurSobrToggleMenu(e) {
+  e?.stopPropagation();
+  const menu = document.getElementById('meval-tableur-sobr-menu');
+  if (!menu) return;
+  if (menu.style.display === 'none' || !menu.style.display) {
+    menu.style.display = 'block';
+    // Click-away fermeture
+    setTimeout(() => {
+      document.addEventListener('click', _evalTableurSobrCloseAway, true);
+    }, 0);
+  } else {
+    menu.style.display = 'none';
+    document.removeEventListener('click', _evalTableurSobrCloseAway, true);
+  }
+}
+function _evalTableurSobrCloseAway(e) {
+  const menu = document.getElementById('meval-tableur-sobr-menu');
+  const btn  = document.getElementById('meval-tableur-sobr-btn');
+  if (!menu) return;
+  if (menu.contains(e.target) || btn?.contains(e.target)) return;
+  menu.style.display = 'none';
+  document.removeEventListener('click', _evalTableurSobrCloseAway, true);
+}
+function _evalTableurSobrRestore() {
+  // Hydrate les checkboxes depuis localStorage et applique
+  const notesOn = (() => { try { return localStorage.getItem('planClasse_tableurSobrNotes') === '1'; } catch (e) { return false; } })();
+  const compsOn = (() => { try { return localStorage.getItem('planClasse_tableurSobrComps') === '1'; } catch (e) { return false; } })();
+  const cN = document.getElementById('meval-tableur-sobr-notes');
+  const cC = document.getElementById('meval-tableur-sobr-comps');
+  if (cN) cN.checked = notesOn;
+  if (cC) cC.checked = compsOn;
+  _evalTableurSobrApply();
+}
+
 function _evalTableurRender() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -28684,6 +28750,7 @@ function _evalTableurRender() {
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
   _evalTableurRenderClassPicker(ev, cls);
+  _evalTableurSobrRestore();
   if (ev.type === 'B') { _evalTableurRenderB(ev, cls); return; }
 
   const sids = _evalTableurSortedSids(cls);
@@ -28901,7 +28968,7 @@ function _evalTableurRender() {
         ? `🧮 ${_storedExpr} = ${_esc(dispVal)}\n(clic droit = commentaires)`
         : 'Clic droit = commentaires (bonus / malus / annotations)';
       const _titleAttr  = _escAttr(_cellTitle);
-      html += `<td style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      html += `<td class="meval-cell-note" style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
     if (isTypeC && exoGroups.length > 0) {
@@ -28913,7 +28980,7 @@ function _evalTableurRender() {
         const txt = sum == null ? '—' : _fmtNote(sum);
         const exoLabel = g.id ? `de ${_esc(g.label)}` : 'des questions orphelines';
         const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
-        html += `<td class="meval-exo-total-cell" data-row-exo="${_esc(g.id || '__orphans__')}" data-row-exo-max="${max}" style="padding:3px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;font-size:.85em;background:${sbg || 'var(--paper-deep)'};color:${sCol};${borderLeft}" title="Total ${exoLabel} : ${txt}/${max}">${txt}</td>`;
+        html += `<td class="meval-exo-total-cell meval-cell-note" data-row-exo="${_esc(g.id || '__orphans__')}" data-row-exo-max="${max}" style="padding:3px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;font-size:.85em;background:${sbg || 'var(--paper-deep)'};color:${sCol};${borderLeft}" title="Total ${exoLabel} : ${txt}/${max}">${txt}</td>`;
       });
     }
     // Total brut (somme sur tous les exos) — colonne séparée si maxBrut !== noteMax
@@ -28921,7 +28988,7 @@ function _evalTableurRender() {
       const brut = _computeStudentNoteBrut(ev, sid);
       const bbg = (brut != null) ? _noteColor(brut, maxBrut) : '';
       const bCol = bbg ? _contrastTextColor(bbg) : 'var(--ink-blue)';
-      html += `<td data-row-brute="1" data-row-brute-max="${maxBrut}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bbg || 'var(--paper-warm)'};color:${bCol};border-left:2px solid var(--ink-blue-soft)" title="Total brut sur ${maxBrut}">${brut != null ? _fmtNote(brut) : '—'}</td>`;
+      html += `<td data-row-brute="1" data-row-brute-max="${maxBrut}" class="meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bbg || 'var(--paper-warm)'};color:${bCol};border-left:2px solid var(--ink-blue-soft)" title="Total brut sur ${maxBrut}">${brut != null ? _fmtNote(brut) : '—'}</td>`;
     }
     // Note finale (proportionnée à ev.noteMax)
     const total = _computeStudentEvalNote(ev, sid);
@@ -28933,7 +29000,7 @@ function _evalTableurRender() {
     else totalBg = '';
     totalColor = totalBg ? _contrastTextColor(totalBg) : 'var(--ink-blue)';
     const noteBorderLeft = showBruteCol ? '' : 'border-left:2px solid var(--ink-blue-soft);';
-    html += `<td class="meval-row-total" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${noteBorderLeft}" data-sid="${_esc(sid)}">${disp.text}</td>`;
+    html += `<td class="meval-row-total meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${noteBorderLeft}" data-sid="${_esc(sid)}">${disp.text}</td>`;
     // Compétences inline (Type C : niveau atteint par compétence évaluée)
     if (isTypeC && inlineComps.length > 0) {
       const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
@@ -28943,7 +29010,7 @@ function _evalTableurRender() {
         const dispNiv = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
         const cellBg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
         const cellColor = _contrastTextColor(cellBg);
-        html += `<td data-row-comp="${_esc(c.id)}" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
+        html += `<td data-row-comp="${_esc(c.id)}" class="meval-cell-comp" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
       }
     }
     // Remarque (Type A et Type C)
@@ -30661,7 +30728,7 @@ function _evalTableurRenderB(ev, cls) {
         const tdBg = bg ? `;background:${bg}` : '';
         const compForLbl = S.competences?.[cid];
         const ariaBLbl = `Niveau de ${stu.prenom || ''} ${stu.nom || ''} sur ${compForLbl?.code || cid} (passation ${_esc(p.code || '')})`;
-        html += `<td style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" aria-label="${_escAttr(ariaBLbl)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${fw};font-size:.88em;text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
+        html += `<td class="meval-cell-comp" style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" aria-label="${_escAttr(ariaBLbl)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${fw};font-size:.88em;text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
         ci++;
       });
     }
@@ -30671,7 +30738,7 @@ function _evalTableurRenderB(ev, cls) {
       const bg = (note20 != null) ? _noteColor(note20, 20) : '';
       const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
       const _tipB = _evalNoteTipB(ev, sid);
-      html += `<td class="meval-row-total" data-sid="${_esc(sid)}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft);cursor:help" title="${_escAttr(_tipB)}">${note20 != null ? _fmtNote(note20) : '—'}</td>`;
+      html += `<td class="meval-row-total meval-cell-note" data-sid="${_esc(sid)}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft);cursor:help" title="${_escAttr(_tipB)}">${note20 != null ? _fmtNote(note20) : '—'}</td>`;
     }
     // Niveau par compétence évaluée (calculé)
     const colorsB = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
@@ -30681,7 +30748,7 @@ function _evalTableurRenderB(ev, cls) {
       const dispNiv = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
       const cellBg = isNull ? 'var(--paper-warm)' : colorsB[Math.max(0, Math.min(3, Math.round(niv) - 1))];
       const cellColor = _contrastTextColor(cellBg);
-      html += `<td data-row-comp="${_esc(c.id)}" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
+      html += `<td data-row-comp="${_esc(c.id)}" class="meval-cell-comp" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
     }
     // Cellule Remarque (par élève)
     const remark = ev.studentRemarks?.[sid] || '';
