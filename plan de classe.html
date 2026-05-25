@@ -5355,7 +5355,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T04:15:00Z';
+const APP_VERSION   = '2026-05-26T19:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -6810,9 +6810,39 @@ function _seatingHashStr(cls) {
   if (!cls?.seating) return '';
   return Object.entries(cls.seating).sort().map(([k,v]) => k+'='+v).join('|');
 }
-// Map classId → hash du seating au moment où l'utilisateur a accepté les violations
-// (pas persisté — uniquement pour la session courante)
-const _violationsAcceptedFor = new Map();
+// Hash du seating au moment où l'utilisateur a accepté les violations.
+// Double persistance :
+//   1. S.violationsAccepted[classId]  — voyage avec le JSON (sync, export, undo)
+//   2. localStorage('planClasse_violDismiss') — fallback robuste si S est rechargé
+//      depuis un fichier disque qui ne contient pas encore ce champ (sync cross-device)
+// Lecture : on prend l'union (priorité S, fallback LS). Écriture : les deux.
+const _VIOL_DISMISS_LS_KEY = 'planClasse_violDismiss';
+function _violDismissReadLS() {
+  try { return JSON.parse(localStorage.getItem(_VIOL_DISMISS_LS_KEY) || '{}') || {}; }
+  catch(_) { return {}; }
+}
+function _violDismissWriteLS(obj) {
+  try { localStorage.setItem(_VIOL_DISMISS_LS_KEY, JSON.stringify(obj || {})); } catch(_) {}
+}
+const _violationsAcceptedFor = {
+  get(cid) {
+    const v = S.violationsAccepted?.[cid];
+    if (v) return v;
+    return _violDismissReadLS()[cid];
+  },
+  set(cid, h) {
+    if (!S.violationsAccepted) S.violationsAccepted = {};
+    S.violationsAccepted[cid] = h;
+    const ls = _violDismissReadLS();
+    ls[cid] = h;
+    _violDismissWriteLS(ls);
+  },
+  delete(cid) {
+    if (S.violationsAccepted) delete S.violationsAccepted[cid];
+    const ls = _violDismissReadLS();
+    if (cid in ls) { delete ls[cid]; _violDismissWriteLS(ls); }
+  },
+};
 function areViolationsDismissedForCls(cls) {
   if (!cls) return false;
   const acc = _violationsAcceptedFor.get(cls.id);
@@ -6856,6 +6886,13 @@ function resolveMinimalConflicts() {
     return toast('✅ Aucune violation à résoudre.');
   }
 
+  // Snapshot du seating AVANT la résolution — sert d'origine au bucket de
+  // surlignage pour que toute mutation ultérieure (swap manuel, etc.) soit
+  // évaluée par rapport à ce même point de référence (pas par rapport à
+  // l'état post-Solution-minimale, sinon les highlights posés ici seraient
+  // écrasés au 1er swap manuel suivant).
+  const beforeSeat = _snapSeating(cls);
+
   const MAX_ITER = 200; // garde-fou
   let iter = 0;
   let progress = true;
@@ -6890,15 +6927,12 @@ function resolveMinimalConflicts() {
   _violationsAcceptedFor.delete(cls.id);
   _violationsModalShown.delete(cls.id);
 
-  // Ajoute les cellules déplacées au bucket de surlignage (accumulation persistante).
+  // Surlignage : on passe par _recordMovesFromDiff avec comme référence le
+  // seating d'AVANT la résolution. Ainsi le bucket.origin reflète ce point
+  // de départ et les mutations manuelles ultérieures s'y empilent (au lieu
+  // de réinitialiser l'origine au post-Sol-min et d'effacer ces highlights).
   if (movedKeys.size) {
-    const bucket = _getHighlightBucket(cls, true);
-    if (bucket) {
-      const set = new Set(bucket.keys || []);
-      for (const k of movedKeys) set.add(k);
-      bucket.keys = [...set];
-      bucket.hidden = false;
-    }
+    _recordMovesFromDiff(cls, beforeSeat);
   }
 
   save();
@@ -6951,11 +6985,23 @@ function _recordMovesFromDiff(cls, beforeSeating) {
   const after = cls.seating || {};
   const bucket = _getHighlightBucket(cls, true);
   if (!bucket) { _updateMovedHighlightBtnUI(); return; }
+  // Cas spécial : population initiale d'une salle vide (seating "avant" sans
+  // aucun élève) → on traite comme un clear implicite, l'état courant devient
+  // la nouvelle origine et aucune case n'est surlignée. Évite que le premier
+  // peuplement d'une salle fasse clignoter en rose toutes les places remplies.
+  const wasEmpty = !beforeSeating || Object.keys(beforeSeating).length === 0;
+  if (wasEmpty) {
+    bucket.origin = Object.assign({}, after);
+    bucket.keys = [];
+    bucket.hidden = false;
+    _updateMovedHighlightBtnUI();
+    return;
+  }
   // Initialise l'origine au 1er changement de la session (ou après un clear).
   // On utilise `beforeSeating` du 1er appel comme snapshot d'origine — c'est
   // bien l'état "d'avant la 1re mutation" qui sert de référence.
   if (!bucket.origin) {
-    bucket.origin = beforeSeating ? Object.assign({}, beforeSeating) : Object.assign({}, after);
+    bucket.origin = Object.assign({}, beforeSeating);
   }
   // Recalcule la liste complète des keys différentes de l'origine.
   // (Pas d'accumulation tas-FIFO : la vérité absolue est diff(after, origin).)
@@ -7128,6 +7174,10 @@ function _maybeShowViolationsModal(cls) {
     _violationsModalShown.delete(cls.id);
     return;
   }
+  // L'utilisateur a explicitement accepté ce plan via "Garder & supprimer les
+  // alertes" → on ne ré-ouvre pas la modale tant que le seating n'a pas changé,
+  // même après un refresh de page (le dismiss est persisté dans S.violationsAccepted).
+  if (areViolationsDismissedForCls(cls)) return;
   if (_violationsModalShown.get(cls.id) === h) return; // déjà signalé pour cet état
   _violationsModalShown.set(cls.id, h);
   // Léger délai pour laisser l'animation des cellules se voir avant la popup
@@ -7139,6 +7189,7 @@ function dismissViolations() {
   const cls = getCls();
   if (!cls) return;
   _violationsAcceptedFor.set(cls.id, _seatingHashStr(cls));
+  save();
   closeMod2('mviolations');
   renderTeacherGrid();
   toast('✓ Alertes supprimées (réapparaîtront si le plan change).');
@@ -23543,7 +23594,8 @@ function _validateImport(d) {
                     'evaluations', 'competences', 'competenceDomains', 'evalCommentLibrary',
                     // Disciplines + bulletins (per-channel/per-discipline) ajoutés ici pour bloquer
                     // un éventuel prototype pollution via clés __proto__ / constructor / prototype.
-                    'disciplines', 'bulletinRemarques', 'bulletinClassRemarques', 'bulletinWorkedItems', 'conseilClasse'];
+                    'disciplines', 'bulletinRemarques', 'bulletinClassRemarques', 'bulletinWorkedItems', 'conseilClasse',
+                    'violationsAccepted'];
   for (const sec of sections) {
     const err = checkKeys(d[sec], sec);
     if (err) return err;
