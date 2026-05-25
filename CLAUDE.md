@@ -1491,63 +1491,111 @@ L'algo normalise les prénoms via NFD + suppression des combining marks `/[̀-ͯ
 
 `body:has(.mo.on)::before { display: none; }` — règle CSS pure. Évite que le filet rouge (`body::before`, z-index 9990) passe au-dessus du tableur d'éval en mode plein écran (99vw).
 
-## Disciplines et sous-groupes (classes recomposées)
+## Disciplines (flux per-classe) et classes recomposées
 
-Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + Option) OU de gérer des **classes recomposées** (élèves d'une ou plusieurs classes regroupés autour d'une discipline particulière — ex. Bilingue, Option DP3).
+Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + Option) OU de gérer des **classes recomposées** (élèves d'une ou plusieurs classes regroupés — ex. Bilingue 6ᵉ, Option DP3).
+
+Deux notions **orthogonales** :
+- **Flux (discipline)** : configuré par classe. Chaque classe a 1 ou 2 disciplines (nom personnalisable). Les évaluations sont rangées dans l'un des deux flux ; les bilans (notes, compétences, remarques) sont **séparés par flux**.
+- **Classe recomposée (sous-groupe)** : roster d'élèves (potentiellement inter-classes) qu'une éval peut cibler pour restreindre son tableur. Indépendant de la discipline.
 
 ### Modèle
 
 ```js
-S.disciplines = { [id]: { id, nom, abbr, color } }
-S.subgroups   = { [id]: { id, nom, disciplineId, members:[{classId, sids:[]}, …] } }
-ev.disciplineId = 'disc_xxx' | null   // null = "Discipline principale" (legacy)
-ev.subgroupId   = 'sg_xxx'   | null   // null = pas de restriction de roster
+// Par classe : nom des disciplines (vide / null = mono-flux)
+cls.discNamePrimary    = 'SVT'                 // string, '' interprété comme « Principale »
+cls.discNameSecondary  = 'SVT Bilingue' | null // null = pas de 2e flux
+
+// Par évaluation : flux d'appartenance
+ev.discChannel = 'primary' | 'secondary'   // défaut 'primary'
+ev.subgroupId  = 'sg_xxx' | null            // optionnel : roster restriction
+
+// Catalogue global de sous-groupes (inter-classes possibles)
+S.subgroups = {
+  [id]: { id, nom, members: [{classId, sids: [...]}, ...] }
+}
+
+// Bulletins : structures wrappées per-channel
+S.bulletinRemarques[classId][channel][sid][periode]      = "texte"
+S.bulletinClassRemarques[classId][channel][periode]      = "texte"
+S.bulletinWorkedItems[classId][channel][periode]         = [items]
+S.conseilClasse[classId][channel][sid][periode]          = { F, E, AT, AC }
 ```
 
-Migration douce dans `postLoadHook` : si absents, `S.disciplines` et `S.subgroups` sont initialisés à `{}`. **Aucun changement de comportement** tant que l'utilisateur n'a pas créé sa 1re discipline — toutes les évals restent implicitement dans la « Discipline principale ».
+### Migration (postLoadHook)
+
+1. **Catalogue global obsolète** : `S.disciplines` (v1) supprimé silencieusement.
+2. **Évaluations** : `ev.discChannel = 'primary'` si absent ; `ev.disciplineId` (v1) supprimé.
+3. **Classes** : `discNamePrimary = ''` / `discNameSecondary = null` si absents.
+4. **Bulletins** : helper top-level `_bulletinWrapAll()` (idempotent). Pour chaque map, détecte si la valeur (par classe) est déjà wrappée (`primary`/`secondary` au 1er niveau) :
+   - **Pure ancien format** (`{cid: {sid: {periode: …}}}`) → wrap entier en `{primary: existing, secondary: {}}`
+   - **Mixte** (clés orphelines à côté de `primary`/`secondary`) → migre les orphelines vers `.primary` sans écraser ce qui s'y trouve déjà
+   - Aussi rappelé en fin de `createDemo` (la démo écrit volontairement en ancien format pour rester lisible).
 
 ### 3 cas d'usage
 
-1. **Classe entière, 2 disciplines** : créer 2 disciplines (ex. SVT + Option), tagger chaque éval avec la bonne discipline. Pas besoin de sous-groupe (tous les élèves de la classe sont concernés).
-2. **Sous-ensemble d'une classe** : créer une discipline + un sous-groupe avec les élèves concernés (d'une seule classe). Tagger l'éval avec discipline + sous-groupe : le tableur n'affiche que les membres.
-3. **Inter-classes** : sous-groupe avec membres dans plusieurs classes (ex. Bilingue 6ᵉ : 5 élèves de 6A + 5 de 6B). L'éval est créée multi-classes (`classIds = ['6A','6B']`) + `subgroupId`. Le tableur affiche les 10 élèves même s'ils sont dans 2 classes différentes.
+1. **Classe entière, 1 discipline** : cas par défaut. Pas de configuration, pas de sélecteur. Comportement identique à avant la feature.
+2. **Classe entière, 2 disciplines** (même prof, ex. SVT + Option à toute la 6A) : éditer la classe, saisir un nom secondaire. Le sélecteur de flux apparaît dans Devoirs/Bilans/Compétences. Chaque éval créée demande son flux.
+3. **Classe recomposée** (inter-classes, ex. Bilingue 6ᵉ = 5 élèves de 6A + 5 de 6B) : créer un sous-groupe via 👥 Classes recomposées (membres dans plusieurs classes). Les évals destinées à ce groupe portent `subgroupId` (et probablement `discChannel='secondary'` si les classes ont leur 2e discipline configurée).
 
 ### Helpers exposés
 
-- `_disciplineLabel(id)` / `_disciplineColor(id)` / `_disciplineAbbr(id)` — `null`/inconnu → libellé/couleur neutres
-- `_evalMatchesDisciplineFilter(ev, filterId)` — `filterId` ∈ `'all'` | `'__principal__'` | `disciplineId`
+**Per-classe / per-channel** :
+- `_clsPrimaryName(cls)` / `_clsSecondaryName(cls)` — renvoient le nom affiché du flux (`'Principale'` si vide)
+- `_clsHasTwoChannels(cls)` — true si la classe a une discipline secondaire
+- `_channelLabel(cls, channel)` — libellé human-friendly
+- `_evalChannelOf(ev)` — `'primary'` | `'secondary'`, défaut `'primary'`
+- `_evalMatchesChannel(ev, channel)` — filtre
+- `_currentDiscChannel(classId)` / `_setDiscChannel(classId, channel)` — persistance par classe dans `localStorage.planClasse_discChannel` (JSON `{classId: channel}`)
+- `_renderDiscChannelToolbar(tabKey)` — peuple `#disc-channel-{notes,bilan,comp}` ; caché si la classe est mono-flux
+- `_evalRefreshChannelSelect(prefix)` — peuple le select Flux dans `meval-new` / `meval-edit` ; caché si aucune classe cochée n'a 2 flux
+
+**Bulletins per-channel** :
+- `_bulRemark(classId, sid, periode)` / `_setBulRemark`
+- `_bulClassRemark(classId, periode)` / `_setBulClassRemark`
+- `_bulWorkedItems(classId, periode)` / `_setBulWorkedItems`
+- `_conseilFor(classId, sid, periode)` / `_setConseilFor(classId, sid, periode, flag, value)`
+
+**Sous-groupes** (inchangés depuis la v1, sans le champ `disciplineId` retiré) :
 - `_subgroupSidsForClass(sg, classId)` / `_subgroupAllSids(sg)`
-- `_evalEffectiveSidsForClass(ev, classId)` — intersection (sids du subgroup pour classId) ∩ `cls.eleves`, ou `cls.eleves` si pas de subgroupId
-- `_suggestSubgroupForEval(ev)` — auto-suggestion : si une seule combinaison `discipline + classIds` matche, renvoie ce subgroup
-- `_currentDisciplineFilter(classId)` / `_setDisciplineFilter(classId, filterId)` — persistance par classe dans `localStorage.planClasse_disciplineFilter` (JSON `{classId: filterId}`)
-- `_disciplinePillHTML(disciplineId)` — pastille colorée pour les en-têtes / listes
-- `_renderDisciplineFilterToolbar(tabKey)` — affiche le `<select>` filtre discipline si ≥ 1 discipline existe, sinon cache
+- `_evalEffectiveSidsForClass(ev, classId)` — intersection avec `cls.eleves` si `ev.subgroupId` est défini
 
 ### UI
 
-- **Modale `mdisciplines`** : 2 sections empilées (Disciplines + Sous-groupes). Accessible depuis le bouton **🎓 Disciplines** du header de l'onglet **Classes**, ou depuis le lien « + Gérer… » à côté du select discipline dans `meval-new` / `meval-edit` (avec `_modalReturnTo` pour retour automatique à la modale parente).
-- **Sélecteur discipline + sous-groupe** dans `meval-new` et `meval-edit` (sous le champ Période). Le select sous-groupe est caché si aucune discipline n'est sélectionnée ou si aucun subgroup ne matche.
-- **Filtre discipline** dans les toolbars des 3 onglets eval (Devoirs / Bilan des notes / Bilan des compétences). Caché si aucune discipline créée (rétrocompat zéro friction).
-- **Pastille discipline** : dans la liste Devoirs, le header du tableur, et les en-têtes de colonne du Bilan des notes. Format : `<span>` mono-fin avec fond coloré (`_disciplineColor`) et `_contrastTextColor`.
+- **Édition de classe** (modale `medit-cls` / `mc-edit-cls`) : section « 🎓 Disciplines » avec champ « Discipline principale » (placeholder « Principale ») + case « Activer une discipline secondaire » qui révèle son champ Nom.
+- **Modale 👥 Classes recomposées** (`msubgroups`) : accessible depuis le header de l'onglet Classes (bouton « 🎓 Disciplines » qui ouvre ce modal — historique du nom conservé). Liste les sous-groupes, picker membres avec chips d'élèves par classe (cross-class).
+- **Sélecteur Flux** dans `meval-new` / `meval-edit` (sous Période) : visible uniquement si au moins une classe cochée a 2 flux. Options nommées avec le nom des classes (« Principal (SVT/Maths) », « Secondaire (Bilingue) »). En édition, la valeur du select priorise `ev.discChannel` sur le state du DOM.
+- **Sélecteur Flux** dans toolbars des 3 onglets eval (Devoirs / Bilan notes / Bilan compétences) : visible uniquement si la classe courante a 2 flux. Persistance par classe.
+- **Pastille flux** (`_evalChannelPillHTML`) : affichée à côté du titre / dans la liste / le tableur **uniquement pour le flux secondaire d'une classe à 2 flux** (sinon implicite).
 
-### Filtrage / restriction roster
+### Filtrage
 
-- Sites filtrés par discipline : `renderEvalNotes`, `renderBilanTab` (ownEvs + orphanEvs), `renderCompetencesTab` (compIds + orphan), `_computeStudentMeanForPeriod` (param optionnel `disciplineFilter`, défaut `'all'`), `_bilanCollectEligibleEvals`.
-- **Important** : le tableur d'éval, le calcul intra-éval et le cross-tab d'une éval ignorent le filtre (`'all'` partout) — les bilans sont les seuls à le respecter.
-- **Roster restriction** : `_evalTableurSortedSids` et `_evalOpenSaisie` intersectent leur liste de sids avec `_evalEffectiveSidsForClass(ev, classId)` quand `ev.subgroupId` est défini.
+Sites filtrés par channel :
+- `renderEvalNotes` (liste Devoirs)
+- `renderBilanTab` (ownEvs + orphanEvs)
+- `renderCompetencesTab` (compIds + orphan)
+- `_bilanCollectEligibleEvals`
+- `_computeStudentMeanForPeriod` (lit le channel courant pour la classe)
 
-### Suppression — cascade
+**Pas filtrés** (volontaire) : tableur d'éval, calcul intra-éval, cross-tab d'une éval — ces vues sont focalisées sur une éval précise, le flux est déjà déterminé par `ev.discChannel`.
 
-Supprimer une discipline utilisée :
-1. Confirm explicite récapitulant les conséquences
-2. Les évals taggées passent en `disciplineId = null`
-3. Les subgroups rattachés sont **cascade supprimés**, et les évals qui les référençaient perdent leur `subgroupId` (tableur ré-élargi à la classe entière)
+### Roster restriction (subgroup)
 
-Supprimer un subgroup : les évals qui le référençaient perdent juste `subgroupId`.
+`_evalTableurSortedSids` et `_evalOpenSaisie` intersectent leur liste de sids avec `_evalEffectiveSidsForClass(ev, classId)` quand `ev.subgroupId` est défini. La discipline (channel) est indépendante : un subgroup peut être utilisé dans n'importe quel flux.
 
-### Auto-suggestion subgroup
+### Démo
 
-À la création d'une éval, si `disciplineId` est set et qu'un seul subgroup matche (`discipline + ≥ 1 membre dans les classIds`), il est suggéré (pré-coché dans le select). L'utilisateur peut décocher pour ouvrir le tableur à toute la classe.
+`_seedDemoEvaluations` configure :
+- 6A : `discNamePrimary='SVT'`, `discNameSecondary='SVT Bilingue'`
+- Un sous-groupe `sg_bil_6e` avec 5 élèves de 6A
+- 1 éval `discChannel='secondary'` + `subgroupId='sg_bil_6e'` (Interrogation SVT bilingue)
+- 1 remarque bulletin sur le flux 'secondary' de 6A pour démontrer la séparation
+- Toutes les autres évals / classes restent en flux primary par défaut
+
+### Suppression / désactivation
+
+- Désactiver la discipline secondaire d'une classe (décocher la case dans medit-cls) : on accepte que les évals secondary "orphelines" subsistent dans les données mais ne soient plus accessibles tant que le flux n'est pas réactivé. Pas de cascade automatique.
+- Supprimer un sous-groupe : les évals référençantes perdent juste `subgroupId` (tableur ré-élargi à la classe entière).
 
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
