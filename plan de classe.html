@@ -5201,7 +5201,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T22:30:00Z';
+const APP_VERSION   = '2026-05-25T23:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -7849,6 +7849,9 @@ let _mvcSelected = new Set();   // sids cochés (set vivant pendant l'édition)
 let _mvcEditingId = null;       // id si édition, null si création
 let _mvcSeedFromTag = null;     // tagId pré-coché (depuis "Sauver comme classe recomposée")
 let _mvcIdManual   = false;     // l'utilisateur a-t-il modifié l'ID manuellement ? (alors on n'auto-suggère plus)
+// Appartenance per-période { sid: { fromPer, toPer } } — édité dans la modale,
+// appliqué à cls.membership au save. Entrées vides ⇒ « toutes périodes » (défaut).
+let _mvcMembership = {};
 // Filtres cumulatifs du panneau "🔎 Filtrer les candidats" (intersection ET entre les 3 dimensions ;
 // tags entre eux : OU par défaut, ET configurable ; classes entre elles : OU implicite ; niveau : single)
 let _mvcFilters = { tagIds: new Set(), tagMode: 'or', classIds: new Set(), level: null };
@@ -7977,6 +7980,13 @@ function openVirtualClassModal(id, opts) {
   }
   _mvcEditingId = id || null;
   _mvcSelected = new Set();
+  // Membership : copie depuis cls.membership si édition (deep clone simple), sinon vide
+  _mvcMembership = {};
+  if (id && S.classes?.[id]?.membership) {
+    for (const [sid, m] of Object.entries(S.classes[id].membership)) {
+      if (m && (m.fromPer || m.toPer)) _mvcMembership[sid] = { fromPer: m.fromPer || null, toPer: m.toPer || null };
+    }
+  }
   _mvcSeedFromTag = opts?.fromTag || null;
   _mvcIdManual = !!id; // en édition, on considère l'ID comme "manuel" (l'utilisateur ne veut pas qu'il change tout seul)
 
@@ -8068,18 +8078,31 @@ function renderMvcStudents() {
         <button class="btn btn-g btn-sm" onclick="mvcCheckClass('${cls.id}',true)" style="padding:1px 6px">+ Tous</button>
         <button class="btn btn-g btn-sm" onclick="mvcCheckClass('${cls.id}',false)" style="padding:1px 6px">− Aucun</button>
       </div>`;
+    const _perOpts = _periodeOptions();
+    const _mkPerSel = (sid, key, current) => {
+      let opts = `<option value="">—</option>`;
+      for (const p of _perOpts) opts += `<option value="${p.code}"${current === p.code ? ' selected' : ''}>${p.code}</option>`;
+      const _ttl = (key === 'fromPer') ? "À partir de la période…" : "Jusqu'à la période (incluse)…";
+      return `<select onchange="mvcSetMembership('${sid}','${key}',this.value)" title="${_ttl}" style="font-size:.72em;padding:0 2px;height:18px;background:transparent;border:1px solid #d0d0d0;border-radius:2px;font-family:var(--font-mono);color:var(--pencil)">${opts}</select>`;
+    };
     html += eleves.map(s => {
       const checked = _mvcSelected.has(s.id) ? 'checked' : '';
+      const isChecked = _mvcSelected.has(s.id);
       const tagSpans = (Array.isArray(s.tags) ? s.tags : [])
         .map(tid => S.tags[tid])
         .filter(Boolean)
         .map(t => `<span class="tagbdg" style="background:${_safeColor(t.color)};font-size:.62em;padding:0 4px">${_escAttr(t.abbr)}</span>`)
         .join('');
       const grpBadge = s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.62em;padding:0 4px">G${s.groupe}</span>` : '';
+      const mem = _mvcMembership[s.id] || {};
+      const memUI = isChecked
+        ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:.72em;color:var(--pencil);margin-left:4px" onclick="event.preventDefault()">de ${_mkPerSel(s.id,'fromPer',mem.fromPer||'')} à ${_mkPerSel(s.id,'toPer',mem.toPer||'')}</span>`
+        : '';
       return `<label style="display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
         <input type="checkbox" ${checked} onchange="mvcToggleSid('${s.id}',this.checked)" style="width:14px;height:14px;cursor:pointer">
         <span style="flex:1"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>
         ${grpBadge} ${tagSpans}
+        ${memUI}
       </label>`;
     }).join('');
     html += '</div>';
@@ -8090,8 +8113,18 @@ function renderMvcStudents() {
 }
 
 function mvcToggleSid(sid, checked) {
-  if (checked) _mvcSelected.add(sid); else _mvcSelected.delete(sid);
-  document.getElementById('mvc-count').textContent = `${_mvcSelected.size} élève(s) sélectionné(s)`;
+  if (checked) _mvcSelected.add(sid);
+  else { _mvcSelected.delete(sid); delete _mvcMembership[sid]; }
+  // Re-render pour afficher/cacher les sélecteurs de période per-élève
+  renderMvcStudents();
+}
+// Met à jour l'appartenance per-période d'un élève dans la modale Classe recomposée.
+// `key` = 'fromPer' | 'toPer' ; `value` = code période ou '' (= null = ouvert).
+function mvcSetMembership(sid, key, value) {
+  if (!_mvcMembership[sid]) _mvcMembership[sid] = { fromPer: null, toPer: null };
+  _mvcMembership[sid][key] = value || null;
+  // Si tout est null, retire l'entrée pour rester propre
+  if (!_mvcMembership[sid].fromPer && !_mvcMembership[sid].toPer) delete _mvcMembership[sid];
 }
 function mvcCheckClass(clsId, on) {
   const cls = S.classes[clsId];
@@ -8361,6 +8394,12 @@ function mvcSave() {
       }
     }
     cls.eleves = sids;
+    // Appartenance per-période : ne garder que les entrées des sids encore présents
+    cls.membership = {};
+    for (const sid of sids) {
+      const m = _mvcMembership[sid];
+      if (m && (m.fromPer || m.toPer)) cls.membership[sid] = { fromPer: m.fromPer || null, toPer: m.toPer || null };
+    }
 
     // Renommer l'identifiant si différent
     if (newId !== oldId) {
@@ -8383,6 +8422,11 @@ function mvcSave() {
     }
   } else {
     // ─── CRÉATION ────────────────────────────────────────────
+    const membership = {};
+    for (const sid of sids) {
+      const m = _mvcMembership[sid];
+      if (m && (m.fromPer || m.toPer)) membership[sid] = { fromPer: m.fromPer || null, toPer: m.toPer || null };
+    }
     const newCls = {
       id: newId, nom, année: yr,
       eleves: sids,
@@ -8392,6 +8436,7 @@ function mvcSave() {
       virtual: true,
       fromTag: fromTag,
       disciplineIds: mvcDiscIds,
+      membership,
     };
     S.classes[newId] = newCls;
     setupClassAccessors(newCls);
@@ -19210,6 +19255,23 @@ function _stuActiveOn(stu, ymd) {
   if (stu.arrivalDate   && d <  stu.arrivalDate)   return false;
   if (stu.departureDate && d >= stu.departureDate) return false;
   return true;
+}
+
+// Appartenance d'un élève à une classe sur une période donnée.
+// Modèle : cls.membership[sid] = { fromPer, toPer } — fromPer/toPer sont des
+// codes de période (S1/S2 ou T1/T2/T3) ou null pour « ouvert ». Si l'entrée
+// n'existe pas, l'élève est dans la classe sur toutes les périodes (défaut).
+// `periode === ''` (Toutes) → toujours actif (vue agrégée).
+function _stuActiveInClassForPeriod(cls, sid, periode) {
+  if (!periode) return true; // Toutes périodes → pas de restriction
+  const m = cls?.membership?.[sid];
+  if (!m) return true;
+  const order = _periodeOptions().map(o => o.code);
+  const pIdx = order.indexOf(periode);
+  if (pIdx < 0) return true; // période d'un autre mode (trimestre/semestre) — laisser passer
+  const fromIdx = m.fromPer ? order.indexOf(m.fromPer) : -Infinity;
+  const toIdx   = m.toPer   ? order.indexOf(m.toPer)   : Infinity;
+  return pIdx >= fromIdx && pIdx <= toIdx;
 }
 
 // Dates de référence d'une éval pour une classe :
@@ -34534,6 +34596,10 @@ function renderBilanTab() {
     .filter(sid => {
       const stu = S.eleves[sid];
       if (!stu) return false;
+      // Filtre appartenance per-période (utile pour classes évolutives comme DF) :
+      // si l'élève n'appartient pas à la classe sur la période courante, on l'exclut.
+      // En mode « Toutes » → toujours actif (union).
+      if (!_stuActiveInClassForPeriod(cls, sid, periode)) return false;
       if (periode) {
         // Strict : exclus si pas présent à AUCUNE éval de la période ET pas
         // d'orpheline (cas du transféré qui amène des notes d'une autre classe).
@@ -35103,6 +35169,7 @@ function _bilanBuildRows() {
     .filter(sid => {
       const stu = S.eleves[sid];
       if (!stu) return false;
+      if (!_stuActiveInClassForPeriod(cls, sid, periode)) return false;
       if (periode) {
         return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
             || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
@@ -35759,6 +35826,7 @@ function renderCompetencesTab() {
   const sidsForOrphan = (cls.eleves || []).filter(sid => {
     const stu = S.eleves?.[sid];
     if (!stu) return false;
+    if (!_stuActiveInClassForPeriod(cls, sid, periode)) return false;
     if (periode) {
       return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
           || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
@@ -35876,6 +35944,7 @@ function renderCompetencesTab() {
     .filter(sid => {
       const stu = S.eleves[sid];
       if (!stu) return false;
+      if (!_stuActiveInClassForPeriod(cls, sid, periode)) return false;
       if (periode) {
         return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
             || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
