@@ -2100,6 +2100,8 @@ kbd {
       <h2>🏫 Gestion des Classes</h2>
       <button class="btn btn-p" onclick="openMod('mc')">+ Nouvelle classe</button>
       <button class="btn btn-g btn-sm" onclick="printClassesBilan()" title="Imprimer le bilan : détail par classe + récap par niveau (portrait — Ctrl+P)">🖨 Bilan</button>
+      <span style="margin-left:auto"></span>
+      <button class="btn btn-g btn-sm" onclick="openDisciplinesModal()" title="Gérer les disciplines (catalogue global)">🎓 Disciplines</button>
       <button class="btn btn-d btn-sm" onclick="openResetModal()" title="Réinitialiser tout ou partie du fichier (fin d'année, etc.)">🗑 Réinitialiser…</button>
     </div>
     <div id="cls-list"></div>
@@ -2697,6 +2699,24 @@ kbd {
 
 <!-- ═══════════════ MODALS ═══════════════ -->
 
+<!-- Gérer les disciplines (catalogue global) -->
+<div id="mdisciplines" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%">
+    <h2>🎓 Disciplines</h2>
+    <p style="font-size:.86em;color:var(--pencil);margin:0 0 12px;line-height:1.45">
+      Les disciplines permettent de séparer plusieurs flux d'enseignement (notes, bilans, compétences).
+      Une classe peut être enseignée dans une ou plusieurs disciplines, et chaque évaluation est rattachée à une discipline.
+    </p>
+    <div id="mdisciplines-list" style="border:1px solid var(--rule-line);border-radius:4px;margin-bottom:10px;max-height:50vh;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+      <button class="btn btn-s btn-sm" onclick="_addDiscipline()">+ Ajouter une discipline</button>
+    </div>
+    <div class="ma">
+      <button class="btn btn-p" onclick="closeMod2('mdisciplines')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Create class -->
 <div id="mc" class="mo" onclick="closeMod(this,event)">
   <div class="mb">
@@ -3091,26 +3111,10 @@ kbd {
       <button type="button" class="btn btn-g btn-sm" onclick="mvcRegenerateId()" title="Régénérer depuis le nom">↻ Auto</button>
       <span id="mvc-id-status" style="font-size:.82em;color:#888"></span>
     </div>
-    <!-- Disciplines (flux per-classe) — facultatif, comme pour une classe réelle -->
+    <!-- Disciplines enseignées (idem classe réelle) -->
     <div style="background:#faf7ff;border:1px solid #e8def7;border-radius:4px;padding:8px 10px;margin-bottom:12px">
-      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:#5b21b6">🎓 Disciplines</div>
-      <label style="display:flex;align-items:center;gap:4px;font-size:.85em;cursor:pointer;margin-bottom:2px">
-        <input type="checkbox" id="mvc-discname-prim-on" onchange="_mvcTogglePrim()" checked>
-        Activer la discipline principale
-      </label>
-      <div class="fg" id="mvc-discname-prim-wrap" style="margin-bottom:6px">
-        <input id="mvc-discname-prim" type="text" maxlength="40" placeholder="ex. SVT (vide → « Principale »)" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
-      </div>
-      <label style="display:flex;align-items:center;gap:4px;font-size:.85em;cursor:pointer;margin-bottom:2px">
-        <input type="checkbox" id="mvc-discname-sec-on" onchange="_mvcToggleSec()">
-        Activer une discipline secondaire
-      </label>
-      <div class="fg" id="mvc-discname-sec-wrap" style="display:none;margin-bottom:0">
-        <input id="mvc-discname-sec" type="text" maxlength="40" placeholder="ex. Devoir Fait, Option, Bilingue…" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
-      </div>
-      <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:6px 0 0">
-        💡 Pour un groupe spécialisé (DF, accompagnement, club…), décoche la principale et active uniquement la secondaire.
-      </p>
+      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:#5b21b6">🎓 Disciplines enseignées</div>
+      <div id="mvc-disc-checks"></div>
     </div>
     <!-- Panneau de filtres cumulatifs (ET entre groupes ; tags = ET ou OU au choix ; classes = OU) -->
     <div id="mvc-filter-panel" style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:8px 10px;margin-bottom:8px">
@@ -3553,7 +3557,7 @@ kbd {
         <textarea id="meval-new-desc" maxlength="500" rows="2" placeholder="Notes libres affichées dans les infobulles" style="padding:5px 8px;resize:vertical;font-family:inherit"></textarea>
         <label for="meval-new-periode">Période</label>
         <select id="meval-new-periode" style="padding:5px 8px"></select>
-        <label id="meval-new-channel-lbl" style="display:none">🎓 Flux</label>
+        <label id="meval-new-channel-lbl" style="display:none">🎓 Discipline</label>
         <div id="meval-new-channel-wrap" style="display:none">
           <select id="meval-new-channel" style="padding:5px 8px;min-width:220px"></select>
           <div style="font-size:.78em;color:var(--pencil);margin-top:2px;font-style:italic">Sélectionne le flux (discipline) pour cette éval — visible si au moins une classe cochée a deux flux configurés.</div>
@@ -3653,7 +3657,7 @@ kbd {
         <select id="meval-edit-slot" style="padding:4px 8px;font-family:var(--font-mono);font-size:.9em" onchange="_evalEditMarkDirty()"><option value="">— Pendant la journée —</option></select>
         <label>Période</label>
         <select id="meval-edit-periode" style="padding:4px 8px" onchange="_evalEditMarkDirty()"></select>
-        <label id="meval-edit-channel-lbl" style="display:none">🎓 Flux</label>
+        <label id="meval-edit-channel-lbl" style="display:none">🎓 Discipline</label>
         <div id="meval-edit-channel-wrap" style="display:none">
           <select id="meval-edit-channel" onchange="_evalEditMarkDirty()" style="padding:4px 8px;min-width:220px"></select>
           <div style="font-size:.78em;color:var(--pencil);margin-top:2px;font-style:italic">Visible si au moins une classe a deux flux configurés.</div>
@@ -4959,31 +4963,12 @@ kbd {
     <div class="fg"><label>Nom complet</label><input id="ec-nom"></div>
     <div class="fg"><label>Année scolaire</label><input id="ec-yr" type="number"></div>
     <div class="about-section" style="margin-top:14px">
-      <h3>🎓 Disciplines</h3>
+      <h3>🎓 Disciplines enseignées</h3>
       <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">
-        Permet d'avoir <strong>deux flux parallèles</strong> de notes pour la même classe (ex. SVT et Bilingue).
-        Les évaluations, moyennes, bilans et remarques bulletin sont indépendants pour chaque flux.
-        Si la 2ᵉ discipline est désactivée, la classe n'a qu'un seul flux (comportement standard).
+        Coche les disciplines dans lesquelles tu enseignes à cette classe. Chaque évaluation, bilan et remarque bulletin
+        peut être rattaché à une discipline spécifique.
       </p>
-      <label style="display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer;font-size:.92em">
-        <input type="checkbox" id="ec-discname-prim-on" onchange="_ecTogglePrim()" checked>
-        <strong>Activer la discipline principale</strong>
-      </label>
-      <div class="fg" id="ec-discname-prim-wrap">
-        <label>Nom de la discipline principale</label>
-        <input type="text" id="ec-discname-prim" placeholder="ex. SVT (laissé vide → « Principale »)" maxlength="40">
-      </div>
-      <label style="display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer;font-size:.92em">
-        <input type="checkbox" id="ec-discname-sec-on" onchange="_ecToggleSec()">
-        <strong>Activer une discipline secondaire</strong>
-      </label>
-      <div class="fg" id="ec-discname-sec-wrap" style="display:none">
-        <label>Nom de la discipline secondaire</label>
-        <input type="text" id="ec-discname-sec" placeholder="ex. Bilingue, Option DP3, Devoir Fait…" maxlength="40">
-      </div>
-      <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:6px 0 0">
-        💡 Pour un groupe spécialisé (DF, accompagnement, club…), décoche la principale et active uniquement la secondaire.
-      </p>
+      <div id="ec-disc-checks"></div>
     </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mce')">Annuler</button>
@@ -5216,7 +5201,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T19:30:00Z';
+const APP_VERSION   = '2026-05-25T21:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5678,34 +5663,57 @@ function migrateToRooms() {
   });
 }
 
-// Wrap per-channel des 4 maps bulletin (idempotent). Détecte si la valeur de premier
-// niveau (par classe) contient déjà des clés `primary`/`secondary` ; sinon, ré-emballe.
-// Top-level pour pouvoir être rappelé après createDemo (qui écrit volontairement en
-// ancien format pour rester lisible).
+// Migration des 4 maps bulletin vers le modèle catalogue (clés = disciplineIds).
+// Idempotent : si la valeur est déjà au format { [discId]: ... } avec des ids du
+// catalogue, on ne touche rien. Si elle a encore des clés 'primary' / 'secondary'
+// (anciennes données), on convertit en utilisant cls.disciplineIds.
+// Doit être appelé APRÈS la migration des classes (cls.disciplineIds set).
 function _bulletinWrapAll() {
+  const knownDiscIds = new Set(Object.keys(S.disciplines || {}));
+  const _primaryDiscId = () => {
+    for (const d of Object.values(S.disciplines || {})) if (d.isPrimary) return d.id;
+    return Object.keys(S.disciplines || {})[0] || 'disc_main';
+  };
   const wrap = (root) => {
     if (!root || typeof root !== 'object') return;
     for (const cid of Object.keys(root)) {
       const v = root[cid];
       if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
-      const hasPri = v.primary && typeof v.primary === 'object' && !Array.isArray(v.primary);
-      const hasSec = v.secondary && typeof v.secondary === 'object' && !Array.isArray(v.secondary);
-      if (hasPri || hasSec) {
-        // Déjà partiellement wrappé. Migrer les clés "orphelines" (autres que
-        // primary/secondary) vers .primary, sans écraser ce qui s'y trouve déjà.
-        const primary = v.primary || {};
-        const secondary = v.secondary || {};
-        for (const k of Object.keys(v)) {
-          if (k === 'primary' || k === 'secondary') continue;
-          if (primary[k] === undefined) primary[k] = v[k];
-          delete v[k];
-        }
-        v.primary = primary;
-        v.secondary = secondary;
-      } else {
-        // Ancien format pur → wrap entier en .primary.
-        root[cid] = { primary: v, secondary: {} };
+      const hasLegacyPri = v.primary && typeof v.primary === 'object' && !Array.isArray(v.primary);
+      const hasLegacySec = v.secondary && typeof v.secondary === 'object' && !Array.isArray(v.secondary);
+      // Si TOUTES les clés sont des disciplineIds connus → déjà migré
+      const keys = Object.keys(v);
+      const allKnownDisc = keys.length > 0 && keys.every(k => knownDiscIds.has(k));
+      if (allKnownDisc) continue;
+      // Sinon : on migre
+      const cls = S.classes?.[cid];
+      const discIds = (cls && Array.isArray(cls.disciplineIds) && cls.disciplineIds.length > 0)
+        ? cls.disciplineIds
+        : [_primaryDiscId()];
+      const primDisc = discIds[0];
+      const secDisc  = discIds[1] || discIds[0];
+      const newV = {};
+      // Legacy .primary → discIds[0]
+      if (hasLegacyPri) {
+        newV[primDisc] = Object.assign(newV[primDisc] || {}, v.primary);
       }
+      // Legacy .secondary → discIds[1] (ou primDisc si pas de 2e)
+      if (hasLegacySec && Object.keys(v.secondary).length > 0) {
+        newV[secDisc] = Object.assign(newV[secDisc] || {}, v.secondary);
+      }
+      // Clés orphelines (ni primary/secondary, ni discId connu) : merge dans primDisc
+      for (const k of keys) {
+        if (k === 'primary' || k === 'secondary') continue;
+        if (knownDiscIds.has(k)) {
+          newV[k] = v[k];
+        } else {
+          newV[primDisc] = Object.assign(newV[primDisc] || {}, { [k]: v[k] });
+          // Note : si v[k] est aussi un objet imbriqué, le Object.assign de surface
+          // peut produire des collisions ; pour les bulletinRemarques (3 niveaux
+          // sid→periode→text), on traite la racine donc ok.
+        }
+      }
+      root[cid] = newV;
     }
   };
   if (S.bulletinRemarques)      wrap(S.bulletinRemarques);
@@ -5728,23 +5736,81 @@ function postLoadHook() {
   if (!S.movedHighlights) S.movedHighlights = {};
   // Conseil de classe : { classId: { channel: { sid: { periode: { F, E, AT, AC } } } } }
   // (Initialisé plus bas avec wrapping per-channel des structures bulletin.)
-  // Nettoie les anciennes features supprimées :
-  // - S.disciplines : catalogue global obsolète (refonte : remplacé par cls.disc* per-classe)
-  // - S.subgroups   : feature "sous-groupes inter-classes" abandonnée (redondante avec les
-  //                   virtual classes = cls.virtual=true qui font déjà tout cela). Les
-  //                   ev.subgroupId restent dans les évals mais ne sont plus lus.
-  if (S.disciplines) delete S.disciplines;
-  if (S.subgroups)   delete S.subgroups;
-  // ── Disciplines & flux par classe ──
-  // Migration douce : chaque classe reçoit discNamePrimary='' / discNameSecondary=null si absents.
-  for (const cls of Object.values(S.classes || {})) {
-    if (cls.discNamePrimary === undefined) cls.discNamePrimary = '';
-    if (cls.discNameSecondary === undefined) cls.discNameSecondary = null;
+  // Nettoie l'ancienne feature subgroup (abandonnée, redondante avec virtual classes).
+  if (S.subgroups) delete S.subgroups;
+  // ── Disciplines : catalogue global + cls.disciplineIds[] + ev.disciplineId ──
+  // 1. Init catalogue avec au moins une discipline principale
+  if (!S.disciplines || typeof S.disciplines !== 'object') S.disciplines = {};
+  if (Object.keys(S.disciplines).length === 0) {
+    S.disciplines = { 'disc_main': { id: 'disc_main', nom: 'Discipline principale', isPrimary: true } };
   }
-  // ── Évaluations : ev.discChannel (défaut 'primary'), suppression ev.disciplineId ──
+  // Garantit qu'AU MOINS UNE est isPrimary
+  let hasPrimary = false;
+  for (const d of Object.values(S.disciplines)) if (d.isPrimary) { hasPrimary = true; break; }
+  if (!hasPrimary) {
+    const first = Object.values(S.disciplines)[0];
+    if (first) first.isPrimary = true;
+  }
+  const _findOrCreateDiscByName = (name) => {
+    const n = (name || '').trim();
+    const lc = n.toLowerCase();
+    for (const d of Object.values(S.disciplines)) {
+      if ((d.nom || '').trim().toLowerCase() === lc) return d.id;
+    }
+    const newId = 'disc_' + Math.random().toString(36).slice(2, 9);
+    S.disciplines[newId] = { id: newId, nom: n || 'Discipline', isPrimary: false };
+    return newId;
+  };
+  const _primaryDiscId = () => {
+    for (const d of Object.values(S.disciplines)) if (d.isPrimary) return d.id;
+    return Object.keys(S.disciplines)[0];
+  };
+  // 2. Migrer les classes : legacy fields → cls.disciplineIds[]
+  for (const cls of Object.values(S.classes || {})) {
+    if (Array.isArray(cls.disciplineIds) && cls.disciplineIds.length > 0) {
+      // Déjà migré : filtre les ids inconnus
+      cls.disciplineIds = cls.disciplineIds.filter(id => S.disciplines[id]);
+      if (cls.disciplineIds.length === 0) cls.disciplineIds = [_primaryDiscId()];
+    } else {
+      // Construire depuis legacy
+      const ids = [];
+      const primOn = (cls.discPrimaryDisabled !== true);
+      const primName = (cls.discNamePrimary || '').trim();
+      const secName = (cls.discNameSecondary != null) ? String(cls.discNameSecondary).trim() : '';
+      if (primOn) {
+        // Si nom rempli, le retrouver/créer ; sinon utiliser la principale du catalogue
+        ids.push(primName ? _findOrCreateDiscByName(primName) : _primaryDiscId());
+      }
+      if (cls.discNameSecondary != null && secName) {
+        ids.push(_findOrCreateDiscByName(secName || 'Secondaire'));
+      }
+      if (ids.length === 0) ids.push(_primaryDiscId());
+      cls.disciplineIds = Array.from(new Set(ids));
+    }
+    delete cls.discNamePrimary;
+    delete cls.discNameSecondary;
+    delete cls.discPrimaryDisabled;
+  }
+  // 3. Migrer les évals : ev.discChannel → ev.disciplineId
   for (const ev of Object.values(S.evaluations || {})) {
-    if (ev.discChannel !== 'secondary') ev.discChannel = 'primary';
-    if (ev.disciplineId !== undefined) delete ev.disciplineId;
+    if (ev.disciplineId && S.disciplines[ev.disciplineId]) {
+      // Déjà migré (id valide)
+      delete ev.discChannel;
+      continue;
+    }
+    // Trouver classe primaire
+    const cids = Array.isArray(ev.classIds) && ev.classIds.length > 0 ? ev.classIds : (ev.classId ? [ev.classId] : []);
+    let primCls = null;
+    for (const cid of cids) {
+      if (S.classes?.[cid]) { primCls = S.classes[cid]; break; }
+    }
+    const discIds = (primCls && Array.isArray(primCls.disciplineIds)) ? primCls.disciplineIds : [_primaryDiscId()];
+    if (ev.discChannel === 'secondary') {
+      ev.disciplineId = discIds[1] || discIds[0];
+    } else {
+      ev.disciplineId = discIds[0];
+    }
+    delete ev.discChannel;
   }
   // ── Per-channel bulletin data : wrap legacy structures dans une clé 'primary' ──
   // (fonction top-level _bulletinWrapAll — peut être rappelée après createDemo qui
@@ -7823,17 +7889,37 @@ function _suggestVcId(name) {
   }
   return id || 'VC';
 }
-// Toggles de visibilité des champs Nom dans la modale mvc.
-function _mvcTogglePrim() {
-  const on = document.getElementById('mvc-discname-prim-on')?.checked;
-  const wrap = document.getElementById('mvc-discname-prim-wrap');
-  if (wrap) wrap.style.display = on ? '' : 'none';
+// Rend les checkboxes "Disciplines enseignées" pour la modale mvc (Classe recomposée).
+function _mvcRenderDisciplineChecks(cls) {
+  const wrap = document.getElementById('mvc-disc-checks');
+  if (!wrap) return;
+  const allDiscs = Object.values(S.disciplines || {});
+  if (allDiscs.length === 0) {
+    wrap.innerHTML = '<p style="font-size:.84em;color:var(--pencil);font-style:italic;margin:0">Aucune discipline.</p>';
+    return;
+  }
+  const checked = cls ? new Set(_clsDisciplineIds(cls)) : new Set([_disciplinePrimaryId()]);
+  if (allDiscs.length === 1) {
+    const d = allDiscs[0];
+    wrap.innerHTML = `<p style="font-size:.82em;color:var(--pencil);margin:0">
+      Une seule discipline : <strong>${_esc(d.nom)}</strong>.
+      <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">+ En ajouter</a>
+    </p>`;
+    return;
+  }
+  wrap.innerHTML = allDiscs.map(d => `
+    <label style="display:flex;align-items:center;gap:5px;margin:3px 0;cursor:pointer;font-size:.88em">
+      <input type="checkbox" data-disc-id="${_escAttr(d.id)}"${checked.has(d.id) ? ' checked' : ''} class="mvc-disc-cb">
+      <strong>${_esc(d.nom)}</strong>${d.isPrimary ? ' <span style="font-size:.76em;color:var(--pencil)">(principale)</span>' : ''}
+    </label>
+  `).join('') + `
+    <p style="font-size:.76em;color:var(--pencil);font-style:italic;margin:6px 0 0">
+      <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">+ Créer une nouvelle discipline…</a>
+    </p>`;
 }
-function _mvcToggleSec() {
-  const on = document.getElementById('mvc-discname-sec-on')?.checked;
-  const wrap = document.getElementById('mvc-discname-sec-wrap');
-  if (wrap) wrap.style.display = on ? '' : 'none';
-}
+// Shims rétrocompat
+function _mvcTogglePrim() {}
+function _mvcToggleSec() {}
 
 // Garantit l'unicité par suffixage (_2, _3, …) si nécessaire.
 function _uniqueVcId(base, ignoreId) {
@@ -7923,25 +8009,11 @@ function openVirtualClassModal(id, opts) {
     idInp.value    = id;
     idInputEl.value= id;
     fromTagInp.value = cls.fromTag || '';
-    // Disciplines
-    const primOnV = !cls.discPrimaryDisabled;
-    document.getElementById('mvc-discname-prim-on').checked = primOnV;
-    document.getElementById('mvc-discname-prim').value = cls.discNamePrimary || '';
-    document.getElementById('mvc-discname-prim-wrap').style.display = primOnV ? '' : 'none';
-    const hasSec = (cls.discNameSecondary != null);
-    document.getElementById('mvc-discname-sec-on').checked = hasSec;
-    document.getElementById('mvc-discname-sec').value = hasSec ? (cls.discNameSecondary || '') : '';
-    document.getElementById('mvc-discname-sec-wrap').style.display = hasSec ? '' : 'none';
+    _mvcRenderDisciplineChecks(cls);
     for (const sid of (cls.eleves || [])) _mvcSelected.add(sid);
   } else {
     titleEl.textContent = '🔀 Nouvelle classe recomposée';
-    // Disciplines : reset (principale activée par défaut, secondaire désactivée)
-    document.getElementById('mvc-discname-prim-on').checked = true;
-    document.getElementById('mvc-discname-prim').value = '';
-    document.getElementById('mvc-discname-prim-wrap').style.display = '';
-    document.getElementById('mvc-discname-sec-on').checked = false;
-    document.getElementById('mvc-discname-sec').value = '';
-    document.getElementById('mvc-discname-sec-wrap').style.display = 'none';
+    _mvcRenderDisciplineChecks(null);
     nomInp.value = _mvcSeedFromTag && S.tags[_mvcSeedFromTag] ? `${getCls()?.nom || ''} — ${S.tags[_mvcSeedFromTag].abbr}`.trim() : '';
     yrInp.value  = getCls()?.année || (new Date()).getFullYear();
     salleSel.value = getCls()?.activeRoom || Object.keys(S.salles || {})[0] || '';
@@ -8248,12 +8320,16 @@ function mvcSave() {
   // Init pool actif (1er disponible)
   const defaultPool = Object.keys(S.tabletPools || {})[0] || null;
 
-  // Disciplines (mêmes champs que pour une classe réelle)
-  const discPrimOn = !!document.getElementById('mvc-discname-prim-on')?.checked;
-  const discPrim = (document.getElementById('mvc-discname-prim')?.value || '').trim();
-  const discSecOn = !!document.getElementById('mvc-discname-sec-on')?.checked;
-  const discSec = (document.getElementById('mvc-discname-sec')?.value || '').trim();
-  if (!discPrimOn && !discSecOn) return alert('Au moins une discipline doit être activée (principale ou secondaire).');
+  // Disciplines (catalogue global)
+  const allDiscs = Object.values(S.disciplines || {});
+  let mvcDiscIds;
+  if (allDiscs.length === 1) {
+    mvcDiscIds = [allDiscs[0].id];
+  } else {
+    mvcDiscIds = Array.from(document.querySelectorAll('#mvc-disc-checks input.mvc-disc-cb:checked'))
+      .map(cb => cb.getAttribute('data-disc-id')).filter(id => S.disciplines?.[id]);
+    if (mvcDiscIds.length === 0) return alert('Au moins une discipline doit être cochée.');
+  }
 
   if (oldId && S.classes[oldId]) {
     // ─── ÉDITION ─────────────────────────────────────────────
@@ -8261,9 +8337,7 @@ function mvcSave() {
     cls.nom = nom;
     cls.année = yr;
     cls.fromTag = fromTag;
-    cls.discNamePrimary = discPrim;
-    cls.discNameSecondary = discSecOn ? discSec : null;
-    cls.discPrimaryDisabled = !discPrimOn;
+    cls.disciplineIds = mvcDiscIds;
     // Si la salle a changé, on ajoute la nouvelle si elle n'existe pas dans cls.rooms
     if (cls.activeRoom !== salleId) {
       if (!cls.rooms[salleId]) {
@@ -8317,9 +8391,7 @@ function mvcSave() {
       activePool: defaultPool,
       virtual: true,
       fromTag: fromTag,
-      discNamePrimary: discPrim,
-      discNameSecondary: discSecOn ? discSec : null,
-      discPrimaryDisabled: !discPrimOn,
+      disciplineIds: mvcDiscIds,
     };
     S.classes[newId] = newCls;
     setupClassAccessors(newCls);
@@ -10923,9 +10995,10 @@ function renderClasses() {
       ? ` <span style="color:#3498db;font-weight:600">♂ ${c.m}</span> <span style="color:#e91e63;font-weight:600">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="color:#888" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
       : '';
     const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}`;
-    const _discLine = _clsHasTwoChannels(cls)
-      ? `<div class="cc-meta" style="font-size:.8em;color:#5b21b6;margin-top:2px">🎓 ${_esc(_clsPrimaryName(cls))} <span style="opacity:.5">·</span> ${_esc(_clsSecondaryName(cls))}</div>`
-      : (cls.discNamePrimary ? `<div class="cc-meta" style="font-size:.8em;color:#5b21b6;margin-top:2px">🎓 ${_esc(_clsPrimaryName(cls))}</div>` : '');
+    const _discIds = _clsDisciplineIds(cls);
+    const _discLine = _discIds.length >= 2
+      ? `<div class="cc-meta" style="font-size:.8em;color:#5b21b6;margin-top:2px">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
+      : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;color:#5b21b6;margin-top:2px">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
     return `
       <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg}" onclick="switchClass('${cls.id}');renderClasses()">
         <div class="cc-info">
@@ -11069,27 +11142,42 @@ function editClass(id) {
   document.getElementById('ec-id-disp').value = id;
   document.getElementById('ec-nom').value = cls.nom;
   document.getElementById('ec-yr').value  = cls.année;
-  // Discipline principale : activée par défaut (rétrocompat). Désactivée
-  // seulement si cls.discPrimaryDisabled === true (cas DF only, etc.).
-  const primOn = !cls.discPrimaryDisabled;
-  document.getElementById('ec-discname-prim-on').checked = primOn;
-  document.getElementById('ec-discname-prim').value = cls.discNamePrimary || '';
-  document.getElementById('ec-discname-prim-wrap').style.display = primOn ? '' : 'none';
-  const hasSec = (cls.discNameSecondary != null);
-  document.getElementById('ec-discname-sec-on').checked = hasSec;
-  document.getElementById('ec-discname-sec').value = hasSec ? (cls.discNameSecondary || '') : '';
-  document.getElementById('ec-discname-sec-wrap').style.display = hasSec ? '' : 'none';
+  _ecRenderDisciplineChecks(cls);
   document.getElementById('mce').classList.add('on');
 }
 
-function _ecTogglePrim() {
-  const on = document.getElementById('ec-discname-prim-on').checked;
-  document.getElementById('ec-discname-prim-wrap').style.display = on ? '' : 'none';
+// Rend les checkboxes "Disciplines enseignées" pour la modale Modifier classe.
+function _ecRenderDisciplineChecks(cls) {
+  const wrap = document.getElementById('ec-disc-checks');
+  if (!wrap) return;
+  const allDiscs = Object.values(S.disciplines || {});
+  if (allDiscs.length === 0) {
+    wrap.innerHTML = '<p style="font-size:.86em;color:var(--pencil);font-style:italic;margin:0">Aucune discipline configurée.</p>';
+    return;
+  }
+  const checked = new Set(_clsDisciplineIds(cls));
+  if (allDiscs.length === 1) {
+    const d = allDiscs[0];
+    wrap.innerHTML = `<p style="font-size:.86em;color:var(--pencil);margin:0">
+      Une seule discipline configurée : <strong>${_esc(d.nom)}</strong>.
+      Pour avoir plusieurs flux (ex. SVT + Bilingue), <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">crée d'autres disciplines</a>.
+    </p>`;
+    return;
+  }
+  wrap.innerHTML = allDiscs.map(d => `
+    <label style="display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer;font-size:.92em">
+      <input type="checkbox" data-disc-id="${_escAttr(d.id)}"${checked.has(d.id) ? ' checked' : ''} class="ec-disc-cb">
+      <strong>${_esc(d.nom)}</strong>${d.isPrimary ? ' <span style="font-size:.78em;color:var(--pencil);font-style:italic">(principale)</span>' : ''}
+    </label>
+  `).join('') + `
+    <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:8px 0 0">
+      <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">+ Créer une nouvelle discipline…</a>
+    </p>`;
 }
-function _ecToggleSec() {
-  const on = document.getElementById('ec-discname-sec-on').checked;
-  document.getElementById('ec-discname-sec-wrap').style.display = on ? '' : 'none';
-}
+
+// Shims (anciens callbacks oninput=… encore présents en HTML)
+function _ecTogglePrim() {}
+function _ecToggleSec() {}
 
 function saveClassEdit() {
   const id  = document.getElementById('ec-id').value;
@@ -11098,44 +11186,40 @@ function saveClassEdit() {
   const nom = document.getElementById('ec-nom').value.trim();
   const yr  = parseInt(document.getElementById('ec-yr').value) || cls.année;
   if (!nom) return alert('Le nom ne peut pas être vide.');
-  const primOn = document.getElementById('ec-discname-prim-on').checked;
-  const primName = (document.getElementById('ec-discname-prim').value || '').trim();
-  const secOn = document.getElementById('ec-discname-sec-on').checked;
-  const secName = (document.getElementById('ec-discname-sec').value || '').trim();
-  // Validation : au moins une discipline doit être activée
-  if (!primOn && !secOn) return alert('Au moins une discipline doit être activée (principale ou secondaire).');
-  const wasTwo = _clsHasTwoChannels(cls);
-  // Avertit si on désactive le secondaire alors qu'il existe des évals 'secondary'
-  if (wasTwo && !secOn) {
-    const nbSec = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, cls.id) && _evalChannelOf(e) === 'secondary').length;
-    if (nbSec > 0) {
-      if (!confirm(`Désactiver la discipline secondaire ?\n\n${nbSec} évaluation(s) restent marquées 'secondary' et seront invisibles tant que vous ne la réactiverez pas. Aucune donnée n'est perdue.\n\nContinuer ?`)) return;
-    }
+  // Lit les disciplines cochées
+  const allDiscs = Object.values(S.disciplines || {});
+  let checkedIds;
+  if (allDiscs.length === 1) {
+    checkedIds = [allDiscs[0].id];
+  } else {
+    checkedIds = Array.from(document.querySelectorAll('#ec-disc-checks input.ec-disc-cb:checked')).map(cb => cb.getAttribute('data-disc-id')).filter(id => S.disciplines?.[id]);
+    if (checkedIds.length === 0) return alert('Au moins une discipline doit être cochée.');
   }
-  // Avertit si on désactive le principal alors qu'il existe des évals 'primary'
-  const wasPrim = _clsHasPrimary(cls);
-  if (wasPrim && !primOn) {
-    const nbPrim = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, cls.id) && _evalChannelOf(e) === 'primary').length;
-    if (nbPrim > 0) {
-      if (!confirm(`Désactiver la discipline principale ?\n\n${nbPrim} évaluation(s) restent marquées 'primary' et seront invisibles tant que vous ne la réactiverez pas. Aucune donnée n'est perdue.\n\nContinuer ?`)) return;
+  // Warning si on retire une discipline qui a des évals attachées dans cette classe
+  const oldIds = new Set(_clsDisciplineIds(cls));
+  const newIds = new Set(checkedIds);
+  for (const oldId of oldIds) {
+    if (newIds.has(oldId)) continue;
+    const nbEvs = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, cls.id) && _evalDisciplineId(e) === oldId).length;
+    if (nbEvs > 0) {
+      if (!confirm(`Retirer la discipline « ${_disciplineLabel(oldId)} » de cette classe ?\n\n${nbEvs} évaluation(s) y sont rattachées et seront invisibles tant que la discipline ne sera pas réactivée. Aucune donnée n'est perdue.\n\nContinuer ?`)) return;
     }
   }
   pushUndo();
   cls.nom   = nom;
   cls.année = yr;
-  cls.discNamePrimary = primName;
-  cls.discNameSecondary = secOn ? secName : null;
-  cls.discPrimaryDisabled = !primOn;
-  // Si la classe n'a plus 2 flux, force le sélecteur de flux sur primary
-  if (!_clsHasTwoChannels(cls)) {
-    try {
-      const raw = localStorage.getItem('planClasse_discChannel');
-      if (raw) {
-        const map = JSON.parse(raw) || {};
-        if (map[cls.id] === 'secondary') { map[cls.id] = 'primary'; localStorage.setItem('planClasse_discChannel', JSON.stringify(map)); }
+  cls.disciplineIds = checkedIds;
+  // Si la discipline actuellement affichée pour cette classe a été retirée, reset
+  try {
+    const raw = localStorage.getItem('planClasse_currentDiscipline');
+    if (raw) {
+      const map = JSON.parse(raw) || {};
+      if (map[cls.id] && !newIds.has(map[cls.id])) {
+        map[cls.id] = checkedIds[0];
+        localStorage.setItem('planClasse_currentDiscipline', JSON.stringify(map));
       }
-    } catch (_) {}
-  }
+    }
+  } catch (_) {}
   closeMod2('mce');
   save();
   refreshSelector();
@@ -24412,9 +24496,27 @@ function createDemo(opts) {
   //     bulletinClassRemarques (par classe × période), bulletinWorkedItems.
   _seedDemoEvaluations();
 
+  // S'assure que toutes les classes ont disciplineIds[] (sinon les fallbacks sont
+  // implicites mais bulletinWrapAll a besoin de cette info).
+  for (const cls of Object.values(S.classes || {})) {
+    if (!Array.isArray(cls.disciplineIds) || cls.disciplineIds.length === 0) {
+      cls.disciplineIds = [_disciplinePrimaryId()];
+    }
+  }
+  // Assigne ev.disciplineId pour toutes les évals créées par la démo qui ne l'ont
+  // pas explicitement (fallback : 1re discipline de la classe primaire).
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev.disciplineId && S.disciplines?.[ev.disciplineId]) continue;
+    const cids = Array.isArray(ev.classIds) && ev.classIds.length > 0 ? ev.classIds : (ev.classId ? [ev.classId] : []);
+    let primCls = null;
+    for (const cid of cids) {
+      if (S.classes?.[cid]) { primCls = S.classes[cid]; break; }
+    }
+    ev.disciplineId = _clsDefaultDisciplineId(primCls) || _disciplinePrimaryId();
+  }
   // Les writes ci-dessus peuvent contenir des données bulletin en ancien format
   // ({classId:{sid:{periode:txt}}}) plus lisibles que le format wrappé. On normalise
-  // en post-traitement pour les passer en format per-channel ({primary:{...}}).
+  // en post-traitement pour les passer en format per-disciplineId.
   _bulletinWrapAll();
 
   S.cur = '6A';
@@ -25303,12 +25405,24 @@ function _seedDemoEvaluations() {
   const _cls6A = S.classes['6A'];
   const _take5 = (cls) => (cls && cls.eleves ? cls.eleves.slice(0, 5) : []);
   if (_cls6A) {
-    _cls6A.discNamePrimary   = 'SVT';
-    _cls6A.discNameSecondary = 'SVT Bilingue';
+    // Crée 2 disciplines au catalogue : SVT (principale) et SVT Bilingue, et les
+    // attache à la 6A. La discipline générique "Discipline principale" reste pour
+    // les autres classes.
+    if (!S.disciplines) S.disciplines = {};
+    const _discSvtId = 'disc_svt';
+    const _discBilId = 'disc_svt_bil';
+    if (!S.disciplines[_discSvtId]) S.disciplines[_discSvtId] = { id: _discSvtId, nom: 'SVT', isPrimary: false };
+    if (!S.disciplines[_discBilId]) S.disciplines[_discBilId] = { id: _discBilId, nom: 'SVT Bilingue', isPrimary: false };
+    _cls6A.disciplineIds = [_discSvtId, _discBilId];
+    // Réaffecte les évals existantes de la 6A à la discipline SVT (par défaut elles
+    // viennent d'être créées avec ev.disciplineId basé sur cls.disciplineIds[0])
+    for (const ev of Object.values(S.evaluations)) {
+      if (_evalIncludesClass(ev, '6A')) ev.disciplineId = _discSvtId;
+    }
     const evBilA = {
       id: _id(), type: 'A',
       classId: '6A', classIds: ['6A'],
-      discChannel: 'secondary',
+      disciplineId: _discBilId,
       nomCourt: 'IE Bilingue', nomLong: 'Interrogation SVT — vocabulaire bilingue',
       date: '2025-11-08', periode: 'S1',
       coef: 1, noteMax: 20,
@@ -25322,10 +25436,10 @@ function _seedDemoEvaluations() {
     };
     _seedNotes(evBilA, _take5(_cls6A), 9001, 0.75);
     S.evaluations[evBilA.id] = evBilA;
-    // Remarque bulletin sur le flux 'secondary' de la 6A pour démontrer la séparation
-    if (!S.bulletinClassRemarques['6A']) S.bulletinClassRemarques['6A'] = { primary: {}, secondary: {} };
-    if (!S.bulletinClassRemarques['6A'].secondary) S.bulletinClassRemarques['6A'].secondary = {};
-    S.bulletinClassRemarques['6A'].secondary.S1 = 'Groupe Bilingue : bonne participation, vocabulaire SVT en anglais bien assimilé.';
+    // Remarque bulletin sur la discipline "SVT Bilingue" pour démontrer la séparation
+    if (!S.bulletinClassRemarques['6A']) S.bulletinClassRemarques['6A'] = {};
+    if (!S.bulletinClassRemarques['6A'][_discBilId]) S.bulletinClassRemarques['6A'][_discBilId] = {};
+    S.bulletinClassRemarques['6A'][_discBilId].S1 = 'Groupe Bilingue : bonne participation, vocabulaire SVT en anglais bien assimilé.';
   }
 
   // Enregistre un seatingHash pour chaque éval démo : permet au tooltip
@@ -26565,10 +26679,10 @@ function renderEvalNotes() {
     return;
   }
   let allEvs = _evalsForClass(cls.id, periode || null);
-  // Filtre par flux si la classe a 2 flux configurés
-  if (_clsHasTwoChannels(cls)) {
-    const _ch = _currentDiscChannel(cls.id);
-    allEvs = allEvs.filter(e => _evalMatchesChannel(e, _ch));
+  // Filtre par discipline si la classe a ≥ 2 disciplines configurées
+  if (_clsHasMultipleDisciplines(cls)) {
+    const _did = _currentDiscipline(cls.id);
+    allEvs = allEvs.filter(e => _evalMatchesDiscipline(e, _did));
   }
   if (allEvs.length === 0) {
     wrap.innerHTML = `<p style="color:var(--pencil);font-style:italic;padding:14px">Aucune évaluation pour <strong>${_esc(cls.nom)}</strong>${periode ? ' en ' + _esc(periode) : ''}. Clique sur <strong>+ Nouvelle évaluation</strong> pour commencer.</p>`;
@@ -27144,10 +27258,15 @@ function _evalNewSave() {
   // Classes affectées (multi)
   evObj.classId = primaryCls.id;
   evObj.classIds = validIds.slice();
-  // Flux (canal de discipline) — primary / secondary
-  const _channelNew = document.getElementById('meval-new-channel')?.value || 'primary';
-  evObj.discChannel = (_channelNew === 'secondary') ? 'secondary' : 'primary';
-  delete evObj.disciplineId;
+  // Discipline (id du catalogue global)
+  const _discNew = document.getElementById('meval-new-channel')?.value || '';
+  if (_discNew && S.disciplines?.[_discNew]) {
+    evObj.disciplineId = _discNew;
+  } else {
+    // Fallback : 1re discipline de la classe primaire
+    evObj.disciplineId = _clsDefaultDisciplineId(primaryCls);
+  }
+  delete evObj.discChannel;
   delete evObj.subgroupId; // feature subgroup retirée
   // Dates et créneaux per-classe (modèle canonique : pas de ev.date/ev.slotId)
   if (Object.keys(perClassDates).length > 0) evObj.dates = perClassDates;
@@ -28055,7 +28174,102 @@ function _competencePickerAlsoToggleAll(check) {
 
 // Noop de compat — au cas où d'anciens onclick traînent quelque part.
 function openSubgroupsManager() { /* removed — use virtual classes */ }
-function openDisciplinesModal() { /* removed — use virtual classes */ }
+function openDisciplinesModal() {
+  if (!S.disciplines || Object.keys(S.disciplines).length === 0) {
+    S.disciplines = { 'disc_main': { id: 'disc_main', nom: 'Discipline principale', isPrimary: true } };
+  }
+  _renderDisciplinesList();
+  openMod('mdisciplines');
+  setTimeout(() => document.getElementById('mdisciplines-list')?.querySelector('input[type="text"]')?.focus(), 50);
+}
+
+function _renderDisciplinesList() {
+  const wrap = document.getElementById('mdisciplines-list');
+  if (!wrap) return;
+  const discs = Object.values(S.disciplines || {});
+  if (discs.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px">Aucune discipline.</p>';
+    return;
+  }
+  // Compteurs : nb de classes par discipline, nb d'évals par discipline
+  const clsCount = {};
+  const evCount = {};
+  for (const cls of Object.values(S.classes || {})) {
+    for (const did of _clsDisciplineIds(cls)) clsCount[did] = (clsCount[did] || 0) + 1;
+  }
+  for (const ev of Object.values(S.evaluations || {})) {
+    const did = _evalDisciplineId(ev);
+    if (did) evCount[did] = (evCount[did] || 0) + 1;
+  }
+  wrap.innerHTML = discs.map(d => {
+    const nbCls = clsCount[d.id] || 0;
+    const nbEv = evCount[d.id] || 0;
+    const used = nbCls > 0 || nbEv > 0;
+    const canDelete = !d.isPrimary && !used;
+    const delTitle = d.isPrimary
+      ? 'La discipline principale ne peut pas être supprimée.'
+      : (used ? `Utilisée par ${nbCls} classe(s) et ${nbEv} éval(s) — retirez-les d'abord pour pouvoir supprimer.` : 'Supprimer cette discipline');
+    return `<div data-disc-id="${_escAttr(d.id)}" style="display:grid;grid-template-columns:1fr 110px 110px;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--rule-line-soft)">
+      <input type="text" value="${_escAttr(d.nom || '')}" maxlength="60" placeholder="Nom de la discipline"
+        oninput="_disciplineUpdateName('${_esc(d.id)}', this.value)"
+        style="padding:4px 8px;font-size:.95em;font-family:var(--font-serif)">
+      <span style="font-size:.82em;color:var(--pencil);text-align:center">
+        ${d.isPrimary ? '<strong style="color:#5b21b6">Principale</strong>' : (nbCls + nbEv > 0 ? `${nbCls} cl. · ${nbEv} év.` : 'inutilisée')}
+      </span>
+      <button class="btn btn-d btn-sm" onclick="_deleteDiscipline('${_esc(d.id)}')" title="${_escAttr(delTitle)}"${canDelete ? '' : ' disabled style="opacity:.4;cursor:not-allowed"'}>✕ Supprimer</button>
+    </div>`;
+  }).join('');
+}
+
+let _disciplineNameSaveTimer = null;
+function _disciplineUpdateName(id, val) {
+  const d = S.disciplines?.[id];
+  if (!d) return;
+  // Armed undo : 1 entrée par salve de frappe (pas 1 par caractère)
+  _evalArmUndo();
+  d.nom = val;
+  // Save debounced + UI refresh sans toucher au input (bug 895917a)
+  if (_disciplineNameSaveTimer) clearTimeout(_disciplineNameSaveTimer);
+  _disciplineNameSaveTimer = setTimeout(() => {
+    save();
+    // Refresh des UI dépendantes mais PAS de la liste elle-même pour préserver le focus
+    try { _refreshSubgroupSelectors(); } catch (_) {}
+  }, 500);
+}
+
+function _addDiscipline() {
+  pushUndo();
+  const id = 'disc_' + Math.random().toString(36).slice(2, 9);
+  S.disciplines[id] = { id, nom: 'Nouvelle discipline', isPrimary: false };
+  save();
+  _renderDisciplinesList();
+  // Focus + select sur la nouvelle ligne pour saisir le nom direct
+  setTimeout(() => {
+    const inp = document.querySelector(`#mdisciplines-list [data-disc-id="${CSS.escape(id)}"] input[type="text"]`);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+  try { _refreshSubgroupSelectors(); } catch (_) {}
+}
+
+function _deleteDiscipline(id) {
+  const d = S.disciplines?.[id];
+  if (!d) return;
+  if (d.isPrimary) { toast('⚠ La discipline principale ne peut pas être supprimée.', 'warn'); return; }
+  // Vérifie usage
+  let nbCls = 0, nbEv = 0;
+  for (const cls of Object.values(S.classes || {})) if (_clsDisciplineIds(cls).includes(id)) nbCls++;
+  for (const ev of Object.values(S.evaluations || {})) if (_evalDisciplineId(ev) === id) nbEv++;
+  if (nbCls > 0 || nbEv > 0) {
+    toast(`⚠ Discipline utilisée (${nbCls} classe(s), ${nbEv} éval(s)). Retire-la d'abord.`, 'warn');
+    return;
+  }
+  if (!confirm(`Supprimer la discipline « ${d.nom} » ?`)) return;
+  pushUndo();
+  delete S.disciplines[id];
+  save();
+  _renderDisciplinesList();
+  try { _refreshSubgroupSelectors(); } catch (_) {}
+}
 function _refreshSubgroupSelectors() {
   for (const tabKey of ['notes', 'bilan', 'comp']) _renderDiscChannelToolbar(tabKey);
   for (const prefix of ['meval-new', 'meval-edit']) _evalRefreshChannelSelect(prefix);
@@ -28264,41 +28478,38 @@ function _evalRefreshChannelSelect(prefix) {
   if (!sel || !wrap) return;
   let classIds = [];
   let curValue = sel.value;
-  let evChannel = '';
+  let evDiscId = '';
   if (prefix === 'meval-new') {
     classIds = (typeof _evalNewGetCheckedClassIds === 'function') ? _evalNewGetCheckedClassIds() : [];
   } else if (prefix === 'meval-edit') {
     const evId = document.getElementById('meval-edit-id')?.value;
     const ev = S.evaluations?.[evId];
-    if (ev) { classIds = _evalClassIds(ev); evChannel = _evalChannelOf(ev); }
+    if (ev) { classIds = _evalClassIds(ev); evDiscId = _evalDisciplineId(ev); }
   }
   const clsObjs = classIds.map(cid => S.classes?.[cid]).filter(Boolean);
-  const anyTwo = clsObjs.some(c => _clsHasTwoChannels(c));
-  if (!anyTwo) {
-    // Aucune classe avec 2 flux → pas de choix utilisateur. Le sélecteur est
-    // caché et l'éval prend automatiquement le seul flux disponible. Si toutes
-    // les classes mono-flux partagent le même flux, on prend celui-là ; sinon
-    // on retombe sur 'primary' (cas le plus fréquent).
+  // Union des disciplines couvertes par les classes cochées (ordre stable)
+  const discIdsSet = [];
+  for (const c of clsObjs) {
+    for (const did of _clsDisciplineIds(c)) {
+      if (!discIdsSet.includes(did)) discIdsSet.push(did);
+    }
+  }
+  if (discIdsSet.length <= 1) {
+    // Choix unique automatique
     wrap.style.display = 'none';
     if (lbl) lbl.style.display = 'none';
-    const uniqueOnly = new Set(clsObjs.map(c => _clsOnlyChannel(c)));
-    const autoCh = (clsObjs.length > 0 && uniqueOnly.size === 1) ? [...uniqueOnly][0] : 'primary';
-    sel.innerHTML = `<option value="${autoCh}" selected>— ${autoCh === 'secondary' ? 'Secondaire' : 'Principal'} —</option>`;
+    const only = discIdsSet[0] || _disciplinePrimaryId();
+    sel.innerHTML = `<option value="${_escAttr(only)}" selected>${_esc(_disciplineLabel(only))}</option>`;
     return;
   }
   wrap.style.display = '';
   if (lbl) lbl.style.display = '';
-  const primNames = Array.from(new Set(clsObjs.map(c => _clsPrimaryName(c))));
-  const secNames  = Array.from(new Set(clsObjs.filter(c => _clsHasTwoChannels(c)).map(c => _clsSecondaryName(c))));
-  const primLbl = 'Principal' + (primNames.length ? ' (' + primNames.join(' / ') + ')' : '');
-  const secLbl  = 'Secondaire' + (secNames.length ? ' (' + secNames.join(' / ') + ')' : '');
-  // En mode édition, prioriser la valeur de l'éval (ev.discChannel) sur ce que le
-  // select affichait — le select a pu être rendu en "Principal seul" si la modale
-  // s'est ouverte avant que les classes soient peuplées.
-  const cur = (prefix === 'meval-edit') ? (evChannel || curValue || 'primary') : (curValue || 'primary');
-  sel.innerHTML = `<option value="primary"${cur === 'primary' ? ' selected' : ''}>${_esc(primLbl)}</option>
-    <option value="secondary"${cur === 'secondary' ? ' selected' : ''}>${_esc(secLbl)}</option>`;
+  const cur = (prefix === 'meval-edit')
+    ? (evDiscId || (discIdsSet.includes(curValue) ? curValue : discIdsSet[0]))
+    : (discIdsSet.includes(curValue) ? curValue : discIdsSet[0]);
+  sel.innerHTML = discIdsSet.map(id => `<option value="${_escAttr(id)}"${id === cur ? ' selected' : ''}>${_esc(_disciplineLabel(id))}</option>`).join('');
 }
+function _evalRefreshDisciplineSelect(prefix) { return _evalRefreshChannelSelect(prefix); }
 
 // Ouvre la modale Classes recomposées depuis la modale eval-new ou eval-edit.
 function _openSubgroupsFromEval(returnModalId) {
@@ -28547,10 +28758,12 @@ function _evalEditSave() {
   const slotId = document.getElementById('meval-edit-slot')?.value || '';
   if (slotId) ev.slotId = slotId; else delete ev.slotId;
   ev.periode  = document.getElementById('meval-edit-periode').value;
-  // Flux (canal de discipline)
-  const _channelEd = document.getElementById('meval-edit-channel')?.value || 'primary';
-  ev.discChannel = (_channelEd === 'secondary') ? 'secondary' : 'primary';
-  delete ev.disciplineId;
+  // Discipline (id du catalogue global)
+  const _discEd = document.getElementById('meval-edit-channel')?.value || '';
+  if (_discEd && S.disciplines?.[_discEd]) {
+    ev.disciplineId = _discEd;
+  }
+  delete ev.discChannel;
   delete ev.subgroupId; // feature subgroup retirée
   ev.noteMax  = noteMax;
   ev.coef     = coef;
@@ -30502,7 +30715,7 @@ function _bilanCollectEligibleEvals(periode) {
   const evs = Object.values(S.evaluations || {})
     .filter(e => e.countsForMean !== false)
     .filter(e => !periode || e.periode === periode)
-    .filter(e => !cls || !_clsHasTwoChannels(cls) || _evalMatchesChannel(e, _currentDiscChannel(cls.id)));
+    .filter(e => !cls || !_clsHasMultipleDisciplines(cls) || _evalMatchesDiscipline(e, _currentDiscipline(cls.id)));
   evs.sort((a, b) => {
     const da = _evalDateFor(a) || '';
     const db = _evalDateFor(b) || '';
@@ -32781,62 +32994,66 @@ function _evalTableurCloseHook() {
 
 // ═══════════════ TYPE B — Passations (compétences au fil de l'eau) ═══════════════
 
-// ── Disciplines & flux parallèles (par classe) — helpers ──
+// ── Disciplines (catalogue global) — helpers ──
 // Modèle :
-//   cls.discNamePrimary    : string (vide → libellé « Principale » par défaut)
-//   cls.discNameSecondary  : string | null (null → pas de 2e flux)
-//   cls.discPrimaryDisabled: bool (true → le flux principal n'existe pas du
-//                                  tout pour cette classe ; suppose discNameSecondary
-//                                  configuré, sinon validation refuse)
-//   ev.discChannel         : 'primary' | 'secondary' (défaut 'primary' ;
-//                            ramené automatiquement à 'secondary' si la classe
-//                            a primary désactivé)
-function _clsHasPrimary(cls)    { return !!cls && cls.discPrimaryDisabled !== true; }
-function _clsPrimaryName(cls)   { return (cls && cls.discNamePrimary != null ? String(cls.discNamePrimary).trim() : '') || 'Principale'; }
-function _clsSecondaryName(cls) {
-  if (!cls) return null;
-  const v = cls.discNameSecondary;
-  if (v == null) return null;
-  const t = String(v).trim();
-  return t || 'Secondaire';
+//   S.disciplines = { [id]: { id, nom, isPrimary } } — au moins une isPrimary
+//   cls.disciplineIds = [discId, ...] — 1 ou plusieurs
+//   ev.disciplineId = discId (toujours set après migration)
+function _disciplineLabel(discId) {
+  const d = S.disciplines?.[discId];
+  return d ? (d.nom || '(sans nom)') : '(discipline inconnue)';
 }
-function _clsHasSecondary(cls)  { return !!cls && _clsSecondaryName(cls) !== null; }
-// Vrai ssi la classe a EXACTEMENT 2 flux configurés (un sélecteur a alors un sens).
-function _clsHasTwoChannels(cls) { return _clsHasPrimary(cls) && _clsHasSecondary(cls); }
-// Flux unique d'une classe mono-flux (utilisé quand _clsHasTwoChannels est faux).
-function _clsOnlyChannel(cls) {
-  if (_clsHasPrimary(cls) && !_clsHasSecondary(cls)) return 'primary';
-  if (!_clsHasPrimary(cls) && _clsHasSecondary(cls)) return 'secondary';
-  return 'primary'; // fallback : aucune config → flux principal implicite
+function _disciplinePrimary() {
+  for (const d of Object.values(S.disciplines || {})) if (d.isPrimary) return d;
+  const first = Object.values(S.disciplines || {})[0];
+  return first || null;
 }
-function _channelLabel(cls, channel) {
-  return channel === 'secondary' ? (_clsSecondaryName(cls) || 'Secondaire') : _clsPrimaryName(cls);
+function _disciplinePrimaryId() { return _disciplinePrimary()?.id || 'disc_main'; }
+function _clsDisciplineIds(cls) {
+  if (!cls) return [];
+  const raw = Array.isArray(cls.disciplineIds) ? cls.disciplineIds : [];
+  const filtered = raw.filter(id => S.disciplines?.[id]);
+  if (filtered.length === 0) return [_disciplinePrimaryId()];
+  return filtered;
 }
-function _evalChannelOf(ev) { return (ev && ev.discChannel === 'secondary') ? 'secondary' : 'primary'; }
-function _evalMatchesChannel(ev, channel) { return _evalChannelOf(ev) === (channel || 'primary'); }
-
-// Flux actif (par classe), persisté dans localStorage en JSON {classId:'primary'|'secondary'}.
-// Si la classe est mono-flux, retourne directement ce flux unique (le storage
-// est ignoré). Si elle est multi-flux, lit le storage avec fallback 'primary'
-// (si primary désactivé, fallback 'secondary').
-function _currentDiscChannel(classId) {
-  if (!classId) return 'primary';
+function _clsHasMultipleDisciplines(cls) { return _clsDisciplineIds(cls).length >= 2; }
+function _clsDefaultDisciplineId(cls) { return _clsDisciplineIds(cls)[0]; }
+function _evalDisciplineId(ev) {
+  if (ev?.disciplineId && S.disciplines?.[ev.disciplineId]) return ev.disciplineId;
+  // Fallback : 1re discipline de la 1re classe vivante
+  const cids = Array.isArray(ev?.classIds) && ev.classIds.length > 0 ? ev.classIds : (ev?.classId ? [ev.classId] : []);
+  for (const cid of cids) {
+    const c = S.classes?.[cid];
+    if (c) return _clsDefaultDisciplineId(c);
+  }
+  return _disciplinePrimaryId();
+}
+function _evalMatchesDiscipline(ev, discId) {
+  if (!discId) return true;
+  return _evalDisciplineId(ev) === discId;
+}
+// Discipline active par classe, persistée en localStorage JSON {classId: discId}
+function _currentDiscipline(classId) {
+  if (!classId) return _disciplinePrimaryId();
   const cls = S.classes?.[classId];
-  if (!cls) return 'primary';
-  if (!_clsHasTwoChannels(cls)) return _clsOnlyChannel(cls);
+  if (!cls) return _disciplinePrimaryId();
+  const ids = _clsDisciplineIds(cls);
+  if (ids.length === 1) return ids[0];
   try {
-    const raw = localStorage.getItem('planClasse_discChannel');
-    if (!raw) return 'primary';
+    const raw = localStorage.getItem('planClasse_currentDiscipline');
+    if (!raw) return ids[0];
     const map = JSON.parse(raw) || {};
-    return map[classId] === 'secondary' ? 'secondary' : 'primary';
-  } catch (_) { return 'primary'; }
+    const v = map[classId];
+    if (v && ids.includes(v)) return v;
+    return ids[0];
+  } catch (_) { return ids[0]; }
 }
-function _setDiscChannel(classId, channel) {
+function _setCurrentDiscipline(classId, discId) {
   if (!classId) return;
   let map = {};
-  try { const raw = localStorage.getItem('planClasse_discChannel'); if (raw) map = JSON.parse(raw) || {}; } catch (_) {}
-  map[classId] = (channel === 'secondary') ? 'secondary' : 'primary';
-  try { localStorage.setItem('planClasse_discChannel', JSON.stringify(map)); } catch (_) {}
+  try { const raw = localStorage.getItem('planClasse_currentDiscipline'); if (raw) map = JSON.parse(raw) || {}; } catch (_) {}
+  map[classId] = discId;
+  try { localStorage.setItem('planClasse_currentDiscipline', JSON.stringify(map)); } catch (_) {}
   try {
     if (document.getElementById('tab-notes')?.classList?.contains('on')) renderEvalNotes();
     if (document.getElementById('tab-bilan')?.classList?.contains('on')) renderBilanTab();
@@ -32844,21 +33061,66 @@ function _setDiscChannel(classId, channel) {
   } catch (_) {}
 }
 
-// Rendu du sélecteur de flux dans une toolbar des 3 onglets eval.
-// tabKey : 'notes' | 'bilan' | 'comp'. Caché si la classe n'a qu'un seul flux
-// configuré (le filtre canal est figé sur ce flux unique, choisi automatiquement).
-function _renderDiscChannelToolbar(tabKey) {
+// ── Shims rétrocompat (anciens noms d'API per-channel) ──
+// Garde le code historique fonctionnel sans réécriture massive.
+function _clsHasPrimary(cls)    { return _clsDisciplineIds(cls).length >= 1; }
+function _clsPrimaryName(cls)   { return _disciplineLabel(_clsDefaultDisciplineId(cls)); }
+function _clsSecondaryName(cls) {
+  const ids = _clsDisciplineIds(cls);
+  return ids.length >= 2 ? _disciplineLabel(ids[1]) : null;
+}
+function _clsHasSecondary(cls)  { return _clsDisciplineIds(cls).length >= 2; }
+function _clsHasTwoChannels(cls) { return _clsHasMultipleDisciplines(cls); }
+function _clsOnlyChannel(cls) { return 'primary'; }
+function _channelLabel(cls, channel) {
+  const ids = _clsDisciplineIds(cls);
+  if (channel === 'secondary' && ids[1]) return _disciplineLabel(ids[1]);
+  return _disciplineLabel(ids[0]);
+}
+// _evalChannelOf : retourne 'primary' si ev.disciplineId == 1re discipline de la classe primaire,
+// 'secondary' sinon. Utilisé pour compat avec quelques anciens callsites.
+function _evalChannelOf(ev) {
+  const cids = Array.isArray(ev?.classIds) && ev.classIds.length > 0 ? ev.classIds : (ev?.classId ? [ev.classId] : []);
+  for (const cid of cids) {
+    const c = S.classes?.[cid];
+    if (!c) continue;
+    const ids = _clsDisciplineIds(c);
+    if (ev.disciplineId === ids[1]) return 'secondary';
+    return 'primary';
+  }
+  return 'primary';
+}
+function _evalMatchesChannel(ev, channel) { return _evalChannelOf(ev) === (channel || 'primary'); }
+function _currentDiscChannel(classId) {
+  const cls = S.classes?.[classId];
+  if (!cls) return 'primary';
+  const ids = _clsDisciplineIds(cls);
+  const cur = _currentDiscipline(classId);
+  return (cur === ids[1]) ? 'secondary' : 'primary';
+}
+function _setDiscChannel(classId, channel) {
+  const cls = S.classes?.[classId];
+  if (!cls) return;
+  const ids = _clsDisciplineIds(cls);
+  const target = (channel === 'secondary' && ids[1]) ? ids[1] : ids[0];
+  _setCurrentDiscipline(classId, target);
+}
+
+// Rendu du sélecteur de discipline dans une toolbar des 3 onglets eval.
+function _renderDisciplineToolbar(tabKey) {
   const el = document.getElementById('disc-channel-' + tabKey);
   if (!el) return;
   const cls = getCls();
-  if (!cls || !_clsHasTwoChannels(cls)) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  if (!cls || !_clsHasMultipleDisciplines(cls)) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = '';
-  const cur = _currentDiscChannel(cls.id);
-  const primOpt = `<option value="primary"${cur === 'primary' ? ' selected' : ''}>${_esc(_clsPrimaryName(cls))}</option>`;
-  const secOpt  = `<option value="secondary"${cur === 'secondary' ? ' selected' : ''}>${_esc(_clsSecondaryName(cls) || 'Secondaire')}</option>`;
-  el.innerHTML = `<label style="font-size:.85em;color:var(--pencil)">🎓 Flux :</label>
-    <select onchange="_setDiscChannel(getCls()?.id, this.value)" title="Sélectionne le flux (discipline) à afficher" style="padding:4px 8px;font-size:.9em">${primOpt}${secOpt}</select>`;
+  const ids = _clsDisciplineIds(cls);
+  const cur = _currentDiscipline(cls.id);
+  const opts = ids.map(id => `<option value="${_escAttr(id)}"${id === cur ? ' selected' : ''}>${_esc(_disciplineLabel(id))}</option>`).join('');
+  el.innerHTML = `<label style="font-size:.85em;color:var(--pencil)">🎓 Discipline :</label>
+    <select onchange="_setCurrentDiscipline(getCls()?.id, this.value)" title="Sélectionne la discipline à afficher" style="padding:4px 8px;font-size:.9em">${opts}</select>`;
 }
+// Alias rétrocompat (les callsites existants utilisent l'ancien nom)
+function _renderDiscChannelToolbar(tabKey) { return _renderDisciplineToolbar(tabKey); }
 
 // Helpers subgroup retirés (feature abandonnée, redondante avec virtual classes).
 // Stubs gardés au cas où d'anciens appels traînent.
@@ -32868,15 +33130,17 @@ function _evalEffectiveSidsForClass(_ev, classId) {
   const cls = S.classes?.[classId];
   return cls ? (cls.eleves || []).slice() : [];
 }
-// Pastille discrète indiquant le flux d'une éval (uniquement utile en classe à 2
-// flux ET pour le flux secondaire — sinon implicite). `cls` = classe de
-// référence pour le nommage (généralement la 1re classe vivante de l'éval).
+// Pastille discrète indiquant la discipline d'une éval. Affichée seulement si la
+// classe a ≥ 2 disciplines ET que la discipline de l'éval n'est pas la 1re
+// (celle par défaut). `cls` = classe de référence pour le nommage.
 function _evalChannelPillHTML(ev, cls) {
   if (!ev || !cls) return '';
-  if (!_clsHasTwoChannels(cls)) return '';
-  if (_evalChannelOf(ev) !== 'secondary') return '';
-  const label = _clsSecondaryName(cls) || 'Secondaire';
-  return `<span class="disc-pill" style="display:inline-block;font-family:var(--font-mono);font-size:.7em;padding:1px 6px;border-radius:8px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;margin-right:4px;vertical-align:middle" title="${_escAttr('Flux : ' + label)}">🎓 ${_esc(label)}</span>`;
+  if (!_clsHasMultipleDisciplines(cls)) return '';
+  const ids = _clsDisciplineIds(cls);
+  const discId = _evalDisciplineId(ev);
+  if (discId === ids[0]) return ''; // implicite
+  const label = _disciplineLabel(discId);
+  return `<span class="disc-pill" style="display:inline-block;font-family:var(--font-mono);font-size:.7em;padding:1px 6px;border-radius:8px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;margin-right:4px;vertical-align:middle" title="${_escAttr('Discipline : ' + label)}">🎓 ${_esc(label)}</span>`;
 }
 
 // ── Multi-classes pour une éval (ev.classIds) — helpers de compat ──
@@ -34117,15 +34381,19 @@ function _computeStudentMeanForPeriod(classId, sid, periode, channelFilter) {
   // Inclut aussi les évals "orphelines" (non attachées à cette classe) où l'élève
   // a une saisie — cas d'un élève transféré depuis une autre classe en cours d'année :
   // ses notes de la classe d'origine doivent rentrer dans sa moyenne actuelle.
-  // Filtre par flux : si la classe a 2 flux, filtre par le flux courant (ou celui passé).
+  // Filtre par discipline : si la classe a ≥ 2 disciplines, filtre par la discipline
+  // courante (ou celle passée — argument `channelFilter` conservé pour compat).
   const cls = S.classes?.[classId];
-  let _ch = channelFilter;
-  if (_ch === undefined && cls && _clsHasTwoChannels(cls)) _ch = _currentDiscChannel(classId);
+  let _did = channelFilter; // peut contenir un disciplineId, 'primary'/'secondary' (legacy) ou undefined
+  if (_did === undefined && cls && _clsHasMultipleDisciplines(cls)) _did = _currentDiscipline(classId);
+  // Normalise 'primary'/'secondary' (anciens callsites) en disciplineId
+  if (_did === 'primary' && cls) _did = _clsDisciplineIds(cls)[0];
+  else if (_did === 'secondary' && cls) _did = _clsDisciplineIds(cls)[1] || _clsDisciplineIds(cls)[0];
   const evs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, classId) || _studentHasAnyDataInEval(e, sid))
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
-    .filter(e => !_ch || _evalMatchesChannel(e, _ch));
+    .filter(e => !_did || _evalMatchesDiscipline(e, _did));
   if (evs.length === 0) return null;
   // 1ère passe : sépare facultatives des obligatoires
   const obligatoires = evs.filter(e => !e.facultative?.active);
@@ -34330,8 +34598,8 @@ function renderBilanTab() {
   };
   const _cmpB = _cmpsB[sortMode] || _cmpsB.date;
   // 1) Évals attachées à la classe courante (comportement historique)
-  const _bilanCh = _clsHasTwoChannels(cls) ? _currentDiscChannel(cls.id) : null;
-  const _bilanChannelFilter = (e) => !_bilanCh || _evalMatchesChannel(e, _bilanCh);
+  const _bilanDid = _clsHasMultipleDisciplines(cls) ? _currentDiscipline(cls.id) : null;
+  const _bilanChannelFilter = (e) => !_bilanDid || _evalMatchesDiscipline(e, _bilanDid);
   const ownEvs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, cls.id))
     .filter(e => !periode || e.periode === periode)
@@ -34489,7 +34757,11 @@ function renderBilanTab() {
     const typePill = `<span class="eval-type-badge eval-type-${ev.type || 'A'}" style="font-size:.62em;padding:1px 5px;line-height:1.2;border-radius:8px">${ev.type || '?'}</span>`;
     // Avec le filtre par flux actif, la pastille de canal dans l'en-tête est redondante.
     const discPill = '';
-    if (_evalChannelOf(ev) === 'secondary' && _clsHasTwoChannels(cls)) tip += `\n🎓 ${_clsSecondaryName(cls) || 'Secondaire'}`;
+    if (_clsHasMultipleDisciplines(cls)) {
+      const _evDid = _evalDisciplineId(ev);
+      const _defaultDid = _clsDefaultDisciplineId(cls);
+      if (_evDid !== _defaultDid) tip += `\n🎓 ${_disciplineLabel(_evDid)}`;
+    }
     const facStar = isFac ? `<span title="Évaluation facultative — ${_escAttr(facModeLabel)}" style="color:#d97706;font-size:.85em;cursor:help">★</span>` : '';
     // Marqueur "orpheline" : évaluation rattachée à une autre classe — fond très léger
     // ambre et icône ⤴ avant le nom, avec tooltip indiquant la classe d'origine.
@@ -35094,7 +35366,7 @@ function _bilanHiddenBanner(keys, labelFn) {
 // pour servir de brouillon à la remarque finale du bulletin.
 // Stocké dans S.bulletinRemarques[classId][channel][sid][periode] = "texte"
 // (channel ∈ {'primary','secondary'}, défaut 'primary')
-function _curCh(classId) { return _currentDiscChannel(classId); }
+function _curCh(classId) { return _currentDiscipline(classId); }
 function _getBulletinRemarque(classId, sid, periode, channel) {
   const ch = channel || _curCh(classId);
   return S.bulletinRemarques?.[classId]?.[ch]?.[sid]?.[periode || ''] || '';
@@ -35489,8 +35761,8 @@ function renderCompetencesTab() {
   const _hideOrphansComp = (() => { try { return localStorage.getItem('planClasse_bilanHideOrphans') === '1'; } catch (e) { return false; } })();
   // Compétences évaluées dans la classe + période. On marque celles "orphelines" :
   // venant uniquement d'évals d'autres classes (où un élève transféré a des saisies).
-  const _compCh = _clsHasTwoChannels(cls) ? _currentDiscChannel(cls.id) : null;
-  const _compChannelFilter = (e) => !_compCh || _evalMatchesChannel(e, _compCh);
+  const _compDid = _clsHasMultipleDisciplines(cls) ? _currentDiscipline(cls.id) : null;
+  const _compChannelFilter = (e) => !_compDid || _evalMatchesDiscipline(e, _compDid);
   const compIds = new Set();
   const ownCompIds = new Set();
   for (const ev of Object.values(S.evaluations || {})) {

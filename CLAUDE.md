@@ -1491,104 +1491,87 @@ L'algo normalise les prénoms via NFD + suppression des combining marks `/[̀-ͯ
 
 `body:has(.mo.on)::before { display: none; }` — règle CSS pure. Évite que le filet rouge (`body::before`, z-index 9990) passe au-dessus du tableur d'éval en mode plein écran (99vw).
 
-## Disciplines (flux per-classe)
+## Disciplines (catalogue global)
 
-Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + Option) : la classe a 1 ou 2 disciplines (noms personnalisables), les évaluations sont rangées dans l'un des deux flux, et les bilans (notes, compétences, remarques) sont **séparés par flux**.
+Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + SVT Bilingue). Refonte mai 2026 : au lieu de stocker 2 noms par classe (`discNamePrimary`/`discNameSecondary`), on a désormais un **catalogue global** `S.disciplines` et chaque classe coche les disciplines qui la concernent. Plus de limite à 2 — une classe peut être enseignée dans 3, 4, N disciplines.
 
-Pour les **classes recomposées** (élèves d'une ou plusieurs classes regroupés autour d'une discipline particulière — ex. Bilingue 6ᵉ, Option DP3), on utilise la feature **virtual classes** (`cls.virtual = true`) — créées via l'onglet Classes → ➕ Nouvelle classe → option « classe recomposée ». La virtual class porte ses propres disciplines + bilans, indépendamment des classes parentes.
+Pour les **classes recomposées** (élèves d'une ou plusieurs classes regroupés autour d'une discipline particulière — ex. Bilingue 6ᵉ, Option DP3), on utilise toujours la feature **virtual classes** (`cls.virtual = true`) — créées via l'onglet Classes → ➕ Nouvelle classe recomposée. La virtual class porte ses propres `disciplineIds` + bilans, indépendamment des classes parentes.
 
 ### Modèle
 
 ```js
-// Par classe : nom des disciplines (vide / null = mono-flux)
-cls.discNamePrimary    = 'SVT'                 // string, '' interprété comme « Principale »
-cls.discNameSecondary  = 'SVT Bilingue' | null // null = pas de 2e flux
+// Catalogue global (au moins une discipline marquée isPrimary)
+S.disciplines = {
+  'disc_main':    { id: 'disc_main',    nom: 'Discipline principale', isPrimary: true },
+  'disc_svt':     { id: 'disc_svt',     nom: 'SVT',                   isPrimary: false },
+  'disc_svt_bil': { id: 'disc_svt_bil', nom: 'SVT Bilingue',          isPrimary: false },
+}
 
-// Par évaluation : flux d'appartenance
-ev.discChannel = 'primary' | 'secondary'   // défaut 'primary'
+// Par classe : 1 ou plusieurs disciplines (jamais vide)
+cls.disciplineIds = ['disc_svt', 'disc_svt_bil']
 
-// Bulletins : structures wrappées per-channel
-S.bulletinRemarques[classId][channel][sid][periode]      = "texte"
-S.bulletinClassRemarques[classId][channel][periode]      = "texte"
-S.bulletinWorkedItems[classId][channel][periode]         = [items]
-S.conseilClasse[classId][channel][sid][periode]          = { F, E, AT, AC }
+// Par évaluation : la discipline d'appartenance (toujours set après migration)
+ev.disciplineId = 'disc_svt_bil'
+
+// Bulletins : clés = disciplineId
+S.bulletinRemarques[classId][disciplineId][sid][periode]      = "texte"
+S.bulletinClassRemarques[classId][disciplineId][periode]      = "texte"
+S.bulletinWorkedItems[classId][disciplineId][periode]         = [items]
+S.conseilClasse[classId][disciplineId][sid][periode]          = { F, E, AT, AC }
 ```
 
-### Classes recomposées = virtual classes
+### Helpers principaux
 
-**Important** : il n'y a **pas** de système de « sous-groupes » dédié pour les rosters cross-class. On utilise la feature préexistante des **virtual classes** (`cls.virtual = true`) — créées via l'onglet Classes → ➕ Nouvelle classe → option « classe recomposée ». Une virtual class est une vraie entité de classe avec :
-- son propre `cls.eleves` (sids issus de n'importe quelle(s) classe(s) réelle(s))
-- son propre plan / salle / placement / groupes G1/G2/G3
-- ses propres bulletins (per-channel comme les classes réelles)
-- ses propres `discNamePrimary` / `discNameSecondary`
+- `_disciplineLabel(id)` — renvoie le nom (fallback « (discipline inconnue) »)
+- `_disciplinePrimary()` / `_disciplinePrimaryId()` — discipline marquée `isPrimary`
+- `_clsDisciplineIds(cls)` — liste filtrée des ids valides (jamais vide ; fallback principale)
+- `_clsHasMultipleDisciplines(cls)` — true si ≥ 2 disciplines
+- `_clsDefaultDisciplineId(cls)` — la 1re discipline de la classe
+- `_evalDisciplineId(ev)` — l'id de l'éval (fallback : 1re discipline de la classe primaire)
+- `_evalMatchesDiscipline(ev, discId)` — filtre
+- `_currentDiscipline(classId)` / `_setCurrentDiscipline(classId, discId)` — discipline active, persistance via `localStorage.planClasse_currentDiscipline` (JSON `{classId: discId}`)
+- `_renderDisciplineToolbar(tabKey)` — peuple `#disc-channel-{notes,bilan,comp}` ; caché si mono-discipline
 
-Une éval qui cible une recomposée s'écrit simplement avec `ev.classIds = [<virtualClassId>]` — le tableur affiche automatiquement le roster correct. Toute la machinerie discipline/flux/bilan est commune entre classes réelles et virtual classes.
-
-**Une éphémère feature `S.subgroups` + `ev.subgroupId`** (commits `ffe3a1d` et antérieurs de la session 2026-05-25) a été retirée car redondante. Les anciennes données `ev.subgroupId` et `S.subgroups` sont silencieusement ignorées / supprimées à la migration.
-
-### Migration (postLoadHook)
-
-1. **Catalogues obsolètes** : `S.disciplines` (v1 « tag global ») et `S.subgroups` (v2 « roster cross-class ») supprimés silencieusement.
-2. **Évaluations** : `ev.discChannel = 'primary'` si absent ; `ev.disciplineId` et `ev.subgroupId` (v1/v2) ignorés / supprimés à la sauvegarde suivante.
-3. **Classes** : `discNamePrimary = ''` / `discNameSecondary = null` si absents.
-4. **Bulletins** : helper top-level `_bulletinWrapAll()` (idempotent). Pour chaque map, détecte si la valeur (par classe) est déjà wrappée (`primary`/`secondary` au 1er niveau) :
-   - **Pure ancien format** (`{cid: {sid: {periode: …}}}`) → wrap entier en `{primary: existing, secondary: {}}`
-   - **Mixte** (clés orphelines à côté de `primary`/`secondary`) → migre les orphelines vers `.primary` sans écraser ce qui s'y trouve déjà
-   - Aussi rappelé en fin de `createDemo` (la démo écrit volontairement en ancien format pour rester lisible).
-
-### 3 cas d'usage
-
-1. **Classe entière, 1 discipline** : cas par défaut. Pas de configuration, pas de sélecteur. Comportement identique à avant la feature.
-2. **Classe entière, 2 disciplines** (même prof, ex. SVT + Option à toute la 6A) : éditer la classe, activer la discipline secondaire et la nommer. Le sélecteur de flux apparaît dans Devoirs/Bilans/Compétences. Chaque éval créée demande son flux.
-3. **Classe recomposée** (sous-ensemble d'une classe OU élèves de plusieurs classes regroupés) : créer une virtual class via onglet Classes (option « classe recomposée »), y ajouter les sids concernés, configurer ses propres `discNamePrimary` / `discNameSecondary`. Les évals créées sur cette virtual class sont totalement indépendantes des classes parentes.
-
-### Helpers exposés
-
-**Per-classe / per-channel** :
-- `_clsPrimaryName(cls)` / `_clsSecondaryName(cls)` — renvoient le nom affiché du flux (`'Principale'` si vide)
-- `_clsHasTwoChannels(cls)` — true si la classe a une discipline secondaire
-- `_channelLabel(cls, channel)` — libellé human-friendly
-- `_evalChannelOf(ev)` — `'primary'` | `'secondary'`, défaut `'primary'`
-- `_evalMatchesChannel(ev, channel)` — filtre
-- `_currentDiscChannel(classId)` / `_setDiscChannel(classId, channel)` — persistance par classe dans `localStorage.planClasse_discChannel` (JSON `{classId: channel}`)
-- `_renderDiscChannelToolbar(tabKey)` — peuple `#disc-channel-{notes,bilan,comp}` ; caché si la classe est mono-flux
-- `_evalRefreshChannelSelect(prefix)` — peuple le select Flux dans `meval-new` / `meval-edit` ; caché si aucune classe cochée n'a 2 flux
-
-**Bulletins per-channel** :
-- `_bulRemark(classId, sid, periode)` / `_setBulRemark`
-- `_bulClassRemark(classId, periode)` / `_setBulClassRemark`
-- `_bulWorkedItems(classId, periode)` / `_setBulWorkedItems`
-- `_conseilFor(classId, sid, periode)` / `_setConseilFor(classId, sid, periode, flag, value)`
+Les anciens noms `_clsPrimaryName`, `_clsSecondaryName`, `_clsHasTwoChannels`, `_evalChannelOf`, `_evalMatchesChannel`, `_currentDiscChannel`, `_setDiscChannel`, `_renderDiscChannelToolbar`, `_evalRefreshChannelSelect` existent encore comme **shims rétrocompat** au-dessus du nouveau modèle (utilisés par les callsites historiques pour ne pas tout réécrire). `_clsHasTwoChannels` est ainsi un alias de `_clsHasMultipleDisciplines`.
 
 ### UI
 
-- **Édition de classe** (modale `mclass-edit`) : section « 🎓 Disciplines » avec champ « Discipline principale » (placeholder « Principale ») + case « Activer une discipline secondaire » qui révèle son champ Nom.
-- **Sélecteur Flux** dans `meval-new` / `meval-edit` (sous Période) : visible uniquement si au moins une classe cochée a 2 flux. Options nommées avec le nom des classes (« Principal (SVT/Maths) », « Secondaire (Bilingue) »). En édition, la valeur du select priorise `ev.discChannel` sur le state du DOM.
-- **Sélecteur Flux** dans toolbars des 3 onglets eval (Devoirs / Bilan notes / Bilan compétences) : visible uniquement si la classe courante a 2 flux. Persistance par classe.
-- **Pastille flux** (`_evalChannelPillHTML`) : affichée à côté du titre / dans la liste / le tableur **uniquement pour le flux secondaire d'une classe à 2 flux** (sinon implicite).
+- **Bouton 🎓 Disciplines** dans le header de l'onglet Classes (à gauche de 🗑 Réinitialiser) → ouvre la modale `mdisciplines` :
+  - Liste : un input nom + badge « Principale »/compteurs d'usage + bouton ✕ Supprimer (désactivé si principale ou si utilisée)
+  - Bouton « + Ajouter une discipline »
+  - Pour éviter le bug 895917a (perte de focus lors de la frappe) : oninput → `_evalArmUndo()` + save debounced (500 ms), **pas de re-render de la liste pendant la frappe**.
+- **Modale Modifier classe** (`mce`) : si ≥ 2 disciplines au catalogue, section « 🎓 Disciplines enseignées » avec checkboxes (au moins une obligatoire). Lien « + Créer une nouvelle discipline… » → ouvre `mdisciplines`. Warning à l'enregistrement si on retire une discipline qui a des évals attachées.
+- **Modale Classe recomposée** (`mvc`) : idem.
+- **Modale Nouvelle classe** (`mc`) : sans champ discipline (toutes les disciplines actives par défaut pour une classe vierge). L'utilisateur peut les ajuster ensuite via Modifier.
+- **Modale Nouvelle/Modifier éval** (`meval-new`, `meval-edit`) : sélecteur de discipline (caché si 1 seule option possible parmi les classes cochées) construit dynamiquement depuis l'union des `cls.disciplineIds` des classes cochées.
+- **Sélecteur Discipline** dans les toolbars des 3 onglets eval (Devoirs / Bilan notes / Bilan compétences) : visible uniquement si la classe courante a ≥ 2 disciplines. Persistance par classe.
+- **Pastille discipline** (`_evalChannelPillHTML`) : affichée si la discipline de l'éval n'est pas la 1re de sa classe.
+
+### Migration (postLoadHook, idempotente)
+
+1. **Catalogue** : crée `S.disciplines` avec `disc_main` (isPrimary) si absent ou vide. Garantit qu'au moins une discipline est `isPrimary`.
+2. **Classes** : si `cls.disciplineIds` absent, construit depuis les legacy fields (`discNamePrimary` / `discNameSecondary` / `discPrimaryDisabled`) en trouvant / créant les disciplines au catalogue par nom (matching case-insensitive trim). Supprime les legacy fields. Garantit `disciplineIds.length >= 1`.
+3. **Évaluations** : si `ev.disciplineId` absent ou invalide, dérive depuis `ev.discChannel` ('primary' → `cls.disciplineIds[0]`, 'secondary' → `cls.disciplineIds[1] || [0]`). Supprime `ev.discChannel`.
+4. **Bulletins** (`_bulletinWrapAll`) : si le `[classId]` contient encore des clés `primary` / `secondary` (anciennes données) OU des clés orphelines (sids/periodes à la racine), migre vers la structure `[disciplineId]` en utilisant `cls.disciplineIds`. Idempotent : skip si toutes les clés sont des disciplineIds connus.
+
+### Démo
+
+`_seedDemoEvaluations` configure pour la 6A : crée 2 disciplines au catalogue (« SVT » + « SVT Bilingue »), affecte les deux à la 6A, réassigne les évals existantes de la 6A à `disc_svt`, et crée une éval bilingue rattachée à `disc_svt_bil` avec sa remarque bulletin séparée. La discipline principale du catalogue (`disc_main`) reste utilisée par les autres classes (5A, 5B, 6B, 4A).
 
 ### Filtrage
 
-Sites filtrés par channel :
+Sites filtrés par discipline (callsites direct, via `_clsHasMultipleDisciplines` + `_currentDiscipline` + `_evalMatchesDiscipline`) :
 - `renderEvalNotes` (liste Devoirs)
 - `renderBilanTab` (ownEvs + orphanEvs)
 - `renderCompetencesTab` (compIds + orphan)
 - `_bilanCollectEligibleEvals`
-- `_computeStudentMeanForPeriod` (lit le channel courant pour la classe)
+- `_computeStudentMeanForPeriod` (paramètre `channelFilter` étendu : accepte un disciplineId, ou `'primary'`/`'secondary'` legacy normalisé)
 
-**Pas filtrés** (volontaire) : tableur d'éval, calcul intra-éval, cross-tab d'une éval — ces vues sont focalisées sur une éval précise, le flux est déjà déterminé par `ev.discChannel`.
+**Pas filtrés** (volontaire) : tableur d'éval, calcul intra-éval, cross-tab d'une éval — ces vues sont focalisées sur une éval précise.
 
-### Démo
+### Suppression d'une discipline
 
-`_seedDemoEvaluations` configure :
-- 6A : `discNamePrimary='SVT'`, `discNameSecondary='SVT Bilingue'`
-- 1 éval `discChannel='secondary'` sur 6A (Interrogation SVT bilingue, notes sur les 5 premiers élèves)
-- 1 remarque bulletin sur le flux 'secondary' de 6A pour démontrer la séparation
-- Toutes les autres évals / classes restent en flux primary par défaut
-
-### Suppression / désactivation
-
-Désactiver la discipline secondaire d'une classe (décocher la case dans medit-cls) : les évals secondary « orphelines » subsistent dans les données mais ne sont plus accessibles tant que le flux n'est pas réactivé. Pas de cascade automatique.
+Refusée si la discipline est utilisée par ≥ 1 classe ou ≥ 1 éval (toast d'avertissement, bouton ✕ désactivé). Pas de cascade automatique — l'utilisateur doit retirer la discipline des classes / évals d'abord. La discipline principale (`isPrimary`) n'est jamais supprimable (peut être renommée).
 
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
