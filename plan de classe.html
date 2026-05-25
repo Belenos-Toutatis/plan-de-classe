@@ -5154,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T10:00:00Z';
+const APP_VERSION   = '2026-05-24T10:25:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -29134,20 +29134,21 @@ function _evalTableurRender() {
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mn.id])
                      .filter(v => typeof v === 'number');
     const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
-    html += `<td data-stat-mn="${_esc(mn.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${exoBdr}">${_statsCellHTML(vals, { format: v => _fmtNote(v) })}</td>`;
+    html += `<td data-stat-mn="${_esc(mn.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${exoBdr}">${_statsCellHTML(vals, { format: v => _fmtNote(v), noteMax: mn.max })}</td>`;
   });
   // Type C avec exos : stats Σ par exo regroupées en footer
   if (isTypeC && exoGroups.length > 0) {
     exoGroups.forEach((g, gi) => {
       const sumsExo = sids.map(sid => _computeStudentExoSum(ev, sid, g.id)).filter(v => typeof v === 'number');
       const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
-      html += `<td data-stat-exo="${_esc(g.id || '__orphans__')}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);${borderLeft}">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v) })}</td>`;
+      const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === g.id).reduce((s, m) => s + (m.max || 0), 0);
+      html += `<td data-stat-exo="${_esc(g.id || '__orphans__')}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);${borderLeft}">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v), noteMax: exoMax })}</td>`;
     });
   }
   // Total brut (si colonne visible)
   if (showBruteCol) {
     const brutVals = sids.map(sid => _computeStudentNoteBrut(ev, sid)).filter(v => typeof v === 'number');
-    html += `<td data-stat-brute="1" data-stat-brute-max="${maxBrut}" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)">${_statsCellHTML(brutVals, { fullStats: true, halfMax: maxBrut / 2 })}</td>`;
+    html += `<td data-stat-brute="1" data-stat-brute-max="${maxBrut}" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)">${_statsCellHTML(brutVals, { fullStats: true, halfMax: maxBrut / 2, noteMax: maxBrut })}</td>`;
   }
   // Note finale /noteMax : stats complètes
   const totals = sids.map(sid => {
@@ -29155,13 +29156,13 @@ function _evalTableurRender() {
     return raw == null ? null : _roundNoteToGranularity(raw, ev);
   }).filter(v => v != null);
   const noteFootBorder = showBruteCol ? '' : 'border-left:2px solid var(--ink-blue-soft);';
-  html += `<td data-stat-total="1" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);${noteFootBorder}">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 })}</td>`;
+  html += `<td data-stat-total="1" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);${noteFootBorder}">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2, noteMax: ev.noteMax || 20 })}</td>`;
   // Compétences inline (Type C)
   if (isTypeC && inlineComps.length > 0) {
     for (const c of inlineComps) {
       const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, c.id))
                        .filter(v => typeof v === 'number');
-      html += `<td data-stat-comp="${_esc(c.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
+      html += `<td data-stat-comp="${_esc(c.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">${_statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true })}</td>`;
     }
   }
   // Remarque (Type A et Type C)
@@ -29361,24 +29362,26 @@ function _evalTableurRefreshFooterStats(ev) {
   if (!tbody) return;
   const sids = Array.from(tbody.querySelectorAll('tr[data-sid]')).map(tr => tr.getAttribute('data-sid'));
 
-  // Stats par mini-note
+  // Stats par mini-note (couleur sur la moyenne selon mn.max)
   wrap.querySelectorAll('[data-stat-mn]').forEach(td => {
     const mnId = td.getAttribute('data-stat-mn');
+    const mn = ev.miniNotes?.find(m => m.id === mnId);
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mnId]).filter(v => typeof v === 'number');
-    td.innerHTML = _statsCellHTML(vals, { format: v => _fmtNote(v) });
+    td.innerHTML = _statsCellHTML(vals, { format: v => _fmtNote(v), noteMax: mn?.max });
   });
-  // Stats par exercice (Type C)
+  // Stats par exercice (Type C) — couleur selon somme max des questions de l'exo
   wrap.querySelectorAll('[data-stat-exo]').forEach(td => {
     const exoId = td.getAttribute('data-stat-exo');
     const real = (exoId === '__orphans__') ? null : exoId;
     const vals = sids.map(sid => _computeStudentExoSum(ev, sid, real)).filter(v => typeof v === 'number');
-    td.innerHTML = _statsCellHTML(vals, { format: v => _fmtNote(v) });
+    const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === real).reduce((s, m) => s + (m.max || 0), 0);
+    td.innerHTML = _statsCellHTML(vals, { format: v => _fmtNote(v), noteMax: exoMax });
   });
   // Stats total brut (si colonne visible)
   wrap.querySelectorAll('[data-stat-brute]').forEach(td => {
     const maxBrut = parseFloat(td.getAttribute('data-stat-brute-max')) || (ev.noteMax || 20);
     const vals = sids.map(sid => _computeStudentNoteBrut(ev, sid)).filter(v => typeof v === 'number');
-    td.innerHTML = _statsCellHTML(vals, { fullStats: true, halfMax: maxBrut / 2 });
+    td.innerHTML = _statsCellHTML(vals, { fullStats: true, halfMax: maxBrut / 2, noteMax: maxBrut });
   });
   // Stats note finale
   wrap.querySelectorAll('[data-stat-total]').forEach(td => {
@@ -29386,13 +29389,13 @@ function _evalTableurRefreshFooterStats(ev) {
       const raw = _computeStudentEvalNote(ev, sid);
       return raw == null ? null : _roundNoteToGranularity(raw, ev);
     }).filter(v => v != null);
-    td.innerHTML = _statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2 });
+    td.innerHTML = _statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2, noteMax: ev.noteMax || 20 });
   });
-  // Stats compétences inline (Type C)
+  // Stats compétences inline (Type C) — pastille couleur niveau 1-4
   wrap.querySelectorAll('[data-stat-comp]').forEach(td => {
     const cid = td.getAttribute('data-stat-comp');
     const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, cid)).filter(v => typeof v === 'number');
-    td.innerHTML = _statsCellHTML(vals, { format: v => v.toFixed(1) });
+    td.innerHTML = _statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true });
   });
 }
 
@@ -30872,31 +30875,22 @@ function _evalTableurRenderB(ev, cls) {
       const vals = sids.map(sid => p.niveaux?.[sid]?.[cid])
                        .filter(v => typeof v === 'number');
       const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
-      html += `<td data-stat-b-passid="${_esc(p.id)}" data-stat-b-cid="${_esc(cid)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${borderLeft}">${_statsCellHTML(vals, { format: v => v.toFixed(1) })}</td>`;
+      html += `<td data-stat-b-passid="${_esc(p.id)}" data-stat-b-cid="${_esc(cid)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${borderLeft}">${_statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true })}</td>`;
     });
   }
-  // Stats μ de la Note /20 (calculée sur les notes effectives des élèves)
+  // Stats μ de la Note /20 (pastille colorée sur la valeur, fond cellule neutre)
   {
     const noteVals = sids
       .map(sid => _evalNoteSur20Rounded(ev, sid))
       .filter(v => typeof v === 'number' && Number.isFinite(v));
-    const avg = noteVals.length
-      ? (noteVals.reduce((s, v) => s + v, 0) / noteVals.length)
-      : null;
-    const _mg = (S.evalPrefs?.meanGranularity ?? 0.01);
-    const avgDisp = (avg != null && _mg > 0) ? Math.round(avg / _mg) * _mg : avg;
-    const bg = (avgDisp != null) ? _noteColor(avgDisp, 20) : '';
-    const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
-    const lblTip = `μ Note /20 (${noteVals.length} élève${noteVals.length > 1 ? 's' : ''})`;
-    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.85em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft);cursor:help" title="${_escAttr(lblTip)}">${avgDisp != null ? _fmtNote(avgDisp) : '—'}</td>`;
+    html += `<td style="padding:4px 6px;text-align:center;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)">${_statsCellHTML(noteVals, { fullStats: true, halfMax: 10, noteMax: 20 })}</td>`;
   }
-  // μ par compétence évaluée (niveau moyen)
+  // μ par compétence évaluée (niveau moyen) — pastille couleur niveau 1-4
   for (const c of inlineCompsB) {
     const lvls = sids
       .map(sid => _evalStudentLevelForComp(ev, sid, c.id))
       .filter(v => typeof v === 'number' && Number.isFinite(v));
-    const avg = lvls.length ? (lvls.reduce((s, v) => s + v, 0) / lvls.length) : null;
-    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="Niveau moyen sur ${_esc(c.code)}">${avg != null ? avg.toFixed(1) : '—'}</td>`;
+    html += `<td style="padding:4px 6px;text-align:center;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="Niveau moyen sur ${_esc(c.code)}">${_statsCellHTML(lvls, { format: v => v.toFixed(1), compLevels: true })}</td>`;
   }
   // Colonne Remarque : pas de stats
   html += `<td style="border-left:2px solid var(--ink-blue-soft);background:var(--paper-warm)"></td>`;
@@ -30952,12 +30946,28 @@ function _statsForNumbers(values) {
 // HTML compact d'une stat colonne. Si fullStats, affiche aussi min/med/max/σ/n≥/n<.
 // halfMax : seuil pour le compteur ≥/< (typiquement noteMax/2).
 function _statsCellHTML(values, opts) {
-  const { fullStats, halfMax, format } = opts || {};
+  const { fullStats, halfMax, format, noteMax, compLevels } = opts || {};
   const fmt = format || (v => _fmtNote(v));
   const stats = _statsForNumbers(values);
   if (!stats) return '<span style="color:var(--pencil)">—</span>';
+  // Pastille colorée sur LA VALEUR moyenne uniquement (pas la cellule complète),
+  // pour permettre à l'œil de la situer par rapport aux notes/niveaux du dessus
+  // sans dégrader la lisibilité de la ligne stats. Deux modes :
+  //   - noteMax : couleur de barème note (rouge→orange→vert→bleu via _noteColor)
+  //   - compLevels : couleur du niveau 1-4 (palette S.evalPrefs.maitriseColors)
+  let avgPillStyle = '';
+  if (typeof noteMax === 'number' && noteMax > 0) {
+    const bg = _noteColor(stats.avg, noteMax);
+    if (bg) avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`;
+  } else if (compLevels) {
+    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    const idx = Math.max(1, Math.min(colors.length, Math.round(stats.avg))) - 1;
+    const bg = colors[idx];
+    if (bg) avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`;
+  }
   if (!fullStats) {
-    return `<div title="Moyenne sur ${stats.count} valeur(s)"><span style="color:var(--pencil);font-size:.82em">moy</span> ${fmt(stats.avg)}</div>`;
+    const avgHtml = avgPillStyle ? `<span style="${avgPillStyle}">${fmt(stats.avg)}</span>` : fmt(stats.avg);
+    return `<div title="Moyenne sur ${stats.count} valeur(s)"><span style="color:var(--pencil);font-size:.82em">moy</span> ${avgHtml}</div>`;
   }
   // Mode complet : stats principales (μ, n) visibles inline,
   // détails (min/méd/max, σ, ≥half, <half) en tooltip natif au survol.
@@ -30976,8 +30986,9 @@ function _statsCellHTML(values, opts) {
     tipLines.push(`< ${fmt(halfMax)} : ${below} élève${below > 1 ? 's' : ''}`);
   }
   const tip = tipLines.join('\n');
+  const avgHtml = avgPillStyle ? `<span style="${avgPillStyle}">${fmt(stats.avg)}</span>` : fmt(stats.avg);
   return `<div title="${_esc(tip)}" style="font-size:.82em;line-height:1.4;text-align:center;font-family:var(--font-mono);white-space:nowrap;cursor:help">`
-       + `<strong>μ</strong> ${fmt(stats.avg)}<br>`
+       + `<strong>μ</strong> ${avgHtml}<br>`
        + `<span style="color:var(--pencil);font-size:.85em">n=${stats.count} · σ ${fmt(stats.std)}</span>`
        + `</div>`;
 }
@@ -31207,7 +31218,7 @@ function _evalTableurRefreshFooterStatsB(ev, passId, cid) {
   const td = wrap.querySelector(`[data-stat-b-passid="${CSS.escape(passId)}"][data-stat-b-cid="${CSS.escape(cid)}"]`);
   if (!td) return;
   const vals = sids.map(sid => pass.niveaux?.[sid]?.[cid]).filter(v => typeof v === 'number');
-  td.innerHTML = _statsCellHTML(vals, { format: v => v.toFixed(1) });
+  td.innerHTML = _statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true });
 }
 
 // Toast warning niveau invalide (throttle 1500ms)
