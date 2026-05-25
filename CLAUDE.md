@@ -1491,6 +1491,64 @@ L'algo normalise les prénoms via NFD + suppression des combining marks `/[̀-ͯ
 
 `body:has(.mo.on)::before { display: none; }` — règle CSS pure. Évite que le filet rouge (`body::before`, z-index 9990) passe au-dessus du tableur d'éval en mode plein écran (99vw).
 
+## Disciplines et sous-groupes (classes recomposées)
+
+Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + Option) OU de gérer des **classes recomposées** (élèves d'une ou plusieurs classes regroupés autour d'une discipline particulière — ex. Bilingue, Option DP3).
+
+### Modèle
+
+```js
+S.disciplines = { [id]: { id, nom, abbr, color } }
+S.subgroups   = { [id]: { id, nom, disciplineId, members:[{classId, sids:[]}, …] } }
+ev.disciplineId = 'disc_xxx' | null   // null = "Discipline principale" (legacy)
+ev.subgroupId   = 'sg_xxx'   | null   // null = pas de restriction de roster
+```
+
+Migration douce dans `postLoadHook` : si absents, `S.disciplines` et `S.subgroups` sont initialisés à `{}`. **Aucun changement de comportement** tant que l'utilisateur n'a pas créé sa 1re discipline — toutes les évals restent implicitement dans la « Discipline principale ».
+
+### 3 cas d'usage
+
+1. **Classe entière, 2 disciplines** : créer 2 disciplines (ex. SVT + Option), tagger chaque éval avec la bonne discipline. Pas besoin de sous-groupe (tous les élèves de la classe sont concernés).
+2. **Sous-ensemble d'une classe** : créer une discipline + un sous-groupe avec les élèves concernés (d'une seule classe). Tagger l'éval avec discipline + sous-groupe : le tableur n'affiche que les membres.
+3. **Inter-classes** : sous-groupe avec membres dans plusieurs classes (ex. Bilingue 6ᵉ : 5 élèves de 6A + 5 de 6B). L'éval est créée multi-classes (`classIds = ['6A','6B']`) + `subgroupId`. Le tableur affiche les 10 élèves même s'ils sont dans 2 classes différentes.
+
+### Helpers exposés
+
+- `_disciplineLabel(id)` / `_disciplineColor(id)` / `_disciplineAbbr(id)` — `null`/inconnu → libellé/couleur neutres
+- `_evalMatchesDisciplineFilter(ev, filterId)` — `filterId` ∈ `'all'` | `'__principal__'` | `disciplineId`
+- `_subgroupSidsForClass(sg, classId)` / `_subgroupAllSids(sg)`
+- `_evalEffectiveSidsForClass(ev, classId)` — intersection (sids du subgroup pour classId) ∩ `cls.eleves`, ou `cls.eleves` si pas de subgroupId
+- `_suggestSubgroupForEval(ev)` — auto-suggestion : si une seule combinaison `discipline + classIds` matche, renvoie ce subgroup
+- `_currentDisciplineFilter(classId)` / `_setDisciplineFilter(classId, filterId)` — persistance par classe dans `localStorage.planClasse_disciplineFilter` (JSON `{classId: filterId}`)
+- `_disciplinePillHTML(disciplineId)` — pastille colorée pour les en-têtes / listes
+- `_renderDisciplineFilterToolbar(tabKey)` — affiche le `<select>` filtre discipline si ≥ 1 discipline existe, sinon cache
+
+### UI
+
+- **Modale `mdisciplines`** : 2 sections empilées (Disciplines + Sous-groupes). Accessible depuis le bouton **🎓 Disciplines** du header de l'onglet **Classes**, ou depuis le lien « + Gérer… » à côté du select discipline dans `meval-new` / `meval-edit` (avec `_modalReturnTo` pour retour automatique à la modale parente).
+- **Sélecteur discipline + sous-groupe** dans `meval-new` et `meval-edit` (sous le champ Période). Le select sous-groupe est caché si aucune discipline n'est sélectionnée ou si aucun subgroup ne matche.
+- **Filtre discipline** dans les toolbars des 3 onglets eval (Devoirs / Bilan des notes / Bilan des compétences). Caché si aucune discipline créée (rétrocompat zéro friction).
+- **Pastille discipline** : dans la liste Devoirs, le header du tableur, et les en-têtes de colonne du Bilan des notes. Format : `<span>` mono-fin avec fond coloré (`_disciplineColor`) et `_contrastTextColor`.
+
+### Filtrage / restriction roster
+
+- Sites filtrés par discipline : `renderEvalNotes`, `renderBilanTab` (ownEvs + orphanEvs), `renderCompetencesTab` (compIds + orphan), `_computeStudentMeanForPeriod` (param optionnel `disciplineFilter`, défaut `'all'`), `_bilanCollectEligibleEvals`.
+- **Important** : le tableur d'éval, le calcul intra-éval et le cross-tab d'une éval ignorent le filtre (`'all'` partout) — les bilans sont les seuls à le respecter.
+- **Roster restriction** : `_evalTableurSortedSids` et `_evalOpenSaisie` intersectent leur liste de sids avec `_evalEffectiveSidsForClass(ev, classId)` quand `ev.subgroupId` est défini.
+
+### Suppression — cascade
+
+Supprimer une discipline utilisée :
+1. Confirm explicite récapitulant les conséquences
+2. Les évals taggées passent en `disciplineId = null`
+3. Les subgroups rattachés sont **cascade supprimés**, et les évals qui les référençaient perdent leur `subgroupId` (tableur ré-élargi à la classe entière)
+
+Supprimer un subgroup : les évals qui le référençaient perdent juste `subgroupId`.
+
+### Auto-suggestion subgroup
+
+À la création d'une éval, si `disciplineId` est set et qu'un seul subgroup matche (`discipline + ≥ 1 membre dans les classIds`), il est suggéré (pré-coché dans le select). L'utilisateur peut décocher pour ouvrir le tableur à toute la classe.
+
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
 - CSS dans le `<style>`, JS dans le `<script>` en fin de body

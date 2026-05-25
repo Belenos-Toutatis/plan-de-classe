@@ -2100,7 +2100,8 @@ kbd {
       <h2>🏫 Gestion des Classes</h2>
       <button class="btn btn-p" onclick="openMod('mc')">+ Nouvelle classe</button>
       <button class="btn btn-g btn-sm" onclick="printClassesBilan()" title="Imprimer le bilan : détail par classe + récap par niveau (portrait — Ctrl+P)">🖨 Bilan</button>
-      <button class="btn btn-d btn-sm" onclick="openResetModal()" title="Réinitialiser tout ou partie du fichier (fin d'année, etc.)" style="margin-left:auto">🗑 Réinitialiser…</button>
+      <button class="btn btn-g btn-sm" onclick="openDisciplinesModal()" title="Disciplines & sous-groupes : permet d'avoir plusieurs disciplines pour une classe, ou des classes recomposées (inter-classes)" style="margin-left:auto">🎓 Disciplines</button>
+      <button class="btn btn-d btn-sm" onclick="openResetModal()" title="Réinitialiser tout ou partie du fichier (fin d'année, etc.)">🗑 Réinitialiser…</button>
     </div>
     <div id="cls-list"></div>
   </div>
@@ -2607,6 +2608,7 @@ kbd {
       <span id="eval-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em;margin-left:24px;flex-wrap:wrap"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <button class="btn btn-g btn-sm" id="evhelp-btn-notes" onclick="_evhelpToggle('notes')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
+        <span id="discipline-filter-notes" style="display:none;gap:6px;align-items:center" data-disc-toolbar="1"></span>
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
         <select id="eval-period-filter" onchange="_syncBilanPeriode('eval-period-filter');renderEvalNotes()" style="padding:4px 8px;font-size:.9em" title="Période affichée. Partagée entre les onglets Devoirs, Bilan des compétences et Bilan des notes."></select>
         <button class="btn btn-g btn-sm" onclick="openEvalPrefs()" title="Paramètres globaux : couleurs des niveaux, points par niveau, période, règle de moyenne…">⚙ Paramètres</button>
@@ -2629,6 +2631,7 @@ kbd {
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <span id="bilan-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em"></span>
         <button class="btn btn-g btn-sm" id="evhelp-btn-bilan" onclick="_evhelpToggle('bilan')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
+        <span id="discipline-filter-bilan" style="display:none;gap:6px;align-items:center" data-disc-toolbar="1"></span>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="bilan-period-filter" onchange="_syncBilanPeriode('bilan-period-filter');renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
         <button class="btn btn-g btn-sm" id="bilan-crosstab-btn" onclick="_bilanOpenCrossTab()" title="Comparer les classes : moyenne, σ et médiane par classe × civilité, sur la période ou un sous-ensemble d'évaluations">🔀 Comparer classes</button>
@@ -2664,6 +2667,7 @@ kbd {
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
         <button class="btn btn-g btn-sm" onclick="openCompetencesManager()" title="Gérer les compétences : codes courts, noms complets, domaines du socle">⚙ Gérer les compétences</button>
         <button class="btn btn-g btn-sm" id="evhelp-btn-comp" onclick="_evhelpToggle('comp')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
+        <span id="discipline-filter-comp" style="display:none;gap:6px;align-items:center" data-disc-toolbar="1"></span>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="comp-period-filter" onchange="_syncBilanPeriode('comp-period-filter');renderCompetencesTab()" style="padding:4px 8px;font-size:.9em"></select>
       </div>
@@ -3529,6 +3533,16 @@ kbd {
         <textarea id="meval-new-desc" maxlength="500" rows="2" placeholder="Notes libres affichées dans les infobulles" style="padding:5px 8px;resize:vertical;font-family:inherit"></textarea>
         <label for="meval-new-periode">Période</label>
         <select id="meval-new-periode" style="padding:5px 8px"></select>
+        <label for="meval-new-discipline">🎓 Discipline</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="meval-new-discipline" onchange="_evalRefreshSubgroupSelect('meval-new')" style="padding:5px 8px;flex:1"></select>
+          <button type="button" class="btn btn-g btn-sm" onclick="_openDisciplinesFromEval('meval-new')" title="Gérer les disciplines & sous-groupes" style="padding:2px 8px">+ Gérer…</button>
+        </div>
+        <label for="meval-new-subgroup" id="meval-new-subgroup-wrap-lbl">👥 Sous-groupe</label>
+        <div id="meval-new-subgroup-wrap" style="display:none">
+          <select id="meval-new-subgroup" style="padding:5px 8px;width:100%"></select>
+          <div style="font-size:.78em;color:var(--pencil);margin-top:2px;font-style:italic">Le tableur n'affichera que les élèves du sous-groupe.</div>
+        </div>
         <label for="meval-new-notemax">Note maximale</label>
         <div><input type="number" id="meval-new-notemax" min="1" max="100" step="0.5" value="20" style="width:90px;padding:5px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.88em">points</span></div>
         <label for="meval-new-coef">Coefficient</label>
@@ -3624,6 +3638,16 @@ kbd {
         <select id="meval-edit-slot" style="padding:4px 8px;font-family:var(--font-mono);font-size:.9em" onchange="_evalEditMarkDirty()"><option value="">— Pendant la journée —</option></select>
         <label>Période</label>
         <select id="meval-edit-periode" style="padding:4px 8px" onchange="_evalEditMarkDirty()"></select>
+        <label>🎓 Discipline</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="meval-edit-discipline" onchange="_evalEditMarkDirty();_evalRefreshSubgroupSelect('meval-edit')" style="padding:4px 8px;flex:1"></select>
+          <button type="button" class="btn btn-g btn-sm" onclick="_openDisciplinesFromEval('meval-edit')" title="Gérer les disciplines & sous-groupes" style="padding:2px 8px">+ Gérer…</button>
+        </div>
+        <label id="meval-edit-subgroup-wrap-lbl">👥 Sous-groupe</label>
+        <div id="meval-edit-subgroup-wrap" style="display:none">
+          <select id="meval-edit-subgroup" onchange="_evalEditMarkDirty()" style="padding:4px 8px;width:100%"></select>
+          <div style="font-size:.78em;color:var(--pencil);margin-top:2px;font-style:italic">Le tableur n'affichera que les élèves du sous-groupe.</div>
+        </div>
         <label>Note maximale</label>
         <div><input type="number" id="meval-edit-notemax" min="1" max="100" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)" oninput="_evalEditMarkDirty()"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
         <label>Coefficient</label>
@@ -4407,6 +4431,36 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Disciplines & sous-groupes ── -->
+<div id="mdisciplines" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:780px;width:100%;max-height:92vh;overflow-y:auto">
+    <h2>🎓 Disciplines & sous-groupes</h2>
+    <p style="font-size:.86em;color:var(--pencil);margin-bottom:8px;line-height:1.5">
+      Permet d'<strong>enseigner plusieurs disciplines à une même classe</strong> (ex. SVT + Option) ou de gérer des
+      <strong>classes recomposées</strong> (ex. groupe Bilingue 6ᵉ mélangeant des élèves de 6A et 6B).
+      Tant qu'aucune discipline n'est créée, le comportement de l'app est inchangé (tout reste dans la « Discipline principale »).
+    </p>
+
+    <div class="about-section">
+      <h3>🎓 Disciplines</h3>
+      <p style="margin:0 0 8px;font-size:.85em;color:var(--pencil)">Chaque éval pourra être étiquetée avec une discipline. Le filtre apparaîtra automatiquement dans les onglets Devoirs / Bilans dès qu'au moins une discipline existe.</p>
+      <div id="mdisc-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <button class="btn btn-p btn-sm" onclick="_disciplineAdd()">+ Ajouter une discipline</button>
+    </div>
+
+    <div class="about-section">
+      <h3>👥 Sous-groupes (classes recomposées)</h3>
+      <p style="margin:0 0 8px;font-size:.85em;color:var(--pencil)">Un sous-groupe est rattaché à une discipline et liste les élèves concernés (potentiellement <strong>inter-classes</strong>). Quand on associe un sous-groupe à une éval, le tableur n'affiche que ses membres.</p>
+      <div id="msg-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+      <button class="btn btn-p btn-sm" id="msg-add-btn" onclick="_subgroupAdd()">+ Ajouter un sous-groupe</button>
+    </div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('mdisciplines')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Export des notes (XLSX / ODS, un fichier par classe) ── -->
 <div id="mexport-notes" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:680px;width:100%">
@@ -5154,7 +5208,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T10:50:00Z';
+const APP_VERSION   = '2026-05-25T12:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5630,6 +5684,19 @@ function postLoadHook() {
   if (!S.movedHighlights) S.movedHighlights = {};
   // Conseil de classe : { classId: { sid: { periode: { F, E, AT, AC } } } }
   if (!S.conseilClasse) S.conseilClasse = {};
+  // Disciplines + sous-groupes (classes recomposées). Rétro-compat : si absents,
+  // tout reste implicitement en "Discipline principale" (ev.disciplineId == null).
+  if (!S.disciplines || typeof S.disciplines !== 'object') S.disciplines = {};
+  if (!S.subgroups   || typeof S.subgroups   !== 'object') S.subgroups   = {};
+  // Nettoyage léger des subgroups : assure structure cohérente
+  for (const sgId of Object.keys(S.subgroups)) {
+    const sg = S.subgroups[sgId];
+    if (!sg || typeof sg !== 'object') { delete S.subgroups[sgId]; continue; }
+    if (!Array.isArray(sg.members)) sg.members = [];
+    for (const m of sg.members) {
+      if (!Array.isArray(m.sids)) m.sids = [];
+    }
+  }
   // ── Volet ÉVALUATION (phase 0 : fondations) ──
   // S.competenceDomains  : 8 domaines fixes du socle commun (D1.1 → D5)
   // S.competences        : compétences personnalisables, chacune rattachée à un domainId
@@ -13985,6 +14052,8 @@ function _resetNukeConfirm() {
   S.evaluations = {};
   S.evalPrefs = {};
   S.evalCommentLibrary = { positive: [], negative: [] };
+  S.disciplines = {};
+  S.subgroups = {};
   S.cur = null;
   // Au prochain postLoadHook, migrateTabletPools() recréera les pools par défaut (CM1/CM2)
   // et migrateEvalDefaults() rechargera le référentiel C1-C8 + les domaines du socle.
@@ -25060,6 +25129,73 @@ function _seedDemoEvaluations() {
 
   // 3e A : volontairement aucune éval (état vide démontré dans l'UI)
 
+  // ── Disciplines & sous-groupes de démo ──
+  // Démontre les 3 cas d'usage :
+  //   - SVT Bilingue : 5 élèves de 6A + 5 de 6B (sous-groupe inter-classes)
+  //   - Option DP3   : 3 élèves de 5A + 3 de 5B (autre sous-groupe inter-classes)
+  if (!S.disciplines) S.disciplines = {};
+  if (!S.subgroups)   S.subgroups   = {};
+  S.disciplines['disc_svt_bil'] = { id: 'disc_svt_bil', nom: 'SVT Bilingue', abbr: 'SVT-B', color: '#7c3aed' };
+  S.disciplines['disc_opt_dp3'] = { id: 'disc_opt_dp3', nom: 'Option DP3',   abbr: 'DP3',   color: '#0891b2' };
+  const _cls6A = S.classes['6A'], _cls6B = S.classes['6B'], _cls5A = S.classes['5A'], _cls5B = S.classes['5B'];
+  const _take5 = (cls) => (cls && cls.eleves ? cls.eleves.slice(0, 5) : []);
+  const _take3 = (cls) => (cls && cls.eleves ? cls.eleves.slice(0, 3) : []);
+  S.subgroups['sg_bil_6e'] = {
+    id: 'sg_bil_6e', nom: 'Bilingue 6ᵉ', disciplineId: 'disc_svt_bil',
+    members: [
+      _cls6A ? { classId: '6A', sids: _take5(_cls6A) } : null,
+      _cls6B ? { classId: '6B', sids: _take5(_cls6B) } : null,
+    ].filter(Boolean),
+  };
+  S.subgroups['sg_dp3'] = {
+    id: 'sg_dp3', nom: 'Option DP3', disciplineId: 'disc_opt_dp3',
+    members: [
+      _cls5A ? { classId: '5A', sids: _take3(_cls5A) } : null,
+      _cls5B ? { classId: '5B', sids: _take3(_cls5B) } : null,
+    ].filter(Boolean),
+  };
+  // Éval Type A : SVT Bilingue 6A + 6B (sous-groupe inter-classes)
+  if (_cls6A && _cls6B) {
+    const evBilA = {
+      id: _id(), type: 'A',
+      classId: '6A', classIds: ['6A', '6B'],
+      disciplineId: 'disc_svt_bil', subgroupId: 'sg_bil_6e',
+      nomCourt: 'IE Bilingue', nomLong: 'Interrogation SVT — vocabulaire bilingue',
+      date: '2025-11-08', periode: 'S1',
+      coef: 1, noteMax: 20,
+      miniNotes: [
+        { id: _mnId(), label: 'Q1', max: 5 },
+        { id: _mnId(), label: 'Q2', max: 5 },
+        { id: _mnId(), label: 'Q3', max: 10 },
+      ],
+      notes: {},
+      createdAt: now - 150 * 86400000, updatedAt: now - 100 * 86400000,
+    };
+    const _bilSids = [..._take5(_cls6A), ..._take5(_cls6B)];
+    _seedNotes(evBilA, _bilSids, 9001, 0.75);
+    S.evaluations[evBilA.id] = evBilA;
+  }
+  // Éval Type B : Option DP3 5A + 5B (sous-groupe inter-classes)
+  if (_cls5A && _cls5B) {
+    const evDp3B = {
+      id: _id(), type: 'B',
+      classId: '5A', classIds: ['5A', '5B'],
+      disciplineId: 'disc_opt_dp3', subgroupId: 'sg_dp3',
+      nomCourt: 'Suivi DP3', nomLong: 'Découverte professionnelle — suivi compétences',
+      date: '2025-12-20', periode: 'S1',
+      coef: 1, noteMax: 20, weighting: 'perCompetence',
+      passations: [],
+      createdAt: now - 140 * 86400000, updatedAt: now - 50 * 86400000,
+    };
+    const _dp3Sids = [..._take3(_cls5A), ..._take3(_cls5B)];
+    const passDp1 = { id: _passId(), code: 'P1', date: '2025-10-15', competenceIds: compIds.slice(0, 2), niveaux: {} };
+    const passDp2 = { id: _passId(), code: 'P2', date: '2025-12-20', competenceIds: compIds.slice(0, 3), niveaux: {} };
+    _seedPassationLevels(passDp1, _dp3Sids, 9101);
+    _seedPassationLevels(passDp2, _dp3Sids, 9102);
+    evDp3B.passations.push(passDp1, passDp2);
+    S.evaluations[evDp3B.id] = evDp3B;
+  }
+
   // Enregistre un seatingHash pour chaque éval démo : permet au tooltip
   // "position au moment du devoir" de fonctionner. Hash basé sur la salle
   // active de chaque classe au moment du seed (cohérent avec ce que ferait
@@ -26257,6 +26393,8 @@ function renderEvalNotes() {
   // Reset la toolbar de tri (sera re-peuplée plus bas si une classe est sélectionnée)
   const _tbResetEv = document.getElementById('eval-sort-toolbar');
   if (_tbResetEv) _tbResetEv.innerHTML = '';
+  // Toolbar « filtre discipline » (cachée si aucune discipline)
+  _renderDisciplineFilterToolbar('notes');
 
   // Sélecteur de période — distingue "pas encore initialisé" de "Toutes" (vide explicite)
   const sel = document.getElementById('eval-period-filter');
@@ -26294,7 +26432,10 @@ function renderEvalNotes() {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir ses évaluations.</p>';
     return;
   }
-  const allEvs = _evalsForClass(cls.id, periode || null);
+  let allEvs = _evalsForClass(cls.id, periode || null);
+  // Filtre discipline (rétro-compat : si aucune discipline n'existe, filtre = 'all' donc no-op)
+  const _discF = _currentDisciplineFilter(cls.id);
+  if (_discF !== 'all') allEvs = allEvs.filter(e => _evalMatchesDisciplineFilter(e, _discF));
   if (allEvs.length === 0) {
     wrap.innerHTML = `<p style="color:var(--pencil);font-style:italic;padding:14px">Aucune évaluation pour <strong>${_esc(cls.nom)}</strong>${periode ? ' en ' + _esc(periode) : ''}. Clique sur <strong>+ Nouvelle évaluation</strong> pour commencer.</p>`;
     return;
@@ -26475,7 +26616,7 @@ function renderEvalNotes() {
     const rowTip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${ev.description ? '\n\n' + ev.description : ''}\n\nOuvrir la saisie (mode tableur) — boutons à droite pour réglages / export / suppression`;
     html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr(rowTip)}">
       <div style="flex:1">
-        <div>${typeBadge}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
+        <div>${typeBadge}${_disciplinePillHTML(ev.disciplineId)}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}${ev.subgroupId && S.subgroups?.[ev.subgroupId] ? ` <span style="font-size:.78em;color:var(--pencil);font-style:italic" title="Sous-groupe restreint : ${_escAttr(S.subgroups[ev.subgroupId].nom || '')}">👥 ${_esc(S.subgroups[ev.subgroupId].nom)}</span>` : ''}</div>
         <div style="font-size:.85em;color:var(--pencil);margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
           <span>📅 ${(() => { const d = _evalDateFor(ev, cls.id); return d ? _fmtDateFr(d) : '—'; })()}${_evalSlotIdFor(ev, cls.id) ? ' · ' + _esc(_evalSlotIdFor(ev, cls.id)) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
           · ${summaryInfo}
@@ -26522,6 +26663,10 @@ function openNewEvalModal() {
   document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
   document.getElementById('meval-new-coef').value = (S.evalPrefs?.defaultCoef ?? 1);
   document.getElementById('meval-new-granularity').value = '';
+  // Discipline (rétro-compat : si aucune discipline créée, le select est juste « — Principale — »)
+  const _discSelNew = document.getElementById('meval-new-discipline');
+  if (_discSelNew) _discSelNew.innerHTML = _disciplineSelectOptionsHTML('');
+  _evalRefreshSubgroupSelect('meval-new');
   // Type : déverrouillé, A coché par défaut
   document.getElementById('meval-new-type-lock').style.display = 'none';
   for (const r of document.querySelectorAll('input[name="meval-new-type"]')) {
@@ -26626,6 +26771,8 @@ function _evalNewOnClassChipToggle(checkbox) {
     if (checkbox.checked) lbl.classList.add('on'); else lbl.classList.remove('on');
   }
   _evalNewRenderClassRows();
+  // Sous-groupe : les classes cochées influent sur la liste des subgroups éligibles
+  try { _evalRefreshSubgroupSelect('meval-new'); } catch(_) {}
 }
 
 // Ligne "date + créneau" pour une classe cochée. La checkbox de sélection est
@@ -26862,6 +27009,17 @@ function _evalNewSave() {
   // Classes affectées (multi)
   evObj.classId = primaryCls.id;
   evObj.classIds = validIds.slice();
+  // Discipline + sous-groupe (champs optionnels, omis si vides pour rester rétro-compat)
+  const _discIdNew = document.getElementById('meval-new-discipline')?.value || '';
+  const _sgIdNew   = document.getElementById('meval-new-subgroup')?.value || '';
+  if (_discIdNew) evObj.disciplineId = _discIdNew; else delete evObj.disciplineId;
+  // Si l'utilisateur n'a pas explicitement choisi un subgroup mais qu'un seul matche, on le suggère
+  let _finalSgId = _sgIdNew;
+  if (_discIdNew && !_sgIdNew) {
+    const sugg = _suggestSubgroupForEval({ disciplineId: _discIdNew, classIds: validIds });
+    if (sugg) _finalSgId = sugg;
+  }
+  if (_finalSgId && S.subgroups?.[_finalSgId]) evObj.subgroupId = _finalSgId; else delete evObj.subgroupId;
   // Dates et créneaux per-classe (modèle canonique : pas de ev.date/ev.slotId)
   if (Object.keys(perClassDates).length > 0) evObj.dates = perClassDates;
   else delete evObj.dates;
@@ -26928,6 +27086,14 @@ function _evalOpenEditor(evalId) {
   _evalEditUpdateSlotOptions(ev.slotId || '');
   _evalEditRenderClasses(ev);
   _fillPeriodeSelect(document.getElementById('meval-edit-periode'), ev.periode);
+  // Discipline + sous-groupe
+  const _discSelEd = document.getElementById('meval-edit-discipline');
+  if (_discSelEd) _discSelEd.innerHTML = _disciplineSelectOptionsHTML(ev.disciplineId || '');
+  const _sgSelEd = document.getElementById('meval-edit-subgroup');
+  if (_sgSelEd) _sgSelEd.value = ev.subgroupId || '';
+  _evalRefreshSubgroupSelect('meval-edit');
+  // Re-applique la valeur après le refresh (qui aurait pu reset à '' si discipline absente)
+  if (_sgSelEd && ev.subgroupId && S.subgroups?.[ev.subgroupId]) _sgSelEd.value = ev.subgroupId;
   document.getElementById('meval-edit-notemax').value  = ev.noteMax  ?? 20;
   document.getElementById('meval-edit-coef').value     = ev.coef     ?? 1;
   // Granulométrie : '' = défaut global ; sinon valeur en string
@@ -27753,6 +27919,370 @@ function _competencePickerAlsoToggleAll(check) {
   _competencePickerRenderAlso();
 }
 
+// ═══════════════ Gestion des disciplines et sous-groupes ═══════════════
+const _DEFAULT_DISC_COLORS = ['#0ea5e9','#16a34a','#f59e0b','#dc2626','#7c3aed','#db2777','#0891b2','#65a30d','#ea580c','#4338ca'];
+
+function _newDisciplineId()  { return 'disc_' + Math.random().toString(36).slice(2, 9); }
+function _newSubgroupId()    { return 'sg_'   + Math.random().toString(36).slice(2, 9); }
+
+function openDisciplinesModal() {
+  if (!S.disciplines) S.disciplines = {};
+  if (!S.subgroups)   S.subgroups   = {};
+  _renderDisciplinesList();
+  _renderSubgroupsList();
+  openMod('mdisciplines');
+}
+
+function _renderDisciplinesList() {
+  const wrap = document.getElementById('mdisc-list');
+  if (!wrap) return;
+  const list = Object.values(S.disciplines || {}).sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
+  if (list.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px;font-size:.86em">Aucune discipline créée. Toutes les évals sont actuellement rattachées à la « Discipline principale ».</p>';
+    return;
+  }
+  let html = '';
+  for (const d of list) {
+    const usedByEvs = Object.values(S.evaluations || {}).filter(e => e.disciplineId === d.id).length;
+    const usedBySgs = Object.values(S.subgroups   || {}).filter(s => s.disciplineId === d.id).length;
+    const txt = _contrastTextColor(d.color || '#6b7280');
+    html += `<div class="disc-row" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--paper-warm);border-left:3px solid ${_esc(d.color || '#6b7280')};border-radius:3px">
+      <span style="display:inline-block;padding:2px 8px;background:${_esc(d.color || '#6b7280')};color:${txt};border-radius:8px;font-family:var(--font-mono);font-size:.78em;min-width:48px;text-align:center">${_esc(d.abbr || '?')}</span>
+      <input type="text" value="${_escAttr(d.nom || '')}" placeholder="Nom de la discipline" oninput="_disciplineUpdate('${_esc(d.id)}','nom',this.value)" style="flex:1;padding:3px 6px;font-size:.92em">
+      <input type="text" value="${_escAttr(d.abbr || '')}" placeholder="Abbr." maxlength="8" oninput="_disciplineUpdate('${_esc(d.id)}','abbr',this.value)" style="width:70px;padding:3px 6px;font-family:var(--font-mono);font-size:.88em;text-align:center">
+      <input type="color" value="${_escAttr(d.color || '#6b7280')}" oninput="_disciplineUpdate('${_esc(d.id)}','color',this.value)" style="width:38px;height:28px;padding:0;border:1px solid var(--rule-line);cursor:pointer" title="Couleur d'affichage">
+      <span style="font-size:.78em;color:var(--pencil);min-width:70px;text-align:right" title="${usedByEvs} éval(s), ${usedBySgs} sous-groupe(s)">${usedByEvs}🅔 ${usedBySgs}👥</span>
+      <button class="btn btn-d btn-sm" onclick="_disciplineDelete('${_esc(d.id)}')" title="Supprimer cette discipline">✕</button>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function _disciplineAdd() {
+  pushUndo();
+  const n = Object.keys(S.disciplines || {}).length;
+  const color = _DEFAULT_DISC_COLORS[n % _DEFAULT_DISC_COLORS.length];
+  const id = _newDisciplineId();
+  S.disciplines[id] = { id, nom: 'Nouvelle discipline', abbr: 'NEW', color };
+  save();
+  _renderDisciplinesList();
+  _renderSubgroupsList();
+  _refreshDisciplineSelectors();
+}
+
+function _disciplineUpdate(id, field, value) {
+  const d = S.disciplines?.[id];
+  if (!d) return;
+  if (d[field] === value) return;
+  pushUndo();
+  d[field] = value;
+  save();
+  // Maj visuelle bordure / pastille — re-render léger
+  if (field === 'color' || field === 'abbr' || field === 'nom') {
+    _renderDisciplinesList();
+    _renderSubgroupsList();
+    _refreshDisciplineSelectors();
+    // Si onglet eval ouvert, rafraîchir les pastilles
+    try {
+      if (document.getElementById('tab-notes')?.classList?.contains('on')) renderEvalNotes();
+      if (document.getElementById('tab-bilan')?.classList?.contains('on')) renderBilanTab();
+      if (document.getElementById('tab-comp')?.classList?.contains('on')) renderCompetencesTab();
+    } catch (_) {}
+  }
+}
+
+function _disciplineDelete(id) {
+  const d = S.disciplines?.[id];
+  if (!d) return;
+  const evsUsing = Object.values(S.evaluations || {}).filter(e => e.disciplineId === id);
+  const sgsUsing = Object.values(S.subgroups   || {}).filter(s => s.disciplineId === id);
+  let msg = `Supprimer la discipline « ${d.nom || d.id} » ?`;
+  if (evsUsing.length > 0 || sgsUsing.length > 0) {
+    msg += '\n\n⚠️ Conséquences :';
+    if (evsUsing.length > 0) msg += `\n• ${evsUsing.length} évaluation(s) basculeront en « Discipline principale »`;
+    if (sgsUsing.length > 0) msg += `\n• ${sgsUsing.length} sous-groupe(s) seront SUPPRIMÉS (et leurs évals associées perdront leur restriction de roster)`;
+    msg += '\n\nContinuer ?';
+  }
+  if (!confirm(msg)) return;
+  pushUndo();
+  // Évaluations : disciplineId → null
+  for (const ev of evsUsing) {
+    delete ev.disciplineId;
+  }
+  // Subgroups : cascade supprimés ; pour chaque éval qui les référence, retirer subgroupId
+  const deletedSgIds = sgsUsing.map(s => s.id);
+  for (const sg of sgsUsing) {
+    delete S.subgroups[sg.id];
+  }
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev.subgroupId && deletedSgIds.includes(ev.subgroupId)) {
+      delete ev.subgroupId;
+    }
+  }
+  delete S.disciplines[id];
+  save();
+  _renderDisciplinesList();
+  _renderSubgroupsList();
+  _refreshDisciplineSelectors();
+  toast(`✓ Discipline « ${d.nom || d.id} » supprimée`);
+}
+
+function _renderSubgroupsList() {
+  const wrap = document.getElementById('msg-list');
+  if (!wrap) return;
+  const list = Object.values(S.subgroups || {}).sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
+  const hasDisc = Object.keys(S.disciplines || {}).length > 0;
+  const btn = document.getElementById('msg-add-btn');
+  if (btn) {
+    btn.disabled = !hasDisc;
+    btn.title = hasDisc ? '' : 'Créez d\'abord au moins une discipline ci-dessus';
+    btn.style.opacity = hasDisc ? '' : '0.5';
+  }
+  if (list.length === 0) {
+    wrap.innerHTML = hasDisc
+      ? '<p style="color:var(--pencil);font-style:italic;padding:6px 4px;font-size:.86em">Aucun sous-groupe. Cliquez sur « + Ajouter un sous-groupe » pour créer une classe recomposée.</p>'
+      : '<p style="color:var(--pencil);font-style:italic;padding:6px 4px;font-size:.86em">Créez d\'abord une discipline.</p>';
+    return;
+  }
+  let html = '';
+  for (const sg of list) {
+    const disc = S.disciplines?.[sg.disciplineId];
+    const cTotal = (sg.members || []).reduce((s, m) => s + (Array.isArray(m.sids) ? m.sids.length : 0), 0);
+    const nbCls = (sg.members || []).filter(m => Array.isArray(m.sids) && m.sids.length > 0).length;
+    const dColor = disc?.color || '#6b7280';
+    const dTxt = _contrastTextColor(dColor);
+    let discOpts = '<option value="">— Discipline —</option>';
+    for (const d of Object.values(S.disciplines || {}).sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr'))) {
+      discOpts += `<option value="${_escAttr(d.id)}"${d.id === sg.disciplineId ? ' selected' : ''}>${_esc(d.nom || d.id)}</option>`;
+    }
+    // Pour chaque classe avec des élèves : chips d'élèves cliquables
+    let membersHtml = '';
+    const allCls = Object.values(S.classes || {}).sort((a,b)=>(a.niveau||999)-(b.niveau||999)||(a.nom||'').localeCompare(b.nom||'','fr'));
+    for (const c of allCls) {
+      if (!Array.isArray(c.eleves) || c.eleves.length === 0) continue;
+      const memberMap = sg.members || [];
+      const memberEntry = memberMap.find(m => m.classId === c.id);
+      const checkedSids = new Set(memberEntry?.sids || []);
+      const sortedEleves = c.eleves.slice().sort((a, b) => {
+        const sa = S.eleves[a], sb = S.eleves[b];
+        const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
+        const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
+        return ka.localeCompare(kb, 'fr');
+      });
+      const checkedN = sortedEleves.filter(sid => checkedSids.has(sid)).length;
+      let chipsHtml = '';
+      for (const sid of sortedEleves) {
+        const stu = S.eleves[sid];
+        if (!stu) continue;
+        const on = checkedSids.has(sid);
+        const label = `${(stu.prenom || '').trim()} ${(stu.nom || '').trim().toUpperCase()}`.trim();
+        chipsHtml += `<span class="sg-stu-chip${on ? ' on' : ''}" onclick="_subgroupToggleStu('${_esc(sg.id)}','${_esc(c.id)}','${_esc(sid)}')" style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:.82em;cursor:pointer;margin:1px;background:${on ? 'var(--ink-blue)' : 'var(--paper-deep)'};color:${on ? '#fff' : 'var(--ink-deep)'};border:1px solid ${on ? 'var(--ink-blue)' : 'var(--rule-line)'}">${_esc(label)}</span>`;
+      }
+      membersHtml += `<div style="margin-top:6px;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line-soft);border-radius:3px">
+        <div style="font-size:.82em;color:var(--pencil);margin-bottom:4px"><strong>${_esc(c.nom)}</strong> — ${checkedN}/${sortedEleves.length} élève(s)
+          <button class="btn btn-g btn-sm" onclick="_subgroupBulkSelect('${_esc(sg.id)}','${_esc(c.id)}',true)" style="padding:0 6px;font-size:.78em;margin-left:6px">Tout</button>
+          <button class="btn btn-g btn-sm" onclick="_subgroupBulkSelect('${_esc(sg.id)}','${_esc(c.id)}',false)" style="padding:0 6px;font-size:.78em">Rien</button>
+        </div>
+        <div style="line-height:1.7">${chipsHtml}</div>
+      </div>`;
+    }
+    html += `<div class="sg-card" style="padding:8px 10px;background:var(--paper-warm);border-left:3px solid ${_esc(dColor)};border-radius:3px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="display:inline-block;padding:2px 8px;background:${_esc(dColor)};color:${dTxt};border-radius:8px;font-family:var(--font-mono);font-size:.78em" title="${_escAttr(disc?.nom || '')}">${_esc(disc?.abbr || '?')}</span>
+        <input type="text" value="${_escAttr(sg.nom || '')}" placeholder="Nom du sous-groupe" oninput="_subgroupUpdate('${_esc(sg.id)}','nom',this.value)" style="flex:1;min-width:160px;padding:3px 6px;font-size:.92em">
+        <select onchange="_subgroupUpdate('${_esc(sg.id)}','disciplineId',this.value)" style="padding:3px 6px;font-size:.88em">${discOpts}</select>
+        <span style="font-size:.78em;color:var(--pencil)" title="${nbCls} classe(s), ${cTotal} élève(s)">${cTotal} él. / ${nbCls} cl.</span>
+        <button class="btn btn-d btn-sm" onclick="_subgroupDelete('${_esc(sg.id)}')" title="Supprimer ce sous-groupe">✕</button>
+      </div>
+      ${membersHtml || '<p style="font-size:.82em;color:var(--pencil);font-style:italic;margin:6px 0 0">Aucune classe disponible.</p>'}
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function _subgroupAdd() {
+  const discIds = Object.keys(S.disciplines || {});
+  if (discIds.length === 0) { toast('⚠ Créez d\'abord une discipline', 'warn'); return; }
+  pushUndo();
+  const id = _newSubgroupId();
+  S.subgroups[id] = { id, nom: 'Nouveau sous-groupe', disciplineId: discIds[0], members: [] };
+  save();
+  _renderSubgroupsList();
+  _refreshDisciplineSelectors();
+}
+
+function _subgroupUpdate(id, field, value) {
+  const sg = S.subgroups?.[id];
+  if (!sg) return;
+  if (sg[field] === value) return;
+  pushUndo();
+  sg[field] = value;
+  save();
+  _renderSubgroupsList();
+  _refreshDisciplineSelectors();
+}
+
+function _subgroupDelete(id) {
+  const sg = S.subgroups?.[id];
+  if (!sg) return;
+  const evsUsing = Object.values(S.evaluations || {}).filter(e => e.subgroupId === id);
+  let msg = `Supprimer le sous-groupe « ${sg.nom || sg.id} » ?`;
+  if (evsUsing.length > 0) msg += `\n\n${evsUsing.length} évaluation(s) perdront leur restriction de roster (tableur ré-élargi à toute la classe).`;
+  if (!confirm(msg)) return;
+  pushUndo();
+  for (const ev of evsUsing) delete ev.subgroupId;
+  delete S.subgroups[id];
+  save();
+  _renderSubgroupsList();
+  _refreshDisciplineSelectors();
+  toast(`✓ Sous-groupe supprimé`);
+}
+
+function _subgroupToggleStu(sgId, classId, sid) {
+  const sg = S.subgroups?.[sgId];
+  if (!sg) return;
+  pushUndo();
+  if (!Array.isArray(sg.members)) sg.members = [];
+  let entry = sg.members.find(m => m.classId === classId);
+  if (!entry) {
+    entry = { classId, sids: [] };
+    sg.members.push(entry);
+  }
+  if (!Array.isArray(entry.sids)) entry.sids = [];
+  const idx = entry.sids.indexOf(sid);
+  if (idx >= 0) entry.sids.splice(idx, 1);
+  else entry.sids.push(sid);
+  // Nettoie l'entrée vide
+  if (entry.sids.length === 0) {
+    sg.members = sg.members.filter(m => m !== entry);
+  }
+  save();
+  _renderSubgroupsList();
+}
+
+function _subgroupBulkSelect(sgId, classId, all) {
+  const sg = S.subgroups?.[sgId];
+  const cls = S.classes?.[classId];
+  if (!sg || !cls) return;
+  pushUndo();
+  if (!Array.isArray(sg.members)) sg.members = [];
+  sg.members = sg.members.filter(m => m.classId !== classId);
+  if (all) {
+    sg.members.push({ classId, sids: (cls.eleves || []).slice() });
+  }
+  save();
+  _renderSubgroupsList();
+}
+
+// Met à jour les sélecteurs de discipline déjà rendus (toolbar 3 onglets +
+// modales eval-new / eval-edit si ouvertes).
+function _refreshDisciplineSelectors() {
+  // Toolbar des 3 onglets
+  for (const tabKey of ['notes', 'bilan', 'comp']) {
+    _renderDisciplineFilterToolbar(tabKey);
+  }
+  // Modales eval-new / eval-edit : re-remplit les selects discipline si présents
+  for (const prefix of ['meval-new', 'meval-edit']) {
+    const sel = document.getElementById(prefix + '-discipline');
+    if (sel) {
+      const cur = sel.value;
+      sel.innerHTML = _disciplineSelectOptionsHTML(cur);
+    }
+    const sgSel = document.getElementById(prefix + '-subgroup');
+    if (sgSel) {
+      // Régénère via l'helper dédié (a besoin du discipline courant + classIds)
+      _evalRefreshSubgroupSelect(prefix);
+    }
+  }
+}
+
+// HTML d'options pour un <select> de discipline (utilisé dans modales).
+// Première option = « Discipline principale » (valeur '__principal__' n'est PAS
+// utilisée ici — on stocke '' qui correspond à null/undefined).
+function _disciplineSelectOptionsHTML(currentId) {
+  let html = `<option value=""${!currentId ? ' selected' : ''}>— Principale —</option>`;
+  const list = Object.values(S.disciplines || {}).sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr'));
+  for (const d of list) {
+    html += `<option value="${_escAttr(d.id)}"${d.id === currentId ? ' selected' : ''}>${_esc(d.nom || d.id)}</option>`;
+  }
+  return html;
+}
+
+// Rendu de la toolbar « filtre discipline » dans l'un des 3 onglets eval.
+// tabKey : 'notes' | 'bilan' | 'comp'. La toolbar est cachée tant qu'aucune
+// discipline n'a été créée (rétrocompat zéro friction).
+function _renderDisciplineFilterToolbar(tabKey) {
+  const containerId = 'discipline-filter-' + tabKey;
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const hasAny = Object.keys(S.disciplines || {}).length > 0;
+  if (!hasAny) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  const cls = getCls();
+  const cur = cls ? _currentDisciplineFilter(cls.id) : 'all';
+  let opts = `<option value="all"${cur === 'all' ? ' selected' : ''}>🎓 Toutes</option>
+    <option value="__principal__"${cur === '__principal__' ? ' selected' : ''}>— Principale —</option>`;
+  for (const d of Object.values(S.disciplines || {}).sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr'))) {
+    opts += `<option value="${_escAttr(d.id)}"${cur === d.id ? ' selected' : ''}>${_esc(d.nom || d.id)}</option>`;
+  }
+  el.innerHTML = `<label style="font-size:.85em;color:var(--pencil)">Discipline :</label>
+    <select onchange="_setDisciplineFilter(getCls()?.id, this.value)" title="Filtrer les évaluations par discipline" style="padding:4px 8px;font-size:.9em">${opts}</select>`;
+}
+
+// Re-rendu du select sous-groupe dans une modale (eval-new ou eval-edit) en
+// fonction de la discipline courante et des classes cochées.
+function _evalRefreshSubgroupSelect(prefix) {
+  const sel = document.getElementById(prefix + '-subgroup');
+  const wrap = document.getElementById(prefix + '-subgroup-wrap');
+  if (!sel || !wrap) return;
+  const discSel = document.getElementById(prefix + '-discipline');
+  const discId = discSel?.value || '';
+  let classIds = [];
+  let curValue = sel.value;
+  if (prefix === 'meval-new') {
+    classIds = _evalNewGetCheckedClassIds ? _evalNewGetCheckedClassIds() : [];
+  } else if (prefix === 'meval-edit') {
+    const evId = document.getElementById('meval-edit-id')?.value;
+    const ev = S.evaluations?.[evId];
+    if (ev) classIds = _evalClassIds(ev);
+    if (ev && !curValue) curValue = ev.subgroupId || '';
+  }
+  // Liste des subgroups éligibles : même discipline + au moins un membre dans une des classes
+  const candidates = Object.values(S.subgroups || {}).filter(sg => {
+    if (!discId) return false;
+    if (sg.disciplineId !== discId) return false;
+    if (classIds.length === 0) return true; // permissif
+    const cidSet = new Set(classIds);
+    return (sg.members || []).some(m => cidSet.has(m.classId) && Array.isArray(m.sids) && m.sids.length > 0);
+  });
+  if (!discId || candidates.length === 0) {
+    wrap.style.display = 'none';
+    sel.innerHTML = '<option value="">— Tous les élèves —</option>';
+    return;
+  }
+  wrap.style.display = '';
+  let html = `<option value=""${!curValue ? ' selected' : ''}>— Tous les élèves des classes —</option>`;
+  for (const sg of candidates.sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr'))) {
+    const n = _subgroupAllSids(sg).length;
+    html += `<option value="${_escAttr(sg.id)}"${sg.id === curValue ? ' selected' : ''}>${_esc(sg.nom || sg.id)} (${n} él.)</option>`;
+  }
+  sel.innerHTML = html;
+}
+
+// Ouvre la modale Disciplines depuis la modale eval-new ou eval-edit, et
+// programme un retour automatique.
+function _openDisciplinesFromEval(returnModalId) {
+  if (returnModalId && typeof _modalReturnTo !== 'undefined') {
+    _modalReturnTo['mdisciplines'] = () => {
+      // refresh + ré-ouvre la modale parente
+      try { _refreshDisciplineSelectors(); } catch (_) {}
+      try { openMod(returnModalId); } catch (_) {}
+    };
+  }
+  closeMod2(returnModalId);
+  setTimeout(() => openDisciplinesModal(), 80);
+}
+
 // ═══════════════ Gestion des compétences (CRUD) ═══════════════
 // Modale ⚙ Gérer les compétences depuis l'onglet 🎯 Bilan par compétences.
 // CRUD sur S.competences = { id: {id,code,name,domainId} } avec domaine rattaché
@@ -27988,6 +28518,11 @@ function _evalEditSave() {
   const slotId = document.getElementById('meval-edit-slot')?.value || '';
   if (slotId) ev.slotId = slotId; else delete ev.slotId;
   ev.periode  = document.getElementById('meval-edit-periode').value;
+  // Discipline + sous-groupe
+  const _discIdEd = document.getElementById('meval-edit-discipline')?.value || '';
+  const _sgIdEd   = document.getElementById('meval-edit-subgroup')?.value || '';
+  if (_discIdEd) ev.disciplineId = _discIdEd; else delete ev.disciplineId;
+  if (_sgIdEd && S.subgroups?.[_sgIdEd]) ev.subgroupId = _sgIdEd; else delete ev.subgroupId;
   ev.noteMax  = noteMax;
   ev.coef     = coef;
   // Granulométrie de la note finale ('' = utiliser le défaut global)
@@ -28066,7 +28601,11 @@ function _evalOpenSaisie() {
   }
   // Trie alphabétique nom-prénom (défaut ENT). Inclut les élèves présents à AU
   // MOINS UNE date de mini-note (A/C) ou passation (B) — cohérent avec le tableur.
-  const sids = cls.eleves.slice()
+  // Si l'éval a un subgroupId, restreint au roster.
+  const _saisieBase = (ev.subgroupId && S.subgroups?.[ev.subgroupId])
+    ? _evalEffectiveSidsForClass(ev, cls.id)
+    : cls.eleves.slice();
+  const sids = _saisieBase
     .filter(sid => _stuActiveOnAnyEvalRef(S.eleves[sid], ev, cls.id))
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
@@ -28512,7 +29051,18 @@ function _evalOpenTableur(forcedId) {
   } else {
     delete document.getElementById('meval-tableur').dataset.passId;
   }
-  document.getElementById('meval-tableur-title').textContent = `${ev.type === 'B' ? '🎯' : '📊'} ${ev.nomCourt} — saisie tableur`;
+  // Titre tableur : icône type + nom court. Si discipline, ajoute pastille colorée (HTML).
+  const _tTitle = document.getElementById('meval-tableur-title');
+  if (_tTitle) {
+    const _baseTxt = `${ev.type === 'B' ? '🎯' : '📊'} ${ev.nomCourt} — saisie tableur`;
+    const _discHTML = (ev.disciplineId && S.disciplines?.[ev.disciplineId])
+      ? ` <span style="display:inline-block;font-family:var(--font-mono);font-size:.65em;padding:2px 7px;border-radius:8px;background:${_esc(_disciplineColor(ev.disciplineId))};color:${_contrastTextColor(_disciplineColor(ev.disciplineId))};vertical-align:middle;margin-left:6px" title="${_escAttr(_disciplineLabel(ev.disciplineId))}">${_esc(_disciplineAbbr(ev.disciplineId))}</span>`
+      : '';
+    const _sgHTML = (ev.subgroupId && S.subgroups?.[ev.subgroupId])
+      ? ` <span style="font-size:.7em;color:var(--pencil);font-style:italic" title="Sous-groupe restreint">👥 ${_esc(S.subgroups[ev.subgroupId].nom || '')}</span>`
+      : '';
+    _tTitle.innerHTML = _esc(_baseTxt) + _discHTML + _sgHTML;
+  }
   // Classe active initiale : classe courante si elle fait partie de l'éval, sinon primaire
   const initCls = (getCls() && _evalIncludesClass(ev, getCls().id)) ? getCls() : S.classes?.[ev.classId];
   if (initCls) document.getElementById('meval-tableur').dataset.classid = initCls.id;
@@ -28708,7 +29258,11 @@ function _evalTableurSortedSids(cls) {
     const ordered = _sidsOrderedByPattern(cls, patternId, snapSeating);
     if (ordered) return ordered.filter(_activeFilter);
   }
-  const sids = (cls.eleves || []).slice().filter(_activeFilter);
+  // Restriction roster si l'éval a un subgroupId : on intersecte avec ses membres pour cette classe.
+  const baseSids = (_ev && _ev.subgroupId && S.subgroups?.[_ev.subgroupId])
+    ? _evalEffectiveSidsForClass(_ev, cls.id)
+    : (cls.eleves || []).slice();
+  const sids = baseSids.filter(_activeFilter);
   if (mode === 'prenom-nom') {
     sids.sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
@@ -29922,9 +30476,13 @@ let _bilanXState = { periode: '', selectedEvalId: null };
 // Renvoie toutes les évaluations comptées éligibles pour la période donnée
 // (toutes classes confondues). Triées par date asc puis nomCourt.
 function _bilanCollectEligibleEvals(periode) {
+  // Filtre discipline si une classe est active (rétrocompat : si pas de discipline créée → no-op)
+  const cls = getCls();
+  const discF = cls ? _currentDisciplineFilter(cls.id) : 'all';
   const evs = Object.values(S.evaluations || {})
     .filter(e => e.countsForMean !== false)
-    .filter(e => !periode || e.periode === periode);
+    .filter(e => !periode || e.periode === periode)
+    .filter(e => _evalMatchesDisciplineFilter(e, discF));
   evs.sort((a, b) => {
     const da = _evalDateFor(a) || '';
     const db = _evalDateFor(b) || '';
@@ -32203,6 +32761,117 @@ function _evalTableurCloseHook() {
 
 // ═══════════════ TYPE B — Passations (compétences au fil de l'eau) ═══════════════
 
+// ── Disciplines et sous-groupes (classes recomposées) — helpers ──
+// Modèle :
+//   S.disciplines = { [id]: { id, nom, abbr, color } }
+//   S.subgroups   = { [id]: { id, nom, disciplineId, members:[{classId,sids:[]},...] } }
+//   ev.disciplineId = id | null   // null = "Discipline principale" (legacy)
+//   ev.subgroupId   = id | null   // null = pas de restriction de roster
+function _disciplineLabel(disciplineId) {
+  if (!disciplineId) return 'Discipline principale';
+  const d = S.disciplines?.[disciplineId];
+  return d ? (d.nom || d.id) : 'Discipline principale';
+}
+function _disciplineColor(disciplineId) {
+  if (!disciplineId) return '#6b7280'; // gris neutre
+  const d = S.disciplines?.[disciplineId];
+  return (d && d.color) ? d.color : '#6b7280';
+}
+function _disciplineAbbr(disciplineId) {
+  if (!disciplineId) return '—';
+  const d = S.disciplines?.[disciplineId];
+  return d ? (d.abbr || d.nom || '?') : '—';
+}
+function _evalMatchesDisciplineFilter(ev, filterId) {
+  if (!filterId || filterId === 'all') return true;
+  if (filterId === '__principal__') return !ev.disciplineId;
+  return ev.disciplineId === filterId;
+}
+function _subgroupSidsForClass(subgroup, classId) {
+  if (!subgroup || !Array.isArray(subgroup.members)) return [];
+  for (const m of subgroup.members) {
+    if (m.classId === classId) return Array.isArray(m.sids) ? m.sids.slice() : [];
+  }
+  return [];
+}
+function _subgroupAllSids(subgroup) {
+  if (!subgroup || !Array.isArray(subgroup.members)) return [];
+  const out = [];
+  for (const m of subgroup.members) {
+    if (Array.isArray(m.sids)) out.push(...m.sids);
+  }
+  return out;
+}
+function _evalEffectiveSidsForClass(ev, classId) {
+  const cls = S.classes?.[classId];
+  if (!cls) return [];
+  if (ev?.subgroupId && S.subgroups?.[ev.subgroupId]) {
+    const sg = S.subgroups[ev.subgroupId];
+    const sgSids = new Set(_subgroupSidsForClass(sg, classId));
+    return (cls.eleves || []).filter(sid => sgSids.has(sid));
+  }
+  return (cls.eleves || []).slice();
+}
+// Pré-suggère le sous-groupe à coller à une éval : un seul subgroup qui matche
+// (même discipline + au moins un membre dans une des classIds) → renvoie son id.
+function _suggestSubgroupForEval(ev) {
+  if (!ev?.disciplineId) return null;
+  const classIds = new Set(_evalClassIds(ev));
+  const matches = [];
+  for (const sg of Object.values(S.subgroups || {})) {
+    if (sg.disciplineId !== ev.disciplineId) continue;
+    const touches = (sg.members || []).some(m => classIds.has(m.classId) && Array.isArray(m.sids) && m.sids.length > 0);
+    if (touches) matches.push(sg.id);
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+// Filtre actif (par classe), persisté dans localStorage en JSON {classId: filterId}.
+// Valeurs possibles : 'all' (défaut), '__principal__', ou un disciplineId.
+function _currentDisciplineFilter(classId) {
+  if (!classId) return 'all';
+  try {
+    const raw = localStorage.getItem('planClasse_disciplineFilter');
+    if (!raw) return 'all';
+    const map = JSON.parse(raw) || {};
+    const v = map[classId];
+    if (!v) return 'all';
+    if (v === 'all' || v === '__principal__') return v;
+    return S.disciplines?.[v] ? v : 'all';
+  } catch (_) { return 'all'; }
+}
+function _setDisciplineFilter(classId, filterId) {
+  if (!classId) return;
+  let map = {};
+  try {
+    const raw = localStorage.getItem('planClasse_disciplineFilter');
+    if (raw) map = JSON.parse(raw) || {};
+  } catch (_) {}
+  map[classId] = filterId || 'all';
+  try { localStorage.setItem('planClasse_disciplineFilter', JSON.stringify(map)); } catch (_) {}
+  // Re-render onglets affectés
+  try {
+    if (document.getElementById('tab-notes')?.classList?.contains('on')) renderEvalNotes();
+    if (document.getElementById('tab-bilan')?.classList?.contains('on')) renderBilanTab();
+    if (document.getElementById('tab-comp')?.classList?.contains('on')) renderCompetencesTab();
+  } catch (_) {}
+}
+// Rendu d'une pastille discipline (HTML) — renvoie '' si pas de discipline ET aucune
+// discipline n'existe (rétrocompat zéro friction). Si l'éval est en "principale"
+// mais qu'au moins une discipline existe, on affiche un petit tag "Principale".
+function _disciplinePillHTML(disciplineId, opts) {
+  opts = opts || {};
+  const hasAny = S.disciplines && Object.keys(S.disciplines).length > 0;
+  if (!disciplineId && !hasAny) return '';
+  if (!disciplineId) {
+    return `<span class="disc-pill" style="display:inline-block;font-family:var(--font-mono);font-size:.72em;padding:1px 6px;border-radius:8px;background:#e5e7eb;color:#374151;border:1px solid #cbd5e1;margin-right:4px;vertical-align:middle" title="Discipline principale">PRINC.</span>`;
+  }
+  const c = _disciplineColor(disciplineId);
+  const txt = _contrastTextColor ? _contrastTextColor(c) : '#fff';
+  const label = _disciplineAbbr(disciplineId);
+  const title = _disciplineLabel(disciplineId);
+  return `<span class="disc-pill" style="display:inline-block;font-family:var(--font-mono);font-size:.72em;padding:1px 6px;border-radius:8px;background:${c};color:${txt};margin-right:4px;vertical-align:middle" title="${_escAttr ? _escAttr(title) : title}">${_esc(label)}</span>`;
+}
+
 // ── Multi-classes pour une éval (ev.classIds) — helpers de compat ──
 // Une éval peut être partagée par plusieurs classes du même niveau.
 // Modèle :
@@ -33437,14 +34106,16 @@ function _computeStudentFacultativeCounted(classId, sid, periode) {
 
 // Moyenne /20 d'un élève sur une période donnée, pondérée par les coefficients
 // des évaluations. Tient compte de ev.countsForMean et ev.facultative.
-function _computeStudentMeanForPeriod(classId, sid, periode) {
+function _computeStudentMeanForPeriod(classId, sid, periode, disciplineFilter) {
   // Inclut aussi les évals "orphelines" (non attachées à cette classe) où l'élève
   // a une saisie — cas d'un élève transféré depuis une autre classe en cours d'année :
   // ses notes de la classe d'origine doivent rentrer dans sa moyenne actuelle.
+  const _df = disciplineFilter || 'all';
   const evs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, classId) || _studentHasAnyDataInEval(e, sid))
     .filter(e => !periode || e.periode === periode)
-    .filter(e => e.countsForMean !== false);
+    .filter(e => e.countsForMean !== false)
+    .filter(e => _evalMatchesDisciplineFilter(e, _df));
   if (evs.length === 0) return null;
   // 1ère passe : sépare facultatives des obligatoires
   const obligatoires = evs.filter(e => !e.facultative?.active);
@@ -33526,6 +34197,7 @@ function renderBilanTab() {
   // Reset la toolbar de tri en haut (sera re-peuplée plus bas si une classe est sélectionnée)
   const _tbReset = document.getElementById('bilan-sort-toolbar');
   if (_tbReset) _tbReset.innerHTML = '';
+  _renderDisciplineFilterToolbar('bilan');
   const sel = document.getElementById('bilan-period-filter');
   if (sel) {
     // Restaure la période persistée (synchronisée avec l'onglet Bilan par compétences).
@@ -33648,10 +34320,12 @@ function renderBilanTab() {
   };
   const _cmpB = _cmpsB[sortMode] || _cmpsB.date;
   // 1) Évals attachées à la classe courante (comportement historique)
+  const _bilanDiscF = _currentDisciplineFilter(cls.id);
   const ownEvs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, cls.id))
     .filter(e => !periode || e.periode === periode)
-    .filter(e => e.countsForMean !== false);
+    .filter(e => e.countsForMean !== false)
+    .filter(e => _evalMatchesDisciplineFilter(e, _bilanDiscF));
   // 2) Évals "orphelines" : non attachées à cette classe mais où ≥ 1 élève affiché
   //    a une saisie. Cas d'un élève transféré qui amène ses notes de la classe précédente.
   //    Toggle "🔗 Évals d'autres classes" pour masquer si besoin (défaut : affichées).
@@ -33663,6 +34337,7 @@ function renderBilanTab() {
       if (_ownIds.has(ev.id)) continue;
       if (periode && ev.periode !== periode) continue;
       if (ev.countsForMean === false) continue;
+      if (!_evalMatchesDisciplineFilter(ev, _bilanDiscF)) continue;
       if (sids.some(sid => _studentHasAnyDataInEval(ev, sid))) orphanEvs.push(ev);
     }
   }
@@ -33693,7 +34368,7 @@ function renderBilanTab() {
   const synthData = synthPeriodes.map(perCode => {
     const studentMoy = new Map();
     for (const sid of sids) {
-      const m = _computeStudentMeanForPeriod(cls.id, sid, perCode);
+      const m = _computeStudentMeanForPeriod(cls.id, sid, perCode, _bilanDiscF);
       if (m != null) studentMoy.set(sid, m);
     }
     const ranking = [...studentMoy.entries()].sort((a, b) => b[1] - a[1]);
@@ -33801,6 +34476,11 @@ function renderBilanTab() {
     if (ev.description) tip += `\n\n${ev.description}`;
     // Pastille type d'éval, cohérente avec la liste des Devoirs (eval-type-badge)
     const typePill = `<span class="eval-type-badge eval-type-${ev.type || 'A'}" style="font-size:.62em;padding:1px 5px;line-height:1.2;border-radius:8px">${ev.type || '?'}</span>`;
+    // Pastille discipline (cachée si pas de discipline créée)
+    const discPill = (ev.disciplineId && S.disciplines?.[ev.disciplineId])
+      ? `<span style="display:inline-block;font-family:var(--font-mono);font-size:.58em;padding:0px 4px;border-radius:6px;background:${_esc(_disciplineColor(ev.disciplineId))};color:${_contrastTextColor(_disciplineColor(ev.disciplineId))};line-height:1.3" title="${_escAttr(_disciplineLabel(ev.disciplineId))}">${_esc(_disciplineAbbr(ev.disciplineId))}</span>`
+      : '';
+    if (ev.disciplineId) tip += `\n🎓 ${_disciplineLabel(ev.disciplineId)}`;
     const facStar = isFac ? `<span title="Évaluation facultative — ${_escAttr(facModeLabel)}" style="color:#d97706;font-size:.85em;cursor:help">★</span>` : '';
     // Marqueur "orpheline" : évaluation rattachée à une autre classe — fond très léger
     // ambre et icône ⤴ avant le nom, avec tooltip indiquant la classe d'origine.
@@ -33810,7 +34490,7 @@ function renderBilanTab() {
     const orphanMark = isOrphan ? `<span style="color:#d97706;font-weight:bold" title="${_escAttr('Évaluation d\'une autre classe' + (origin ? ' (' + origin + ')' : ''))}">⤴</span>` : '';
     const orphanHeaderBg = isOrphan ? 'background:repeating-linear-gradient(135deg,rgba(217,119,6,.07) 0,rgba(217,119,6,.07) 6px,transparent 6px,transparent 12px);' : '';
     html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px;${_brk}${orphanHeaderBg}" title="${_esc(tip)}">
-      <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')">${orphanMark}${typePill}<span>${_esc(ev.nomCourt)}</span>${facStar}</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:pointer;flex-wrap:wrap" onclick="_evalRowOpen('${_esc(ev.id)}')">${orphanMark}${typePill}${discPill}<span>${_esc(ev.nomCourt)}</span>${facStar}</div>
       <input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
              oninput="_bilanUpdateEvalCoef(this)"
              class="no-spinner"
@@ -34741,6 +35421,7 @@ function renderCompetencesTab() {
   const cls = getCls();
   const wrap = document.getElementById('comp-wrap');
   if (!wrap) return;
+  _renderDisciplineFilterToolbar('comp');
   // Restaure l'état UI des contrôles
   const dispSel = document.getElementById('comp-display-mode');
   if (dispSel) dispSel.value = _compBilanGetDisplayMode();
@@ -34787,11 +35468,13 @@ function renderCompetencesTab() {
   const _hideOrphansComp = (() => { try { return localStorage.getItem('planClasse_bilanHideOrphans') === '1'; } catch (e) { return false; } })();
   // Compétences évaluées dans la classe + période. On marque celles "orphelines" :
   // venant uniquement d'évals d'autres classes (où un élève transféré a des saisies).
+  const _compDiscF = _currentDisciplineFilter(cls.id);
   const compIds = new Set();
   const ownCompIds = new Set();
   for (const ev of Object.values(S.evaluations || {})) {
     if (!_evalIncludesClass(ev, cls.id)) continue;
     if (periode && ev.periode !== periode) continue;
+    if (!_evalMatchesDisciplineFilter(ev, _compDiscF)) continue;
     if (ev.type === 'B') {
       for (const p of (ev.passations || [])) for (const c of (p.competenceIds || [])) { compIds.add(c); ownCompIds.add(c); }
     } else {
@@ -34805,6 +35488,7 @@ function renderCompetencesTab() {
     for (const ev of Object.values(S.evaluations || {})) {
       if (_evalIncludesClass(ev, cls.id)) continue;
       if (periode && ev.periode !== periode) continue;
+      if (!_evalMatchesDisciplineFilter(ev, _compDiscF)) continue;
       if (!sidsForOrphan.some(sid => _studentHasAnyDataInEval(ev, sid))) continue;
       hasOrphanComps = true;
       if (ev.type === 'B') {
