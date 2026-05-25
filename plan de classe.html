@@ -632,9 +632,17 @@ body.rendu-projecting #mrendu-body{font-size:2.2em;line-height:1.35;padding:8px 
 /* Largeur auto pour ne pas étirer artificiellement les colonnes : si la table
    tient dans la largeur de l'écran, elle est centrée — nom et notes restent
    proches, l'œil de l'élève balaye moins (lecture plus rapide depuis le fond). */
+body.rendu-projecting #mrendu-body h2.rendu-project-title{display:block !important;font-size:1.05em;margin:0 0 18px}
 body.rendu-projecting #mrendu-body table.rendu-tbl{font-size:1em;width:auto;max-width:100%;margin:0 auto;text-align:left;display:inline-table}
 body.rendu-projecting #mrendu-body table.rendu-tbl th,
 body.rendu-projecting #mrendu-body table.rendu-tbl td{padding:10px 18px;border-bottom:2px solid var(--rule-line)}
+/* Colle la colonne Élève à la suivante : pad-right Élève → 0, pad-left col+1 → réduit.
+   Évite l'effet "trou de 36px" entre le nom et la 1re note (le regard de l'élève
+   peut faire le lien plus facilement depuis le fond).
+   !important nécessaire pour battre les `padding` inline posés dans le HTML. */
+body.rendu-projecting #mrendu-body table.rendu-tbl .rendu-eleve-col{padding-right:0 !important}
+body.rendu-projecting #mrendu-body table.rendu-tbl thead th.rendu-eleve-col + th,
+body.rendu-projecting #mrendu-body table.rendu-tbl tbody td.rendu-eleve-col + td{padding-left:8px !important}
 body.rendu-projecting #mrendu-body table.rendu-tbl thead th{position:sticky;top:0;background:var(--paper-warm);z-index:2;font-size:.85em}
 body.rendu-projecting body::before{display:none}
 /* Toolbar zoom flottante : à gauche de la sortie. Ergonomique pour ajuster
@@ -2845,7 +2853,6 @@ kbd {
     </div>
     <div id="mrendu-body" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
     <p id="mrendu-hint" style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Bouton 📽 <strong>Projeter</strong> pour passer en plein écran avec grands caractères, ou 🖨 pour imprimer.</p>
-    <div id="mrendu-project-title" style="display:none;position:fixed;top:18px;left:18px;z-index:9999;padding:8px 16px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:8px;font-family:var(--font-serif);font-size:1.1em;font-weight:700;color:var(--ink-blue);box-shadow:0 2px 12px rgba(0,0,0,.3);max-width:55vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
     <div id="mrendu-th-tooltip" style="display:none;position:fixed;z-index:10000;padding:12px 22px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:10px;font-family:var(--font-serif);font-size:2.4em;font-weight:700;color:var(--ink-blue);box-shadow:0 4px 18px rgba(0,0,0,.4);max-width:80vw;pointer-events:none"></div>
     <div id="mrendu-zoom-bar" class="rendu-zoom-bar" style="display:none">
       <button onclick="_renduZoom(-1)" title="Réduire la taille (Ctrl-)">🔍−</button>
@@ -5131,7 +5138,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T22:55:00Z';
+const APP_VERSION   = '2026-05-23T23:20:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11942,10 +11949,16 @@ function _renduRender() {
     return;
   }
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  // Titre principal (visible UNIQUEMENT en mode projection — masqué en mode normal via CSS).
+  // Inline dans le flux du tableau pour ne pas couvrir les notes (vs ancien bandeau flottant).
+  const _dateLbl = (() => { const d = _evalDateFor(ev, _renduState.classId); return d ? _fmtDateFr(d) : ''; })();
+  const _longName = ev.nomLong ? `${ev.nomCourt || '?'} — ${ev.nomLong}` : (ev.nomCourt || '?');
+  const _titleTxt = `${_longName}${_dateLbl ? ' · ' + _dateLbl : ''}${cls?.nom ? ' · ' + cls.nom : ''}`;
+  let html = `<h2 class="rendu-project-title" style="display:none;margin:0 0 14px;text-align:center;font-family:var(--font-serif);color:var(--ink-blue);font-size:1.05em">${_esc(_titleTxt)}</h2>`;
   // Header
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:.92em" class="rendu-tbl">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:.92em" class="rendu-tbl">';
   html += '<thead><tr>';
-  html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:left;font-family:var(--font-serif)">Élève</th>`;
+  html += `<th class="rendu-eleve-col" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:left;font-family:var(--font-serif)">Élève</th>`;
   for (const c of selCols) {
     // Description complète pour le tooltip projection (custom) + tooltip natif (mode normal)
     const fullParts = [c.label];
@@ -11978,7 +11991,7 @@ function _renduRender() {
     const stu = S.eleves[sid];
     if (!stu) continue;
     html += `<tr>`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);font-family:var(--font-serif);white-space:nowrap"><strong>${_esc((stu.nom || '').toUpperCase())}</strong> ${_esc(stu.prenom || '')}</td>`;
+    html += `<td class="rendu-eleve-col" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);font-family:var(--font-serif);white-space:nowrap"><strong>${_esc((stu.nom || '').toUpperCase())}</strong> ${_esc(stu.prenom || '')}</td>`;
     for (const c of selCols) {
       let cellHtml = '';
       let cellStyle = 'padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.88em';
@@ -12057,17 +12070,8 @@ function _renduStartProject() {
   if (exitBtn) exitBtn.style.display = '';
   const zoomBar = document.getElementById('mrendu-zoom-bar');
   if (zoomBar) zoomBar.style.display = '';
-  // Bandeau titre éval (nom complet) en haut à gauche
-  const titleBanner = document.getElementById('mrendu-project-title');
-  const ev = S.evaluations?.[_renduState.evalId];
-  if (titleBanner && ev) {
-    const dateLbl = (() => { const d = _evalDateFor(ev, _renduState.classId); return d ? _fmtDateFr(d) : ''; })();
-    const cls = S.classes?.[_renduState.classId];
-    const longName = ev.nomLong ? `${ev.nomCourt || '?'} — ${ev.nomLong}` : (ev.nomCourt || '?');
-    titleBanner.textContent = `${longName}${dateLbl ? ' · ' + dateLbl : ''}${cls?.nom ? ' · ' + cls.nom : ''}`;
-    titleBanner.title = titleBanner.textContent; // tooltip natif si tronqué
-    titleBanner.style.display = '';
-  }
+  // Le titre principal (h2.rendu-project-title) est désormais injecté dans le
+  // flux du tableau par _renduRender (visible via CSS body.rendu-projecting).
   _renduZoomLevel = 1.0;
   _renduApplyZoom();
   // Tooltip custom large pour les en-têtes de colonne
@@ -12085,8 +12089,6 @@ function _renduExitProject() {
   if (exitBtn) exitBtn.style.display = 'none';
   const zoomBar = document.getElementById('mrendu-zoom-bar');
   if (zoomBar) zoomBar.style.display = 'none';
-  const titleBanner = document.getElementById('mrendu-project-title');
-  if (titleBanner) titleBanner.style.display = 'none';
   const thTip = document.getElementById('mrendu-th-tooltip');
   if (thTip) thTip.style.display = 'none';
   // Reset font-size pour ne pas polluer le mode normal + retire les listeners hover
