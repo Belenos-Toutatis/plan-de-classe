@@ -3157,6 +3157,16 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="mvcCheckAll(true)">Tout cocher</button>
       <button class="btn btn-g btn-sm" onclick="mvcCheckAll(false)">Tout décocher</button>
     </div>
+    <!-- Barre d'action en lot pour l'appartenance par période (utile sur classes évolutives type DF) -->
+    <div id="mvc-bulk-period" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;padding:5px 8px;background:#faf7ff;border:1px solid #e8def7;border-radius:4px;font-size:.85em">
+      <span style="color:#5b21b6;font-weight:600">🗓 Période pour <span id="mvc-bulk-target" style="font-family:var(--font-mono)">tous les cochés</span> :</span>
+      <span>de</span>
+      <select id="mvc-bulk-from" style="padding:1px 4px;font-family:var(--font-mono)"></select>
+      <span>à</span>
+      <select id="mvc-bulk-to" style="padding:1px 4px;font-family:var(--font-mono)"></select>
+      <button class="btn btn-p btn-sm" onclick="mvcBulkApplyPeriod()" title="Applique cette plage de périodes à tous les élèves cochés" style="padding:2px 8px">✅ Appliquer</button>
+      <button class="btn btn-g btn-sm" onclick="mvcBulkResetPeriod()" title="Retire toutes les restrictions de période (= toutes les périodes)" style="padding:2px 8px">↻ Tous toutes périodes</button>
+    </div>
     <div id="mvc-students" style="max-height:340px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;padding:6px"></div>
     <input type="hidden" id="mvc-id">
     <input type="hidden" id="mvc-from-tag">
@@ -5201,7 +5211,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T23:15:00Z';
+const APP_VERSION   = '2026-05-25T23:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -8041,6 +8051,8 @@ function openVirtualClassModal(id, opts) {
   _mvcUpdateIdStatus();
   document.getElementById('mvc-search').value = '';
   renderMvcFilterPanel();
+  _mvcBulkFillPeriodSelects();
+  _mvcBulkUpdateTarget();
   renderMvcStudents();
   openMod('mvc');
   setTimeout(() => nomInp.focus(), 80);
@@ -8117,6 +8129,53 @@ function mvcToggleSid(sid, checked) {
   else { _mvcSelected.delete(sid); delete _mvcMembership[sid]; }
   // Re-render pour afficher/cacher les sélecteurs de période per-élève
   renderMvcStudents();
+  _mvcBulkUpdateTarget();
+}
+// Remplit les <select> de la barre d'action en lot (de … à …) avec les codes
+// de période courants. Appelé une fois à l'ouverture de la modale.
+function _mvcBulkFillPeriodSelects() {
+  const from = document.getElementById('mvc-bulk-from');
+  const to   = document.getElementById('mvc-bulk-to');
+  if (!from || !to) return;
+  const opts = ['<option value="">—</option>']
+    .concat(_periodeOptions().map(p => `<option value="${p.code}">${p.code}</option>`))
+    .join('');
+  from.innerHTML = opts;
+  to.innerHTML   = opts;
+}
+// Met à jour le libellé "tous les cochés (N élèves)".
+function _mvcBulkUpdateTarget() {
+  const el = document.getElementById('mvc-bulk-target');
+  if (!el) return;
+  const n = _mvcSelected.size;
+  el.textContent = n === 0 ? 'tous les cochés' : `les ${n} élève${n > 1 ? 's' : ''} coché${n > 1 ? 's' : ''}`;
+}
+// Applique la plage (fromPer, toPer) du bulk-bar à TOUS les sids cochés.
+function mvcBulkApplyPeriod() {
+  if (_mvcSelected.size === 0) { toast('Coche d\'abord au moins un élève.', 'warn'); return; }
+  const fromPer = (document.getElementById('mvc-bulk-from')?.value || null) || null;
+  const toPer   = (document.getElementById('mvc-bulk-to')?.value   || null) || null;
+  let n = 0;
+  for (const sid of _mvcSelected) {
+    if (!fromPer && !toPer) delete _mvcMembership[sid];
+    else _mvcMembership[sid] = { fromPer, toPer };
+    n++;
+  }
+  renderMvcStudents();
+  const lbl = (!fromPer && !toPer)
+    ? `↻ ${n} élève(s) repassés sur toutes périodes`
+    : `🗓 ${n} élève(s) → de ${fromPer || '…'} à ${toPer || '…'}`;
+  toast(lbl);
+}
+// Retire toutes les restrictions de période pour tous les cochés.
+function mvcBulkResetPeriod() {
+  if (_mvcSelected.size === 0) { toast('Coche d\'abord au moins un élève.', 'warn'); return; }
+  let n = 0;
+  for (const sid of _mvcSelected) {
+    if (_mvcMembership[sid]) { delete _mvcMembership[sid]; n++; }
+  }
+  renderMvcStudents();
+  toast(n > 0 ? `↻ Restriction retirée pour ${n} élève(s)` : 'Aucune restriction à retirer.');
 }
 // Met à jour l'appartenance per-période d'un élève dans la modale Classe recomposée.
 // `key` = 'fromPer' | 'toPer' ; `value` = code période ou '' (= null = ouvert).
