@@ -2845,6 +2845,8 @@ kbd {
     </div>
     <div id="mrendu-body" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
     <p id="mrendu-hint" style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Bouton 📽 <strong>Projeter</strong> pour passer en plein écran avec grands caractères, ou 🖨 pour imprimer.</p>
+    <div id="mrendu-project-title" style="display:none;position:fixed;top:18px;left:18px;z-index:9999;padding:8px 16px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:8px;font-family:var(--font-serif);font-size:1.1em;font-weight:700;color:var(--ink-blue);box-shadow:0 2px 12px rgba(0,0,0,.3);max-width:55vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <div id="mrendu-th-tooltip" style="display:none;position:fixed;z-index:10000;padding:12px 22px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:10px;font-family:var(--font-serif);font-size:2.4em;font-weight:700;color:var(--ink-blue);box-shadow:0 4px 18px rgba(0,0,0,.4);max-width:80vw;pointer-events:none"></div>
     <div id="mrendu-zoom-bar" class="rendu-zoom-bar" style="display:none">
       <button onclick="_renduZoom(-1)" title="Réduire la taille (Ctrl-)">🔍−</button>
       <button onclick="_renduZoom(0)" id="mrendu-zoom-pct" title="Revenir à 100% (Ctrl+0)">100%</button>
@@ -5129,7 +5131,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T22:30:00Z';
+const APP_VERSION   = '2026-05-23T22:55:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11855,9 +11857,11 @@ function _renduListCols(ev) {
       }
     }
   }
-  // Note finale /noteMax et /20
-  cols.push({ key: 'noteMax', label: `Note /${ev.noteMax || 20}`, kind: 'note-max' });
-  cols.push({ key: 'note20',  label: 'Note /20',                  kind: 'note-20' });
+  // Note finale /noteMax et /20 — fusionnées si noteMax === 20 (sinon doublon visuel
+  // "Note /20" + "Note /20" puisque les deux affichages seraient identiques).
+  const nMax = ev.noteMax || 20;
+  if (nMax !== 20) cols.push({ key: 'noteMax', label: `Note /${nMax}`, kind: 'note-max' });
+  cols.push({ key: 'note20',  label: 'Note /20', kind: 'note-20' });
   // Compétences évaluées (toutes types)
   const evalComps = _evalListEvaluatedCompetences(ev, 'code');
   for (const c of evalComps) {
@@ -11943,7 +11947,31 @@ function _renduRender() {
   html += '<thead><tr>';
   html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:left;font-family:var(--font-serif)">Élève</th>`;
   for (const c of selCols) {
-    html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:center;font-family:var(--font-mono);font-size:.82em">${_esc(c.label)}</th>`;
+    // Description complète pour le tooltip projection (custom) + tooltip natif (mode normal)
+    const fullParts = [c.label];
+    if (c.kind === 'mn' && c.max != null) fullParts.push(`Question, barème /${c.max}`);
+    else if (c.kind === 'exo-sum') {
+      const exo = ev.exercices?.find(e => e.id === c.exoId);
+      const sumMax = (ev.miniNotes || []).filter(m => m.exerciceId === c.exoId).reduce((s, m) => s + (m.max || 0), 0);
+      fullParts.length = 0;
+      fullParts.push(`Total exercice ${exo?.label || '?'} /${sumMax}`);
+    }
+    else if (c.kind === 'note-max') fullParts.push(`Note finale sur ${ev.noteMax || 20}`);
+    else if (c.kind === 'note-20')  fullParts.push('Note finale ramenée sur 20');
+    else if (c.kind === 'pass-comp') {
+      const comp = S.competences?.[c.cid];
+      const pass = ev.passations?.find(p => p.id === c.passId);
+      fullParts.length = 0;
+      fullParts.push(`Passation ${pass?.code || '?'} — ${comp?.code || c.cid}${comp?.name ? ' (' + comp.name + ')' : ''}`);
+    }
+    else if (c.kind === 'comp') {
+      const comp = S.competences?.[c.cid];
+      fullParts.length = 0;
+      fullParts.push(`🧩 Compétence ${comp?.code || c.cid}${comp?.name ? ' — ' + comp.name : ''}`);
+    }
+    else if (c.kind === 'remarque') fullParts.push('Remarque enseignant pour cet élève');
+    const fullLabel = fullParts.join(' · ');
+    html += `<th data-full="${_escAttr(fullLabel)}" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);background:var(--paper-warm);text-align:center;font-family:var(--font-mono);font-size:.82em" title="${_escAttr(fullLabel)}">${_esc(c.label)}</th>`;
   }
   html += '</tr></thead><tbody>';
   for (const sid of sids) {
@@ -12029,8 +12057,25 @@ function _renduStartProject() {
   if (exitBtn) exitBtn.style.display = '';
   const zoomBar = document.getElementById('mrendu-zoom-bar');
   if (zoomBar) zoomBar.style.display = '';
+  // Bandeau titre éval (nom complet) en haut à gauche
+  const titleBanner = document.getElementById('mrendu-project-title');
+  const ev = S.evaluations?.[_renduState.evalId];
+  if (titleBanner && ev) {
+    const dateLbl = (() => { const d = _evalDateFor(ev, _renduState.classId); return d ? _fmtDateFr(d) : ''; })();
+    const cls = S.classes?.[_renduState.classId];
+    const longName = ev.nomLong ? `${ev.nomCourt || '?'} — ${ev.nomLong}` : (ev.nomCourt || '?');
+    titleBanner.textContent = `${longName}${dateLbl ? ' · ' + dateLbl : ''}${cls?.nom ? ' · ' + cls.nom : ''}`;
+    titleBanner.title = titleBanner.textContent; // tooltip natif si tronqué
+    titleBanner.style.display = '';
+  }
   _renduZoomLevel = 1.0;
   _renduApplyZoom();
+  // Tooltip custom large pour les en-têtes de colonne
+  const body = document.getElementById('mrendu-body');
+  if (body) {
+    body.addEventListener('mouseover', _renduThHoverIn);
+    body.addEventListener('mouseout',  _renduThHoverOut);
+  }
   // Esc / Ctrl±0 : raccourcis clavier en projection
   document.addEventListener('keydown', _renduProjectEscHandler, true);
 }
@@ -12040,10 +12085,47 @@ function _renduExitProject() {
   if (exitBtn) exitBtn.style.display = 'none';
   const zoomBar = document.getElementById('mrendu-zoom-bar');
   if (zoomBar) zoomBar.style.display = 'none';
-  // Reset font-size pour ne pas polluer le mode normal
+  const titleBanner = document.getElementById('mrendu-project-title');
+  if (titleBanner) titleBanner.style.display = 'none';
+  const thTip = document.getElementById('mrendu-th-tooltip');
+  if (thTip) thTip.style.display = 'none';
+  // Reset font-size pour ne pas polluer le mode normal + retire les listeners hover
   const body = document.getElementById('mrendu-body');
-  if (body) body.style.fontSize = '';
+  if (body) {
+    body.style.fontSize = '';
+    body.removeEventListener('mouseover', _renduThHoverIn);
+    body.removeEventListener('mouseout',  _renduThHoverOut);
+  }
   document.removeEventListener('keydown', _renduProjectEscHandler, true);
+}
+function _renduThHoverIn(e) {
+  const th = e.target.closest('th[data-full]');
+  if (!th) return;
+  const tip = document.getElementById('mrendu-th-tooltip');
+  if (!tip) return;
+  tip.textContent = th.getAttribute('data-full') || '';
+  tip.style.display = '';
+  // Positionne sous l'en-tête, sans dépasser l'écran
+  const rect = th.getBoundingClientRect();
+  // Affiche d'abord pour mesurer
+  const tw = tip.offsetWidth;
+  const th_h = tip.offsetHeight;
+  let left = rect.left + rect.width / 2 - tw / 2;
+  let top  = rect.bottom + 12;
+  if (left < 10) left = 10;
+  if (left + tw > window.innerWidth - 10) left = window.innerWidth - tw - 10;
+  if (top + th_h > window.innerHeight - 10) top = rect.top - th_h - 12; // au-dessus si pas la place dessous
+  tip.style.left = left + 'px';
+  tip.style.top  = top + 'px';
+}
+function _renduThHoverOut(e) {
+  const th = e.target.closest('th[data-full]');
+  if (!th) return;
+  // Ne masque pas si on entre dans une cellule fille (le mouseout se déclenche aussi sur descendants)
+  const related = e.relatedTarget;
+  if (related && th.contains(related)) return;
+  const tip = document.getElementById('mrendu-th-tooltip');
+  if (tip) tip.style.display = 'none';
 }
 function _renduProjectEscHandler(e) {
   if (e.key === 'Escape') {
