@@ -3091,6 +3091,24 @@ kbd {
       <button type="button" class="btn btn-g btn-sm" onclick="mvcRegenerateId()" title="Régénérer depuis le nom">↻ Auto</button>
       <span id="mvc-id-status" style="font-size:.82em;color:#888"></span>
     </div>
+    <!-- Disciplines (flux per-classe) — facultatif, comme pour une classe réelle -->
+    <div style="background:#faf7ff;border:1px solid #e8def7;border-radius:4px;padding:8px 10px;margin-bottom:12px">
+      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:#5b21b6">🎓 Disciplines (facultatif)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+        <div class="fg" style="flex:1;min-width:160px;margin-bottom:0">
+          <label style="font-size:.85em">Discipline principale</label>
+          <input id="mvc-discname-prim" type="text" maxlength="40" placeholder="ex. SVT Bilingue (vide → « Principale »)" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
+        </div>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85em;cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" id="mvc-discname-sec-on" onchange="_mvcToggleSec()">
+          Activer une discipline secondaire
+        </label>
+      </div>
+      <div class="fg" id="mvc-discname-sec-wrap" style="display:none;margin-top:6px;margin-bottom:0">
+        <label style="font-size:.85em">Nom de la discipline secondaire</label>
+        <input id="mvc-discname-sec" type="text" maxlength="40" placeholder="ex. Option, Bilingue…" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
+      </div>
+    </div>
     <!-- Panneau de filtres cumulatifs (ET entre groupes ; tags = ET ou OU au choix ; classes = OU) -->
     <div id="mvc-filter-panel" style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:8px 10px;margin-bottom:8px">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
@@ -5188,7 +5206,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T18:30:00Z';
+const APP_VERSION   = '2026-05-25T19:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -7795,6 +7813,13 @@ function _suggestVcId(name) {
   }
   return id || 'VC';
 }
+// Toggle de visibilité du champ « Nom de la discipline secondaire » dans la modale mvc.
+function _mvcToggleSec() {
+  const on = document.getElementById('mvc-discname-sec-on')?.checked;
+  const wrap = document.getElementById('mvc-discname-sec-wrap');
+  if (wrap) wrap.style.display = on ? '' : 'none';
+}
+
 // Garantit l'unicité par suffixage (_2, _3, …) si nécessaire.
 function _uniqueVcId(base, ignoreId) {
   if (!base) base = 'VC';
@@ -7883,9 +7908,20 @@ function openVirtualClassModal(id, opts) {
     idInp.value    = id;
     idInputEl.value= id;
     fromTagInp.value = cls.fromTag || '';
+    // Disciplines
+    document.getElementById('mvc-discname-prim').value = cls.discNamePrimary || '';
+    const hasSec = (cls.discNameSecondary != null);
+    document.getElementById('mvc-discname-sec-on').checked = hasSec;
+    document.getElementById('mvc-discname-sec').value = hasSec ? (cls.discNameSecondary || '') : '';
+    document.getElementById('mvc-discname-sec-wrap').style.display = hasSec ? '' : 'none';
     for (const sid of (cls.eleves || [])) _mvcSelected.add(sid);
   } else {
     titleEl.textContent = '🔀 Nouvelle classe recomposée';
+    // Disciplines : reset
+    document.getElementById('mvc-discname-prim').value = '';
+    document.getElementById('mvc-discname-sec-on').checked = false;
+    document.getElementById('mvc-discname-sec').value = '';
+    document.getElementById('mvc-discname-sec-wrap').style.display = 'none';
     nomInp.value = _mvcSeedFromTag && S.tags[_mvcSeedFromTag] ? `${getCls()?.nom || ''} — ${S.tags[_mvcSeedFromTag].abbr}`.trim() : '';
     yrInp.value  = getCls()?.année || (new Date()).getFullYear();
     salleSel.value = getCls()?.activeRoom || Object.keys(S.salles || {})[0] || '';
@@ -8192,12 +8228,19 @@ function mvcSave() {
   // Init pool actif (1er disponible)
   const defaultPool = Object.keys(S.tabletPools || {})[0] || null;
 
+  // Disciplines (facultatif, mêmes champs que pour une classe réelle)
+  const discPrim = (document.getElementById('mvc-discname-prim')?.value || '').trim();
+  const discSecOn = !!document.getElementById('mvc-discname-sec-on')?.checked;
+  const discSec = (document.getElementById('mvc-discname-sec')?.value || '').trim();
+
   if (oldId && S.classes[oldId]) {
     // ─── ÉDITION ─────────────────────────────────────────────
     const cls = S.classes[oldId];
     cls.nom = nom;
     cls.année = yr;
     cls.fromTag = fromTag;
+    cls.discNamePrimary = discPrim;
+    cls.discNameSecondary = discSecOn ? discSec : null;
     // Si la salle a changé, on ajoute la nouvelle si elle n'existe pas dans cls.rooms
     if (cls.activeRoom !== salleId) {
       if (!cls.rooms[salleId]) {
@@ -8251,6 +8294,8 @@ function mvcSave() {
       activePool: defaultPool,
       virtual: true,
       fromTag: fromTag,
+      discNamePrimary: discPrim,
+      discNameSecondary: discSecOn ? discSec : null,
     };
     S.classes[newId] = newCls;
     setupClassAccessors(newCls);
