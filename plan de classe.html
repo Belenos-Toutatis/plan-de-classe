@@ -621,6 +621,19 @@ html[data-theme="dark"] .qcm-info-banner a{color:#7fb4d8 !important}
 @media print{.moved-cell{animation:none;outline-color:#c2185b !important;outline-width:4px;box-shadow:none}}
 /* Bouton 💡 quand un surlignage rose est actif et visible : pulse rose pour
    guider l'utilisateur vers le bouton qui permet de masquer/effacer. */
+/* Mode projection « Projeter les notes » : modale plein écran + grands caractères
+   pour que les élèves lisent leurs notes depuis le fond de la classe. */
+body.rendu-projecting #mrendu .mb{max-width:100vw !important;width:100vw !important;max-height:100vh !important;height:100vh !important;border-radius:0;padding:18px 32px;box-sizing:border-box}
+body.rendu-projecting #mrendu-header,
+body.rendu-projecting #mrendu-sub,
+body.rendu-projecting #mrendu-cols-row,
+body.rendu-projecting #mrendu-hint{display:none !important}
+body.rendu-projecting #mrendu-body{font-size:2.2em;line-height:1.35;padding:8px 4px;border:none;background:var(--paper)}
+body.rendu-projecting #mrendu-body table.rendu-tbl{font-size:1em}
+body.rendu-projecting #mrendu-body table.rendu-tbl th,
+body.rendu-projecting #mrendu-body table.rendu-tbl td{padding:10px 18px;border-bottom:2px solid var(--rule-line)}
+body.rendu-projecting #mrendu-body table.rendu-tbl thead th{position:sticky;top:0;background:var(--paper-warm);z-index:2;font-size:.85em}
+body.rendu-projecting body::before{display:none}
 .btn-toggle-moved.pulse{animation:btnMovedPulse 0.9s ease-in-out infinite;border-color:#ff1493 !important}
 @keyframes btnMovedPulse{
   0%,100%{box-shadow:0 0 0 0   rgba(255,20,147,.7),0 0 12px 2px rgba(255,20,147,.5)}
@@ -2801,19 +2814,20 @@ kbd {
 </div>
 
 <!-- Historique des incidents -->
-<!-- Rendre les notes : vue épurée projetable / imprimable pour distribuer les résultats -->
+<!-- Projeter les notes : vue épurée projetable pour distribuer les résultats -->
 <div id="mrendu" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-      <h2 id="mrendu-title" style="margin:0">👀 Rendre les notes</h2>
+  <div class="mb" id="mrendu-mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
+    <div id="mrendu-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <h2 id="mrendu-title" style="margin:0">👀 Projeter les notes</h2>
       <div style="display:flex;gap:6px">
+        <button class="btn btn-p btn-sm" onclick="_renduStartProject()" title="Passer en mode projection plein écran avec grands caractères, pour que les élèves voient leurs notes depuis le fond de la salle">📽 Projeter</button>
         <button class="btn btn-g btn-sm" onclick="_renduPrint()" title="Imprimer cette vue épurée">🖨 Imprimer</button>
         <button class="btn btn-g" onclick="closeMod2('mrendu')">Fermer</button>
       </div>
     </div>
     <p id="mrendu-sub" style="margin:0 0 8px;color:var(--pencil);font-size:.85em"></p>
     <input type="hidden" id="mrendu-evalid">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:.85em">
+    <div id="mrendu-cols-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:.85em">
       <span style="color:var(--pencil);font-weight:600">Colonnes affichées :</span>
       <div id="mrendu-cols" style="display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:200px"></div>
       <div style="display:flex;gap:4px">
@@ -2822,7 +2836,8 @@ kbd {
       </div>
     </div>
     <div id="mrendu-body" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
-    <p style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Imprime pour distribuer une copie papier, ou projette tel quel en classe.</p>
+    <p id="mrendu-hint" style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Bouton 📽 <strong>Projeter</strong> pour passer en plein écran avec grands caractères, ou 🖨 pour imprimer.</p>
+    <button id="mrendu-exit-project" onclick="_renduExitProject()" title="Quitter la projection (Échap)" style="display:none;position:fixed;top:18px;right:18px;z-index:9999;padding:10px 18px;border:2px solid var(--ink-blue);border-radius:8px;background:var(--paper);color:var(--ink-blue);font-family:var(--font-sans);font-size:1.1em;font-weight:700;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.3)">❌ Quitter la projection</button>
   </div>
 </div>
 
@@ -4253,7 +4268,7 @@ kbd {
         <button class="btn btn-g btn-sm" id="meval-tableur-qcmcam-btn" onclick="_evalQcmcamOpen()" title="📂 Importer un fichier CSV exporté de qcmcam.net (matching par prénom)" aria-label="Importer CSV QCMcam" style="display:none;padding:4px 6px">📂</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="📋 Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">📋</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="💾 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px">💾</button>
-        <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Rendre les notes : vue épurée projetable / imprimable" aria-label="Rendre les notes" style="padding:4px 6px">👀</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
       </div>
     </div>
@@ -5101,7 +5116,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T21:25:00Z';
+const APP_VERSION   = '2026-05-23T22:10:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -10297,6 +10312,7 @@ function openMod(id) {
 }
 function closeMod(overlay, e) {
   if (e.target === overlay) {
+    if (overlay.id === 'mrendu' && document.body.classList.contains('rendu-projecting')) _renduExitProject();
     overlay.classList.remove('on');
     overlay.style.zIndex = '';  // reset le bump éventuel (stack modal)
     _modalTeardownA11y(overlay);
@@ -10304,6 +10320,7 @@ function closeMod(overlay, e) {
   }
 }
 function closeMod2(id) {
+  if (id === 'mrendu' && document.body.classList.contains('rendu-projecting')) _renduExitProject();
   const el = document.getElementById(id);
   if (el) { el.classList.remove('on'); el.style.zIndex = ''; _modalTeardownA11y(el); }
   _afterModalClose(id);
@@ -11796,7 +11813,7 @@ function renderHistNotes(stu) {
   }).join('');
 }
 
-// ═══════════════ « Rendre les notes » — vue épurée projetable / imprimable ═══════════════
+// ═══════════════ « Projeter les notes » — vue épurée projetable / imprimable ═══════════════
 // État de sélection des colonnes (clé éval → Set de keys cochées) — éphémère en mémoire,
 // reset à chaque ouverture pour repartir d'une valeur par défaut sensée.
 let _renduState = { evalId: null, classId: null, checked: new Set() };
@@ -11840,6 +11857,8 @@ function _renduListCols(ev) {
 function _evalOpenRendu(evalId) {
   const ev = S.evaluations?.[evalId];
   if (!ev) { toast('⚠ Évaluation introuvable', 'warn'); return; }
+  // Sortie de projection si on rouvre la modale (sécurité au cas où on n'a pas quitté)
+  if (document.body.classList.contains('rendu-projecting')) _renduExitProject();
   document.getElementById('mrendu-evalid').value = evalId;
   // Détermine la classe active : si appelé depuis le tableur, lit son select de classe,
   // sinon prend S.cur si l'éval la couvre, sinon la première classe vivante.
@@ -11855,7 +11874,7 @@ function _evalOpenRendu(evalId) {
     if (c.kind === 'comp') _renduState.checked.add(c.key);
   }
   // Titre + sous-titre
-  document.getElementById('mrendu-title').textContent = `👀 Rendre les notes — ${ev.nomCourt || '?'}`;
+  document.getElementById('mrendu-title').textContent = `👀 Projeter les notes — ${ev.nomCourt || '?'}`;
   const cls = S.classes?.[cid];
   const dateLbl = (() => { const d = _evalDateFor(ev, cid); return d ? _fmtDateFr(d) : ''; })();
   document.getElementById('mrendu-sub').textContent =
@@ -11969,6 +11988,30 @@ function _renduRender() {
   }
   html += '</tbody></table>';
   body.innerHTML = html;
+}
+
+// Mode projection : transforme la modale en plein écran avec grands caractères,
+// pour que les élèves voient leur note depuis le fond de la classe. Esc / clic
+// sur le bouton ❌ sort du mode.
+function _renduStartProject() {
+  document.body.classList.add('rendu-projecting');
+  const exitBtn = document.getElementById('mrendu-exit-project');
+  if (exitBtn) exitBtn.style.display = '';
+  // Esc pour quitter (capture en mode bouillage pour passer avant le handler global de la modale)
+  document.addEventListener('keydown', _renduProjectEscHandler, true);
+}
+function _renduExitProject() {
+  document.body.classList.remove('rendu-projecting');
+  const exitBtn = document.getElementById('mrendu-exit-project');
+  if (exitBtn) exitBtn.style.display = 'none';
+  document.removeEventListener('keydown', _renduProjectEscHandler, true);
+}
+function _renduProjectEscHandler(e) {
+  if (e.key === 'Escape') {
+    e.stopPropagation();
+    e.preventDefault();
+    _renduExitProject();
+  }
 }
 
 // Impression : isole #mrendu-body et applique un style d'impression léger.
@@ -26191,7 +26234,7 @@ function renderEvalNotes() {
         ${_evalListEvaluatedCompetences(ev, 'code').length > 0 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenBilanCompsForEval('${_esc(ev.id)}')" title="Bilan compétences : niveau atteint par élève sur chaque compétence évaluée">📊</button>` : ''}
         ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🔀</button>` : ''}
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV">💾</button>
-        <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Rendre les notes : vue épurée (sans couleurs sauf compétences) à projeter ou imprimer">👀</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Projeter les notes : vue épurée à projeter en plein écran (grands caractères pour le fond de la salle) ou à imprimer">👀</button>
         <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">✕</button>
       </div>
     </div>`;
