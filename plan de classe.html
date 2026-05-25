@@ -5154,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T10:25:00Z';
+const APP_VERSION   = '2026-05-24T10:50:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -18933,6 +18933,37 @@ function _stuActiveOnAnyEvalRef(stu, ev, classId) {
   if (!stu) return false;
   const refs = _evalRefDatesForClass(ev, classId);
   return refs.some(d => _stuActiveOn(stu, d));
+}
+
+// True si l'élève a été présent pour AU MOINS UNE évaluation (comptée dans la
+// moyenne) de la classe pendant la période. Critère d'inclusion dans le bilan
+// par période : un élève arrivé après la dernière éval de S1 (ou parti avant la
+// 1re) n'a fait aucun devoir → on ne l'affiche pas dans le bilan S1, même s'il
+// est actif aujourd'hui dans la classe. Ne s'applique PAS aux orphelines (cf.
+// transferts depuis une autre classe) — celles-ci passent par _stuHasOrphanDataInPeriod.
+function _stuPresentForAnyEvalInPeriod(stu, classId, periode) {
+  if (!stu || !classId || !periode) return false;
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!_evalIncludesClass(ev, classId)) continue;
+    if (ev.periode !== periode) continue;
+    if (ev.countsForMean === false) continue;
+    if (_stuActiveOnAnyEvalRef(stu, ev, classId)) return true;
+  }
+  return false;
+}
+
+// True si l'élève a une saisie dans au moins une éval orpheline (non attachée à
+// la classe demandée) pour la période. Permet de garder dans le bilan un élève
+// transféré qui amène des notes d'une autre classe même s'il n'était pas là pour
+// les évals de la classe courante pendant la période.
+function _stuHasOrphanDataInPeriod(sid, classId, periode) {
+  if (!sid || !classId || !periode) return false;
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (_evalIncludesClass(ev, classId)) continue; // on saute les évals de la classe courante
+    if (ev.periode !== periode) continue;
+    if (_studentHasAnyDataInEval(ev, sid)) return true;
+  }
+  return false;
 }
 
 // Date de fin (YYYY-MM-DD) de la période donnée pour l'année scolaire courante.
@@ -33538,13 +33569,28 @@ function renderBilanTab() {
     return;
   }
 
-  // Élèves affichés : présents à la fin de la période OU partis mais ayant
-  // laissé au moins une note dans la période (un élève parti en cours de
-  // semestre figure quand même au bilan du semestre).
+  // Élèves affichés :
+  //   - Mode période spécifique (S1, S2, T1…) : l'élève doit avoir été présent
+  //     pour AU MOINS UNE éval comptée de la période. Un élève arrivé après
+  //     toutes les évals (ou parti avant) est exclu du bilan de cette période.
+  //     Inclut aussi les orphelines (notes venant d'une autre classe) via
+  //     _stuHasAnyNoteInPeriod.
+  //   - Mode « Toutes » : critère plus large (actif en fin d'année OU avec une
+  //     trace n'importe où) — pour ne perdre personne dans la vue d'ensemble.
   const _bilanRefDate = _periodEndDate(periode || '');
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _bilanRefDate)
-                 || _stuHasAnyNoteInPeriod(sid, cls.id, periode))
+    .filter(sid => {
+      const stu = S.eleves[sid];
+      if (!stu) return false;
+      if (periode) {
+        // Strict : exclus si pas présent à AUCUNE éval de la période ET pas
+        // d'orpheline (cas du transféré qui amène des notes d'une autre classe).
+        return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
+            || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
+      }
+      // Mode « Toutes » : critère large pour ne perdre personne dans la vue d'ensemble.
+      return _stuActiveOn(stu, _bilanRefDate) || _stuHasAnyNoteInPeriod(sid, cls.id, '');
+    })
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
@@ -34082,12 +34128,19 @@ function _bilanBuildRows() {
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
     .sort((a, b) => (_evalDateFor(a, cls.id) || '').localeCompare(_evalDateFor(b, cls.id) || ''));
-  // Même filtre que le rendu visuel : présents en fin de période OU partis
-  // mais ayant des notes dans la période.
+  // Même filtre que le rendu visuel : période spécifique = présent pour ≥ 1 éval
+  // comptée ; « Toutes » = critère large (fin d'année OU trace).
   const _refDate = _periodEndDate(periode || '');
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _refDate)
-                 || _stuHasAnyNoteInPeriod(sid, cls.id, periode))
+    .filter(sid => {
+      const stu = S.eleves[sid];
+      if (!stu) return false;
+      if (periode) {
+        return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
+            || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
+      }
+      return _stuActiveOn(stu, _refDate) || _stuHasAnyNoteInPeriod(sid, cls.id, '');
+    })
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       return ((sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase())
@@ -34719,12 +34772,18 @@ function renderCompetencesTab() {
   }
 
   // Pré-calcul des sids affichés (nécessaire pour détecter les compétences orphelines).
-  // Mêmes règles que renderBilanTab : actifs en fin de période OU partis avec note.
+  // Mêmes règles que renderBilanTab : présents pour ≥ 1 éval de la période, ou
+  // mode « Toutes » avec critère large.
   const _compRefDateForOrphan = _periodEndDate(periode || '');
-  const sidsForOrphan = (cls.eleves || []).filter(sid =>
-    _stuActiveOn(S.eleves?.[sid], _compRefDateForOrphan)
-    || _stuHasAnyNoteInPeriod(sid, cls.id, periode)
-  );
+  const sidsForOrphan = (cls.eleves || []).filter(sid => {
+    const stu = S.eleves?.[sid];
+    if (!stu) return false;
+    if (periode) {
+      return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
+          || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
+    }
+    return _stuActiveOn(stu, _compRefDateForOrphan) || _stuHasAnyNoteInPeriod(sid, cls.id, '');
+  });
   const _hideOrphansComp = (() => { try { return localStorage.getItem('planClasse_bilanHideOrphans') === '1'; } catch (e) { return false; } })();
   // Compétences évaluées dans la classe + période. On marque celles "orphelines" :
   // venant uniquement d'évals d'autres classes (où un élève transféré a des saisies).
@@ -34822,12 +34881,21 @@ function renderCompetencesTab() {
       };
     });
   }
-  // Élèves affichés : présents en fin de période OU partis mais ayant laissé
-  // au moins une saisie dans la période (cohérent avec le Bilan des notes).
+  // Élèves affichés — même règle que renderBilanTab :
+  //   - Période spécifique : présent pour ≥ 1 éval comptée de la période
+  //     (un élève arrivé après / parti avant n'apparaît pas).
+  //   - « Toutes » : critère large (actif en fin d'année ou avec une trace).
   const _compRefDate = _periodEndDate(periode || '');
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _compRefDate)
-                 || _stuHasAnyNoteInPeriod(sid, cls.id, periode))
+    .filter(sid => {
+      const stu = S.eleves[sid];
+      if (!stu) return false;
+      if (periode) {
+        return _stuPresentForAnyEvalInPeriod(stu, cls.id, periode)
+            || _stuHasOrphanDataInPeriod(sid, cls.id, periode);
+      }
+      return _stuActiveOn(stu, _compRefDate) || _stuHasAnyNoteInPeriod(sid, cls.id, '');
+    })
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
