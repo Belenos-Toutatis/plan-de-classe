@@ -733,6 +733,11 @@ body.rendu-projecting body::before{display:none}
   --font-serif: 'Fraunces', 'Source Serif Pro', 'Charter', 'Iowan Old Style', 'Sitka Text', Palatino, Georgia, serif;
   --font-sans:  'IBM Plex Sans', 'Public Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono:  'JetBrains Mono', 'Iosevka', 'IBM Plex Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  /* Accent « discipline » (violet) — utilisé pour les pastilles, liens et titres
+     liés au catalogue de disciplines (cohérent entre les modales). */
+  --disc-accent:      #5b21b6;
+  --disc-accent-soft: #ede9fe;
+  --disc-accent-mid:  #c4b5fd;
   --margin-w: 56px;
   --radius-sm: 3px;
   --radius-md: 5px;
@@ -3118,7 +3123,7 @@ kbd {
     </div>
     <!-- Disciplines enseignées (idem classe réelle) -->
     <div style="background:#faf7ff;border:1px solid #e8def7;border-radius:4px;padding:8px 10px;margin-bottom:12px">
-      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:#5b21b6">🎓 Disciplines enseignées</div>
+      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:var(--disc-accent)">🎓 Disciplines enseignées</div>
       <div id="mvc-disc-checks"></div>
     </div>
     <!-- Panneau de filtres cumulatifs (ET entre groupes ; tags = ET ou OU au choix ; classes = OU) -->
@@ -3165,7 +3170,7 @@ kbd {
     <!-- Barre d'action en lot pour l'appartenance par période (utile sur classes évolutives type DF) -->
     <!-- Cible : les élèves cochés dans la 2e case (à droite) — distincte de la case d'appartenance. -->
     <div id="mvc-bulk-period" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;padding:5px 8px;background:#faf7ff;border:1px solid #e8def7;border-radius:4px;font-size:.85em">
-      <span style="color:#5b21b6;font-weight:600">🗓 Période pour <span id="mvc-bulk-target" style="font-family:var(--font-mono)">la sélection (case droite)</span> :</span>
+      <span style="color:var(--disc-accent);font-weight:600">🗓 Période pour <span id="mvc-bulk-target" style="font-family:var(--font-mono)">la sélection (case droite)</span> :</span>
       <span>de</span>
       <select id="mvc-bulk-from" style="padding:1px 4px;font-family:var(--font-mono)"></select>
       <span>à</span>
@@ -5237,7 +5242,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T01:00:00Z';
+const APP_VERSION   = '2026-05-26T01:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5499,6 +5504,22 @@ function _ensureActivePool(cls) {
   const first = Object.keys(S.tabletPools || {})[0];
   cls.activePool = first || null;
   return cls.activePool;
+}
+
+// Template minimal d'une room neuve (utilisé à la création d'une classe / d'une
+// salle / par duplication). Garantit la structure cohérente avec le modèle
+// courant : ipadsByPool {} (lazily peuplée), pas de champs legacy ipads/ipads_g*.
+function _newRoomTemplate() {
+  return {
+    seating: {},
+    groupes: {},
+    ipadsByPool: {},
+    posTagId: {},
+    allowedFor: {},
+    aeshCount: 0,
+    aeshSeating: {},
+    aeshLinks: {},
+  };
 }
 
 // Renvoie l'objet { ce, g1, g2 } du pool actif dans la salle active
@@ -7953,7 +7974,7 @@ function _mvcRenderDisciplineChecks(cls) {
     const d = allDiscs[0];
     wrap.innerHTML = `<p style="font-size:.82em;color:var(--pencil);margin:0">
       Une seule discipline : <strong>${_esc(d.nom)}</strong>.
-      <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">+ En ajouter</a>
+      <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">+ En ajouter</a>
     </p>`;
     return;
   }
@@ -7964,7 +7985,7 @@ function _mvcRenderDisciplineChecks(cls) {
     </label>
   `).join('') + `
     <p style="font-size:.76em;color:var(--pencil);font-style:italic;margin:6px 0 0">
-      <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">+ Créer une nouvelle discipline…</a>
+      <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">+ Créer une nouvelle discipline…</a>
     </p>`;
 }
 // Shims rétrocompat
@@ -8495,7 +8516,7 @@ function mvcSave() {
     // Si la salle a changé, on ajoute la nouvelle si elle n'existe pas dans cls.rooms
     if (cls.activeRoom !== salleId) {
       if (!cls.rooms[salleId]) {
-        cls.rooms[salleId] = { seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, ipads_g3:{}, groupes:{} };
+        cls.rooms[salleId] = _newRoomTemplate();
       }
       cls.activeRoom = salleId;
     }
@@ -8551,7 +8572,7 @@ function mvcSave() {
     const newCls = {
       id: newId, nom, année: yr,
       eleves: sids,
-      rooms: { [salleId]: { seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, ipads_g3:{}, groupes:{} } },
+      rooms: { [salleId]: _newRoomTemplate() },
       activeRoom: salleId,
       activePool: defaultPool,
       virtual: true,
@@ -10892,10 +10913,9 @@ function createClass() {
     const srcCls = S.classes[choix.slice(6)];
     if (srcCls && srcCls.rooms) {
       for (const [salleId, srcRoom] of Object.entries(srcCls.rooms)) {
-        rooms[salleId] = {
-          seating: {}, ipads: {}, ipads_g1: {}, ipads_g2: {}, ipads_g3: {},
+        rooms[salleId] = Object.assign(_newRoomTemplate(), {
           groupes: JSON.parse(JSON.stringify(srcRoom.groupes || {}))
-        };
+        });
       }
       activeRoom = srcCls.activeRoom || Object.keys(rooms)[0];
     }
@@ -10903,7 +10923,7 @@ function createClass() {
     // Utiliser une salle existante du catalogue
     const sid = choix.slice(6);
     if (S.salles[sid]) {
-      rooms = { [sid]: { seating: {}, ipads: {}, ipads_g1: {}, ipads_g2: {}, ipads_g3: {}, groupes: {} } };
+      rooms = { [sid]: _newRoomTemplate() };
       activeRoom = sid;
     }
   }
@@ -10911,7 +10931,7 @@ function createClass() {
   // Cas par défaut : créer une nouvelle salle pour cette classe
   if (!activeRoom) {
     const sid = createSalle(`Salle ${nom}`, 4, 10, []);
-    rooms = { [sid]: { seating: {}, ipads: {}, ipads_g1: {}, ipads_g2: {}, ipads_g3: {}, groupes: {} } };
+    rooms = { [sid]: _newRoomTemplate() };
     activeRoom = sid;
   }
 
@@ -11163,8 +11183,8 @@ function renderClasses() {
     const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}`;
     const _discIds = _clsDisciplineIds(cls);
     const _discLine = _discIds.length >= 2
-      ? `<div class="cc-meta" style="font-size:.8em;color:#5b21b6;margin-top:2px">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
-      : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;color:#5b21b6;margin-top:2px">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
+      ? `<div class="cc-meta" style="font-size:.8em;color:var(--disc-accent);margin-top:2px">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
+      : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;color:var(--disc-accent);margin-top:2px">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
     return `
       <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg}" onclick="switchClass('${cls.id}');renderClasses()">
         <div class="cc-info">
@@ -11326,7 +11346,7 @@ function _ecRenderDisciplineChecks(cls) {
     const d = allDiscs[0];
     wrap.innerHTML = `<p style="font-size:.86em;color:var(--pencil);margin:0">
       Une seule discipline configurée : <strong>${_esc(d.nom)}</strong>.
-      Pour avoir plusieurs flux (ex. SVT + Bilingue), <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">crée d'autres disciplines</a>.
+      Pour avoir plusieurs flux (ex. SVT + Bilingue), <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">crée d'autres disciplines</a>.
     </p>`;
     return;
   }
@@ -11337,7 +11357,7 @@ function _ecRenderDisciplineChecks(cls) {
     </label>
   `).join('') + `
     <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:8px 0 0">
-      <a href="javascript:openDisciplinesModal()" style="color:#5b21b6">+ Créer une nouvelle discipline…</a>
+      <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">+ Créer une nouvelle discipline…</a>
     </p>`;
 }
 
@@ -16354,7 +16374,7 @@ function addSalleToClass(salleId) {
   if (!cls.rooms) cls.rooms = {};
   if (cls.rooms[salleId]) { closeMod2('madds'); return; }
   pushUndo();
-  cls.rooms[salleId] = { seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, ipads_g3:{}, groupes:{} };
+  cls.rooms[salleId] = _newRoomTemplate();
   cls.activeRoom = salleId;
   closeMod2('madds');
   save();
@@ -16453,7 +16473,7 @@ function confirmNewSalle() {
     const cls = getCls();
     if (cls) {
       if (!cls.rooms) cls.rooms = {};
-      cls.rooms[id] = { seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, ipads_g3:{}, groupes:{} };
+      cls.rooms[id] = _newRoomTemplate();
       cls.activeRoom = id;
     }
   }
@@ -25024,7 +25044,7 @@ function _seedDemoVirtualClasses() {
       S.classes['DNLG1'] = {
         id: 'DNLG1', nom: 'DNL Groupe 1', année: 2025,
         eleves: dnlSids,
-        rooms: { [salleId]: { seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, ipads_g3:{}, groupes:{} } },
+        rooms: { [salleId]: _newRoomTemplate() },
         activeRoom: salleId,
         activePool: Object.keys(S.tabletPools)[0] || null,
         virtual: true,
@@ -25044,7 +25064,7 @@ function _seedDemoVirtualClasses() {
       S.classes['6ADF'] = {
         id: '6ADF', nom: '6e A — DF', année: 2025,
         eleves: dfSids,
-        rooms: { [salleId]: { seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, ipads_g3:{}, groupes:{} } },
+        rooms: { [salleId]: _newRoomTemplate() },
         activeRoom: salleId,
         activePool: Object.keys(S.tabletPools)[0] || null,
         virtual: true,
@@ -26527,6 +26547,20 @@ function _evalPrefsSave() {
   }
   // Tout est valide : on applique
   pushUndo();
+  // Si le mode de période a changé, les `cls.membership[sid] = {fromPer, toPer}`
+  // existants utilisent des codes (S1/S2 ou T1/T2/T3) qui ne correspondent plus
+  // au nouveau mode → seraient silencieusement ignorés (helper retourne true en
+  // fallback). On les efface explicitement avec un toast d'information.
+  if (S.evalPrefs.periodMode !== periodMode) {
+    let cleaned = 0;
+    for (const cls of Object.values(S.classes || {})) {
+      if (cls && cls.membership && Object.keys(cls.membership).length > 0) {
+        cleaned += Object.keys(cls.membership).length;
+        cls.membership = {};
+      }
+    }
+    if (cleaned > 0) toast(`⚠ Mode de période modifié — ${cleaned} restriction(s) d'appartenance par période effacée(s) (à reconfigurer si besoin)`, 'warn');
+  }
   S.evalPrefs.maitriseColors    = colors;
   S.evalPrefs.maitriseColorsAuto = colorsAuto;
   S.evalPrefs.maitrisePoints    = points;
@@ -26927,7 +26961,7 @@ function renderEvalNotes() {
   const _tbResetEv = document.getElementById('eval-sort-toolbar');
   if (_tbResetEv) _tbResetEv.innerHTML = '';
   // Toolbar « filtre discipline » (cachée si aucune discipline)
-  _renderDiscChannelToolbar('notes');
+  _renderDisciplineToolbar('notes');
 
   // Sélecteur de période — distingue "pas encore initialisé" de "Toutes" (vide explicite)
   const sel = document.getElementById('eval-period-filter');
@@ -27198,9 +27232,8 @@ function openNewEvalModal() {
   document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
   document.getElementById('meval-new-coef').value = (S.evalPrefs?.defaultCoef ?? 1);
   document.getElementById('meval-new-granularity').value = '';
-  // Flux (canal) + sous-groupe : régénérés depuis les classes cochées dans le panneau Classes.
+  // Sélecteur de discipline (flux) : régénéré depuis les classes cochées
   _evalRefreshChannelSelect('meval-new');
-  _evalRefreshSubgroupSelect('meval-new');
   // Type : déverrouillé, A coché par défaut
   document.getElementById('meval-new-type-lock').style.display = 'none';
   for (const r of document.querySelectorAll('input[name="meval-new-type"]')) {
@@ -27305,9 +27338,7 @@ function _evalNewOnClassChipToggle(checkbox) {
     if (checkbox.checked) lbl.classList.add('on'); else lbl.classList.remove('on');
   }
   _evalNewRenderClassRows();
-  // Sous-groupe + flux : les classes cochées influent sur la liste des subgroups éligibles
-  // et sur la visibilité du sélecteur de flux (Principal/Secondaire).
-  try { _evalRefreshSubgroupSelect('meval-new'); } catch(_) {}
+  // Discipline (flux) : visibilité dépend des classes cochées.
   try { _evalRefreshChannelSelect('meval-new'); } catch(_) {}
 }
 
@@ -27919,9 +27950,8 @@ function _evalEditToggleClass(checkbox) {
   _evalEditDirty = true;
   // Re-render la section pour afficher / cacher les champs date+créneau par classe
   _evalEditRenderClasses(ev);
-  // Rafraîchit la visibilité du sélecteur de flux + la liste des sous-groupes
+  // Rafraîchit la visibilité du sélecteur de discipline
   try { _evalRefreshChannelSelect('meval-edit'); } catch (_) {}
-  try { _evalRefreshSubgroupSelect('meval-edit'); } catch (_) {}
   save();
 }
 
@@ -28459,8 +28489,6 @@ function _competencePickerAlsoToggleAll(check) {
 // alors automatiquement les sids du roster. Pas de feature de "sous-groupe"
 // dédiée — c'est redondant avec les virtual classes.
 
-// Noop de compat — au cas où d'anciens onclick traînent quelque part.
-function openSubgroupsManager() { /* removed — use virtual classes */ }
 function openDisciplinesModal() {
   if (!S.disciplines || Object.keys(S.disciplines).length === 0) {
     S.disciplines = { 'disc_main': { id: 'disc_main', nom: 'Discipline principale', isPrimary: true } };
@@ -28501,7 +28529,7 @@ function _renderDisciplinesList() {
         oninput="_disciplineUpdateName('${_esc(d.id)}', this.value)"
         style="padding:4px 8px;font-size:.95em;font-family:var(--font-serif)">
       <span style="font-size:.82em;color:var(--pencil);text-align:center">
-        ${d.isPrimary ? '<strong style="color:#5b21b6">Principale</strong>' : (nbCls + nbEv > 0 ? `${nbCls} cl. · ${nbEv} év.` : 'inutilisée')}
+        ${d.isPrimary ? '<strong style="color:var(--disc-accent)">Principale</strong>' : (nbCls + nbEv > 0 ? `${nbCls} cl. · ${nbEv} év.` : 'inutilisée')}
       </span>
       <button class="btn btn-d btn-sm" onclick="_deleteDiscipline('${_esc(d.id)}')" title="${_escAttr(delTitle)}"${canDelete ? '' : ' disabled style="opacity:.4;cursor:not-allowed"'}>✕ Supprimer</button>
     </div>`;
@@ -28558,200 +28586,11 @@ function _deleteDiscipline(id) {
   try { _refreshSubgroupSelectors(); } catch (_) {}
 }
 function _refreshSubgroupSelectors() {
-  for (const tabKey of ['notes', 'bilan', 'comp']) _renderDiscChannelToolbar(tabKey);
+  for (const tabKey of ['notes', 'bilan', 'comp']) _renderDisciplineToolbar(tabKey);
   for (const prefix of ['meval-new', 'meval-edit']) _evalRefreshChannelSelect(prefix);
 }
 function _refreshDisciplineSelectors() { _refreshSubgroupSelectors(); }
-function _evalRefreshSubgroupSelect(_prefix) { /* noop — subgroup field removed */ }
-function _openSubgroupsFromEval(_id) { /* noop */ }
-// _evalEffectiveSidsForClass défini plus bas dans le fichier.
 
-function _renderSubgroupsList_REMOVED_DELETE_FROM_HERE() { /*
-  const wrap = document.getElementById('msg-list');
-  if (!wrap) return;
-  const list = Object.values(S.subgroups || {}).sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
-  if (list.length === 0) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px;font-size:.86em">Aucun sous-groupe. Cliquez sur « + Ajouter un sous-groupe » pour créer une classe recomposée.</p>';
-    return;
-  }
-  let html = '';
-  for (const sg of list) {
-    const cTotal = (sg.members || []).reduce((s, m) => s + (Array.isArray(m.sids) ? m.sids.length : 0), 0);
-    const nbCls = (sg.members || []).filter(m => Array.isArray(m.sids) && m.sids.length > 0).length;
-    // Pour chaque classe avec des élèves : chips d'élèves cliquables
-    let membersHtml = '';
-    const allCls = Object.values(S.classes || {}).sort((a,b)=>(a.niveau||999)-(b.niveau||999)||(a.nom||'').localeCompare(b.nom||'','fr'));
-    for (const c of allCls) {
-      if (!Array.isArray(c.eleves) || c.eleves.length === 0) continue;
-      const memberMap = sg.members || [];
-      const memberEntry = memberMap.find(m => m.classId === c.id);
-      const checkedSids = new Set(memberEntry?.sids || []);
-      const sortedEleves = c.eleves.slice().sort((a, b) => {
-        const sa = S.eleves[a], sb = S.eleves[b];
-        const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
-        const kb = (sb?.nom || '').toLowerCase() + '|' + (sb?.prenom || '').toLowerCase();
-        return ka.localeCompare(kb, 'fr');
-      });
-      const checkedN = sortedEleves.filter(sid => checkedSids.has(sid)).length;
-      let chipsHtml = '';
-      for (const sid of sortedEleves) {
-        const stu = S.eleves[sid];
-        if (!stu) continue;
-        const on = checkedSids.has(sid);
-        const label = `${(stu.prenom || '').trim()} ${(stu.nom || '').trim().toUpperCase()}`.trim();
-        chipsHtml += `<span class="sg-stu-chip${on ? ' on' : ''}" onclick="_subgroupToggleStu('${_esc(sg.id)}','${_esc(c.id)}','${_esc(sid)}')" style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:.82em;cursor:pointer;margin:1px;background:${on ? 'var(--ink-blue)' : 'var(--paper-deep)'};color:${on ? '#fff' : 'var(--ink-deep)'};border:1px solid ${on ? 'var(--ink-blue)' : 'var(--rule-line)'}">${_esc(label)}</span>`;
-      }
-      membersHtml += `<div style="margin-top:6px;padding:6px 8px;background:var(--paper);border:1px solid var(--rule-line-soft);border-radius:3px">
-        <div style="font-size:.82em;color:var(--pencil);margin-bottom:4px"><strong>${_esc(c.nom)}</strong> — ${checkedN}/${sortedEleves.length} élève(s)
-          <button class="btn btn-g btn-sm" onclick="_subgroupBulkSelect('${_esc(sg.id)}','${_esc(c.id)}',true)" style="padding:0 6px;font-size:.78em;margin-left:6px">Tout</button>
-          <button class="btn btn-g btn-sm" onclick="_subgroupBulkSelect('${_esc(sg.id)}','${_esc(c.id)}',false)" style="padding:0 6px;font-size:.78em">Rien</button>
-        </div>
-        <div style="line-height:1.7">${chipsHtml}</div>
-      </div>`;
-    }
-    html += `<div class="sg-card" style="padding:8px 10px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input type="text" value="${_escAttr(sg.nom || '')}" placeholder="Nom du sous-groupe" oninput="_subgroupUpdate('${_esc(sg.id)}','nom',this.value)" style="flex:1;min-width:160px;padding:3px 6px;font-size:.92em">
-        <span style="font-size:.78em;color:var(--pencil)" title="${nbCls} classe(s), ${cTotal} élève(s)">${cTotal} él. / ${nbCls} cl.</span>
-        <button class="btn btn-d btn-sm" onclick="_subgroupDelete('${_esc(sg.id)}')" title="Supprimer ce sous-groupe">✕</button>
-      </div>
-      ${membersHtml || '<p style="font-size:.82em;color:var(--pencil);font-style:italic;margin:6px 0 0">Aucune classe disponible.</p>'}
-    </div>`;
-  }
-  wrap.innerHTML = html;
-}
-
-function _subgroupAdd() {
-  pushUndo();
-  const id = _newSubgroupId();
-  if (!S.subgroups) S.subgroups = {};
-  S.subgroups[id] = { id, nom: 'Nouveau sous-groupe', members: [] };
-  save();
-  _renderSubgroupsList();
-  _refreshSubgroupSelectors();
-}
-
-function _subgroupUpdate(id, field, value) {
-  const sg = S.subgroups?.[id];
-  if (!sg) return;
-  if (sg[field] === value) return;
-  if (typeof _evalArmUndo === 'function') _evalArmUndo();
-  else pushUndo();
-  sg[field] = value;
-  save();
-  // Pas de re-render de la liste sur frappe (focus serait perdu).
-  _refreshSubgroupSelectors();
-}
-
-function _subgroupDelete(id) {
-  const sg = S.subgroups?.[id];
-  if (!sg) return;
-  const evsUsing = Object.values(S.evaluations || {}).filter(e => e.subgroupId === id);
-  let msg = `Supprimer le sous-groupe « ${sg.nom || sg.id} » ?`;
-  if (evsUsing.length > 0) msg += `\n\n${evsUsing.length} évaluation(s) perdront leur restriction de roster (tableur ré-élargi à toute la classe).`;
-  if (!confirm(msg)) return;
-  pushUndo();
-  for (const ev of evsUsing) delete ev.subgroupId;
-  delete S.subgroups[id];
-  save();
-  _renderSubgroupsList();
-  _refreshSubgroupSelectors();
-  toast(`✓ Sous-groupe supprimé`);
-}
-
-function _subgroupToggleStu(sgId, classId, sid) {
-  const sg = S.subgroups?.[sgId];
-  if (!sg) return;
-  pushUndo();
-  if (!Array.isArray(sg.members)) sg.members = [];
-  let entry = sg.members.find(m => m.classId === classId);
-  if (!entry) {
-    entry = { classId, sids: [] };
-    sg.members.push(entry);
-  }
-  if (!Array.isArray(entry.sids)) entry.sids = [];
-  const idx = entry.sids.indexOf(sid);
-  if (idx >= 0) entry.sids.splice(idx, 1);
-  else entry.sids.push(sid);
-  if (entry.sids.length === 0) {
-    sg.members = sg.members.filter(m => m !== entry);
-  }
-  save();
-  _renderSubgroupsList();
-}
-
-function _subgroupBulkSelect(sgId, classId, all) {
-  const sg = S.subgroups?.[sgId];
-  const cls = S.classes?.[classId];
-  if (!sg || !cls) return;
-  pushUndo();
-  if (!Array.isArray(sg.members)) sg.members = [];
-  sg.members = sg.members.filter(m => m.classId !== classId);
-  if (all) {
-    sg.members.push({ classId, sids: (cls.eleves || []).slice() });
-  }
-  save();
-  _renderSubgroupsList();
-}
-
-// Met à jour les sélecteurs de flux + sous-groupe + pastilles, dans toolbars
-// onglets eval et modales eval-new/edit si ouvertes.
-function _refreshSubgroupSelectors() {
-  for (const tabKey of ['notes', 'bilan', 'comp']) {
-    _renderDiscChannelToolbar(tabKey);
-  }
-  for (const prefix of ['meval-new', 'meval-edit']) {
-    _evalRefreshChannelSelect(prefix);
-    _evalRefreshSubgroupSelect(prefix);
-  }
-}
-// Alias pour rétrocompat des appels existants.
-function _refreshDisciplineSelectors() { _refreshSubgroupSelectors(); }
-
-// Re-rendu du select sous-groupe dans une modale (eval-new ou eval-edit) en
-// fonction des classes cochées (les flux ne filtrent PAS la liste — un subgroup
-// peut être utilisé sur n'importe quel flux). Affiché tant qu'au moins 1 subgroup
-// existe ; sinon caché.
-function _evalRefreshSubgroupSelect(prefix) {
-  const sel = document.getElementById(prefix + '-subgroup');
-  const wrap = document.getElementById(prefix + '-subgroup-wrap');
-  if (!sel || !wrap) return;
-  let classIds = [];
-  let curValue = sel.value;
-  if (prefix === 'meval-new') {
-    classIds = (typeof _evalNewGetCheckedClassIds === 'function') ? _evalNewGetCheckedClassIds() : [];
-  } else if (prefix === 'meval-edit') {
-    const evId = document.getElementById('meval-edit-id')?.value;
-    const ev = S.evaluations?.[evId];
-    if (ev) classIds = _evalClassIds(ev);
-    if (ev && !curValue) curValue = ev.subgroupId || '';
-  }
-  const allSubs = Object.values(S.subgroups || {});
-  if (allSubs.length === 0) {
-    wrap.style.display = 'none';
-    sel.innerHTML = '<option value="">— Tous les élèves —</option>';
-    return;
-  }
-  // Sous-groupes éligibles : au moins un membre dans une des classes cochées,
-  // ou (classIds vide) tous les sous-groupes.
-  const candidates = allSubs.filter(sg => {
-    if (classIds.length === 0) return true;
-    const cidSet = new Set(classIds);
-    return (sg.members || []).some(m => cidSet.has(m.classId) && Array.isArray(m.sids) && m.sids.length > 0);
-  });
-  if (candidates.length === 0) {
-    wrap.style.display = 'none';
-    sel.innerHTML = '<option value="">— Tous les élèves —</option>';
-    return;
-  }
-  wrap.style.display = '';
-  let html = `<option value=""${!curValue ? ' selected' : ''}>— Tous les élèves des classes —</option>`;
-  for (const sg of candidates.sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr'))) {
-    const n = _subgroupAllSids(sg).length;
-    html += `<option value="${_escAttr(sg.id)}"${sg.id === curValue ? ' selected' : ''}>${_esc(sg.nom || sg.id)} (${n} él.)</option>`;
-  }
-  sel.innerHTML = html;
-} */ }
 
 // Re-rendu du select de flux (canal) dans une modale (eval-new ou eval-edit).
 // Affiché ssi au moins une des classes cochées (ou la classe primaire pour edit)
@@ -28797,18 +28636,6 @@ function _evalRefreshChannelSelect(prefix) {
   sel.innerHTML = discIdsSet.map(id => `<option value="${_escAttr(id)}"${id === cur ? ' selected' : ''}>${_esc(_disciplineLabel(id))}</option>`).join('');
 }
 function _evalRefreshDisciplineSelect(prefix) { return _evalRefreshChannelSelect(prefix); }
-
-// Ouvre la modale Classes recomposées depuis la modale eval-new ou eval-edit.
-function _openSubgroupsFromEval(returnModalId) {
-  if (returnModalId && typeof _modalReturnTo !== 'undefined') {
-    _modalReturnTo['msubgroups'] = () => {
-      try { _refreshSubgroupSelectors(); } catch (_) {}
-      try { openMod(returnModalId); } catch (_) {}
-    };
-  }
-  closeMod2(returnModalId);
-  setTimeout(() => openSubgroupsManager(), 80);
-}
 
 // ═══════════════ Gestion des compétences (CRUD) ═══════════════
 // Modale ⚙ Gérer les compétences depuis l'onglet 🎯 Bilan par compétences.
@@ -33423,17 +33250,9 @@ function _renderDisciplineToolbar(tabKey) {
   el.innerHTML = `<label style="font-size:.85em;color:var(--pencil)">🎓 Discipline :</label>
     <select onchange="_setCurrentDiscipline(getCls()?.id, this.value)" title="Sélectionne la discipline à afficher" style="padding:4px 8px;font-size:.9em">${opts}</select>`;
 }
-// Alias rétrocompat (les callsites existants utilisent l'ancien nom)
-function _renderDiscChannelToolbar(tabKey) { return _renderDisciplineToolbar(tabKey); }
-
-// Helpers subgroup retirés (feature abandonnée, redondante avec virtual classes).
-// Stubs gardés au cas où d'anciens appels traînent.
-function _subgroupSidsForClass(_sg, _classId) { return []; }
-function _subgroupAllSids(_sg) { return []; }
-function _evalEffectiveSidsForClass(_ev, classId) {
-  const cls = S.classes?.[classId];
-  return cls ? (cls.eleves || []).slice() : [];
-}
+// (Anciens shims _renderDiscChannelToolbar / _subgroupSidsForClass /
+//  _subgroupAllSids / _evalEffectiveSidsForClass retirés — feature subgroups
+//  abandonnée, plus aucun call-site live.)
 // Pastille discrète indiquant la discipline d'une éval. Affichée seulement si la
 // classe a ≥ 2 disciplines ET que la discipline de l'éval n'est pas la 1re
 // (celle par défaut). `cls` = classe de référence pour le nommage.
@@ -33444,7 +33263,7 @@ function _evalChannelPillHTML(ev, cls) {
   const discId = _evalDisciplineId(ev);
   if (discId === ids[0]) return ''; // implicite
   const label = _disciplineLabel(discId);
-  return `<span class="disc-pill" style="display:inline-block;font-family:var(--font-mono);font-size:.7em;padding:1px 6px;border-radius:8px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;margin-right:4px;vertical-align:middle" title="${_escAttr('Discipline : ' + label)}">🎓 ${_esc(label)}</span>`;
+  return `<span class="disc-pill" style="display:inline-block;font-family:var(--font-mono);font-size:.7em;padding:1px 6px;border-radius:8px;background:var(--disc-accent-soft);color:var(--disc-accent);border:1px solid var(--disc-accent-mid);margin-right:4px;vertical-align:middle" title="${_escAttr('Discipline : ' + label)}">🎓 ${_esc(label)}</span>`;
 }
 
 // ── Multi-classes pour une éval (ev.classIds) — helpers de compat ──
@@ -34779,7 +34598,7 @@ function renderBilanTab() {
   // Reset la toolbar de tri en haut (sera re-peuplée plus bas si une classe est sélectionnée)
   const _tbReset = document.getElementById('bilan-sort-toolbar');
   if (_tbReset) _tbReset.innerHTML = '';
-  _renderDiscChannelToolbar('bilan');
+  _renderDisciplineToolbar('bilan');
   const sel = document.getElementById('bilan-period-filter');
   if (sel) {
     // Restaure la période persistée (synchronisée avec l'onglet Bilan par compétences).
@@ -36028,7 +35847,7 @@ function renderCompetencesTab() {
   const cls = getCls();
   const wrap = document.getElementById('comp-wrap');
   if (!wrap) return;
-  _renderDiscChannelToolbar('comp');
+  _renderDisciplineToolbar('comp');
   // Restaure l'état UI des contrôles
   const dispSel = document.getElementById('comp-display-mode');
   if (dispSel) dispSel.value = _compBilanGetDisplayMode();

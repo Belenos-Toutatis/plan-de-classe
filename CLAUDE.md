@@ -1560,14 +1560,34 @@ Les anciens noms `_clsPrimaryName`, `_clsSecondaryName`, `_clsHasTwoChannels`, `
 
 ### Filtrage
 
-Sites filtrés par discipline (callsites direct, via `_clsHasMultipleDisciplines` + `_currentDiscipline` + `_evalMatchesDiscipline`) :
+Sites filtrés par discipline (callsites direct, via `_currentDiscipline` + `_evalMatchesDiscipline`) :
 - `renderEvalNotes` (liste Devoirs)
 - `renderBilanTab` (ownEvs + orphanEvs)
 - `renderCompetencesTab` (compIds + orphan)
 - `_bilanCollectEligibleEvals`
 - `_computeStudentMeanForPeriod` (paramètre `channelFilter` étendu : accepte un disciplineId, ou `'primary'`/`'secondary'` legacy normalisé)
 
+**Important** : le filtre est appliqué **systématiquement**, même quand la classe n'a qu'une seule discipline (mono-flux). Cela permet d'exclure correctement les évaluations orphelines (provenant d'autres classes d'élèves transférés ou inhérentes au modèle multi-classes) qui n'appartiennent pas à la discipline courante. Le sélecteur de flux dans la toolbar reste caché en mono-discipline (pas de choix utile pour l'utilisateur), mais le filtre est toujours actif en arrière-plan.
+
 **Pas filtrés** (volontaire) : tableur d'éval, calcul intra-éval, cross-tab d'une éval — ces vues sont focalisées sur une éval précise.
+
+### Appartenance per-période (`cls.membership`)
+
+Pour les classes recomposées dont le roster évolue entre périodes (typique : Devoir Fait), chaque élève peut avoir un intervalle d'appartenance restreint :
+
+```js
+cls.membership = { [sid]: { fromPer, toPer } }
+// fromPer / toPer : code période (S1/S2 ou T1/T2/T3) ou null pour ouvert
+// sid absent du dict → présent sur toutes les périodes (défaut)
+```
+
+Helper : `_stuActiveInClassForPeriod(cls, sid, periode)`. En mode « Toutes » → toujours actif (union). En période spécifique → vérifie l'inclusion dans [fromPer..toPer].
+
+Appliqué dans : `renderBilanTab`, `_bilanBuildRows`, `renderCompetencesTab` (sids + sidsForOrphan).
+
+**Migration auto** : si l'utilisateur change `S.evalPrefs.periodMode` (semestre ↔ trimestre), tous les `cls.membership` sont effacés (les codes ne correspondent plus). Toast d'avertissement avec compte des restrictions effacées.
+
+UI : dans la modale 🔀 Classe recomposée (`mvc`), deux mini-sélecteurs « de [—] à [—] » par élève coché + barre d'action en lot avec sélection secondaire (case droite distincte de la case d'appartenance gauche) pour appliquer en bulk : `mvcBulkApplyPeriod()` / `mvcBulkResetPeriod()` / `mvcBulkSelAll()`.
 
 ### Suppression d'une discipline
 
