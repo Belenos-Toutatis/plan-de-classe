@@ -231,6 +231,27 @@ Ordre des migrations dans `postLoadHook()` :
 
 `postLoadHook()` initialise aussi : `S.snapshots`, `S.attendance`, `S.tabletPools`, `S.tags`, `S.userLinks`, `S.seatingSnapshots`, `S.movedHighlights` (tous `{}` ou `[]` si absents).
 
+### Helper `_newRoomTemplate()`
+
+Toutes les créations de room (au runtime — `mvc` save, `mce` ajout salle, duplication de classe, création depuis Config Salle) doivent passer par ce helper pour garantir une structure cohérente avec le modèle courant :
+
+```js
+function _newRoomTemplate() {
+  return {
+    seating: {},
+    groupes: {},
+    ipadsByPool: {},   // nouveau format (lazy peuplé par activePoolData)
+    posTagId: {},
+    allowedFor: {},
+    aeshCount: 0,
+    aeshSeating: {},
+    aeshLinks: {},
+  };
+}
+```
+
+⚠️ Ne pas écrire en dur `{ seating:{}, ipads:{}, ipads_g1:{}, ipads_g2:{}, groupes:{} }` (ancien format legacy) — ces champs sont supprimés par `migrateTabletAssignments` au chargement mais pollueront la session courante jusqu'au prochain reload.
+
 ## Niveaux reconnus
 | Code | Niveau     | Couleur      |
 |------|------------|--------------|
@@ -1186,8 +1207,8 @@ Quand un placement modifie une ou plusieurs cases (drag&drop, mélange, "🔁 So
 ### Stockage persistant
 `S.movedHighlights[classId][salleId] = { keys: ['r,c', ...], hidden: bool }` — par classe + salle. Présent dans le JSON, donc **traverse les sessions et les machines** (un placement préparé chez soi le soir est retrouvé surligné le lendemain en classe).
 
-### Accumulation
-Chaque placement **fusionne** les nouvelles keys dans le bucket via `_recordMovesFromDiff(cls, beforeSeating)` — accumulation de tous les changements jusqu'à effacement explicite. Les sites d'appel sont les fonctions de placement (`dropOnCell`, `randomPlacement`/`_runRandomPlacement`, `removeSeat`, `unplaceStu`, `clearAllSeating`, `mseBulkApply`, `placeStudentAtEntry`, `snapshotRestore`, `onPosBlur`, `onPosPaste`, `resolveMinimalConflicts`).
+### Comparaison à l'ORIGINE (pas au "précédent")
+`_recordMovesFromDiff(cls, beforeSeating)` capture un snapshot d'**origine** à la 1re mutation depuis le dernier clear (`bucket.origin = beforeSeating`). À chaque appel, recalcule la liste `bucket.keys` = `{k | origin[k] !== after[k]}`. **Conséquence importante** : si l'utilisateur déplace un élève puis le RAMÈNE à sa case de départ, le surlignage de cette case disparaît automatiquement (la case est revenue à l'origine, plus un changement net). Quand toutes les cases ont retrouvé leur origine, `bucket.origin` est supprimé pour repartir d'un état neuf. Les sites d'appel sont les fonctions de placement (`dropOnCell`, `randomPlacement`/`_runRandomPlacement`, `removeSeat`, `unplaceStu`, `clearAllSeating`, `mseBulkApply`, `placeStudentAtEntry`, `snapshotRestore`, `onPosBlur`, `onPosPaste`, `resolveMinimalConflicts`).
 
 ### Bouton 💡 dans la toolbar (Plan Prof + Vue Élève)
 Toujours visible (même si aucun surlignage actif → opacité .35 + grayscale). 3 états :
@@ -1592,6 +1613,60 @@ UI : dans la modale 🔀 Classe recomposée (`mvc`), deux mini-sélecteurs « de
 ### Suppression d'une discipline
 
 Refusée si la discipline est utilisée par ≥ 1 classe ou ≥ 1 éval (toast d'avertissement, bouton ✕ désactivé). Pas de cascade automatique — l'utilisateur doit retirer la discipline des classes / évals d'abord. La discipline principale (`isPrimary`) n'est jamais supprimable (peut être renommée).
+
+### Affectation rapide depuis l'onglet Devoirs
+
+Bouton **🎓 Disciplines** dans la toolbar de l'onglet **Devoirs** (uniquement — pas Bilans, qui sont des vues de consultation) → ouvre `mdisciplines` via `openDisciplinesFromTab()` avec un panneau supplémentaire **« 📚 Disciplines enseignées à [classe active] »** (id `mdisc-class-assign`). Checkboxes pour cocher/décocher les disciplines de la classe sans passer par « Modifier classe ». Helper `_discToggleClassAssign(discId, on)` : `pushUndo()` + mute `cls.disciplineIds` + garantit ≥ 1 discipline (retombe sur `_disciplinePrimaryId()` si vide). Re-render auto des toolbars eval.
+
+## Classes recomposées (virtual classes)
+
+Une « classe recomposée » est une `cls` avec `cls.virtual = true` créée via l'onglet Classes (bouton **+ Nouvelle classe recomposée**). Elle a son propre roster (sids issus de n'importe quelle(s) classe(s) réelle(s)), sa propre salle/plan, ses propres bilans et disciplines.
+
+### Modale `mvc` — mode pliable
+
+Pour réduire la densité visuelle dans le cas simple (cocher quelques élèves), la modale a deux niveaux :
+
+- **Mode simple (par défaut)** : seule la liste d'élèves avec **une case par ligne** (= membre de la classe). Le panneau de filtres (Tags / Classes / Niveau), la barre bulk période, la 2e case (sélection bulk) et les sélecteurs « de [..] à [..] » par élève sont **cachés**.
+- **Mode avancé** : déplié via le bouton **▸ Options avancées** (en haut de la modale, à côté de la liste). Reveille tous les outils + un mini-header de colonnes « 👤 Membre | 🗓 Sélection bulk ▶ » au-dessus de la liste pour clarifier les 2 cases.
+
+État : variable globale `_mvcAdvancedOn` (booléen, reset à chaque ouverture via `_mvcResetAdvanced()`). Toggle : `_mvcToggleAdvanced()` qui synchronise visibilité du wrap, libellé du bouton (▸ vs ▾), header de colonnes et re-render de la liste.
+
+CSS responsive : `@media (pointer: coarse)` agrandit les cases (22px) et sélecteurs (font-size 1em, padding) — meilleure ergonomie sur Surface / iPad. La case bulk droite utilise `accent-color: var(--disc-accent)` pour la distinguer visuellement.
+
+### Workflow inverse depuis l'onglet Élèves
+
+Sélection multi-élèves (clic & glisser) dans l'onglet Élèves → barre d'actions en lot → bouton violet **🔀 Classe recomposée** appelle `bulkCreateRecomposee()` qui ouvre `mvc` avec les sids pré-cochés (via `_mvcSelected`) et focus sur le champ Nom. Permet de créer un groupe DNL/Bilingue/Option en 3 clics.
+
+### Appartenance per-période (`cls.membership`)
+
+Pour les classes recomposées dont le roster évolue entre périodes (typique : Devoir Fait), chaque élève peut avoir un intervalle d'appartenance restreint : `cls.membership[sid] = { fromPer, toPer }`. Codes période (S1/S2 ou T1/T2/T3) ou null pour ouvert. Géré dans le mode avancé (sélecteurs « de [..] à [..] » par élève + barre bulk violette). Cf. section *Appartenance per-période* dans le bloc Disciplines pour les détails.
+
+## Mode de coloration des cellules (Plan Prof)
+
+Sélecteur **🎨 Couleur** dans la toolbar Plan Prof (`#tg-color-mode`). 4 modes :
+- **Groupe** : couleur G1/G2/G3 (bleu/orange/violet)
+- **Tag** : couleur du tag (de l'élève ou de la place)
+- **Genre** : bleu (M) / rose (F)
+- **Aucune** : pas de coloration
+
+**Priorité** (code dans `buildCell` ligne ~14238) :
+1. Attribut de l'ÉLÈVE : `stu.groupe` (1/2/3) | premier `stu.tags[0]` | `stu.civilite` (M/F)
+2. Fallback : attribut de la PLACE : `seatG` (zone configurée via Config Salle → mode Groupes) | `seatTag` (via mode Tags) — utile pour visualiser la configuration des places en l'absence d'élève
+
+CSS : les classes colorées `.cell.oc.cg1`, `.cell.oc.cgen-m`, etc. portent toutes `!important` pour battre la règle `.cell.oc { background:var(--paper) !important }` du design system « papier » (ligne ~1596).
+
+Persistance : `localStorage.planClasse_planColorMode`. Setter : `setPlanColorMode(mode)` qui appelle `renderTeacherGrid()`.
+
+## Menu contextuel cellule (clic droit)
+
+`showCtxMenu(e, cls, key, sid)` populate les libellés dynamiques + positionne le menu pour ne pas déborder.
+
+**Items conditionnels** :
+- ⚠️ **Contraintes non respectées (N)** : visible UNIQUEMENT si `getPlacementViolations(cls, sid, key)` renvoie ≥ 1. Handler `ctxShowViolations()` → ouvre `showViolationsModal(cls)` (modale `mviolations`).
+- 🔔 Rappels (N) : libellé enrichi avec compteur si > 0 actifs.
+- 📦 / 📝 −1 : grisés si compteur à 0.
+- ↩ Annuler : grisé si `undoStack` vide.
+- 🎓 Aménagements (sous-menu) : labels « Marquer X » / « Retirer X » selon l'état actuel de chaque statut.
 
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
