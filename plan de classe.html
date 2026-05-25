@@ -3158,14 +3158,18 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="mvcCheckAll(false)">Tout décocher</button>
     </div>
     <!-- Barre d'action en lot pour l'appartenance par période (utile sur classes évolutives type DF) -->
+    <!-- Cible : les élèves cochés dans la 2e case (à droite) — distincte de la case d'appartenance. -->
     <div id="mvc-bulk-period" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;padding:5px 8px;background:#faf7ff;border:1px solid #e8def7;border-radius:4px;font-size:.85em">
-      <span style="color:#5b21b6;font-weight:600">🗓 Période pour <span id="mvc-bulk-target" style="font-family:var(--font-mono)">tous les cochés</span> :</span>
+      <span style="color:#5b21b6;font-weight:600">🗓 Période pour <span id="mvc-bulk-target" style="font-family:var(--font-mono)">la sélection (case droite)</span> :</span>
       <span>de</span>
       <select id="mvc-bulk-from" style="padding:1px 4px;font-family:var(--font-mono)"></select>
       <span>à</span>
       <select id="mvc-bulk-to" style="padding:1px 4px;font-family:var(--font-mono)"></select>
-      <button class="btn btn-p btn-sm" onclick="mvcBulkApplyPeriod()" title="Applique cette plage de périodes à tous les élèves cochés" style="padding:2px 8px">✅ Appliquer</button>
-      <button class="btn btn-g btn-sm" onclick="mvcBulkResetPeriod()" title="Retire toutes les restrictions de période (= toutes les périodes)" style="padding:2px 8px">↻ Tous toutes périodes</button>
+      <button class="btn btn-p btn-sm" onclick="mvcBulkApplyPeriod()" title="Applique cette plage à tous les élèves dont la case droite est cochée" style="padding:2px 8px">✅ Appliquer</button>
+      <button class="btn btn-g btn-sm" onclick="mvcBulkResetPeriod()" title="Retire toute restriction de période (= toutes les périodes) pour les élèves cochés (case droite)" style="padding:2px 8px">↻ Toutes périodes</button>
+      <span style="width:1px;height:16px;background:#d4b8f5;margin:0 4px"></span>
+      <button class="btn btn-g btn-sm" onclick="mvcBulkSelAll(true)" title="Cocher la case droite de tous les élèves membres" style="padding:2px 8px">☑ Tout sélectionner</button>
+      <button class="btn btn-g btn-sm" onclick="mvcBulkSelAll(false)" title="Décocher la case droite de tout le monde" style="padding:2px 8px">☐ Aucun</button>
     </div>
     <div id="mvc-students" style="max-height:340px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;padding:6px"></div>
     <input type="hidden" id="mvc-id">
@@ -5211,7 +5215,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T23:30:00Z';
+const APP_VERSION   = '2026-05-25T23:45:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -7862,6 +7866,10 @@ let _mvcIdManual   = false;     // l'utilisateur a-t-il modifié l'ID manuelleme
 // Appartenance per-période { sid: { fromPer, toPer } } — édité dans la modale,
 // appliqué à cls.membership au save. Entrées vides ⇒ « toutes périodes » (défaut).
 let _mvcMembership = {};
+// Sélection « secondaire » (case à droite, distincte de _mvcSelected) — sert
+// uniquement à choisir la cible des actions en lot sur l'appartenance par
+// période. Reset à chaque ouverture de la modale.
+let _mvcBulkSel = new Set();
 // Filtres cumulatifs du panneau "🔎 Filtrer les candidats" (intersection ET entre les 3 dimensions ;
 // tags entre eux : OU par défaut, ET configurable ; classes entre elles : OU implicite ; niveau : single)
 let _mvcFilters = { tagIds: new Set(), tagMode: 'or', classIds: new Set(), level: null };
@@ -7990,6 +7998,7 @@ function openVirtualClassModal(id, opts) {
   }
   _mvcEditingId = id || null;
   _mvcSelected = new Set();
+  _mvcBulkSel = new Set();
   // Membership : copie depuis cls.membership si édition (deep clone simple), sinon vide
   _mvcMembership = {};
   if (id && S.classes?.[id]?.membership) {
@@ -8100,6 +8109,7 @@ function renderMvcStudents() {
     html += eleves.map(s => {
       const checked = _mvcSelected.has(s.id) ? 'checked' : '';
       const isChecked = _mvcSelected.has(s.id);
+      const bulkChecked = _mvcBulkSel.has(s.id) ? 'checked' : '';
       const tagSpans = (Array.isArray(s.tags) ? s.tags : [])
         .map(tid => S.tags[tid])
         .filter(Boolean)
@@ -8110,11 +8120,17 @@ function renderMvcStudents() {
       const memUI = isChecked
         ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:.72em;color:var(--pencil);margin-left:4px" onclick="event.preventDefault()">de ${_mkPerSel(s.id,'fromPer',mem.fromPer||'')} à ${_mkPerSel(s.id,'toPer',mem.toPer||'')}</span>`
         : '';
+      // 2e case à droite : sélection pour les actions en lot sur l'appartenance par période.
+      // Affichée (et active) uniquement pour les membres de la classe (case gauche cochée).
+      const bulkUI = isChecked
+        ? `<input type="checkbox" ${bulkChecked} onclick="event.stopPropagation()" onchange="mvcToggleBulkSel('${s.id}',this.checked)" title="Sélection pour les actions en lot sur les périodes (barre violette ci-dessus)" style="width:14px;height:14px;cursor:pointer;margin-left:6px;accent-color:#7c3aed">`
+        : `<span style="display:inline-block;width:14px;height:14px;margin-left:6px"></span>`;
       return `<label style="display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
-        <input type="checkbox" ${checked} onchange="mvcToggleSid('${s.id}',this.checked)" style="width:14px;height:14px;cursor:pointer">
+        <input type="checkbox" ${checked} onchange="mvcToggleSid('${s.id}',this.checked)" title="Membre de la classe recomposée" style="width:14px;height:14px;cursor:pointer">
         <span style="flex:1"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>
         ${grpBadge} ${tagSpans}
         ${memUI}
+        ${bulkUI}
       </label>`;
     }).join('');
     html += '</div>';
@@ -8126,8 +8142,24 @@ function renderMvcStudents() {
 
 function mvcToggleSid(sid, checked) {
   if (checked) _mvcSelected.add(sid);
-  else { _mvcSelected.delete(sid); delete _mvcMembership[sid]; }
+  else {
+    _mvcSelected.delete(sid);
+    delete _mvcMembership[sid];
+    _mvcBulkSel.delete(sid); // sortir un élève le retire aussi du bulk-sel
+  }
   // Re-render pour afficher/cacher les sélecteurs de période per-élève
+  renderMvcStudents();
+  _mvcBulkUpdateTarget();
+}
+// Toggle de la case « droite » (sélection pour bulk période).
+function mvcToggleBulkSel(sid, checked) {
+  if (checked) _mvcBulkSel.add(sid); else _mvcBulkSel.delete(sid);
+  _mvcBulkUpdateTarget();
+}
+// Coche/décoche la case « droite » pour TOUS les membres de la classe.
+function mvcBulkSelAll(on) {
+  if (on) for (const sid of _mvcSelected) _mvcBulkSel.add(sid);
+  else _mvcBulkSel.clear();
   renderMvcStudents();
   _mvcBulkUpdateTarget();
 }
@@ -8143,20 +8175,21 @@ function _mvcBulkFillPeriodSelects() {
   from.innerHTML = opts;
   to.innerHTML   = opts;
 }
-// Met à jour le libellé "tous les cochés (N élèves)".
+// Met à jour le libellé « la sélection (case droite) — N élève(s) ».
 function _mvcBulkUpdateTarget() {
   const el = document.getElementById('mvc-bulk-target');
   if (!el) return;
-  const n = _mvcSelected.size;
-  el.textContent = n === 0 ? 'tous les cochés' : `les ${n} élève${n > 1 ? 's' : ''} coché${n > 1 ? 's' : ''}`;
+  const n = _mvcBulkSel.size;
+  el.textContent = n === 0 ? 'la sélection (case droite)' : `les ${n} élève${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
 }
-// Applique la plage (fromPer, toPer) du bulk-bar à TOUS les sids cochés.
+// Applique la plage (fromPer, toPer) du bulk-bar aux sids cochés à droite (_mvcBulkSel).
 function mvcBulkApplyPeriod() {
-  if (_mvcSelected.size === 0) { toast('Coche d\'abord au moins un élève.', 'warn'); return; }
+  if (_mvcBulkSel.size === 0) { toast('Coche d\'abord au moins un élève dans la 2e colonne (à droite).', 'warn'); return; }
   const fromPer = (document.getElementById('mvc-bulk-from')?.value || null) || null;
   const toPer   = (document.getElementById('mvc-bulk-to')?.value   || null) || null;
   let n = 0;
-  for (const sid of _mvcSelected) {
+  for (const sid of _mvcBulkSel) {
+    if (!_mvcSelected.has(sid)) continue; // safety : ignorer les non-membres
     if (!fromPer && !toPer) delete _mvcMembership[sid];
     else _mvcMembership[sid] = { fromPer, toPer };
     n++;
@@ -8167,11 +8200,11 @@ function mvcBulkApplyPeriod() {
     : `🗓 ${n} élève(s) → de ${fromPer || '…'} à ${toPer || '…'}`;
   toast(lbl);
 }
-// Retire toutes les restrictions de période pour tous les cochés.
+// Retire toutes les restrictions de période pour les sids cochés à droite.
 function mvcBulkResetPeriod() {
-  if (_mvcSelected.size === 0) { toast('Coche d\'abord au moins un élève.', 'warn'); return; }
+  if (_mvcBulkSel.size === 0) { toast('Coche d\'abord au moins un élève dans la 2e colonne (à droite).', 'warn'); return; }
   let n = 0;
-  for (const sid of _mvcSelected) {
+  for (const sid of _mvcBulkSel) {
     if (_mvcMembership[sid]) { delete _mvcMembership[sid]; n++; }
   }
   renderMvcStudents();
