@@ -5154,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T08:55:00Z';
+const APP_VERSION   = '2026-05-24T09:20:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11950,10 +11950,10 @@ function _renduRender() {
   // Tableau
   const selCols = cols.filter(c => _renduState.checked.has(c.key));
   const body = document.getElementById('mrendu-body');
-  // Élèves présents à la date de l'éval pour la classe
-  const refDate = _evalDateFor(ev, cls.id) || todayKey();
+  // Élèves présents à AU MOINS UNE date de mini-note (Type A/C) ou passation (Type B)
+  // pour la classe — cohérent avec le tableur.
   const sids = (cls.eleves || [])
-    .filter(sid => _stuActiveOn(S.eleves[sid], refDate))
+    .filter(sid => _stuActiveOnAnyEvalRef(S.eleves[sid], ev, cls.id))
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       const ka = (sa?.nom || '').toLowerCase() + '|' + (sa?.prenom || '').toLowerCase();
@@ -18895,6 +18895,44 @@ function _stuActiveOn(stu, ymd) {
   if (stu.arrivalDate   && d <  stu.arrivalDate)   return false;
   if (stu.departureDate && d >= stu.departureDate) return false;
   return true;
+}
+
+// Dates de référence d'une éval pour une classe :
+//   - Type A/C : dates des mini-notes (`mn.dates[classId]` || `mn.date`)
+//   - Type B   : dates des passations (`p.dates[classId]` || `p.date`)
+// Permet d'afficher un élève parti en cours d'année s'il était présent à au moins
+// une des mini-notes / passations (et pas seulement à la date globale de l'éval).
+// Fallback : date globale de l'éval pour cette classe, puis aujourd'hui.
+function _evalRefDatesForClass(ev, classId) {
+  if (!ev) return [todayKey()];
+  const dates = [];
+  if (ev.type === 'A' || ev.type === 'C') {
+    for (const mn of (ev.miniNotes || [])) {
+      const d = (mn?.dates?.[classId]) || mn?.date;
+      if (d) dates.push(d);
+    }
+  } else if (ev.type === 'B') {
+    for (const p of (ev.passations || [])) {
+      const d = (p?.dates?.[classId]) || p?.date;
+      if (d) dates.push(d);
+    }
+  }
+  if (dates.length === 0) {
+    const fb = _evalDateFor(ev, classId);
+    if (fb) dates.push(fb);
+  }
+  if (dates.length === 0) dates.push(todayKey());
+  return dates;
+}
+
+// True si l'élève était actif à au moins une date de mini-note (A/C) ou passation
+// (B) de l'éval pour la classe. Sert à inclure les élèves transférés en cours
+// d'année qui n'étaient là qu'une partie de l'éval (ex. une élève fait les 2
+// premières passations puis quitte avant la 3e → elle apparaît dans le tableur).
+function _stuActiveOnAnyEvalRef(stu, ev, classId) {
+  if (!stu) return false;
+  const refs = _evalRefDatesForClass(ev, classId);
+  return refs.some(d => _stuActiveOn(stu, d));
 }
 
 // Date de fin (YYYY-MM-DD) de la période donnée pour l'année scolaire courante.
@@ -26344,10 +26382,10 @@ function renderEvalNotes() {
       html += `<div style="font-family:var(--font-mono);font-size:.78em;letter-spacing:0.08em;color:var(--pencil);margin:${lastType ? '8px' : '0'} 0 -2px;padding:2px 6px;border-bottom:1px dashed var(--rule-line)">${_esc(typeLabels[ev.type] || ev.type || '?')}</div>`;
       lastType = ev.type;
     }
-    // Effectif présent à la date du devoir (exclut les élèves partis avant ou
-    // arrivés après) — cohérent avec ce qui apparaît dans le tableur de saisie.
-    const _evRefDate = _evalDateFor(ev, cls.id) || todayKey();
-    const _activeSids = (cls.eleves || []).filter(sid => _stuActiveOn(S.eleves?.[sid], _evRefDate));
+    // Effectif présent à AU MOINS UNE date de mini-note (A/C) ou passation (B) —
+    // cohérent avec le tableur de saisie. Pour les évals où des élèves arrivent /
+    // partent en cours, ils sont comptés s'ils ont pu faire au moins un constituant.
+    const _activeSids = (cls.eleves || []).filter(sid => _stuActiveOnAnyEvalRef(S.eleves?.[sid], ev, cls.id));
     const totalStudents = _activeSids.length;
     let typeBadge, summaryInfo, nbStudents;
     // L'éval peut couvrir plusieurs classes, mais on affiche les stats de la classe active.
@@ -27961,11 +27999,10 @@ function _evalOpenSaisie() {
     toast('⚠ Aucun élève dans cette classe', 'warn');
     return;
   }
-  // Trie alphabétique nom-prénom (défaut ENT). Filtre les élèves arrivés
-  // après ou partis avant la date de l'éval (présence à la date du devoir).
-  const _refDate = _evalDateFor(ev, cls.id) || todayKey();
+  // Trie alphabétique nom-prénom (défaut ENT). Inclut les élèves présents à AU
+  // MOINS UNE date de mini-note (A/C) ou passation (B) — cohérent avec le tableur.
   const sids = cls.eleves.slice()
-    .filter(sid => _stuActiveOn(S.eleves[sid], _refDate))
+    .filter(sid => _stuActiveOnAnyEvalRef(S.eleves[sid], ev, cls.id))
     .sort((a, b) => {
       const sa = S.eleves[a], sb = S.eleves[b];
       if (!sa || !sb) return 0;
@@ -28590,13 +28627,14 @@ function _evalTableurChangeSlot(slotId) {
 
 function _evalTableurSortedSids(cls) {
   const mode = document.getElementById('meval-tableur-sort')?.value || 'nom-prenom';
-  // Date de référence pour la présence : date de l'éval pour la classe active,
-  // fallback aujourd'hui. Un élève arrivé après ou parti avant la date de l'éval
-  // n'apparaît pas dans le tableur (il n'était pas là le jour du devoir).
+  // Présence : on regarde les dates des mini-notes (Type A/C) ou passations (Type B).
+  // Un élève est affiché s'il était actif à AU MOINS UNE de ces dates. Ainsi une élève
+  // transférée mi-année qui a fait les 2 premières passations sur 3 apparaît bien
+  // dans le tableur (au lieu d'être exclue parce que la date globale de l'éval lui
+  // est postérieure). Fallback : date globale de l'éval.
   const _evalId  = document.getElementById('meval-tableur-evalid')?.value;
   const _ev      = S.evaluations?.[_evalId];
-  const _refDate = (_ev ? _evalDateFor(_ev, cls.id) : null) || todayKey();
-  const _activeFilter = (sid) => _stuActiveOn(S.eleves[sid], _refDate);
+  const _activeFilter = (sid) => _stuActiveOnAnyEvalRef(S.eleves[sid], _ev, cls.id);
   // Pattern de ramassage : mode = 'pat-<patternId>'
   if (mode.startsWith('pat-')) {
     const patternId = mode.slice(4);
@@ -35280,10 +35318,10 @@ function _evalExportBuildRows(ev) {
       return ka.localeCompare(kb, 'fr');
     });
   }
-  // Filtre arrivées/départs : présent à la date de l'éval (cohérent avec le tableur).
-  // Un élève arrivé après ou parti avant le devoir n'apparaît pas dans l'export ENT.
-  const _refDate = _evalDateFor(ev, cls.id) || todayKey();
-  sids = sids.filter(sid => _stuActiveOn(S.eleves[sid], _refDate));
+  // Filtre arrivées/départs : présent à AU MOINS UNE date de mini-note (A/C) ou
+  // passation (B), cohérent avec le tableur (un élève qui n'a fait qu'une partie de
+  // l'éval — ex. transféré en milieu d'année — apparaît quand même dans l'export).
+  sids = sids.filter(sid => _stuActiveOnAnyEvalRef(S.eleves[sid], ev, cls.id));
   const comps = _evalCompetencesEvaluated(ev);
   const rows = [];
   for (const sid of sids) {
