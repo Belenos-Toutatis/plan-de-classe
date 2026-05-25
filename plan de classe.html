@@ -4521,28 +4521,28 @@ kbd {
       <div class="about-section">
         <h3>📊 Évaluations</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openEvalPrefs()">⚙ Paramètres (couleurs, seuils, période, règle de moyenne…)</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mevalprefs', openEvalPrefs)">⚙ Paramètres (couleurs, seuils, période, règle de moyenne…)</button>
         </div>
       </div>
       <!-- Disciplines -->
       <div class="about-section">
         <h3>🎓 Disciplines</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openDisciplinesModal()">📋 Catalogue des disciplines</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mdisciplines', openDisciplinesModal)">📋 Catalogue des disciplines</button>
         </div>
       </div>
       <!-- Compétences -->
       <div class="about-section">
         <h3>🧩 Compétences</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openCompetencesManager()">🧩 Gérer les compétences (codes, noms, domaines)</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mcompmgr', openCompetencesManager)">🧩 Gérer les compétences (codes, noms, domaines)</button>
         </div>
       </div>
       <!-- Tags -->
       <div class="about-section">
         <h3>🏷 Tags</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openTagsModal()">🏷 Gérer les tags (DF, DNL, etc.)</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mtags', openTagsModal)">🏷 Gérer les tags (DF, DNL, etc.)</button>
         </div>
         <div style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:4px">Aussi accessible depuis Plan Prof → mode Tags.</div>
       </div>
@@ -4550,8 +4550,8 @@ kbd {
       <div class="about-section">
         <h3>💾 Sauvegarde</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openBackupSettings()">⚙ Stratégie (intervalle + rétention)</button>
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');toggleAutoSync()" id="msettings-sync-btn">🔄 Sync auto : …</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mbackup-settings', openBackupSettings)">⚙ Stratégie (intervalle + rétention)</button>
+          <button class="btn btn-g btn-sm" onclick="toggleAutoSync();_settingsRefreshLabels()" id="msettings-sync-btn">🔄 Sync auto : …</button>
           <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');exportJSON()">💾 Exporter (.json)</button>
         </div>
       </div>
@@ -4559,7 +4559,7 @@ kbd {
       <div class="about-section">
         <h3>🔗 Liens externes</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openUserLinksModal()">🔗 Gérer (ENT, Pronote, Klassroom…)</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mlinks', openUserLinksModal)">🔗 Gérer (ENT, Pronote, Klassroom…)</button>
         </div>
       </div>
       <!-- Apparence -->
@@ -4573,7 +4573,7 @@ kbd {
       <div class="about-section">
         <h3>ℹ À propos</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openAbout()">ⓘ Crédits, licence, version, vérifier les MAJ</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mabout', openAbout)">ⓘ Crédits, licence, version, vérifier les MAJ</button>
         </div>
       </div>
     </div>
@@ -5355,7 +5355,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T04:00:00Z';
+const APP_VERSION   = '2026-05-26T04:15:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -22982,6 +22982,21 @@ function _bucketKey(ts, ageMs) {
 function openSettingsMenu() {
   _settingsRefreshLabels();
   openMod('msettings');
+}
+
+// Ouvre une modale fille depuis le meta-menu Réglages. Enregistre un return
+// callback : à la fermeture de la fille, on revient AUTOMATIQUEMENT sur la
+// modale Réglages (au lieu de fermer tout). Ainsi l'utilisateur enchaîne
+// plusieurs réglages sans devoir rouvrir le menu à chaque fois.
+function _settingsOpenChild(childId, openerFn) {
+  if (typeof _modalReturnTo !== 'undefined') {
+    _modalReturnTo[childId] = () => {
+      try { _settingsRefreshLabels(); } catch (_) {}
+      openMod('msettings');
+    };
+  }
+  closeMod2('msettings');
+  setTimeout(() => { try { openerFn(); } catch (_) {} }, 50);
 }
 
 // Met à jour les libellés dynamiques (état Sync auto + Thème courant).
