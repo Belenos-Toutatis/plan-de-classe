@@ -1491,13 +1491,11 @@ L'algo normalise les prénoms via NFD + suppression des combining marks `/[̀-ͯ
 
 `body:has(.mo.on)::before { display: none; }` — règle CSS pure. Évite que le filet rouge (`body::before`, z-index 9990) passe au-dessus du tableur d'éval en mode plein écran (99vw).
 
-## Disciplines (flux per-classe) et classes recomposées
+## Disciplines (flux per-classe)
 
-Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + Option) OU de gérer des **classes recomposées** (élèves d'une ou plusieurs classes regroupés — ex. Bilingue 6ᵉ, Option DP3).
+Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + Option) : la classe a 1 ou 2 disciplines (noms personnalisables), les évaluations sont rangées dans l'un des deux flux, et les bilans (notes, compétences, remarques) sont **séparés par flux**.
 
-Deux notions **orthogonales** :
-- **Flux (discipline)** : configuré par classe. Chaque classe a 1 ou 2 disciplines (nom personnalisable). Les évaluations sont rangées dans l'un des deux flux ; les bilans (notes, compétences, remarques) sont **séparés par flux**.
-- **Classe recomposée (sous-groupe)** : roster d'élèves (potentiellement inter-classes) qu'une éval peut cibler pour restreindre son tableur. Indépendant de la discipline.
+Pour les **classes recomposées** (élèves d'une ou plusieurs classes regroupés autour d'une discipline particulière — ex. Bilingue 6ᵉ, Option DP3), on utilise la feature **virtual classes** (`cls.virtual = true`) — créées via l'onglet Classes → ➕ Nouvelle classe → option « classe recomposée ». La virtual class porte ses propres disciplines + bilans, indépendamment des classes parentes.
 
 ### Modèle
 
@@ -1508,12 +1506,6 @@ cls.discNameSecondary  = 'SVT Bilingue' | null // null = pas de 2e flux
 
 // Par évaluation : flux d'appartenance
 ev.discChannel = 'primary' | 'secondary'   // défaut 'primary'
-ev.subgroupId  = 'sg_xxx' | null            // optionnel : roster restriction
-
-// Catalogue global de sous-groupes (inter-classes possibles)
-S.subgroups = {
-  [id]: { id, nom, members: [{classId, sids: [...]}, ...] }
-}
 
 // Bulletins : structures wrappées per-channel
 S.bulletinRemarques[classId][channel][sid][periode]      = "texte"
@@ -1522,10 +1514,22 @@ S.bulletinWorkedItems[classId][channel][periode]         = [items]
 S.conseilClasse[classId][channel][sid][periode]          = { F, E, AT, AC }
 ```
 
+### Classes recomposées = virtual classes
+
+**Important** : il n'y a **pas** de système de « sous-groupes » dédié pour les rosters cross-class. On utilise la feature préexistante des **virtual classes** (`cls.virtual = true`) — créées via l'onglet Classes → ➕ Nouvelle classe → option « classe recomposée ». Une virtual class est une vraie entité de classe avec :
+- son propre `cls.eleves` (sids issus de n'importe quelle(s) classe(s) réelle(s))
+- son propre plan / salle / placement / groupes G1/G2/G3
+- ses propres bulletins (per-channel comme les classes réelles)
+- ses propres `discNamePrimary` / `discNameSecondary`
+
+Une éval qui cible une recomposée s'écrit simplement avec `ev.classIds = [<virtualClassId>]` — le tableur affiche automatiquement le roster correct. Toute la machinerie discipline/flux/bilan est commune entre classes réelles et virtual classes.
+
+**Une éphémère feature `S.subgroups` + `ev.subgroupId`** (commits `ffe3a1d` et antérieurs de la session 2026-05-25) a été retirée car redondante. Les anciennes données `ev.subgroupId` et `S.subgroups` sont silencieusement ignorées / supprimées à la migration.
+
 ### Migration (postLoadHook)
 
-1. **Catalogue global obsolète** : `S.disciplines` (v1) supprimé silencieusement.
-2. **Évaluations** : `ev.discChannel = 'primary'` si absent ; `ev.disciplineId` (v1) supprimé.
+1. **Catalogues obsolètes** : `S.disciplines` (v1 « tag global ») et `S.subgroups` (v2 « roster cross-class ») supprimés silencieusement.
+2. **Évaluations** : `ev.discChannel = 'primary'` si absent ; `ev.disciplineId` et `ev.subgroupId` (v1/v2) ignorés / supprimés à la sauvegarde suivante.
 3. **Classes** : `discNamePrimary = ''` / `discNameSecondary = null` si absents.
 4. **Bulletins** : helper top-level `_bulletinWrapAll()` (idempotent). Pour chaque map, détecte si la valeur (par classe) est déjà wrappée (`primary`/`secondary` au 1er niveau) :
    - **Pure ancien format** (`{cid: {sid: {periode: …}}}`) → wrap entier en `{primary: existing, secondary: {}}`
@@ -1535,8 +1539,8 @@ S.conseilClasse[classId][channel][sid][periode]          = { F, E, AT, AC }
 ### 3 cas d'usage
 
 1. **Classe entière, 1 discipline** : cas par défaut. Pas de configuration, pas de sélecteur. Comportement identique à avant la feature.
-2. **Classe entière, 2 disciplines** (même prof, ex. SVT + Option à toute la 6A) : éditer la classe, saisir un nom secondaire. Le sélecteur de flux apparaît dans Devoirs/Bilans/Compétences. Chaque éval créée demande son flux.
-3. **Classe recomposée** (inter-classes, ex. Bilingue 6ᵉ = 5 élèves de 6A + 5 de 6B) : créer un sous-groupe via 👥 Classes recomposées (membres dans plusieurs classes). Les évals destinées à ce groupe portent `subgroupId` (et probablement `discChannel='secondary'` si les classes ont leur 2e discipline configurée).
+2. **Classe entière, 2 disciplines** (même prof, ex. SVT + Option à toute la 6A) : éditer la classe, activer la discipline secondaire et la nommer. Le sélecteur de flux apparaît dans Devoirs/Bilans/Compétences. Chaque éval créée demande son flux.
+3. **Classe recomposée** (sous-ensemble d'une classe OU élèves de plusieurs classes regroupés) : créer une virtual class via onglet Classes (option « classe recomposée »), y ajouter les sids concernés, configurer ses propres `discNamePrimary` / `discNameSecondary`. Les évals créées sur cette virtual class sont totalement indépendantes des classes parentes.
 
 ### Helpers exposés
 
@@ -1556,14 +1560,9 @@ S.conseilClasse[classId][channel][sid][periode]          = { F, E, AT, AC }
 - `_bulWorkedItems(classId, periode)` / `_setBulWorkedItems`
 - `_conseilFor(classId, sid, periode)` / `_setConseilFor(classId, sid, periode, flag, value)`
 
-**Sous-groupes** (inchangés depuis la v1, sans le champ `disciplineId` retiré) :
-- `_subgroupSidsForClass(sg, classId)` / `_subgroupAllSids(sg)`
-- `_evalEffectiveSidsForClass(ev, classId)` — intersection avec `cls.eleves` si `ev.subgroupId` est défini
-
 ### UI
 
-- **Édition de classe** (modale `medit-cls` / `mc-edit-cls`) : section « 🎓 Disciplines » avec champ « Discipline principale » (placeholder « Principale ») + case « Activer une discipline secondaire » qui révèle son champ Nom.
-- **Modale 👥 Classes recomposées** (`msubgroups`) : accessible depuis le header de l'onglet Classes (bouton « 🎓 Disciplines » qui ouvre ce modal — historique du nom conservé). Liste les sous-groupes, picker membres avec chips d'élèves par classe (cross-class).
+- **Édition de classe** (modale `mclass-edit`) : section « 🎓 Disciplines » avec champ « Discipline principale » (placeholder « Principale ») + case « Activer une discipline secondaire » qui révèle son champ Nom.
 - **Sélecteur Flux** dans `meval-new` / `meval-edit` (sous Période) : visible uniquement si au moins une classe cochée a 2 flux. Options nommées avec le nom des classes (« Principal (SVT/Maths) », « Secondaire (Bilingue) »). En édition, la valeur du select priorise `ev.discChannel` sur le state du DOM.
 - **Sélecteur Flux** dans toolbars des 3 onglets eval (Devoirs / Bilan notes / Bilan compétences) : visible uniquement si la classe courante a 2 flux. Persistance par classe.
 - **Pastille flux** (`_evalChannelPillHTML`) : affichée à côté du titre / dans la liste / le tableur **uniquement pour le flux secondaire d'une classe à 2 flux** (sinon implicite).
@@ -1579,23 +1578,17 @@ Sites filtrés par channel :
 
 **Pas filtrés** (volontaire) : tableur d'éval, calcul intra-éval, cross-tab d'une éval — ces vues sont focalisées sur une éval précise, le flux est déjà déterminé par `ev.discChannel`.
 
-### Roster restriction (subgroup)
-
-`_evalTableurSortedSids` et `_evalOpenSaisie` intersectent leur liste de sids avec `_evalEffectiveSidsForClass(ev, classId)` quand `ev.subgroupId` est défini. La discipline (channel) est indépendante : un subgroup peut être utilisé dans n'importe quel flux.
-
 ### Démo
 
 `_seedDemoEvaluations` configure :
 - 6A : `discNamePrimary='SVT'`, `discNameSecondary='SVT Bilingue'`
-- Un sous-groupe `sg_bil_6e` avec 5 élèves de 6A
-- 1 éval `discChannel='secondary'` + `subgroupId='sg_bil_6e'` (Interrogation SVT bilingue)
+- 1 éval `discChannel='secondary'` sur 6A (Interrogation SVT bilingue, notes sur les 5 premiers élèves)
 - 1 remarque bulletin sur le flux 'secondary' de 6A pour démontrer la séparation
 - Toutes les autres évals / classes restent en flux primary par défaut
 
 ### Suppression / désactivation
 
-- Désactiver la discipline secondaire d'une classe (décocher la case dans medit-cls) : on accepte que les évals secondary "orphelines" subsistent dans les données mais ne soient plus accessibles tant que le flux n'est pas réactivé. Pas de cascade automatique.
-- Supprimer un sous-groupe : les évals référençantes perdent juste `subgroupId` (tableur ré-élargi à la classe entière).
+Désactiver la discipline secondaire d'une classe (décocher la case dans medit-cls) : les évals secondary « orphelines » subsistent dans les données mais ne sont plus accessibles tant que le flux n'est pas réactivé. Pas de cascade automatique.
 
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
