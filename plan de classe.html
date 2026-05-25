@@ -409,6 +409,9 @@ html[data-theme="dark"] .qcm-info-banner a{color:#7fb4d8 !important}
 /* ─── DROPDOWN ─── */
 .dd{position:relative;display:inline-block}
 .dd-menu{display:none;position:absolute;top:calc(100% + 2px);left:0;background:#fff;border:1px solid #ccc;border-radius:4px;box-shadow:0 3px 8px rgba(0,0,0,.12);z-index:200;min-width:200px;padding:4px 0}
+/* Quand le menu déroulant est dans le header (côté droit de la page), on l'aligne
+   sur la DROITE du bouton parent pour ne pas déborder du viewport. */
+#hdr .dd-menu{left:auto;right:0}
 .dd-menu button{display:block;width:100%;text-align:left;padding:7px 14px;border:none;background:none;cursor:pointer;font-size:.85em;color:#333;white-space:nowrap}
 .dd-menu button:hover{background:#e8f4fd}
 .dd-menu button:disabled{color:#bbb;cursor:default;background:none}
@@ -2064,7 +2067,7 @@ kbd {
         <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
         <button onclick="closeAllDd();openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe, mis en forme avec couleurs">📤 Exporter les notes</button>
         <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
-        <button onclick="closeAllDd();openBackupSettings()" title="Stratégie de sauvegarde automatique : intervalle minimum + politique de rétention des backups horodatés">⚙ Stratégie de sauvegarde…</button>
+        <button onclick="closeAllDd();openBackupSettings()" title="Stratégie de sauvegarde automatique : intervalle minimum + politique de rétention des backups horodatés">⚙ Sauvegarde auto…</button>
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -5234,7 +5237,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T00:45:00Z';
+const APP_VERSION   = '2026-05-26T01:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5823,6 +5826,13 @@ function postLoadHook() {
     delete cls.discNamePrimary;
     delete cls.discNameSecondary;
     delete cls.discPrimaryDisabled;
+  }
+  // Migration : stratégie de sauvegarde — récupère depuis localStorage si absente de S.
+  if (!S.backupStrategy) {
+    try {
+      const ls = localStorage.getItem('planClasse_backupStrategy');
+      if (ls && BACKUP_STRATEGIES[ls]) S.backupStrategy = ls;
+    } catch (_) {}
   }
   // 3. Migrer les évals : ev.discChannel → ev.disciplineId
   for (const ev of Object.values(S.evaluations || {})) {
@@ -22560,13 +22570,21 @@ const BACKUP_STRATEGIES = {
     ],
   },
 };
-function _currentBackupStrategy() {
-  const key = localStorage.getItem('planClasse_backupStrategy') || 'standard';
-  return BACKUP_STRATEGIES[key] || BACKUP_STRATEGIES.standard;
-}
+// La stratégie est désormais stockée dans S.backupStrategy (donc dans le JSON,
+// elle suit le fichier entre machines). Migration : si S.backupStrategy est
+// absente mais qu'un ancien localStorage.planClasse_backupStrategy existe, on
+// importe la valeur dans S (cf. postLoadHook).
 function _currentBackupStrategyKey() {
-  const key = localStorage.getItem('planClasse_backupStrategy') || 'standard';
+  let key = S?.backupStrategy;
+  if (!key) {
+    // Fallback localStorage (utile au tout 1er chargement avant postLoadHook,
+    // ou si S n'est pas encore défini).
+    try { key = localStorage.getItem('planClasse_backupStrategy') || 'standard'; } catch (_) { key = 'standard'; }
+  }
   return BACKUP_STRATEGIES[key] ? key : 'standard';
+}
+function _currentBackupStrategy() {
+  return BACKUP_STRATEGIES[_currentBackupStrategyKey()];
 }
 // Compat : conservés pour usage interne mais lus depuis la stratégie courante.
 function _backupMinIntervalMs() { return _currentBackupStrategy().minIntervalMs; }
@@ -22718,7 +22736,13 @@ function openBackupSettings() {
 }
 function setBackupStrategy(key) {
   if (!BACKUP_STRATEGIES[key]) return;
-  localStorage.setItem('planClasse_backupStrategy', key);
+  pushUndo();
+  if (!S) S = {};
+  S.backupStrategy = key;
+  // Conserve aussi en localStorage pour cohérence si S est rechargé sans la clé
+  // (ex. import d'un fichier issu d'une version pré-feature).
+  try { localStorage.setItem('planClasse_backupStrategy', key); } catch (_) {}
+  save();
   toast(`💾 Stratégie : ${BACKUP_STRATEGIES[key].label}`);
   // Re-render des radios pour mettre à jour la bordure de sélection
   openBackupSettings();
