@@ -5154,7 +5154,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T08:35:00Z';
+const APP_VERSION   = '2026-05-24T08:55:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -26573,21 +26573,42 @@ function _evalNewClassRowHTML(c) {
       slotOpts += `<option value="${_esc(s.id)}"${sel}>${_esc(s.label || s.id)} (${_esc(s.start)}–${_esc(s.end)})</option>`;
     }
   }
+  // Mode auto = pas de date dans _evalNewState.dates[c.id] (la date sera dérivée
+  // de la 1re mini-note ou passation ajoutée). Mode manuel = une date est posée.
+  const isAuto = !date;
+  const modeBtn = isAuto
+    ? `<span style="font-size:.78em;color:var(--pencil);font-style:italic;padding:0 4px" title="Mode auto : la date sera prise sur la 1re mini-note / passation ajoutée">(auto)</span>`
+    : `<button type="button" class="btn btn-g btn-sm" onclick="_evalNewSetClassAuto('${_esc(c.id)}')" style="padding:2px 6px;font-size:.78em" title="Repasser cette classe en mode automatique (date dérivée de la 1re mini-note / passation)">↻ Auto</button>`;
   return `<div data-cid="${_esc(c.id)}" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px;border-radius:3px;background:var(--paper);border:1px solid var(--rule-line)">
     <strong style="font-size:.92em">${_esc(c.nom)}</strong>
     <span style="color:var(--pencil);font-size:.85em">${_esc(c.année || '')}</span>
     <span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
     <input type="date" data-cid="${_esc(c.id)}" data-field="date" value="${_esc(date)}" onchange="_evalNewOnClassDateChange(this)"
-      style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe">
+      style="padding:3px 6px;font-family:var(--font-mono);font-size:.88em" title="Date pour cette classe (vide = mode auto)">
+    ${modeBtn}
     <span style="font-size:.85em;color:var(--pencil)">⏰</span>
     <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalNewOnClassSlotChange(this)" style="padding:3px 6px;font-size:.85em">${slotOpts}</select>
   </div>`;
+}
+// Bascule explicite en mode auto pour une classe : retire la date pré-remplie.
+function _evalNewSetClassAuto(cid) {
+  delete _evalNewState.dates[cid];
+  // Pas de date → pas de créneau utile (le créneau dépend du jour de la date)
+  delete _evalNewState.slotIds[cid];
+  _evalNewRenderClassRows();
 }
 
 function _evalNewOnClassDateChange(inputEl) {
   const cid = inputEl.getAttribute('data-cid');
   const v = inputEl.value || '';
+  const wasAuto = (_evalNewState.dates[cid] == null);
   if (v) _evalNewState.dates[cid] = v; else delete _evalNewState.dates[cid];
+  // Si on bascule vide → auto (ou auto → date), re-rend la ligne pour mettre à jour
+  // le marqueur "(auto)" vs bouton "↻ Auto" et le picker créneau.
+  if (wasAuto !== (v === '')) {
+    _evalNewRenderClassRows();
+    return;
+  }
   // Régénère le select créneau (options dépendent du jour de la semaine)
   const slotSel = document.querySelector(
     `#meval-new-classes select[data-cid="${CSS.escape(cid)}"][data-field="slot"]`
