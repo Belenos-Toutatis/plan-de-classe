@@ -5242,7 +5242,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T01:30:00Z';
+const APP_VERSION   = '2026-05-26T02:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5884,6 +5884,30 @@ function postLoadHook() {
   if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
   if (!S.conseilClasse) S.conseilClasse = {};
   _bulletinWrapAll();
+  // Membership per-période : nettoie les entrées dont les codes ne correspondent
+  // PAS au periodMode courant (cas typique : import depuis une machine en
+  // trimestre vers une machine en semestre — sinon les restrictions sont
+  // silencieusement ignorées). N'efface QUE les entrées invalides, garde les
+  // valides intactes.
+  try {
+    const validPer = new Set((typeof _periodeOptions === 'function' ? _periodeOptions() : []).map(o => o.code));
+    if (validPer.size > 0) {
+      let cleanedCount = 0;
+      for (const cls of Object.values(S.classes || {})) {
+        if (!cls?.membership) continue;
+        for (const sid of Object.keys(cls.membership)) {
+          const m = cls.membership[sid];
+          const fromBad = m.fromPer && !validPer.has(m.fromPer);
+          const toBad   = m.toPer   && !validPer.has(m.toPer);
+          if (fromBad || toBad) { delete cls.membership[sid]; cleanedCount++; }
+        }
+      }
+      if (cleanedCount > 0) {
+        // Toast différé : doit attendre que la pile UI soit prête.
+        setTimeout(() => { try { toast(`⚠ ${cleanedCount} restriction(s) d'appartenance par période effacée(s) (codes incompatibles avec le mode ${S.evalPrefs?.periodMode || 'semestre'})`, 'warn'); } catch (_) {} }, 1200);
+      }
+    }
+  } catch (_) {}
   // ── Volet ÉVALUATION (phase 0 : fondations) ──
   // S.competenceDomains  : 8 domaines fixes du socle commun (D1.1 → D5)
   // S.competences        : compétences personnalisables, chacune rattachée à un domainId
@@ -8557,6 +8581,14 @@ function mvcSave() {
       if (S.snapshots) {
         for (const snap of Object.values(S.snapshots)) {
           if (snap.classId === oldId) snap.classId = newId;
+        }
+      }
+      // Migrer les structures bulletin (per-discipline), conseil de classe,
+      // surlignages déplacés. Sans cela : perte SILENCIEUSE de saisies utilisateur.
+      for (const m of [S.bulletinRemarques, S.bulletinClassRemarques, S.bulletinWorkedItems, S.conseilClasse, S.movedHighlights]) {
+        if (m && m[oldId] !== undefined) {
+          m[newId] = m[oldId];
+          delete m[oldId];
         }
       }
       // S.cur si nécessaire
@@ -14484,6 +14516,12 @@ function _resetNukeConfirm() {
   S.bulletinRemarques = {};
   S.bulletinClassRemarques = {};
   S.bulletinWorkedItems = {};
+  // Nettoyage explicite des 4 maps oubliées (rapport audit) : disciplines, conseil,
+  // surlignages, liens user. postLoadHook recréera le catalogue par défaut.
+  S.disciplines = {};
+  S.conseilClasse = {};
+  S.movedHighlights = {};
+  S.userLinks = [];
   S.cur = null;
   // Au prochain postLoadHook, migrateTabletPools() recréera les pools par défaut (CM1/CM2)
   // et migrateEvalDefaults() rechargera le référentiel C1-C8 + les domaines du socle.
@@ -23267,7 +23305,10 @@ function _validateImport(d) {
   // S1 — ajout des sections évaluation (evaluations, competences, competenceDomains)
   // qui étaient absentes du contrôle initial.
   const sections = ['classes', 'eleves', 'salles', 'snapshots', 'attendance', 'tabletPools', 'tags', 'movedHighlights',
-                    'evaluations', 'competences', 'competenceDomains', 'evalCommentLibrary'];
+                    'evaluations', 'competences', 'competenceDomains', 'evalCommentLibrary',
+                    // Disciplines + bulletins (per-channel/per-discipline) ajoutés ici pour bloquer
+                    // un éventuel prototype pollution via clés __proto__ / constructor / prototype.
+                    'disciplines', 'bulletinRemarques', 'bulletinClassRemarques', 'bulletinWorkedItems', 'conseilClasse'];
   for (const sec of sections) {
     const err = checkKeys(d[sec], sec);
     if (err) return err;
@@ -23694,15 +23735,22 @@ const _NotesExport = (function () {
     if (!cls) return { sheets: [] };
     const sheets = [];
     const periods = _periodeOptions().map(o => o.code);
+    // Filtre élèves : on conserve tous les élèves de la classe pour la feuille
+    // Synthèse (vue globale), mais les feuilles Bilan/Compétences appliqueront
+    // le filtre membership per-période pour ne pas afficher les élèves hors
+    // roster d'une période donnée.
     const students = (cls.eleves || []).map(sid => S.eleves[sid]).filter(Boolean);
-    // Tri par défaut Nom puis Prénom
     students.sort((a, b) => {
       const na = (a.nom || '').localeCompare(b.nom || '', 'fr');
       if (na !== 0) return na;
       return (a.prenom || '').localeCompare(b.prenom || '', 'fr');
     });
+    // Filtre par discipline courante : cohérent avec les bilans affichés.
+    // L'utilisateur exporte ce qu'il VOIT — pas l'union des disciplines.
+    const _did = _currentDiscipline(classId);
     const evs = Object.values(S.evaluations || {})
       .filter(e => _evalIncludesClass(e, classId))
+      .filter(e => !_did || _evalMatchesDiscipline(e, _did))
       .sort((a, b) => {
         const da = _evalDateFor(a, classId) || '';
         const db = _evalDateFor(b, classId) || '';
@@ -23713,11 +23761,16 @@ const _NotesExport = (function () {
     sheets.push(buildSheetSynthese(cls, students, periods));
     for (const p of periods) {
       const evsP = evs.filter(e => e.periode === p);
-      if (evsP.length || students.length) sheets.push(buildSheetBilan(cls, students, p, evsP));
+      // Membership : restreint les élèves du bilan de période à ceux du roster
+      const studentsP = students.filter(s => _stuActiveInClassForPeriod(cls, s.id, p));
+      if (evsP.length || studentsP.length) sheets.push(buildSheetBilan(cls, studentsP, p, evsP));
     }
     sheets.push(buildSheetCompetences(cls, students, evs));
     for (const ev of evs) {
-      sheets.push(buildSheetEval(cls, students, ev));
+      // Pour les feuilles per-éval : filtre les élèves qui n'étaient pas actifs aux
+      // dates de l'éval (cohérent avec le tableur de saisie).
+      const studentsE = students.filter(s => _stuActiveOnAnyEvalRef(s, ev, classId));
+      sheets.push(buildSheetEval(cls, studentsE, ev));
     }
     return { sheets };
   }
@@ -28589,7 +28642,6 @@ function _refreshSubgroupSelectors() {
   for (const tabKey of ['notes', 'bilan', 'comp']) _renderDisciplineToolbar(tabKey);
   for (const prefix of ['meval-new', 'meval-edit']) _evalRefreshChannelSelect(prefix);
 }
-function _refreshDisciplineSelectors() { _refreshSubgroupSelectors(); }
 
 
 // Re-rendu du select de flux (canal) dans une modale (eval-new ou eval-edit).
@@ -28635,7 +28687,6 @@ function _evalRefreshChannelSelect(prefix) {
     : (discIdsSet.includes(curValue) ? curValue : discIdsSet[0]);
   sel.innerHTML = discIdsSet.map(id => `<option value="${_escAttr(id)}"${id === cur ? ' selected' : ''}>${_esc(_disciplineLabel(id))}</option>`).join('');
 }
-function _evalRefreshDisciplineSelect(prefix) { return _evalRefreshChannelSelect(prefix); }
 
 // ═══════════════ Gestion des compétences (CRUD) ═══════════════
 // Modale ⚙ Gérer les compétences depuis l'onglet 🎯 Bilan par compétences.
@@ -28869,8 +28920,10 @@ function _evalEditSave() {
   // On canonicalise quand même par sécurité (nettoie les éventuels résidus
   // legacy ev.date / ev.dateManual qui auraient pu être posés ailleurs).
   _evalNormalizeDates(ev);
-  const slotId = document.getElementById('meval-edit-slot')?.value || '';
-  if (slotId) ev.slotId = slotId; else delete ev.slotId;
+  // Le champ caché #meval-edit-slot est un vestige du modèle global obsolète.
+  // Le ressusciter ici écraserait éventuellement les slots per-classe au prochain
+  // _evalNormalizeDates(). On NE le lit plus.
+  delete ev.slotId;
   ev.periode  = document.getElementById('meval-edit-periode').value;
   // Discipline (id du catalogue global)
   const _discEd = document.getElementById('meval-edit-channel')?.value || '';
@@ -30947,7 +31000,12 @@ function _bilanCrossTabBuild() {
         note = _evalNoteSur20Rounded(ev, sid);
         if (note == null || !Number.isFinite(note)) continue;
       } else {
-        note = _computeStudentMeanForPeriod(cid, sid, periode);
+        // Cross-tab Moyenne : compare la même discipline pour toutes les classes
+        // (celle active sur la classe affichée), pas la discipline « courante »
+        // de chaque ligne — sinon une 6A en disc A se compare à une 6B en disc B.
+        const _curCls = getCls();
+        const _refDid = _curCls ? _currentDiscipline(_curCls.id) : undefined;
+        note = _computeStudentMeanForPeriod(cid, sid, periode, _refDid);
       }
       if (note == null || !Number.isFinite(note)) continue;
       byCiv.total.push(note);
@@ -33192,50 +33250,10 @@ function _setCurrentDiscipline(classId, discId) {
   } catch (_) {}
 }
 
-// ── Shims rétrocompat (anciens noms d'API per-channel) ──
-// Garde le code historique fonctionnel sans réécriture massive.
-function _clsHasPrimary(cls)    { return _clsDisciplineIds(cls).length >= 1; }
-function _clsPrimaryName(cls)   { return _disciplineLabel(_clsDefaultDisciplineId(cls)); }
-function _clsSecondaryName(cls) {
-  const ids = _clsDisciplineIds(cls);
-  return ids.length >= 2 ? _disciplineLabel(ids[1]) : null;
-}
-function _clsHasSecondary(cls)  { return _clsDisciplineIds(cls).length >= 2; }
-function _clsHasTwoChannels(cls) { return _clsHasMultipleDisciplines(cls); }
-function _clsOnlyChannel(cls) { return 'primary'; }
-function _channelLabel(cls, channel) {
-  const ids = _clsDisciplineIds(cls);
-  if (channel === 'secondary' && ids[1]) return _disciplineLabel(ids[1]);
-  return _disciplineLabel(ids[0]);
-}
-// _evalChannelOf : retourne 'primary' si ev.disciplineId == 1re discipline de la classe primaire,
-// 'secondary' sinon. Utilisé pour compat avec quelques anciens callsites.
-function _evalChannelOf(ev) {
-  const cids = Array.isArray(ev?.classIds) && ev.classIds.length > 0 ? ev.classIds : (ev?.classId ? [ev.classId] : []);
-  for (const cid of cids) {
-    const c = S.classes?.[cid];
-    if (!c) continue;
-    const ids = _clsDisciplineIds(c);
-    if (ev.disciplineId === ids[1]) return 'secondary';
-    return 'primary';
-  }
-  return 'primary';
-}
-function _evalMatchesChannel(ev, channel) { return _evalChannelOf(ev) === (channel || 'primary'); }
-function _currentDiscChannel(classId) {
-  const cls = S.classes?.[classId];
-  if (!cls) return 'primary';
-  const ids = _clsDisciplineIds(cls);
-  const cur = _currentDiscipline(classId);
-  return (cur === ids[1]) ? 'secondary' : 'primary';
-}
-function _setDiscChannel(classId, channel) {
-  const cls = S.classes?.[classId];
-  if (!cls) return;
-  const ids = _clsDisciplineIds(cls);
-  const target = (channel === 'secondary' && ids[1]) ? ids[1] : ids[0];
-  _setCurrentDiscipline(classId, target);
-}
+// (Anciens shims rétrocompat per-channel retirés — _clsHasPrimary, _clsPrimaryName,
+//  _clsSecondaryName, _clsHasSecondary, _clsHasTwoChannels, _clsOnlyChannel, _channelLabel,
+//  _evalChannelOf, _evalMatchesChannel, _currentDiscChannel, _setDiscChannel : plus aucun
+//  callsite live après le refactor catalogue global.)
 
 // Rendu du sélecteur de discipline dans une toolbar des 3 onglets eval.
 function _renderDisciplineToolbar(tabKey) {
@@ -34459,12 +34477,20 @@ function _evalNoteSur20Rounded(ev, sid) {
   return (n / (ev.noteMax || 20)) * 20;
 }
 
-function _computeStudentFacultativeCounted(classId, sid, periode) {
+function _computeStudentFacultativeCounted(classId, sid, periode, disciplineFilter) {
+  // Aligne le filtre discipline sur _computeStudentMeanForPeriod : si non précisé,
+  // prend la discipline courante de la classe. Sinon l'ensemble "facultatives
+  // comptées" se calcule sur l'union des disciplines, ce qui contamine le
+  // hachuré "non comptée" du Bilan multi-discipline.
+  const cls = S.classes?.[classId];
+  let _did = disciplineFilter;
+  if (_did === undefined && cls) _did = _currentDiscipline(classId);
   const counted = new Set();
   const evs = Object.values(S.evaluations || {})
     .filter(e => _evalIncludesClass(e, classId))
     .filter(e => !periode || e.periode === periode)
-    .filter(e => e.countsForMean !== false);
+    .filter(e => e.countsForMean !== false)
+    .filter(e => !_did || _did === 'all' || _evalMatchesDiscipline(e, _did));
   const oblig = evs.filter(e => !e.facultative?.active);
   const facultatives = evs.filter(e => e.facultative?.active);
   let num = 0, den = 0;
@@ -35411,13 +35437,19 @@ function _bilanDownloadCsv() {
 // Pour un élève + une compétence sur la classe active + période, agrège tous
 // les niveaux atteints (toutes évals confondues). Retourne :
 // { entries: [{evalId, evalNomCourt, date, niveau}], levelMean: number|null }
-function _aggregateStudentCompetence(classId, sid, cid, periode) {
+function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilter) {
+  // Filtre par discipline : si non précisé, prend la discipline courante de la classe
+  // (cohérent avec le filtre actif des bilans). Passer 'all' pour ignorer le filtre.
+  const cls = S.classes?.[classId];
+  let _did = disciplineFilter;
+  if (_did === undefined && cls) _did = _currentDiscipline(classId);
   const entries = [];
   for (const ev of Object.values(S.evaluations || {})) {
     // Inclut aussi les évals orphelines (cf. _computeStudentMeanForPeriod) :
     // un élève transféré garde ses niveaux de compétences acquis dans sa classe précédente.
     if (!_evalIncludesClass(ev, classId) && !_studentHasAnyDataInEval(ev, sid)) continue;
     if (periode && ev.periode !== periode) continue;
+    if (_did && _did !== 'all' && !_evalMatchesDiscipline(ev, _did)) continue;
     // Pour Type B : on prend toutes les passations sur cette compétence
     if (ev.type === 'B') {
       for (const p of (ev.passations || [])) {
@@ -36701,7 +36733,11 @@ function _evalExportDownloadCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${ev.nomCourt || 'eval'}-${ev.classId}-${ev.date || 'YYYY-MM-DD'}.csv`;
+  // ev.classId et ev.date sont des champs legacy supprimés par la migration —
+  // utiliser les helpers canoniques pour éviter `undefined-undefined` dans le nom.
+  const _cidName = _evalPrimaryAliveClassId(ev) || 'classe';
+  const _dateName = _evalDateFor(ev, _cidName) || todayKey();
+  a.download = `${ev.nomCourt || 'eval'}-${_cidName}-${_dateName}.csv`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
