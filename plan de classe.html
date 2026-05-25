@@ -5138,7 +5138,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-23T23:40:00Z';
+const APP_VERSION   = '2026-05-24T07:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -12159,15 +12159,46 @@ function _renduPrint() {
   const printArea = document.createElement('div');
   printArea.id = oldAreaId;
   printArea.innerHTML = `<h2 style="margin:0 0 4px;font-family:Georgia,serif">${_esc(title)}</h2><p style="margin:0 0 12px;color:#555;font-size:.85em">${_esc(sub)}</p>${body.innerHTML}`;
+  // Insère une ligne de rappel de titre tout en haut du <thead> de la table.
+  // Les <thead> sont automatiquement répétés sur chaque page imprimée → le titre
+  // suivra la table à chaque saut de page sans configuration supplémentaire.
+  const tbl = printArea.querySelector('table.rendu-tbl');
+  if (tbl) {
+    let thead = tbl.querySelector('thead');
+    if (!thead) {
+      thead = document.createElement('thead');
+      tbl.insertBefore(thead, tbl.firstChild);
+    }
+    const colCount = thead.querySelector('tr')?.children.length || 1;
+    const titleRow = document.createElement('tr');
+    titleRow.className = '__rendu-print-title-row';
+    const titleCell = document.createElement('th');
+    titleCell.colSpan = colCount;
+    titleCell.style.cssText = 'text-align:center;font-family:Georgia,serif;font-size:11pt;padding:6px 8px;border:none;background:#fff;color:#000';
+    // Préfère le sous-titre (qui contient les infos éval : nom, date, classe, type)
+    // au titre générique "👀 Projeter les notes" qui n'aide pas à identifier la copie.
+    titleCell.textContent = sub || title;
+    thead.insertBefore(titleRow, thead.firstChild);
+    titleRow.appendChild(titleCell);
+  }
   const style = document.createElement('style');
   style.id = '__renduPrintStyle__';
-  style.textContent = `@page { size: A4 landscape; margin: 12mm; }
+  // @bottom-right pour le numéro de page — supporté Chromium/Edge/Safari/Firefox récents.
+  style.textContent = `@page { size: A4 landscape; margin: 12mm 12mm 16mm 12mm; @bottom-right { content: "Page " counter(page) " / " counter(pages); font-family: Georgia, serif; font-size: 9pt; color: #555; } }
     @media print {
       body > * { display: none !important; }
       body > #${oldAreaId} { display: block !important; }
+      /* Masque le h2/sub en haut (le titre est désormais répété dans le thead) — évite le doublon en page 1. */
+      body > #${oldAreaId} > h2,
+      body > #${oldAreaId} > p { display: none !important; }
       table.rendu-tbl { width: 100%; border-collapse: collapse; font-size: 11pt; }
+      /* Force le thead à se répéter sur chaque page imprimée (comportement par défaut, on l'explicite). */
+      table.rendu-tbl thead { display: table-header-group; }
+      table.rendu-tbl tbody tr { page-break-inside: avoid; }
       table.rendu-tbl th, table.rendu-tbl td { border: 1px solid #888; padding: 3px 6px; }
       table.rendu-tbl th { background: #eee !important; }
+      /* La ligne de rappel de titre n'a pas de bordure pour rester discrète. */
+      table.rendu-tbl thead tr.__rendu-print-title-row th { border: none !important; background: #fff !important; }
     }`;
   document.head.appendChild(style);
   document.body.appendChild(printArea);
