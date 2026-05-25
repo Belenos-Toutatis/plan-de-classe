@@ -5138,7 +5138,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-24T07:00:00Z';
+const APP_VERSION   = '2026-05-24T07:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -12195,7 +12195,8 @@ function _renduPrint() {
       /* Force le thead à se répéter sur chaque page imprimée (comportement par défaut, on l'explicite). */
       table.rendu-tbl thead { display: table-header-group; }
       table.rendu-tbl tbody tr { page-break-inside: avoid; }
-      table.rendu-tbl th, table.rendu-tbl td { border: 1px solid #888; padding: 3px 6px; }
+      table.rendu-tbl th, table.rendu-tbl td { border: 1px solid #888; padding: 3px 6px;
+        -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       table.rendu-tbl th { background: #eee !important; }
       /* La ligne de rappel de titre n'a pas de bordure pour rester discrète. */
       table.rendu-tbl thead tr.__rendu-print-title-row th { border: none !important; background: #fff !important; }
@@ -26327,10 +26328,14 @@ function renderEvalNotes() {
       html += `<div style="font-family:var(--font-mono);font-size:.78em;letter-spacing:0.08em;color:var(--pencil);margin:${lastType ? '8px' : '0'} 0 -2px;padding:2px 6px;border-bottom:1px dashed var(--rule-line)">${_esc(typeLabels[ev.type] || ev.type || '?')}</div>`;
       lastType = ev.type;
     }
-    const totalStudents = (cls.eleves || []).length;
+    // Effectif présent à la date du devoir (exclut les élèves partis avant ou
+    // arrivés après) — cohérent avec ce qui apparaît dans le tableur de saisie.
+    const _evRefDate = _evalDateFor(ev, cls.id) || todayKey();
+    const _activeSids = (cls.eleves || []).filter(sid => _stuActiveOn(S.eleves?.[sid], _evRefDate));
+    const totalStudents = _activeSids.length;
     let typeBadge, summaryInfo, nbStudents;
     // L'éval peut couvrir plusieurs classes, mais on affiche les stats de la classe active.
-    const classSidSet = new Set(cls.eleves || []);
+    const classSidSet = new Set(_activeSids);
     if (ev.type === 'B') {
       typeBadge = '<span class="eval-type-badge eval-type-B">TYPE B</span>';
       const nbPass = (ev.passations || []).length;
@@ -26365,7 +26370,8 @@ function renderEvalNotes() {
     }
     // Stats essentielles : moyenne / min / max / σ des notes finales (classe active uniquement)
     // — arrondies à la granulométrie pour cohérence avec l'affichage utilisateur.
-    const allNotes = (cls.eleves || [])
+    // Limité aux élèves présents à la date du devoir (cf. _activeSids).
+    const allNotes = _activeSids
       .map(sid => {
         const raw = _computeStudentEvalNote(ev, sid);
         return raw == null ? null : _roundNoteToGranularity(raw, ev);
@@ -27150,7 +27156,10 @@ function _evalEditRenderSaisieSection(ev) {
         return Object.values(niv).some(n => n != null && n > 0);
       }).length;
       const cls = S.classes?.[_evalPrimaryAliveClassId(ev)];
-      const total = cls?.eleves?.length || 0;
+      // Effectif présent à la date de la passation (les élèves partis avant ou
+      // arrivés après ne comptent ni dans le total ni dans la base de saisie).
+      const _passRefDate = (p.dates?.[cls?.id]) || p.date || _evalDateFor(ev, cls?.id) || todayKey();
+      const total = cls ? (cls.eleves || []).filter(sid => _stuActiveOn(S.eleves?.[sid], _passRefDate)).length : 0;
       const tip = p.name ? `${p.code || '?'} — ${p.name}` : (p.code || '?');
       html += `<div class="meval-pass-card" data-structdrag="pass" draggable="true" data-passid="${_esc(p.id)}"
           ondragstart="_evalPassDragStart(event,'${_esc(p.id)}')"
