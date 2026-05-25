@@ -3093,21 +3093,24 @@ kbd {
     </div>
     <!-- Disciplines (flux per-classe) — facultatif, comme pour une classe réelle -->
     <div style="background:#faf7ff;border:1px solid #e8def7;border-radius:4px;padding:8px 10px;margin-bottom:12px">
-      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:#5b21b6">🎓 Disciplines (facultatif)</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
-        <div class="fg" style="flex:1;min-width:160px;margin-bottom:0">
-          <label style="font-size:.85em">Discipline principale</label>
-          <input id="mvc-discname-prim" type="text" maxlength="40" placeholder="ex. SVT Bilingue (vide → « Principale »)" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
-        </div>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85em;cursor:pointer;margin-bottom:4px">
-          <input type="checkbox" id="mvc-discname-sec-on" onchange="_mvcToggleSec()">
-          Activer une discipline secondaire
-        </label>
+      <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:#5b21b6">🎓 Disciplines</div>
+      <label style="display:flex;align-items:center;gap:4px;font-size:.85em;cursor:pointer;margin-bottom:2px">
+        <input type="checkbox" id="mvc-discname-prim-on" onchange="_mvcTogglePrim()" checked>
+        Activer la discipline principale
+      </label>
+      <div class="fg" id="mvc-discname-prim-wrap" style="margin-bottom:6px">
+        <input id="mvc-discname-prim" type="text" maxlength="40" placeholder="ex. SVT (vide → « Principale »)" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
       </div>
-      <div class="fg" id="mvc-discname-sec-wrap" style="display:none;margin-top:6px;margin-bottom:0">
-        <label style="font-size:.85em">Nom de la discipline secondaire</label>
-        <input id="mvc-discname-sec" type="text" maxlength="40" placeholder="ex. Option, Bilingue…" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
+      <label style="display:flex;align-items:center;gap:4px;font-size:.85em;cursor:pointer;margin-bottom:2px">
+        <input type="checkbox" id="mvc-discname-sec-on" onchange="_mvcToggleSec()">
+        Activer une discipline secondaire
+      </label>
+      <div class="fg" id="mvc-discname-sec-wrap" style="display:none;margin-bottom:0">
+        <input id="mvc-discname-sec" type="text" maxlength="40" placeholder="ex. Devoir Fait, Option, Bilingue…" style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em">
       </div>
+      <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:6px 0 0">
+        💡 Pour un groupe spécialisé (DF, accompagnement, club…), décoche la principale et active uniquement la secondaire.
+      </p>
     </div>
     <!-- Panneau de filtres cumulatifs (ET entre groupes ; tags = ET ou OU au choix ; classes = OU) -->
     <div id="mvc-filter-panel" style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:8px 10px;margin-bottom:8px">
@@ -4962,8 +4965,12 @@ kbd {
         Les évaluations, moyennes, bilans et remarques bulletin sont indépendants pour chaque flux.
         Si la 2ᵉ discipline est désactivée, la classe n'a qu'un seul flux (comportement standard).
       </p>
-      <div class="fg">
-        <label>Discipline principale</label>
+      <label style="display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer;font-size:.92em">
+        <input type="checkbox" id="ec-discname-prim-on" onchange="_ecTogglePrim()" checked>
+        <strong>Activer la discipline principale</strong>
+      </label>
+      <div class="fg" id="ec-discname-prim-wrap">
+        <label>Nom de la discipline principale</label>
         <input type="text" id="ec-discname-prim" placeholder="ex. SVT (laissé vide → « Principale »)" maxlength="40">
       </div>
       <label style="display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer;font-size:.92em">
@@ -4972,8 +4979,11 @@ kbd {
       </label>
       <div class="fg" id="ec-discname-sec-wrap" style="display:none">
         <label>Nom de la discipline secondaire</label>
-        <input type="text" id="ec-discname-sec" placeholder="ex. Bilingue, Option DP3…" maxlength="40">
+        <input type="text" id="ec-discname-sec" placeholder="ex. Bilingue, Option DP3, Devoir Fait…" maxlength="40">
       </div>
+      <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:6px 0 0">
+        💡 Pour un groupe spécialisé (DF, accompagnement, club…), décoche la principale et active uniquement la secondaire.
+      </p>
     </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mce')">Annuler</button>
@@ -5206,7 +5216,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-25T19:00:00Z';
+const APP_VERSION   = '2026-05-25T19:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -7813,7 +7823,12 @@ function _suggestVcId(name) {
   }
   return id || 'VC';
 }
-// Toggle de visibilité du champ « Nom de la discipline secondaire » dans la modale mvc.
+// Toggles de visibilité des champs Nom dans la modale mvc.
+function _mvcTogglePrim() {
+  const on = document.getElementById('mvc-discname-prim-on')?.checked;
+  const wrap = document.getElementById('mvc-discname-prim-wrap');
+  if (wrap) wrap.style.display = on ? '' : 'none';
+}
 function _mvcToggleSec() {
   const on = document.getElementById('mvc-discname-sec-on')?.checked;
   const wrap = document.getElementById('mvc-discname-sec-wrap');
@@ -7909,7 +7924,10 @@ function openVirtualClassModal(id, opts) {
     idInputEl.value= id;
     fromTagInp.value = cls.fromTag || '';
     // Disciplines
+    const primOnV = !cls.discPrimaryDisabled;
+    document.getElementById('mvc-discname-prim-on').checked = primOnV;
     document.getElementById('mvc-discname-prim').value = cls.discNamePrimary || '';
+    document.getElementById('mvc-discname-prim-wrap').style.display = primOnV ? '' : 'none';
     const hasSec = (cls.discNameSecondary != null);
     document.getElementById('mvc-discname-sec-on').checked = hasSec;
     document.getElementById('mvc-discname-sec').value = hasSec ? (cls.discNameSecondary || '') : '';
@@ -7917,8 +7935,10 @@ function openVirtualClassModal(id, opts) {
     for (const sid of (cls.eleves || [])) _mvcSelected.add(sid);
   } else {
     titleEl.textContent = '🔀 Nouvelle classe recomposée';
-    // Disciplines : reset
+    // Disciplines : reset (principale activée par défaut, secondaire désactivée)
+    document.getElementById('mvc-discname-prim-on').checked = true;
     document.getElementById('mvc-discname-prim').value = '';
+    document.getElementById('mvc-discname-prim-wrap').style.display = '';
     document.getElementById('mvc-discname-sec-on').checked = false;
     document.getElementById('mvc-discname-sec').value = '';
     document.getElementById('mvc-discname-sec-wrap').style.display = 'none';
@@ -8228,10 +8248,12 @@ function mvcSave() {
   // Init pool actif (1er disponible)
   const defaultPool = Object.keys(S.tabletPools || {})[0] || null;
 
-  // Disciplines (facultatif, mêmes champs que pour une classe réelle)
+  // Disciplines (mêmes champs que pour une classe réelle)
+  const discPrimOn = !!document.getElementById('mvc-discname-prim-on')?.checked;
   const discPrim = (document.getElementById('mvc-discname-prim')?.value || '').trim();
   const discSecOn = !!document.getElementById('mvc-discname-sec-on')?.checked;
   const discSec = (document.getElementById('mvc-discname-sec')?.value || '').trim();
+  if (!discPrimOn && !discSecOn) return alert('Au moins une discipline doit être activée (principale ou secondaire).');
 
   if (oldId && S.classes[oldId]) {
     // ─── ÉDITION ─────────────────────────────────────────────
@@ -8241,6 +8263,7 @@ function mvcSave() {
     cls.fromTag = fromTag;
     cls.discNamePrimary = discPrim;
     cls.discNameSecondary = discSecOn ? discSec : null;
+    cls.discPrimaryDisabled = !discPrimOn;
     // Si la salle a changé, on ajoute la nouvelle si elle n'existe pas dans cls.rooms
     if (cls.activeRoom !== salleId) {
       if (!cls.rooms[salleId]) {
@@ -8296,6 +8319,7 @@ function mvcSave() {
       fromTag: fromTag,
       discNamePrimary: discPrim,
       discNameSecondary: discSecOn ? discSec : null,
+      discPrimaryDisabled: !discPrimOn,
     };
     S.classes[newId] = newCls;
     setupClassAccessors(newCls);
@@ -11045,7 +11069,12 @@ function editClass(id) {
   document.getElementById('ec-id-disp').value = id;
   document.getElementById('ec-nom').value = cls.nom;
   document.getElementById('ec-yr').value  = cls.année;
+  // Discipline principale : activée par défaut (rétrocompat). Désactivée
+  // seulement si cls.discPrimaryDisabled === true (cas DF only, etc.).
+  const primOn = !cls.discPrimaryDisabled;
+  document.getElementById('ec-discname-prim-on').checked = primOn;
   document.getElementById('ec-discname-prim').value = cls.discNamePrimary || '';
+  document.getElementById('ec-discname-prim-wrap').style.display = primOn ? '' : 'none';
   const hasSec = (cls.discNameSecondary != null);
   document.getElementById('ec-discname-sec-on').checked = hasSec;
   document.getElementById('ec-discname-sec').value = hasSec ? (cls.discNameSecondary || '') : '';
@@ -11053,6 +11082,10 @@ function editClass(id) {
   document.getElementById('mce').classList.add('on');
 }
 
+function _ecTogglePrim() {
+  const on = document.getElementById('ec-discname-prim-on').checked;
+  document.getElementById('ec-discname-prim-wrap').style.display = on ? '' : 'none';
+}
 function _ecToggleSec() {
   const on = document.getElementById('ec-discname-sec-on').checked;
   document.getElementById('ec-discname-sec-wrap').style.display = on ? '' : 'none';
@@ -11065,9 +11098,12 @@ function saveClassEdit() {
   const nom = document.getElementById('ec-nom').value.trim();
   const yr  = parseInt(document.getElementById('ec-yr').value) || cls.année;
   if (!nom) return alert('Le nom ne peut pas être vide.');
+  const primOn = document.getElementById('ec-discname-prim-on').checked;
   const primName = (document.getElementById('ec-discname-prim').value || '').trim();
   const secOn = document.getElementById('ec-discname-sec-on').checked;
   const secName = (document.getElementById('ec-discname-sec').value || '').trim();
+  // Validation : au moins une discipline doit être activée
+  if (!primOn && !secOn) return alert('Au moins une discipline doit être activée (principale ou secondaire).');
   const wasTwo = _clsHasTwoChannels(cls);
   // Avertit si on désactive le secondaire alors qu'il existe des évals 'secondary'
   if (wasTwo && !secOn) {
@@ -11076,11 +11112,20 @@ function saveClassEdit() {
       if (!confirm(`Désactiver la discipline secondaire ?\n\n${nbSec} évaluation(s) restent marquées 'secondary' et seront invisibles tant que vous ne la réactiverez pas. Aucune donnée n'est perdue.\n\nContinuer ?`)) return;
     }
   }
+  // Avertit si on désactive le principal alors qu'il existe des évals 'primary'
+  const wasPrim = _clsHasPrimary(cls);
+  if (wasPrim && !primOn) {
+    const nbPrim = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, cls.id) && _evalChannelOf(e) === 'primary').length;
+    if (nbPrim > 0) {
+      if (!confirm(`Désactiver la discipline principale ?\n\n${nbPrim} évaluation(s) restent marquées 'primary' et seront invisibles tant que vous ne la réactiverez pas. Aucune donnée n'est perdue.\n\nContinuer ?`)) return;
+    }
+  }
   pushUndo();
   cls.nom   = nom;
   cls.année = yr;
   cls.discNamePrimary = primName;
   cls.discNameSecondary = secOn ? secName : null;
+  cls.discPrimaryDisabled = !primOn;
   // Si la classe n'a plus 2 flux, force le sélecteur de flux sur primary
   if (!_clsHasTwoChannels(cls)) {
     try {
@@ -28230,9 +28275,15 @@ function _evalRefreshChannelSelect(prefix) {
   const clsObjs = classIds.map(cid => S.classes?.[cid]).filter(Boolean);
   const anyTwo = clsObjs.some(c => _clsHasTwoChannels(c));
   if (!anyTwo) {
+    // Aucune classe avec 2 flux → pas de choix utilisateur. Le sélecteur est
+    // caché et l'éval prend automatiquement le seul flux disponible. Si toutes
+    // les classes mono-flux partagent le même flux, on prend celui-là ; sinon
+    // on retombe sur 'primary' (cas le plus fréquent).
     wrap.style.display = 'none';
     if (lbl) lbl.style.display = 'none';
-    sel.innerHTML = `<option value="primary" selected>— Principal —</option>`;
+    const uniqueOnly = new Set(clsObjs.map(c => _clsOnlyChannel(c)));
+    const autoCh = (clsObjs.length > 0 && uniqueOnly.size === 1) ? [...uniqueOnly][0] : 'primary';
+    sel.innerHTML = `<option value="${autoCh}" selected>— ${autoCh === 'secondary' ? 'Secondaire' : 'Principal'} —</option>`;
     return;
   }
   wrap.style.display = '';
@@ -32730,13 +32781,17 @@ function _evalTableurCloseHook() {
 
 // ═══════════════ TYPE B — Passations (compétences au fil de l'eau) ═══════════════
 
-// ── Disciplines & flux parallèles (par classe) + sous-groupes — helpers ──
+// ── Disciplines & flux parallèles (par classe) — helpers ──
 // Modèle :
-//   cls.discNamePrimary   : string | '' (vide → libellé « Principale »)
-//   cls.discNameSecondary : string | null (null → pas de 2e flux ; classe mono-flux)
-//   ev.discChannel        : 'primary' | 'secondary' (défaut 'primary')
-//   S.subgroups   = { [id]: { id, nom, members:[{classId,sids:[]},...] } }
-//   ev.subgroupId = id | null  (roster restriction — indépendant des flux)
+//   cls.discNamePrimary    : string (vide → libellé « Principale » par défaut)
+//   cls.discNameSecondary  : string | null (null → pas de 2e flux)
+//   cls.discPrimaryDisabled: bool (true → le flux principal n'existe pas du
+//                                  tout pour cette classe ; suppose discNameSecondary
+//                                  configuré, sinon validation refuse)
+//   ev.discChannel         : 'primary' | 'secondary' (défaut 'primary' ;
+//                            ramené automatiquement à 'secondary' si la classe
+//                            a primary désactivé)
+function _clsHasPrimary(cls)    { return !!cls && cls.discPrimaryDisabled !== true; }
 function _clsPrimaryName(cls)   { return (cls && cls.discNamePrimary != null ? String(cls.discNamePrimary).trim() : '') || 'Principale'; }
 function _clsSecondaryName(cls) {
   if (!cls) return null;
@@ -32745,7 +32800,15 @@ function _clsSecondaryName(cls) {
   const t = String(v).trim();
   return t || 'Secondaire';
 }
-function _clsHasTwoChannels(cls) { return _clsSecondaryName(cls) !== null; }
+function _clsHasSecondary(cls)  { return !!cls && _clsSecondaryName(cls) !== null; }
+// Vrai ssi la classe a EXACTEMENT 2 flux configurés (un sélecteur a alors un sens).
+function _clsHasTwoChannels(cls) { return _clsHasPrimary(cls) && _clsHasSecondary(cls); }
+// Flux unique d'une classe mono-flux (utilisé quand _clsHasTwoChannels est faux).
+function _clsOnlyChannel(cls) {
+  if (_clsHasPrimary(cls) && !_clsHasSecondary(cls)) return 'primary';
+  if (!_clsHasPrimary(cls) && _clsHasSecondary(cls)) return 'secondary';
+  return 'primary'; // fallback : aucune config → flux principal implicite
+}
 function _channelLabel(cls, channel) {
   return channel === 'secondary' ? (_clsSecondaryName(cls) || 'Secondaire') : _clsPrimaryName(cls);
 }
@@ -32753,10 +32816,14 @@ function _evalChannelOf(ev) { return (ev && ev.discChannel === 'secondary') ? 's
 function _evalMatchesChannel(ev, channel) { return _evalChannelOf(ev) === (channel || 'primary'); }
 
 // Flux actif (par classe), persisté dans localStorage en JSON {classId:'primary'|'secondary'}.
+// Si la classe est mono-flux, retourne directement ce flux unique (le storage
+// est ignoré). Si elle est multi-flux, lit le storage avec fallback 'primary'
+// (si primary désactivé, fallback 'secondary').
 function _currentDiscChannel(classId) {
   if (!classId) return 'primary';
   const cls = S.classes?.[classId];
-  if (!cls || !_clsHasTwoChannels(cls)) return 'primary';
+  if (!cls) return 'primary';
+  if (!_clsHasTwoChannels(cls)) return _clsOnlyChannel(cls);
   try {
     const raw = localStorage.getItem('planClasse_discChannel');
     if (!raw) return 'primary';
@@ -32778,7 +32845,8 @@ function _setDiscChannel(classId, channel) {
 }
 
 // Rendu du sélecteur de flux dans une toolbar des 3 onglets eval.
-// tabKey : 'notes' | 'bilan' | 'comp'. Caché si la classe n'a qu'un flux.
+// tabKey : 'notes' | 'bilan' | 'comp'. Caché si la classe n'a qu'un seul flux
+// configuré (le filtre canal est figé sur ce flux unique, choisi automatiquement).
 function _renderDiscChannelToolbar(tabKey) {
   const el = document.getElementById('disc-channel-' + tabKey);
   if (!el) return;
