@@ -96,8 +96,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .mp-cell.nt.aisle-row{min-height:30px}
 .cell.nt::after{content:"✖";color:#aaa;font-size:1.3em}
 .cell.em{background:#fff;border-color:#c8ccd0;cursor:default}
-.cell.oc{background:#d6eaf8;border-color:#3498db;cursor:pointer}
-.cell.oc:hover{background:#aed6f1}
+.cell.oc{background:#eaeef2;border-color:#7a8b9a;cursor:pointer}
+.cell.oc:hover{background:#d6dde6}
 .cell.oc[draggable="true"]{cursor:grab}
 .cell.em.drop-ok{background:#a9dfbf;border-color:#27ae60;border-style:dashed}
 .cell.oc.drop-ok{background:#a9dfbf;border-color:#27ae60}
@@ -412,6 +412,13 @@ html[data-theme="dark"] .qcm-info-banner a{color:#7fb4d8 !important}
 /* Quand le menu déroulant est dans le header (côté droit de la page), on l'aligne
    sur la DROITE du bouton parent pour ne pas déborder du viewport. */
 #hdr .dd-menu{left:auto;right:0}
+/* Modale Classe recomposée — cases plus grandes au tactile (Surface, iPad) pour
+   éviter les mis-cliques entre case membre (gauche) et case bulk période (droite). */
+@media (pointer: coarse) {
+  .mvc-stu-row .mvc-cb { width: 22px !important; height: 22px !important; }
+  .mvc-stu-row { padding: 5px 8px !important; }
+  .mvc-stu-row select { font-size: 1em !important; padding: 3px 6px !important; }
+}
 .dd-menu button{display:block;width:100%;text-align:left;padding:7px 14px;border:none;background:none;cursor:pointer;font-size:.85em;color:#333;white-space:nowrap}
 .dd-menu button:hover{background:#e8f4fd}
 .dd-menu button:disabled{color:#bbb;cursor:default;background:none}
@@ -2156,6 +2163,7 @@ kbd {
         <button class="muted" onclick="bulkSetGroupe(null)" title="Aucun groupe">—</button>
       </span>
       <button class="btn btn-p btn-sm" onclick="openTagBulkModal()" title="Ajouter ou retirer des tags cumulables (DF, DNL, etc.) sur la sélection">🏷 Tags…</button>
+      <button class="btn btn-p btn-sm" onclick="bulkCreateRecomposee()" title="Créer une nouvelle classe recomposée (virtual) avec les élèves sélectionnés — utile pour groupe DF, DNL, Bilingue, Option…" style="background:#5b21b6;color:#fff;border-color:#4c1d95">🔀 Classe recomposée</button>
       <span style="border-left:1px solid #aaa;height:18px;margin:0 4px"></span>
       <button class="btn btn-w btn-sm" onclick="bulkResetCounters()" title="↺ Remettre à zéro les compteurs 📦 / 📝 sur la sélection">↺ Compteurs</button>
       <button class="btn btn-d btn-sm" onclick="bulkDelete()" title="🗑 Supprimer définitivement les élèves sélectionnés">🗑</button>
@@ -2620,6 +2628,7 @@ kbd {
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
         <button class="btn btn-g btn-sm" id="evhelp-btn-notes" onclick="_evhelpToggle('notes')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
         <span id="disc-channel-notes" style="display:none;gap:6px;align-items:center" data-disc-toolbar="1"></span>
+        <button class="btn btn-g btn-sm" onclick="openDisciplinesFromTab()" title="Gérer le catalogue de disciplines + cocher celles enseignées à la classe active">🎓 Disciplines</button>
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
         <select id="eval-period-filter" onchange="_syncBilanPeriode('eval-period-filter');renderEvalNotes()" style="padding:4px 8px;font-size:.9em" title="Période affichée. Partagée entre les onglets Devoirs, Bilan des compétences et Bilan des notes."></select>
         <button class="btn btn-g btn-sm" onclick="openEvalPrefs()" title="Paramètres globaux : couleurs des niveaux, points par niveau, période, règle de moyenne…">⚙ Paramètres</button>
@@ -2717,7 +2726,15 @@ kbd {
       Les disciplines permettent de séparer plusieurs flux d'enseignement (notes, bilans, compétences).
       Une classe peut être enseignée dans une ou plusieurs disciplines, et chaque évaluation est rattachée à une discipline.
     </p>
-    <div id="mdisciplines-list" style="border:1px solid var(--rule-line);border-radius:4px;margin-bottom:10px;max-height:50vh;overflow-y:auto"></div>
+    <!-- Section "Affecter à la classe active" — visible uniquement quand on entre par
+         le bouton 🎓 de l'onglet Devoirs. Permet de cocher les disciplines enseignées
+         à la classe courante sans devoir naviguer vers Classes → Modifier. -->
+    <div id="mdisc-class-assign" style="display:none;background:var(--disc-accent-soft);border:1px solid var(--disc-accent-mid);border-radius:4px;padding:8px 10px;margin-bottom:12px">
+      <div style="font-weight:600;font-size:.92em;color:var(--disc-accent);margin-bottom:4px">📚 Disciplines enseignées à <span id="mdisc-class-name"></span></div>
+      <div id="mdisc-class-checks" style="display:flex;flex-wrap:wrap;gap:4px 12px"></div>
+    </div>
+    <div style="font-weight:600;font-size:.9em;margin-bottom:6px">📋 Catalogue des disciplines</div>
+    <div id="mdisciplines-list" style="border:1px solid var(--rule-line);border-radius:4px;margin-bottom:10px;max-height:42vh;overflow-y:auto"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
       <button class="btn btn-s btn-sm" onclick="_addDiscipline()">+ Ajouter une discipline</button>
     </div>
@@ -3126,6 +3143,14 @@ kbd {
       <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:var(--disc-accent)">🎓 Disciplines enseignées</div>
       <div id="mvc-disc-checks"></div>
     </div>
+    <!-- Bouton « Options avancées » qui plie/déplie le panneau de filtres + la barre
+         bulk période. Cas simple (cocher 12 élèves d'1 classe) : on n'a pas besoin
+         de tout ça affiché. -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <button type="button" id="mvc-adv-toggle" class="btn btn-g btn-sm" onclick="_mvcToggleAdvanced()" style="padding:3px 10px;font-size:.85em" title="Affiche/cache les outils avancés (filtres par tag/classe/niveau + appartenance par période)">▸ Options avancées</button>
+      <span id="mvc-adv-summary" style="font-size:.78em;color:var(--pencil);font-style:italic">filtres + appartenance par période</span>
+    </div>
+    <div id="mvc-advanced-wrap" style="display:none">
     <!-- Panneau de filtres cumulatifs (ET entre groupes ; tags = ET ou OU au choix ; classes = OU) -->
     <div id="mvc-filter-panel" style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:8px 10px;margin-bottom:8px">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
@@ -3180,6 +3205,12 @@ kbd {
       <span style="width:1px;height:16px;background:#d4b8f5;margin:0 4px"></span>
       <button class="btn btn-g btn-sm" onclick="mvcBulkSelAll(true)" title="Cocher la case droite de tous les élèves membres" style="padding:2px 8px">☑ Tout sélectionner</button>
       <button class="btn btn-g btn-sm" onclick="mvcBulkSelAll(false)" title="Décocher la case droite de tout le monde" style="padding:2px 8px">☐ Aucun</button>
+    </div>
+    </div><!-- /mvc-advanced-wrap -->
+    <!-- Mini-header de colonnes pour les 2 cases (en mode avancé seulement) -->
+    <div id="mvc-students-headers" style="display:none;font-size:.72em;color:var(--pencil);padding:2px 8px 2px 8px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e0e0e0">
+      <span><strong>👤 Membre</strong></span>
+      <span style="color:var(--disc-accent)"><strong>🗓 Sélection bulk ▶</strong></span>
     </div>
     <div id="mvc-students" style="max-height:340px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;padding:6px"></div>
     <input type="hidden" id="mvc-id">
@@ -5067,6 +5098,7 @@ kbd {
   </div>
   <div class="ctx-item" id="ctx-notes"    onclick="ctxEditNotes()">📋 Notes</div>
   <div class="ctx-item" id="ctx-rem"      onclick="ctxOpenReminders()">🔔 <span id="ctx-rem-lbl">Rappels / À vérifier…</span></div>
+  <div class="ctx-item" id="ctx-violations" onclick="ctxShowViolations()" style="display:none;color:var(--margin-red);font-weight:600">⚠️ <span id="ctx-violations-lbl">Contraintes non respectées</span></div>
   <div class="ctx-sep"></div>
   <div class="ctx-item danger" onclick="ctxRemove()">❌ Retirer de sa place</div>
 </div>
@@ -5242,7 +5274,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T02:00:00Z';
+const APP_VERSION   = '2026-05-26T03:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -6825,34 +6857,44 @@ function _getHighlightBucket(cls, autoCreate = false) {
   return S.movedHighlights[cls.id][cls.activeRoom];
 }
 
-// Compare le seating actuel à un snapshot pris avant la mutation et AJOUTE les
-// cases dont l'occupant a changé au bucket existant (accumulation). Si rien n'a
-// changé, le bucket reste tel quel. Appelé après chaque action de placement.
+// Compare le seating actuel à un snapshot d'ORIGINE de la session (pris à la
+// 1re mutation depuis le dernier clear). Seules les cases dont l'occupant DIFFÈRE
+// de l'origine restent surlignées. Conséquence importante : si l'utilisateur
+// déplace un élève puis le RAMÈNE à sa case de départ, le surlignage disparaît
+// (l'élève est revenu chez lui — ce n'est plus un changement net).
+//
+// L'argument `beforeSeating` n'est plus utilisé (gardé pour compat des callsites)
+// mais sert tout de même de fallback pour l'origine si le bucket n'en a pas encore.
 function _recordMovesFromDiff(cls, beforeSeating) {
   if (!cls) { _updateMovedHighlightBtnUI(); return; }
   const after = cls.seating || {};
-  const before = beforeSeating || {};
-  const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  const changed = [];
-  for (const k of allKeys) {
-    if ((before[k] || null) !== (after[k] || null)) changed.push(k);
-  }
-  if (!changed.length) { _updateMovedHighlightBtnUI(); return; }
   const bucket = _getHighlightBucket(cls, true);
   if (!bucket) { _updateMovedHighlightBtnUI(); return; }
-  // Fusion : on garde l'ordre d'arrivée (les plus anciennes en tête, les plus
-  // récentes en queue). Si une key déjà présente revient, on la remet en queue.
-  const set = new Set(bucket.keys || []);
-  for (const k of changed) { set.delete(k); set.add(k); }
-  bucket.keys = [...set];
-  // Cap FIFO de sécurité : au-delà de 50 cellules surlignées, on purge les plus
-  // anciennes. Évite l'inflation silencieuse si beaucoup de placements ciblés
-  // s'accumulent sans clic sur 💡 pour effacer.
-  const MAX_HIGHLIGHTS = 50;
-  if (bucket.keys.length > MAX_HIGHLIGHTS) {
-    bucket.keys = bucket.keys.slice(-MAX_HIGHLIGHTS);
+  // Initialise l'origine au 1er changement de la session (ou après un clear).
+  // On utilise `beforeSeating` du 1er appel comme snapshot d'origine — c'est
+  // bien l'état "d'avant la 1re mutation" qui sert de référence.
+  if (!bucket.origin) {
+    bucket.origin = beforeSeating ? Object.assign({}, beforeSeating) : Object.assign({}, after);
   }
-  bucket.hidden = false; // un nouveau changement → toujours visible
+  // Recalcule la liste complète des keys différentes de l'origine.
+  // (Pas d'accumulation tas-FIFO : la vérité absolue est diff(after, origin).)
+  const origin = bucket.origin;
+  const allKeys = new Set([...Object.keys(origin), ...Object.keys(after)]);
+  const changed = [];
+  for (const k of allKeys) {
+    if ((origin[k] || null) !== (after[k] || null)) changed.push(k);
+  }
+  // Cap de sécurité : 50 cellules max (évite l'inflation visuelle si l'utilisateur
+  // change tout le plan sans cliquer sur 💡 pour effacer entre temps).
+  bucket.keys = (changed.length > 50) ? changed.slice(-50) : changed;
+  // Si plus aucun changement par rapport à l'origine → reset complet du bucket
+  // pour que la prochaine modif reparte d'une nouvelle origine (l'état courant).
+  if (bucket.keys.length === 0) {
+    delete bucket.origin;
+    bucket.hidden = false;
+  } else {
+    bucket.hidden = false; // nouveau changement → toujours visible
+  }
   _updateMovedHighlightBtnUI();
 }
 
@@ -6867,6 +6909,7 @@ function _clearMovedHighlight() {
   pushUndo();
   bucket.keys = [];
   bucket.hidden = false;
+  delete bucket.origin; // reset l'origine pour repartir d'un état neuf
   save();
   if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
   if (typeof renderStudentView === 'function') renderStudentView();
@@ -7366,6 +7409,20 @@ function showCtxMenu(e, cls, key, sid) {
   const remN = Array.isArray(s?.reminders) ? s.reminders.length : 0;
   document.getElementById('ctx-rem-lbl').textContent =
     remN > 0 ? `Rappels (${remN})…` : 'Rappels / À vérifier…';
+  // Contraintes non respectées : item visible uniquement si l'élève est en
+  // violation à sa place actuelle. Permet d'accéder à la modale détail sans
+  // attendre qu'elle s'auto-ouvre.
+  const _viols = (sid && key) ? getPlacementViolations(cls, sid, key) : [];
+  const ctxViol = document.getElementById('ctx-violations');
+  if (ctxViol) {
+    if (_viols.length > 0) {
+      ctxViol.style.display = '';
+      document.getElementById('ctx-violations-lbl').textContent =
+        `Contraintes non respectées (${_viols.length})`;
+    } else {
+      ctxViol.style.display = 'none';
+    }
+  }
 
   // Positionner — mesure la taille réelle du menu (qui dépend des items affichés
   // + de la viewport) pour qu'il ne déborde jamais à droite ou en bas.
@@ -7552,6 +7609,14 @@ function ctxOpenReminders() {
   const sid = ctxTarget.sid;
   closeCtxMenu();
   openReminders(sid);
+}
+// Ouvre la modale Contraintes non respectées (toutes les violations de la classe,
+// dont celles de l'élève cliqué).
+function ctxShowViolations() {
+  if (!ctxTarget) return;
+  const { cls } = ctxTarget;
+  closeCtxMenu();
+  if (typeof showViolationsModal === 'function') showViolationsModal(cls);
 }
 
 function renderRemindersModal() {
@@ -8016,6 +8081,33 @@ function _mvcRenderDisciplineChecks(cls) {
 function _mvcTogglePrim() {}
 function _mvcToggleSec() {}
 
+// Mode avancé du mvc : déplie/replie les options de filtres + la barre bulk
+// période + les cases bulk de droite. État local (pas persisté ; reset au close).
+let _mvcAdvancedOn = false;
+function _mvcToggleAdvanced() {
+  _mvcAdvancedOn = !_mvcAdvancedOn;
+  const wrap = document.getElementById('mvc-advanced-wrap');
+  const btn = document.getElementById('mvc-adv-toggle');
+  const sum = document.getElementById('mvc-adv-summary');
+  const headers = document.getElementById('mvc-students-headers');
+  if (wrap) wrap.style.display = _mvcAdvancedOn ? '' : 'none';
+  if (btn) btn.textContent = _mvcAdvancedOn ? '▾ Options avancées' : '▸ Options avancées';
+  if (sum) sum.style.display = _mvcAdvancedOn ? 'none' : '';
+  if (headers) headers.style.display = _mvcAdvancedOn ? 'flex' : 'none';
+  if (typeof renderMvcStudents === 'function') renderMvcStudents();
+}
+function _mvcResetAdvanced() {
+  _mvcAdvancedOn = false;
+  const wrap = document.getElementById('mvc-advanced-wrap');
+  const btn = document.getElementById('mvc-adv-toggle');
+  const sum = document.getElementById('mvc-adv-summary');
+  const headers = document.getElementById('mvc-students-headers');
+  if (wrap) wrap.style.display = 'none';
+  if (btn) btn.textContent = '▸ Options avancées';
+  if (sum) sum.style.display = '';
+  if (headers) headers.style.display = 'none';
+}
+
 // Garantit l'unicité par suffixage (_2, _3, …) si nécessaire.
 function _uniqueVcId(base, ignoreId) {
   if (!base) base = 'VC';
@@ -8134,6 +8226,7 @@ function openVirtualClassModal(id, opts) {
   _mvcUpdateIdStatus();
   document.getElementById('mvc-search').value = '';
   renderMvcFilterPanel();
+  _mvcResetAdvanced();
   _mvcBulkFillPeriodSelects();
   _mvcBulkUpdateTarget();
   renderMvcStudents();
@@ -8191,16 +8284,20 @@ function renderMvcStudents() {
         .join('');
       const grpBadge = s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.62em;padding:0 4px">G${s.groupe}</span>` : '';
       const mem = _mvcMembership[s.id] || {};
-      const memUI = isChecked
+      // En mode SIMPLE (sans options avancées), pas de sélecteurs de période ni
+      // de 2e case bulk — réduit la densité visuelle pour le cas le plus fréquent
+      // (cocher des élèves dans une classe recomposée stable).
+      const memUI = (isChecked && _mvcAdvancedOn)
         ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:.72em;color:var(--pencil);margin-left:4px" onclick="event.preventDefault()">de ${_mkPerSel(s.id,'fromPer',mem.fromPer||'')} à ${_mkPerSel(s.id,'toPer',mem.toPer||'')}</span>`
         : '';
       // 2e case à droite : sélection pour les actions en lot sur l'appartenance par période.
-      // Affichée (et active) uniquement pour les membres de la classe (case gauche cochée).
-      const bulkUI = isChecked
-        ? `<input type="checkbox" ${bulkChecked} onclick="event.stopPropagation()" onchange="mvcToggleBulkSel('${s.id}',this.checked)" title="Sélection pour les actions en lot sur les périodes (barre violette ci-dessus)" style="width:14px;height:14px;cursor:pointer;margin-left:6px;accent-color:#7c3aed">`
-        : `<span style="display:inline-block;width:14px;height:14px;margin-left:6px"></span>`;
-      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
-        <input type="checkbox" ${checked} onchange="mvcToggleSid('${s.id}',this.checked)" title="Membre de la classe recomposée" style="width:14px;height:14px;cursor:pointer">
+      // Affichée (et active) uniquement pour les membres de la classe (case gauche cochée)
+      // ET uniquement en mode avancé.
+      const bulkUI = (isChecked && _mvcAdvancedOn)
+        ? `<input type="checkbox" ${bulkChecked} onclick="event.stopPropagation()" onchange="mvcToggleBulkSel('${s.id}',this.checked)" title="Sélection pour les actions en lot sur les périodes (barre violette ci-dessus)" style="width:18px;height:18px;cursor:pointer;margin-left:6px;accent-color:var(--disc-accent)">`
+        : '';
+      return `<label class="mvc-stu-row" style="display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
+        <input type="checkbox" ${checked} onchange="mvcToggleSid('${s.id}',this.checked)" title="Membre de la classe recomposée" class="mvc-cb mvc-cb-member" style="width:18px;height:18px;cursor:pointer">
         <span style="flex:1"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>
         ${grpBadge} ${tagSpans}
         ${memUI}
@@ -10309,16 +10406,11 @@ function _renderTagChips(cls) {
       }).join('')
     : '';
   // Quand exactement 1 tag est actif et qu'on est sur une classe réelle :
-  // raccourci pour créer une classe recomposée à partir de ce tag
-  let saveBtn = '';
-  if (cls && !cls.virtual && _tagFilter.size === 1) {
-    const tagId = [..._tagFilter][0];
-    const tag = S.tags?.[tagId];
-    if (tag) {
-      saveBtn = ` <button class="btn btn-sm" style="background:#5b2c6f;color:#fff;margin-left:4px" onclick="openVirtualClassModal(null, {fromTag:'${tagId}'})" title="Créer une classe recomposée à partir des élèves ${_escAttr(tag.abbr)} (modifiable ensuite)">🔀 Sauver comme classe recomposée…</button>`;
-    }
-  }
-  document.querySelectorAll('#tg-tagchips, #sv-tagchips').forEach(el => { el.innerHTML = chipsHtml + saveBtn; });
+  // (Ancien bouton « Sauver comme classe recomposée » retiré : endroit peu intuitif,
+  //  désormais cette action passe par l'onglet Élèves → sélection multi → « 🔀 Créer
+  //  une classe recomposée avec la sélection » ou directement Classes →
+  //  « + Nouvelle classe recomposée ».)
+  document.querySelectorAll('#tg-tagchips, #sv-tagchips').forEach(el => { el.innerHTML = chipsHtml; });
 }
 
 function toggleTagFilter(tagId) {
@@ -13467,6 +13559,25 @@ function bulkSetCivilite(c) {
   renderStudents();
   const lbl = civiliteFullLabel(c);
   toast(`✅ ${selectedEleves.size} élève(s) → ${lbl}.`);
+}
+
+// Workflow inverse : sélection multi-élèves dans l'onglet Élèves → bouton
+// « 🔀 Classe recomposée » → ouvre directement mvc avec les sids pré-cochés.
+function bulkCreateRecomposee() {
+  if (!selectedEleves.size) { toast('💡 Sélectionne d\'abord des élèves (clic + glisser sur les lignes)', 'info'); return; }
+  const sids = [...selectedEleves];
+  // Pré-remplissage : on stocke les sids dans une variable que openVirtualClassModal
+  // lira ensuite. Réutilise _mvcSelected (state du mvc) qui sera initialisé après.
+  openVirtualClassModal(null);
+  // Après l'init du modale (qui a clear _mvcSelected), on rajoute notre sélection
+  setTimeout(() => {
+    if (typeof _mvcSelected !== 'undefined') {
+      for (const sid of sids) _mvcSelected.add(sid);
+      if (typeof renderMvcStudents === 'function') renderMvcStudents();
+      // Focus sur le nom de la classe pour finir rapidement
+      document.getElementById('mvc-nom')?.focus();
+    }
+  }, 50);
 }
 
 function bulkResetCounters() {
@@ -28542,18 +28653,75 @@ function _competencePickerAlsoToggleAll(check) {
 // alors automatiquement les sids du roster. Pas de feature de "sous-groupe"
 // dédiée — c'est redondant avec les virtual classes.
 
-function openDisciplinesModal() {
+function openDisciplinesModal(opts) {
   if (!S.disciplines || Object.keys(S.disciplines).length === 0) {
     S.disciplines = { 'disc_main': { id: 'disc_main', nom: 'Discipline principale', isPrimary: true } };
   }
   _renderDisciplinesList();
+  // Section facultative « Disciplines enseignées à la classe X » : affichée
+  // uniquement si opts.assignToClass est true (ouverture depuis le bouton 🎓
+  // de l'onglet Devoirs).
+  _renderDiscClassAssign(opts?.assignToClass === true);
   openMod('mdisciplines');
   setTimeout(() => document.getElementById('mdisciplines-list')?.querySelector('input[type="text"]')?.focus(), 50);
+}
+
+// Ouvre la modale Disciplines depuis l'onglet Devoirs : panneau « Affecter à la
+// classe active » visible en plus du catalogue.
+function openDisciplinesFromTab() {
+  openDisciplinesModal({ assignToClass: true });
+}
+
+// Rendu (ou cache) du panneau « Disciplines enseignées à la classe active ».
+function _renderDiscClassAssign(show) {
+  const wrap = document.getElementById('mdisc-class-assign');
+  const checks = document.getElementById('mdisc-class-checks');
+  const nameEl = document.getElementById('mdisc-class-name');
+  if (!wrap || !checks) return;
+  const cls = getCls();
+  if (!show || !cls) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  if (nameEl) nameEl.textContent = cls.nom || cls.id;
+  const all = Object.values(S.disciplines || {});
+  const current = new Set(cls.disciplineIds || []);
+  if (all.length === 0) {
+    checks.innerHTML = '<span style="font-size:.82em;color:var(--pencil);font-style:italic">Aucune discipline dans le catalogue — ajoute en une ci-dessous.</span>';
+    return;
+  }
+  checks.innerHTML = all.map(d => {
+    const checked = current.has(d.id);
+    return `<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:.88em">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="_discToggleClassAssign('${_esc(d.id)}',this.checked)">
+      ${_esc(d.nom || d.id)}${d.isPrimary ? ' <span style="font-size:.7em;color:var(--pencil)">(principale)</span>' : ''}
+    </label>`;
+  }).join('');
+}
+
+// Coche/décoche une discipline pour la classe active.
+function _discToggleClassAssign(discId, on) {
+  const cls = getCls();
+  if (!cls) return;
+  pushUndo();
+  cls.disciplineIds = Array.isArray(cls.disciplineIds) ? cls.disciplineIds.slice() : [];
+  const idx = cls.disciplineIds.indexOf(discId);
+  if (on && idx < 0) cls.disciplineIds.push(discId);
+  if (!on && idx >= 0) cls.disciplineIds.splice(idx, 1);
+  // Garantit ≥ 1 discipline (retombe sur la principale si tout est décoché)
+  if (cls.disciplineIds.length === 0) cls.disciplineIds = [_disciplinePrimaryId()];
+  save();
+  // Re-render des toolbars éval + de cette section
+  try { _refreshSubgroupSelectors(); } catch (_) {}
+  _renderDiscClassAssign(true);
+  // Si l'onglet Devoirs est ouvert, re-render pour mettre à jour le sélecteur
+  if (document.getElementById('tab-notes')?.classList?.contains('on')) renderEvalNotes();
 }
 
 function _renderDisciplinesList() {
   const wrap = document.getElementById('mdisciplines-list');
   if (!wrap) return;
+  // Synchronise aussi le panneau d'affectation si actuellement visible
+  const _ass = document.getElementById('mdisc-class-assign');
+  if (_ass && _ass.style.display !== 'none') _renderDiscClassAssign(true);
   const discs = Object.values(S.disciplines || {});
   if (discs.length === 0) {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px">Aucune discipline.</p>';
