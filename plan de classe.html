@@ -5355,7 +5355,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T19:00:00Z';
+const APP_VERSION   = '2026-05-26T23:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -28177,6 +28177,13 @@ function _evalEditPerClass(inputEl) {
   }
   ev.updatedAt = Date.now();
   _evalEditDirty = true;
+  if (field === 'date' || field === 'slot') {
+    const filled = _evalAutoFillAbsentsForEvalClass(ev, cid);
+    if (filled > 0) {
+      _evalToastAbsentsFilled(filled);
+      try { _evalTableurRender(); } catch(_) {}
+    }
+  }
   // Auto-save léger débouncé pour éviter le spam I/O (F15)
   if (_evalEditPerClassSaveTimer) clearTimeout(_evalEditPerClassSaveTimer);
   _evalEditPerClassSaveTimer = setTimeout(() => save(), 600);
@@ -29953,7 +29960,9 @@ function _evalTableurChangeDate(date) {
   pushUndo();
   _evalSetDateFor(ev, cls.id, date);
   ev.updatedAt = Date.now();
+  const filled = _evalAutoFillAbsentsForEvalClass(ev, cls.id);
   save();
+  if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} return; }
   // Mise à jour ciblée du <select> créneau — pas de re-render complet du
   // tableur (qui détruirait l'input <type=date> et casserait la saisie
   // clavier entre segments jour/mois/année dans certains navigateurs).
@@ -29983,7 +29992,9 @@ function _evalTableurChangeSlot(slotId) {
   pushUndo();
   _evalSetSlotIdFor(ev, cls.id, slotId);
   ev.updatedAt = Date.now();
+  const filled = _evalAutoFillAbsentsForEvalClass(ev, cls.id);
   save();
+  if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} }
 }
 
 function _evalTableurSortedSids(cls) {
@@ -32657,6 +32668,10 @@ function _evalTableurEditPass(inputEl) {
   }
   ev.updatedAt = Date.now();
   _evalAutoUpdateDate(ev);
+  if ((field === 'date' || field === 'slot') && cid) {
+    const filled = _evalAutoFillAbsentsForPass(ev, pass, cid);
+    if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} }
+  }
   if (_evalTableurPassEditTimer) clearTimeout(_evalTableurPassEditTimer);
   _evalTableurPassEditTimer = setTimeout(() => save(), 600);
 }
@@ -32839,6 +32854,11 @@ function _tableurEditMn(inputEl) {
       }
     }
     _evalAutoUpdateDate(ev);
+    const cidA = inputEl.getAttribute('data-classid');
+    if (cidA) {
+      const filled = _evalAutoFillAbsentsForMn(ev, mn, cidA);
+      if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} }
+    }
   } else if (field === 'slot') {
     const v = String(inputEl.value || '');
     const cid = inputEl.getAttribute('data-classid');
@@ -32846,6 +32866,8 @@ function _tableurEditMn(inputEl) {
       mn.slotIds = mn.slotIds || {};
       if (v) mn.slotIds[cid] = v; else delete mn.slotIds[cid];
       if (Object.keys(mn.slotIds).length === 0) delete mn.slotIds;
+      const filled = _evalAutoFillAbsentsForMn(ev, mn, cid);
+      if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} }
     }
   }
   ev.updatedAt = Date.now();
@@ -33091,6 +33113,10 @@ function _tableurMnMenuSave() {
   // Date "globale" de l'éval = max des sous-dates (per-classe via _evalAutoUpdateDate)
   _evalAutoUpdateDate(ev);
   ev.updatedAt = Date.now();
+  if (cls) {
+    const filled = _evalAutoFillAbsentsForMn(ev, mn, cls.id);
+    if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} }
+  }
   save();
   closeMod2('meval-mn-menu');
 }
@@ -33287,6 +33313,10 @@ function _tableurPassMenuSavePerGroup() {
     if (pass.slotIdsByGroup && Object.keys(pass.slotIdsByGroup).length === 0) delete pass.slotIdsByGroup;
   }
   ev.updatedAt = Date.now();
+  if (cls) {
+    const filled = _evalAutoFillAbsentsForPass(ev, pass, cls.id);
+    if (filled > 0) { _evalToastAbsentsFilled(filled); try { _evalTableurRender(); } catch(_) {} }
+  }
   save();
   closeMod2('meval-pass-menu');
 }
@@ -33823,6 +33853,116 @@ function _evalSetSlotIdFor(ev, classId, slotId) {
   ev.slotIds = ev.slotIds || {};
   if (slotId) ev.slotIds[classId] = slotId; else delete ev.slotIds[classId];
   delete ev.slotId;
+}
+
+// Auto-fill absences : quand la date/le créneau d'une éval (ou mn/passation)
+// change, on cherche les appels enregistrés correspondants et on pré-remplit
+// 'A' sur les cellules vides des élèves absents à ce moment-là.
+function _evalCollectAbsentsForDateSlot(classId, dateYMD, slotId, groupFilter) {
+  const records = S.attendance?.[classId];
+  if (!records || !dateYMD) return new Set();
+  const out = new Set();
+  for (const r of Object.values(records)) {
+    if (!r || r.date !== dateYMD) continue;
+    if (slotId && r.slotId && r.slotId !== slotId) continue;
+    if (groupFilter && r.groupe && r.groupe !== groupFilter) continue;
+    for (const sid of (r.absents || [])) out.add(sid);
+  }
+  return out;
+}
+
+function _evalAutoFillAbsentsForMn(ev, mn, classId) {
+  if (!ev || !mn || !classId) return 0;
+  if (ev.type !== 'A' && ev.type !== 'C') return 0;
+  const cls = S.classes?.[classId];
+  if (!cls) return 0;
+  // Lit la date/le slot effectifs en cascade — robuste aux différences de niveau
+  // selon le type d'éval et le point d'entrée (modale Réglages = ev-level ;
+  // tableur inline Type A = mn-level ; tableur inline Type C = mn-level
+  // propagé à ev pour la date mais pas pour le slot).
+  const defDate = mn.dates?.[classId] || ev.dates?.[classId] || mn.date || ev.date;
+  const defSlot = mn.slotIds?.[classId] || ev.slotIds?.[classId] || mn.slotId || ev.slotId;
+  const pgDates = mn.datesByGroup?.[classId];
+  const pgSlots = mn.slotIdsByGroup?.[classId];
+  if (!defDate) return 0;
+  let filled = 0;
+  const sids = (cls.eleves || []).filter(sid => S.eleves?.[sid]);
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    const g = stu.groupe || 0;
+    const effDate = (g && pgDates?.[g]) || defDate;
+    const effSlot = (g && pgSlots?.[g]) || defSlot;
+    if (!effDate) continue;
+    if (typeof _stuActiveOn === 'function' && !_stuActiveOn(stu, effDate)) continue;
+    const absents = _evalCollectAbsentsForDateSlot(classId, effDate, effSlot, g);
+    if (!absents.has(sid)) continue;
+    ev.notes = ev.notes || {};
+    ev.notes[sid] = ev.notes[sid] || { values: {} };
+    ev.notes[sid].values = ev.notes[sid].values || {};
+    const cur = ev.notes[sid].values[mn.id];
+    if (cur == null || cur === '') {
+      ev.notes[sid].values[mn.id] = 'A';
+      filled++;
+    }
+  }
+  return filled;
+}
+
+function _evalAutoFillAbsentsForPass(ev, pass, classId) {
+  if (!ev || !pass || !classId) return 0;
+  if (ev.type !== 'B') return 0;
+  const cls = S.classes?.[classId];
+  if (!cls) return 0;
+  const defDate = pass.dates?.[classId] || pass.date;
+  const defSlot = pass.slotIds?.[classId] || pass.slotId;
+  if (!defDate) return 0;
+  const pgDates = pass.datesByGroup?.[classId];
+  const pgSlots = pass.slotIdsByGroup?.[classId];
+  const cids = pass.competenceIds || [];
+  if (cids.length === 0) return 0;
+  let filled = 0;
+  const sids = (cls.eleves || []).filter(sid => S.eleves?.[sid]);
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    const g = stu.groupe || 0;
+    const effDate = (g && pgDates?.[g]) || defDate;
+    const effSlot = (g && pgSlots?.[g]) || defSlot;
+    if (!effDate) continue;
+    if (typeof _stuActiveOn === 'function' && !_stuActiveOn(stu, effDate)) continue;
+    const absents = _evalCollectAbsentsForDateSlot(classId, effDate, effSlot, g);
+    if (!absents.has(sid)) continue;
+    pass.niveaux = pass.niveaux || {};
+    pass.niveaux[sid] = pass.niveaux[sid] || {};
+    for (const cid of cids) {
+      const cur = pass.niveaux[sid][cid];
+      if (cur == null || cur === '' || cur === 0) {
+        pass.niveaux[sid][cid] = 'A';
+        filled++;
+      }
+    }
+  }
+  return filled;
+}
+
+function _evalAutoFillAbsentsForEvalClass(ev, classId) {
+  if (!ev || !classId) return 0;
+  let filled = 0;
+  if (ev.type === 'A' || ev.type === 'C') {
+    for (const mn of (ev.miniNotes || [])) {
+      filled += _evalAutoFillAbsentsForMn(ev, mn, classId);
+    }
+  } else if (ev.type === 'B') {
+    for (const pass of (ev.passations || [])) {
+      filled += _evalAutoFillAbsentsForPass(ev, pass, classId);
+    }
+  }
+  return filled;
+}
+
+function _evalToastAbsentsFilled(filled) {
+  if (filled > 0) {
+    toast(`🚫 ${filled} cellule${filled > 1 ? 's' : ''} pré-remplie${filled > 1 ? 's' : ''} avec « A » (élève${filled > 1 ? 's' : ''} absent${filled > 1 ? 's' : ''} à l'appel)`);
+  }
 }
 
 // Classe active dans le tableur — lit dataset.classid sur #meval-tableur,
@@ -35336,7 +35476,7 @@ function renderBilanTab() {
     if (!stu) continue;
     const rowBg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${rowBg}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="openHist('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1;cursor:pointer" title="Cliquer pour ouvrir l'historique de l'élève">${_fmtStuNameInnerHtml(stu)}</td>`;
     // Détermine quelles facultatives sont effectivement comptées pour cet élève
     // (par période de synthèse ou global selon le filtre). On précalcule l'union
     // sur les périodes de synthèse pour rester rapide.
@@ -36462,7 +36602,7 @@ function renderCompetencesTab() {
     if (!stu) continue;
     const bg = _si % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${bg}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="openHist('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap;cursor:pointer" title="Cliquer pour ouvrir l'historique de l'élève">${_fmtStuNameInnerHtml(stu)}</td>`;
     let sumMean = 0, nbMean = 0;
     for (const col of cols) {
       // Pour chaque colonne (compétence unique OU domaine), on agrège les niveaux
@@ -37302,7 +37442,7 @@ function _evalPasteApply() {
 // toutes les questions n'ont pas été soumises (cellules vides padées en fin) :
 // on prend donc la dernière cellule numérique non vide de la ligne.
 
-const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, dirHandle: null, files: [], userPicks: {}, filter: '' };
+const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, detectedSlot: null, dirHandle: null, files: [], userPicks: {}, filter: '' };
 const QCMCAM_DIR_KEY = 'qcmcam-import-dir';
 const QCMCAM_SORT_KEY = 'planClasse_qcmcamImportSort'; // 'date' | 'name'
 
@@ -37321,6 +37461,35 @@ function _qcmcamExtractDate(s) {
   const y = +m[1], mo = +m[2], d = +m[3];
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+// Cherche dans le nom de fichier un code de créneau (M1, M2, S1...) APRÈS la date
+// détectée et avant l'extension. Utilise le planning de la salle active de la
+// classe pour le jour de la date détectée. Renvoie l'id du créneau ou null.
+function _qcmcamExtractSlot(filename, cls, dateYMD) {
+  if (!filename || !cls || !dateYMD) return null;
+  const fn = String(filename);
+  // Position après la 1re date AAAA-MM-JJ
+  const m = fn.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const tail = fn.slice(m.index + m[0].length).replace(/\.[a-z0-9]+$/i, '');
+  if (!tail) return null;
+  // Calcule le jour de la semaine de la date pour récupérer les créneaux applicables
+  let day = null;
+  try { day = dayKeyOf(new Date(dateYMD + 'T12:00:00')); } catch(_) { return null; }
+  const salleId = cls.activeRoom;
+  if (!salleId) return null;
+  const slots = getSalleSchedule(salleId, day) || [];
+  if (!slots.length) return null;
+  // Trie par longueur de code décroissante pour matcher "M10" avant "M1" si jamais
+  const sorted = slots.slice().sort((a, b) => (b.id || '').length - (a.id || '').length);
+  for (const s of sorted) {
+    const id = s.id || '';
+    if (!id) continue;
+    const re = new RegExp('(?:^|[^A-Za-z0-9])' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9])', 'i');
+    if (re.test(tail)) return id;
+  }
+  return null;
 }
 
 function _qcmcamNorm(s) {
@@ -37500,6 +37669,7 @@ function _evalQcmcamOpen() {
   _qcmcamState.matches = [];
   _qcmcamState.filename = '';
   _qcmcamState.detectedDate = null;
+  _qcmcamState.detectedSlot = null;
   _qcmcamState.files = [];
   _qcmcamState.userPicks = {};
   _qcmcamState.filter = '';
@@ -37674,6 +37844,11 @@ async function _evalQcmcamSelectFromDir(name) {
     const file = await f.handle.getFile();
     _qcmcamState.filename = file.name || name;
     _qcmcamState.detectedDate = _qcmcamExtractDate(file.name || '');
+    {
+      const _ev = S.evaluations?.[document.getElementById('meval-tableur-evalid')?.value];
+      const _cls = _ev ? _evalTableurActiveCls(_ev) : null;
+      _qcmcamState.detectedSlot = _qcmcamExtractSlot(file.name || '', _cls, _qcmcamState.detectedDate);
+    }
     const text = await file.text();
     const grid = _qcmcamParseCsv(text);
     const { rows, maxPoints } = _qcmcamExtractRows(grid);
@@ -37692,6 +37867,11 @@ function _evalQcmcamFileSelected(input) {
   if (!file) return;
   _qcmcamState.filename = file.name || '';
   _qcmcamState.detectedDate = _qcmcamExtractDate(file.name || '');
+  {
+    const _ev = S.evaluations?.[document.getElementById('meval-tableur-evalid')?.value];
+    const _cls = _ev ? _evalTableurActiveCls(_ev) : null;
+    _qcmcamState.detectedSlot = _qcmcamExtractSlot(file.name || '', _cls, _qcmcamState.detectedDate);
+  }
   _qcmcamState.userPicks = {}; // remise à zéro à chaque fichier
   const reader = new FileReader();
   reader.onload = e => {
@@ -37889,6 +38069,20 @@ function _evalQcmcamRenderPreview() {
       </label>
     </div>`;
   }
+  // Créneau détecté dans le nom du fichier (M1, S2, ...) — après la date
+  let slotBlock = '';
+  const ds = _qcmcamState.detectedSlot;
+  if (ds) {
+    const curSlot = mn.slotIds?.[cls.id] || mn.slotId || '';
+    const sameSlot = (curSlot === ds);
+    slotBlock = `<div style="margin:6px 0 0;padding:6px 10px;background:#fff;border-left:3px solid var(--ink-blue-soft);border-radius:3px;font-size:.9em">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="meval-qcmcam-apply-slot" ${sameSlot ? '' : 'checked'}>
+        🕒 Créneau détecté dans le nom du fichier : <strong>${_esc(ds)}</strong>
+        ${sameSlot ? '<span style="color:var(--pencil)">(déjà appliqué)</span>' : `<span style="color:var(--pencil);font-size:.88em">— l'appliquer à la mini-note${curSlot ? ` (remplace ${_esc(curSlot)})` : ''}</span>`}
+      </label>
+    </div>`;
+  }
 
   const hintAmbigOrNone = (nbAmbig + nbNone) > 0
     ? `<div style="margin-top:6px;padding:6px 10px;background:#fffaeb;border-left:3px solid #d97706;border-radius:3px;font-size:.86em;color:var(--ink-deep)">💡 Sélectionne le bon élève dans la liste déroulante de chaque ligne ambigüe (⚠) ou inconnue (✗), ou choisis <em>« Ignorer cette ligne »</em>.</div>`
@@ -37904,6 +38098,7 @@ function _evalQcmcamRenderPreview() {
     ${hintAmbigOrNone}
     ${baremeBlock}
     ${dateBlock}
+    ${slotBlock}
     ${tableHtml}`;
   applyBtn.disabled = (nbOk === 0 && nbHorsLim === 0 && nbAbs === 0);
 }
@@ -37975,6 +38170,19 @@ function _evalQcmcamApply() {
       dateApplied = mn.date;
     }
   }
+  // Créneau détecté : appliqué sur la mn cible pour la classe active
+  const applySlotChk = document.getElementById('meval-qcmcam-apply-slot');
+  let slotApplied = null;
+  if (_qcmcamState.detectedSlot) {
+    const _cls = _evalTableurActiveCls(ev);
+    if (_cls) {
+      if (createdNewMn || applySlotChk?.checked) {
+        mn.slotIds = mn.slotIds || {};
+        mn.slotIds[_cls.id] = _qcmcamState.detectedSlot;
+        slotApplied = _qcmcamState.detectedSlot;
+      }
+    }
+  }
 
   ev.notes = ev.notes || {};
   let applied = 0, skipped = 0, nbAbs = 0, nbClamp = 0;
@@ -37999,6 +38207,13 @@ function _evalQcmcamApply() {
     applied++;
   }
   ev.updatedAt = Date.now();
+  if (dateApplied || slotApplied) {
+    const _cls2 = _evalTableurActiveCls(ev);
+    if (_cls2) {
+      const filled = _evalAutoFillAbsentsForMn(ev, mn, _cls2.id);
+      if (filled > 0) _evalToastAbsentsFilled(filled);
+    }
+  }
   save();
   closeMod2('meval-qcmcam');
   _evalTableurRender();
@@ -38006,6 +38221,7 @@ function _evalQcmcamApply() {
   if (createdNewMn) parts.push(`(nouvelle mini-note /${mn.max})`);
   else if (mode === 'update') parts.push(`(barème mis à jour : /${mn.max})`);
   if (dateApplied) parts.push(`· 📅 ${_fmtDateFr ? _fmtDateFr(dateApplied) : dateApplied}`);
+  if (slotApplied) parts.push(`· 🕒 ${slotApplied}`);
   if (nbAbs > 0) parts.push(`· ${nbAbs} absent${nbAbs>1?'s':''}`);
   if (nbClamp > 0) parts.push(`· ${nbClamp} clampé${nbClamp>1?'s':''}`);
   if (skipped > 0) parts.push(`· ${skipped} ignorée${skipped>1?'s':''}`);

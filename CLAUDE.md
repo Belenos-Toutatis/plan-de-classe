@@ -1289,6 +1289,33 @@ Helper **`_contrastTextColor(bg)`** (formule YIQ, threshold 150) renvoie `'var(-
 ### Hors barème (commit f3e1371)
 Plus de `confirm()` bloquant : une note hors `[0, max]` est conservée d'office avec fond rose persistant + toast non-bloquant. Ctrl+Z l'annule grâce au système d'undo armé. `_evalTableurConfirmIfOutOfRange` est désormais un no-op (gardé pour compat HTML rendu).
 
+### Auto-fill « A » sur les absents quand on change la date/le créneau d'un devoir
+
+Quand l'enseignant change la date ou le créneau d'une évaluation, le système cherche dans `S.attendance[classId]` les appels enregistrés ce jour-là à ce créneau, et **pré-remplit `'A'` sur les cellules vides** des élèves marqués absents. N'écrase JAMAIS une saisie existante (note, A, NN). Toast récap : `🚫 N cellule(s) pré-remplie(s) avec « A » (élève(s) absent(s) à l'appel)`.
+
+**Helpers** (autour de `_evalSetSlotIdFor`) :
+- `_evalCollectAbsentsForDateSlot(classId, dateYMD, slotId, groupFilter)` — Set de sids absents. Match : `r.date === dateYMD`. Slot : si `slotId` ET `r.slotId` sont définis, doivent être égaux ; sinon on accepte. Group : pareil — un appel `groupe=0` (toute la classe) matche n'importe quel filtre groupe.
+- `_evalAutoFillAbsentsForMn(ev, mn, classId)` — pour Type A/C. Lit date/slot effectifs en cascade `mn.dates[cid] || ev.dates[cid] || mn.date || ev.date` (idem pour slot) — robuste aux différences de niveau entre Type A (per-mn) et Type C (per-eval avec propagation parfois partielle). Respecte la granularité per-groupe (`mn.datesByGroup[cid][g]` / `mn.slotIdsByGroup[cid][g]`) et le filtre `_stuActiveOn` (arrivée/départ).
+- `_evalAutoFillAbsentsForPass(ev, pass, classId)` — pour Type B. Itère `pass.competenceIds` ; remplit `pass.niveaux[sid][cid] = 'A'` pour chaque comp vide (cur `== null`, `''` ou `0`).
+- `_evalAutoFillAbsentsForEvalClass(ev, classId)` — wrapper qui itère toutes les mn ou passations.
+
+**Points d'entrée hookés** (7) :
+1. `_evalTableurChangeDate` — input date global en haut du tableur
+2. `_evalTableurChangeSlot` — select créneau global en haut du tableur
+3. `_tableurEditMn` (champs `date` et `slot`) — inline header de mini-note dans le tableur (Type A surtout ; Type C propage déjà l'edit à ev.dates)
+4. `_evalTableurEditPass` (champs `date` et `slot`) — inline header de passation Type B
+5. `_evalEditPerClass` — édition date/slot per-classe dans la modale Réglages d'éval
+6. `_tableurMnMenuSave` — modale clic droit sur en-tête mn (`meval-mn-menu`)
+7. `_tableurPassMenuSavePerGroup` — modale clic droit sur en-tête passation (`meval-pass-menu`)
+
+Aussi déclenché lors de l'**import CSV QCMcam** quand la date OU le créneau détectés sont appliqués (cf. section *Import CSV QCMcam*).
+
+Quand `filled > 0`, le tableur est re-rendu via `_evalTableurRender()` pour faire apparaître les A immédiatement.
+
+### Clic sur le nom dans les bilans → historique élève
+
+Dans le **Bilan des notes** et le **Bilan des compétences**, la cellule du nom (1re colonne sticky) est cliquable et appelle `openHist(sid)` — la même modale 🕓 que le bouton historique dans l'onglet Élèves. Évite d'avoir à naviguer vers Élèves pour consulter incidents/notes/absences d'un élève. Curseur pointer + tooltip explicatif.
+
 ### Mini-calculatrice dans les cellules (Type A / C, tableur)
 
 L'enseignant peut taper une expression arithmétique dans une cellule de note (`1+2+4`, `0,5*3`, `(8+7)/2`, `=5+3`…) ; au commit (blur, déclenché aussi par Tab/Enter via `_evalTableurKey` qui appelle `focus()` sur la cellule suivante), l'expression est évaluée et la cellule affiche le résultat formaté FR (virgule décimale, arrondi 2 décimales, zéros de queue retirés via `_fmtNote`).
@@ -1329,6 +1356,8 @@ Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des note
 - `keep` — laisse `mn.max` inchangé, clampe les scores hors limite
 
 **Date** : motif `AAAA-MM-JJ` cherché dans le nom du fichier via `_qcmcamExtractDate`. Si trouvée, checkbox « 📅 Appliquer à la mini-note » (cochée par défaut sauf si identique). Toujours appliquée à la nouvelle mini-note en mode `create`.
+
+**Créneau** (`_qcmcamExtractSlot`) : scanne la queue du nom de fichier APRÈS la date détectée (avant l'extension) et tente de matcher un id de créneau du planning de la salle active de la classe pour le jour de la date. Ex. `resultats_2026-05-26_M2.csv` → détecte le créneau `M2`. Match insensible à la casse, borné par caractères non-alphanumériques (séparateurs `-`, `_`, espaces…). Slots triés par longueur décroissante pour ne pas matcher `M1` avant `M10`. Affiché dans l'aperçu en bloc 🕒 avec checkbox « Appliquer à la mini-note » (cochée par défaut sauf si identique au créneau actuel). Appliqué à `mn.slotIds[cls.id]` au save, comme la date. Quand date OU créneau sont appliqués, déclenche `_evalAutoFillAbsentsForMn` (cf. section *Auto-fill « A »*).
 
 **Normalisation** (`_qcmcamNorm`) : NFD → suppression des accents → minuscules → traits d'union `-`, apostrophes droite `'` ou courbe `’`, ET points `.` remplacés par espace → écrasement des espaces multiples. Le point couvre le format d'export désambiguïsé `getDisplayName` (`« Léo MART. »`), sinon `'martin'.startsWith('mart.')` échouait. Un prénom composé comme `Lou-Anna` devient ainsi `'lou anna'` (et non `'louanna'`).
 
