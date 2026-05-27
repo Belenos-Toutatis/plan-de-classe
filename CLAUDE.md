@@ -1458,6 +1458,16 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 - **Colonne 🎓 Conseil** (par période) à droite de Remarque : 4 boutons-pastilles `F` (vert) · `E` (bleu) · `AT` (orange) · `AC` (rouge). F et E mutuellement exclusifs. AT et AC cumulables entre eux et avec F/E. Storage `S.conseilClasse[classId][sid][periode] = { F, E, AT, AC }`. Footer du tableau : totaux par période sous forme de pastilles. `_toggleConseilClasse` préserve la position de scroll de `.bilan-table-scroll` lors du re-render.
 - **Préservation du scroll au save de remarque élève** : `_bilanStuRemSave` (modale `mbilan-stuRem`, ouverte via clic sur une note dans le tableau) capture `scrollTop`/`scrollLeft` de `.bilan-table-scroll` avant le re-render et les restaure après — sinon le tableau saute en haut à chaque validation, pénible sur une grande classe quand on annote en bas. Même pattern que `_toggleConseilClasse`.
 
+### Export Copier / CSV — modale de sélection des colonnes (`mbilan-export`)
+
+Les boutons **📋 Copier tout** et **💾 CSV** du Bilan des notes ouvrent désormais une modale intermédiaire qui liste **toutes les colonnes du tableau affiché** (en-têtes scrapés depuis le DOM) avec checkbox. L'utilisateur coche/décoche, puis confirme → export filtré dans l'ordre du tableau.
+
+- État : `_bilanExportState = { mode: 'copy'|'csv', data, checked: boolean[] }`. Reset à chaque ouverture (toutes cochées par défaut).
+- Source de vérité = `_bilanScrapeTableForExport()` : scrape head/body/foot du `#bilan-tbl` rendu, gère les textareas (remarques → `.value`), les pastilles Conseil (extrait F/E/AT/AC actifs séparés par `+`), les en-têtes d'éval (libellé + `(×coef)` depuis l'input numéro). Garantit que l'export reflète EXACTEMENT ce que l'utilisateur voit (tri, groupement par période, colonnes masquées, orphelines incluses ou non).
+- `_bilanCopyAll()` / `_bilanDownloadCsv()` sont devenus des wrappers vers `_bilanOpenExport('copy'|'csv')`.
+- Confirmation (`_bilanExportConfirm`) construit les lignes filtrées et copie au clipboard ou télécharge `bilan-<classe>-<période>.csv`.
+- Toast d'avertissement si 0 colonne cochée.
+
 ### Comparer classes — modale `mbilan-crosstab`
 
 Accessible depuis le bouton **🔀 Comparer classes** de la toolbar du Bilan des notes. Désactivé si moins de 2 classes ont des notes pour la période courante.

@@ -4307,6 +4307,23 @@ kbd {
   </div>
 </div>
 
+<!-- ── MODAL Export sélectif des colonnes du Bilan des notes ── -->
+<div id="mbilan-export" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px;width:100%;max-height:92vh;display:flex;flex-direction:column">
+    <h2 style="margin:0 0 6px" id="mbilan-export-title">📋 Choisir les colonnes à exporter</h2>
+    <p style="margin:0 0 10px;color:var(--pencil);font-size:.88em">Coche les colonnes à inclure. L'ordre d'export suit l'ordre du tableau affiché.</p>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="btn btn-g btn-sm" onclick="_bilanExportToggleAll(true)">☑ Tout cocher</button>
+      <button class="btn btn-g btn-sm" onclick="_bilanExportToggleAll(false)">☐ Tout décocher</button>
+    </div>
+    <div id="mbilan-export-list" style="flex:1;overflow-y:auto;border:1px solid var(--rule-line);border-radius:4px;padding:8px;background:var(--paper-warm);min-height:200px"></div>
+    <div class="ma" style="margin-top:12px">
+      <button class="btn btn-g" onclick="closeMod2('mbilan-export')">Annuler</button>
+      <button class="btn btn-p" id="mbilan-export-confirm" onclick="_bilanExportConfirm()">✓ Exporter</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Menu Passation (clic droit sur en-tête passation Type B) ── -->
 <div id="meval-pass-menu" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:520px;width:100%;max-height:92vh;overflow-y:auto">
@@ -5360,7 +5377,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-27T10:00:00Z';
+const APP_VERSION   = '2026-05-27T12:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -35886,45 +35903,143 @@ function _bilanSaveMeanGran(v) {
   if (typeof renderBilanTab === 'function') renderBilanTab();
 }
 
-function _bilanCopyAll() {
-  const { rows, evs } = _bilanBuildRows();
-  const fmt = v => v == null ? '' : _fmtNote(v).replace('.', ',');
-  const headers = ['Élève', 'Moyenne /20', ...evs.map(e => `${e.nomCourt} (×${e.coef ?? 1})`), 'Remarque'];
-  const lines = [headers.join('\t')];
-  for (const r of rows) {
-    const cells = [r.name, fmt(r.moy), ...r.notes.map(fmt), r.remarque || ''];
-    lines.push(cells.join('\t'));
+// Scrape le tableau du Bilan tel qu'il est affiché, dans l'ordre d'affichage,
+// en honorant le tri actif, le groupement par période, les colonnes masquées
+// (Moy/Rang/Remarque), les évals orphelines (si visibles), et la colonne
+// Conseil de classe (F/E/AT/AC actifs séparés par '+'). Source de vérité unique :
+// le DOM rendu — garantit que copy/CSV correspond EXACTEMENT à ce que voit
+// l'utilisateur.
+function _bilanScrapeTableForExport() {
+  const table = document.getElementById('bilan-tbl');
+  if (!table) return null;
+  const scrapeCell = (c) => {
+    // 1) Textarea → value (cellules Remarque)
+    const ta = c.querySelector('textarea');
+    if (ta) return (ta.value || '').replace(/\s+/g, ' ').trim();
+    // 2) Cellule Conseil (boutons-pastilles F/E/AT/AC) — extrait les actifs
+    const btns = c.querySelectorAll('button');
+    if (btns.length >= 2 && Array.from(btns).every(b => /^(F|E|AT|AC)$/.test((b.textContent || '').trim()))) {
+      const active = [];
+      for (const b of btns) {
+        const bg = (b.style.background || '').toLowerCase();
+        const isOn = bg && bg !== 'transparent' && !bg.startsWith('rgba(0, 0, 0, 0');
+        if (isOn) active.push((b.textContent || '').trim());
+      }
+      return active.join('+');
+    }
+    // 3) En-tête de colonne d'éval : contient un input number de coefficient
+    //    → on retire l'input pour ne garder que le libellé, puis on ré-affiche le coef
+    const coefInp = c.querySelector('input[type="number"]');
+    if (coefInp) {
+      const clone = c.cloneNode(true);
+      clone.querySelectorAll('input,select,textarea').forEach(el => el.remove());
+      const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+      const coef = coefInp.value || '1';
+      return text + ` (×${coef})`;
+    }
+    // 4) Cellule pastille de notation/rang (span coloré dans le td) : textContent suffit
+    // 5) Défaut : textContent nettoyé
+    return (c.textContent || '').replace(/\s+/g, ' ').trim();
+  };
+  const out = { head: [], body: [], foot: [] };
+  const headTr = table.querySelector('thead tr');
+  if (headTr) out.head = Array.from(headTr.children).map(scrapeCell);
+  for (const tr of table.querySelectorAll('tbody tr')) {
+    out.body.push(Array.from(tr.children).map(scrapeCell));
   }
-  navigator.clipboard.writeText(lines.join('\n')).then(
-    () => toast('📋 Bilan copié — colle-le dans le bulletin'),
-    () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
-  );
+  for (const tr of table.querySelectorAll('tfoot tr')) {
+    out.foot.push(Array.from(tr.children).map(scrapeCell));
+  }
+  return out;
 }
 
-function _bilanDownloadCsv() {
-  const cls = getCls();
-  const { rows, evs } = _bilanBuildRows();
-  const sel = document.getElementById('bilan-period-filter');
-  const periode = sel?.value || 'toutes';
-  const csvEsc = s => {
-    const str = String(s ?? '');
-    return /[";\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-  };
-  const fmt = v => v == null ? '' : _fmtNote(v).replace('.', ',');
-  const headers = ['Élève', 'Moyenne /20', ...evs.map(e => `${e.nomCourt} (×${e.coef ?? 1})`), 'Remarque'];
-  const lines = [headers.map(csvEsc).join(';')];
-  for (const r of rows) {
-    const cells = [r.name, fmt(r.moy), ...r.notes.map(fmt), r.remarque || ''];
-    lines.push(cells.map(csvEsc).join(';'));
+// État de la modale d'export (sélection de colonnes)
+let _bilanExportState = { mode: 'copy', data: null, checked: [] };
+
+function _bilanCopyAll() { _bilanOpenExport('copy'); }
+function _bilanDownloadCsv() { _bilanOpenExport('csv'); }
+
+// Ouvre la modale de sélection des colonnes. `mode` ∈ {'copy', 'csv'}.
+function _bilanOpenExport(mode) {
+  const data = _bilanScrapeTableForExport();
+  if (!data || !data.head.length) {
+    toast('⚠ Tableau introuvable — ouvre d\'abord l\'onglet Bilan des notes', 'warn');
+    return;
   }
-  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `bilan-${cls?.nom || 'classe'}-${periode}.csv`;
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-  toast('💾 CSV téléchargé');
+  _bilanExportState.mode = mode;
+  _bilanExportState.data = data;
+  _bilanExportState.checked = data.head.map(() => true);
+  document.getElementById('mbilan-export-title').textContent =
+    mode === 'csv' ? '💾 CSV — choisir les colonnes' : '📋 Copier — choisir les colonnes';
+  document.getElementById('mbilan-export-confirm').textContent =
+    mode === 'csv' ? '💾 Télécharger le CSV' : '📋 Copier au presse-papier';
+  _bilanExportRenderList();
+  openMod('mbilan-export');
+}
+
+function _bilanExportRenderList() {
+  const list = document.getElementById('mbilan-export-list');
+  if (!list) return;
+  const head = _bilanExportState.data?.head || [];
+  let html = '';
+  head.forEach((label, i) => {
+    const checked = _bilanExportState.checked[i] ? 'checked' : '';
+    const shown = label || `(colonne ${i + 1})`;
+    html += `<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-bottom:1px solid var(--rule-line-soft);cursor:pointer;font-size:.92em">
+      <input type="checkbox" data-idx="${i}" ${checked} onchange="_bilanExportToggleOne(${i}, this.checked)">
+      <span>${_esc(shown)}</span>
+    </label>`;
+  });
+  list.innerHTML = html;
+}
+
+function _bilanExportToggleOne(i, on) {
+  _bilanExportState.checked[i] = !!on;
+}
+
+function _bilanExportToggleAll(on) {
+  _bilanExportState.checked = _bilanExportState.checked.map(() => !!on);
+  _bilanExportRenderList();
+}
+
+function _bilanExportConfirm() {
+  const data = _bilanExportState.data;
+  if (!data) { closeMod2('mbilan-export'); return; }
+  const keep = (row) => row.filter((_, i) => _bilanExportState.checked[i]);
+  const nbKept = _bilanExportState.checked.filter(Boolean).length;
+  if (nbKept === 0) {
+    toast('⚠ Coche au moins une colonne', 'warn');
+    return;
+  }
+  if (_bilanExportState.mode === 'csv') {
+    const cls = getCls();
+    const sel = document.getElementById('bilan-period-filter');
+    const periode = sel?.value || 'toutes';
+    const csvEsc = s => {
+      const str = String(s ?? '');
+      return /[";\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const lines = [keep(data.head).map(csvEsc).join(';')];
+    for (const r of data.body) lines.push(keep(r).map(csvEsc).join(';'));
+    for (const r of data.foot) lines.push(keep(r).map(csvEsc).join(';'));
+    const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bilan-${cls?.nom || 'classe'}-${periode || 'toutes'}.csv`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    closeMod2('mbilan-export');
+    toast('💾 CSV téléchargé');
+  } else {
+    const lines = [keep(data.head).join('\t')];
+    for (const r of data.body) lines.push(keep(r).join('\t'));
+    for (const r of data.foot) lines.push(keep(r).join('\t'));
+    navigator.clipboard.writeText(lines.join('\n')).then(
+      () => { closeMod2('mbilan-export'); toast('📋 Bilan copié — colle-le dans le bulletin'); },
+      () => toast('⚠ Copie auto impossible — sélectionne le tableau à la souris', 'warn')
+    );
+  }
 }
 
 // ═══════════════ ONGLET COMPÉTENCES (phase 11) ═══════════════
