@@ -1185,6 +1185,11 @@ html[data-theme="dark"] .bilan-show-chip:hover { background: #3b5a8c !important;
 .bilan-rem-count.over { color: var(--margin-red); font-weight: 700; }
 html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !important; }
 
+/* Bilan — séparateur vertical discret entre colonnes d'évaluation
+   (aide à distinguer les valeurs quand un élève a la même note sur plusieurs
+   évals consécutives). Aligné design system "papier d'enseignant". */
+.bilan-evalcell { border-right: 1px solid var(--rule-line-soft); }
+
 /* Type B saisie sur plan : pastilles de niveau (.evp-pill) */
 .evp-pill { flex: 1; min-width: 26px; height: 30px; border-radius: 50%; border: 2px solid var(--rule-line);
             background: var(--paper); color: var(--ink-deep);
@@ -5355,7 +5360,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-26T23:00:00Z';
+const APP_VERSION   = '2026-05-27T10:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -35412,7 +35417,7 @@ function renderBilanTab() {
     if (isOrphan) tip += `\n\n⤴ Éval venant d'une autre classe${origin ? ' : ' + origin : ''}\n(visible parce qu'au moins un élève de cette classe y a une saisie)`;
     const orphanMark = isOrphan ? `<span style="color:#d97706;font-weight:bold" title="${_escAttr('Évaluation d\'une autre classe' + (origin ? ' (' + origin + ')' : ''))}">⤴</span>` : '';
     const orphanHeaderBg = isOrphan ? 'background:repeating-linear-gradient(135deg,rgba(217,119,6,.07) 0,rgba(217,119,6,.07) 6px,transparent 6px,transparent 12px);' : '';
-    html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px;${_brk}${orphanHeaderBg}" title="${_esc(tip)}">
+    html += `<th class="bilan-evalcell" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px;${_brk}${orphanHeaderBg}" title="${_esc(tip)}">
       <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:pointer;flex-wrap:wrap" onclick="_evalRowOpen('${_esc(ev.id)}')">${orphanMark}${typePill}${discPill}<span>${_esc(ev.nomCourt)}</span>${facStar}</div>
       <input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
              oninput="_bilanUpdateEvalCoef(this)"
@@ -35496,8 +35501,10 @@ function renderBilanTab() {
       // Fond hachuré pour les facultatives NON comptées pour cet élève (mode improveOnly
       // qui n'améliore pas la moyenne, ou over10/bonus si note ≤ 10). Le code couleur
       // normal reste visible derrière les hachures grises pour ne pas effacer l'info.
+      // Opacité réduite + hachures plus contrastées pour rendre le "non comptée"
+      // visible même quand le fond de barème est foncé.
       const facStyle = (isFac && !facCounts)
-        ? 'background-image:repeating-linear-gradient(135deg,rgba(120,120,120,.18) 0,rgba(120,120,120,.18) 4px,transparent 4px,transparent 8px);'
+        ? 'background-image:repeating-linear-gradient(135deg,rgba(80,80,80,.42) 0,rgba(80,80,80,.42) 5px,transparent 5px,transparent 10px);opacity:.55;'
         : '';
       const facTip = isFac
         ? (facCounts
@@ -35508,7 +35515,7 @@ function renderBilanTab() {
       // (autres élèves de la classe quand un transféré amène ses notes). Distinct de
       // A/NN/null — affiché en pointillé discret.
       if (orphanIds.has(ev.id) && !_studentHasAnyDataInEval(ev, sid)) {
-        html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${_brk}background:repeating-linear-gradient(135deg,rgba(217,119,6,.06) 0,rgba(217,119,6,.06) 6px,transparent 6px,transparent 12px)" title="Élève non concerné — n'était pas dans la classe pour cette évaluation">·</td>`;
+        html += `<td class="bilan-evalcell" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${_brk}background:repeating-linear-gradient(135deg,rgba(217,119,6,.06) 0,rgba(217,119,6,.06) 6px,transparent 6px,transparent 12px)" title="Élève non concerné — n'était pas dans la classe pour cette évaluation">·</td>`;
         continue;
       }
       if (n == null) {
@@ -35517,11 +35524,11 @@ function renderBilanTab() {
         const _disp = _studentNoteDisplay(ev, sid);
         if (_disp.kind === 'A') {
           const _aBg = '#9ca3af';
-          html += `<td onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}background:${_aBg};color:${_contrastTextColor(_aBg)};font-weight:700;cursor:pointer" title="${_esc(ev.nomCourt)} · A — Absent\nClic = éditer la remarque élève">${_esc(_disp.text)}</td>`;
+          html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}background:${_aBg};color:${_contrastTextColor(_aBg)};font-weight:700;cursor:pointer" title="${_esc(ev.nomCourt)} · A — Absent\nClic = éditer la remarque élève">${_esc(_disp.text)}</td>`;
         } else if (_disp.kind === 'NN') {
-          html += `<td onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}color:var(--pencil);font-style:italic;cursor:pointer" title="${_esc(ev.nomCourt)} · NN — Non noté\nClic = éditer la remarque élève">${_esc(_disp.text)}</td>`;
+          html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}color:var(--pencil);font-style:italic;cursor:pointer" title="${_esc(ev.nomCourt)} · NN — Non noté\nClic = éditer la remarque élève">${_esc(_disp.text)}</td>`;
         } else {
-          html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${_brk}${facStyle}">—</td>`;
+          html += `<td class="bilan-evalcell" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);font-size:.85em;${_brk}${facStyle}">—</td>`;
         }
       } else {
         evValues[k].push(n);
@@ -35538,11 +35545,12 @@ function renderBilanTab() {
         // est saisi dans le tableur (pas de version flottante différente cachée).
         const _origRounded = _roundNoteToGranularity(_computeStudentEvalNote(ev, sid), ev);
         const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note : ${_fmtNote(_origRounded)} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}${facTip}${_remTip}`;
-        // Style fond : si facultative non comptée, on superpose les hachures sur la couleur de barème.
+        // Style fond : si facultative non comptée, on superpose les hachures sur la couleur de barème
+        // et on dim la cellule (opacity .55) pour signaler "ignorée" même sur fond foncé.
         const cellStyle = (isFac && !facCounts)
-          ? `background-color:${bg};background-image:repeating-linear-gradient(135deg,rgba(120,120,120,.32) 0,rgba(120,120,120,.32) 4px,transparent 4px,transparent 9px);`
+          ? `background-color:${bg};background-image:repeating-linear-gradient(135deg,rgba(80,80,80,.42) 0,rgba(80,80,80,.42) 5px,transparent 5px,transparent 10px);opacity:.55;`
           : `background:${bg};`;
-        html += `<td onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${cellStyle}color:${col};cursor:pointer" title="${_esc(tipN)}\nClic = éditer la remarque élève">${_fmtNote(n)}</td>`;
+        html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${cellStyle}color:${col};cursor:pointer" title="${_esc(tipN)}\nClic = éditer la remarque élève">${_fmtNote(n)}</td>`;
       }
     }
     // Moyenne + Rang par période de synthèse (skip si col masquée)
@@ -35628,12 +35636,12 @@ function renderBilanTab() {
     const vals = evValues[k];
     const _brk = evPeriodBreak[k] ? 'border-left:3px solid var(--ink-blue-soft);' : '';
     if (!vals.length) {
-      html += `<td style="padding:4px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;${_brk}">—</td>`;
+      html += `<td class="bilan-evalcell" style="padding:4px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;${_brk}">—</td>`;
     } else {
       const s = _statsForNumbers(vals);
       const bg = _noteColor(s.avg, 20);
       const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
-      html += `<td style="padding:4px 6px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:600;font-size:.85em;cursor:help;${_brk}" title="${_esc(_statsTip(vals, evs[k].nomCourt))}">${_fmtNote(s.avg)}</td>`;
+      html += `<td class="bilan-evalcell" style="padding:4px 6px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:600;font-size:.85em;cursor:help;${_brk}" title="${_esc(_statsTip(vals, evs[k].nomCourt))}">${_fmtNote(s.avg)}</td>`;
     }
   }
   // Stats Moyenne classe + cellules Rang vides — 1 paire par période de synthèse
@@ -35844,7 +35852,14 @@ function _bilanStuRemSave() {
   ev.updatedAt = Date.now();
   save();
   closeMod2('mbilan-stuRem');
+  // Préserve la position de scroll du tableau (sinon le tableau saute en haut
+  // à chaque save — pénible quand on parcourt une grande classe).
+  const _scroll = document.querySelector('#bilan-wrap .bilan-table-scroll');
+  const _sy = _scroll?.scrollTop || 0;
+  const _sx = _scroll?.scrollLeft || 0;
   if (typeof renderBilanTab === 'function') renderBilanTab();
+  const _newScroll = document.querySelector('#bilan-wrap .bilan-table-scroll');
+  if (_newScroll) { _newScroll.scrollTop = _sy; _newScroll.scrollLeft = _sx; }
   toast(v ? '📝 Remarque enregistrée' : '🗑 Remarque effacée');
 }
 
@@ -36571,7 +36586,7 @@ function renderCompetencesTab() {
     const orphMark = col.isOrphan ? '<span style="color:#d97706;font-weight:bold" title="Compétence venant d\'évals d\'autres classes (élève transféré)">⤴</span> ' : '';
     const orphBg = col.isOrphan ? 'background:repeating-linear-gradient(135deg,rgba(217,119,6,.07) 0,rgba(217,119,6,.07) 6px,transparent 6px,transparent 12px);' : '';
     const orphTip = col.isOrphan ? '\n\n⤴ Compétence venant d\'une éval d\'une autre classe\n(visible parce qu\'au moins un élève transféré y a une saisie)' : '';
-    html += `<th style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help;${orphBg}" title="${_esc(col.tip + orphTip)}">${orphMark}${_esc(col.code)}</th>`;
+    html += `<th class="bilan-evalcell" style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help;${orphBg}" title="${_esc(col.tip + orphTip)}">${orphMark}${_esc(col.code)}</th>`;
   }
   // Moyenne(s) — 1 colonne quand une période, N quand "Toutes" (cliquable pour masquer en multi)
   const compSynthPeriodes = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
@@ -36610,7 +36625,7 @@ function renderCompetencesTab() {
       const aggs = col.compIds.map(cid => _aggregateStudentCompetence(cls.id, sid, cid, periode));
       const levels = aggs.map(a => a.levelMean).filter(v => v != null);
       if (levels.length === 0) {
-        html += '<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
+        html += '<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
         continue;
       }
       let lvl = levels.reduce((s, v) => s + v, 0) / levels.length;
@@ -36634,7 +36649,7 @@ function renderCompetencesTab() {
         ? `${dispLvl} / 4 — moyenne sur ${col.compIds.length} compétences du domaine`
         : `${dispLvl} / 4 — moyenne sur ${aggs[0].entries.length} évaluation${aggs[0].entries.length > 1 ? 's' : ''}`;
       const tip = `${headerLine}\n\n${tipDetail}`;
-      html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="${_esc(tip)}">
+      html += `<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="${_esc(tip)}">
         <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${dispLvl}</span>
       </td>`;
     }
@@ -36730,10 +36745,10 @@ function renderCompetencesTab() {
   compMeans.forEach((m, i) => {
     const tip = _compStatsTooltip(compLevels[i]);
     if (m.mean == null) {
-      html += `<td style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">—</td>`;
+      html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">—</td>`;
     } else {
       const mIdx = Math.max(1, Math.min(4, Math.round(m.mean))) - 1;
-      html += `<td style="padding:6px 6px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tip)}">
+      html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tip)}">
         <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m.mean)}</span>
       </td>`;
     }
@@ -36785,7 +36800,7 @@ function renderCompetencesTab() {
     const tip = evalList.length === 0
       ? `Aucune évaluation contenant ${c.code}`
       : `${nEvals} évaluation${nEvals > 1 ? 's' : ''} contenant ${c.code} :\n\n` + evalList.map(e => `• ${e.nomCourt}${e.nomLong ? ' — ' + e.nomLong : ''}${e.date ? ' (' + _fmtDateFr(e.date) + ')' : ''}`).join('\n');
-    html += `<td style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">${nEvals}</td>`;
+    html += `<td class="bilan-evalcell" style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">${nEvals}</td>`;
   }
   // Cellules Moyenne + Remarque vides (footer "éval(s)") — skip si col masquée
   compSynthPeriodes.forEach((perCode, idx) => {
