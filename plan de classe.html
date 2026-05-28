@@ -3242,11 +3242,12 @@ kbd {
     <div id="mrempresets-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
     <div style="border-top:1px solid #eee;padding-top:12px;margin-top:8px">
       <div style="font-weight:600;font-size:.95em;margin-bottom:8px">+ Ajouter un motif</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-        <input type="text" id="mrempresets-add" maxlength="120" placeholder="Faire signer une autorisation de sortie…" style="flex:1;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.95em" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderPresetFromInput()}">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="mrempresets-add" maxlength="120" placeholder="Faire signer une autorisation de sortie…" style="flex:1;min-width:180px;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.95em" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderPresetFromInput()}">
+        <span id="mrempresets-add-swatches" style="display:inline-flex;gap:3px;align-items:center;padding:0 4px" title="Couleur du prochain motif ajouté"></span>
         <button class="btn btn-p btn-sm" onclick="addReminderPresetFromInput()">+ Ajouter</button>
       </div>
-      <div style="font-size:.78em;color:#888">Vous pouvez préfixer par un emoji si vous le souhaitez (✍️, 📤, 📞, ⚠️…). Le champ accepte 120 caractères max.</div>
+      <div style="font-size:.78em;color:#888">Vous pouvez préfixer par un emoji si vous le souhaitez (✍️, 📤, 📞, ⚠️…). Choisissez aussi une couleur — dans la modale Rappels, les motifs sont regroupés par couleur. Le champ accepte 120 caractères max.</div>
     </div>
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <button class="btn btn-w btn-sm" onclick="restoreDefaultReminderPresets()" title="Remplace la liste par les motifs proposés par défaut">↻ Restaurer les motifs par défaut</button>
@@ -5408,7 +5409,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-28T12:00:00Z';
+const APP_VERSION   = '2026-05-28T14:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5954,7 +5955,16 @@ function postLoadHook() {
   if (!Array.isArray(S.userLinks)) S.userLinks = []; // Liens externes utilisateur (ENT, Pronote…)
   // Motifs de rappels personnalisables (cf. modale mreminders + mrempresets).
   // Si absent → on installe les défauts. Tableau vide explicite (utilisateur a tout supprimé) → respecté.
-  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
+  if (!Array.isArray(S.reminderPresets)) {
+    S.reminderPresets = DEFAULT_REMINDER_PRESETS.map(p => ({ ...p }));
+  } else {
+    // Compat ascendante : les anciens items string → { label, color: null }.
+    // Idempotent : un item déjà sous forme objet n'est pas modifié.
+    for (let i = 0; i < S.reminderPresets.length; i++) {
+      const p = S.reminderPresets[i];
+      if (typeof p === 'string') S.reminderPresets[i] = { label: p, color: null };
+    }
+  }
   if (!S.seatingSnapshots) S.seatingSnapshots = {}; // Pool dédupliqué de seatings au moment des appels
   if (!S.tags) S.tags = {};      // Tags cumulables (DF, DNL, etc.) : { id, abbr, name, color }
   // Surlignage des dernières places modifiées (persistant cross-device via JSON)
@@ -7747,17 +7757,43 @@ function saveCtxNotes() {
 // Motifs pré-remplis proposés dans la modale Rappels. Personnalisables par
 // l'enseignant via ⚙ Réglages → 🔔 Rappels. Persistés dans S.reminderPresets
 // (synchronisé entre machines via le fichier JSON / Nextcloud).
-const DEFAULT_REMINDER_PRESETS = [
-  'Observation : 3 oublis de travail',
-  'Observation : 3 oublis de matériel',
-  'Observation - Attitude incorrect : ',
-  'Faire signer un mot dans le carnet',
-  'Distribuer un document',
-  'Récupérer un document, un livre ou du matériel',
-  'Appeler / contacter les parents',
+// Chaque preset = { label: string, color: <id de REMINDER_COLOR_PALETTE | null> }
+// color = null → couleur par défaut (amber, le ton "carnet" historique).
+const REMINDER_COLOR_PALETTE = [
+  { id: 'red',    bg: '#fdeaea', border: '#f5b7b1', fg: '#7b241c', label: 'Rouge'  },
+  { id: 'orange', bg: '#fdebd0', border: '#f5b041', fg: '#7e5109', label: 'Orange' },
+  { id: 'amber',  bg: '#fef5e7', border: '#f5cba7', fg: '#7d4f00', label: 'Ambre'  },
+  { id: 'yellow', bg: '#fcf3cf', border: '#f7dc6f', fg: '#7d6608', label: 'Jaune'  },
+  { id: 'green',  bg: '#d4efdf', border: '#7dcea0', fg: '#1d6f42', label: 'Vert'   },
+  { id: 'blue',   bg: '#d4e6f1', border: '#7fb3d5', fg: '#1a5490', label: 'Bleu'   },
+  { id: 'purple', bg: '#e8daef', border: '#bb8fce', fg: '#5b2c6f', label: 'Violet' },
+  { id: 'gray',   bg: '#eaecee', border: '#aab7b8', fg: '#34495e', label: 'Gris'   },
 ];
+const REMINDER_DEFAULT_COLOR_ID = 'amber';
+function _reminderColorById(id) {
+  return REMINDER_COLOR_PALETTE.find(c => c.id === id)
+      || REMINDER_COLOR_PALETTE.find(c => c.id === REMINDER_DEFAULT_COLOR_ID);
+}
+function _reminderColorOrderIndex(id) {
+  const i = REMINDER_COLOR_PALETTE.findIndex(c => c.id === id);
+  return i < 0 ? REMINDER_COLOR_PALETTE.findIndex(c => c.id === REMINDER_DEFAULT_COLOR_ID) : i;
+}
+const DEFAULT_REMINDER_PRESETS = [
+  { label: 'Observation : 3 oublis de travail',                 color: 'red'    },
+  { label: 'Observation : 3 oublis de matériel',                color: 'red'    },
+  { label: 'Observation - Attitude incorrect : ',               color: 'red'    },
+  { label: 'Faire signer un mot dans le carnet',                color: 'blue'   },
+  { label: 'Distribuer un document',                            color: 'green'  },
+  { label: 'Récupérer un document, un livre ou du matériel',    color: 'green'  },
+  { label: 'Appeler / contacter les parents',                   color: 'purple' },
+];
+// Lit S.reminderPresets en normalisant à la volée (compat ascendante : items string
+// historiques traités comme { label, color: null }). Renvoie toujours un tableau d'objets.
 function _reminderPresets() {
-  return Array.isArray(S.reminderPresets) ? S.reminderPresets : DEFAULT_REMINDER_PRESETS;
+  const raw = Array.isArray(S.reminderPresets) ? S.reminderPresets : DEFAULT_REMINDER_PRESETS;
+  return raw.map(p => (typeof p === 'string')
+    ? { label: p, color: null }
+    : { label: String(p?.label || ''), color: p?.color || null });
 }
 
 // Échappement minimal pour insertion dans HTML / attribut title.
@@ -7835,18 +7871,42 @@ function renderRemindersModal() {
           </div>`;
       }).join('');
   }
-  // Boutons motifs prédéfinis
+  // Boutons motifs prédéfinis — regroupés par couleur (ordre de la palette)
   const presetsEl = document.getElementById('mrem-presets');
   const presets = _reminderPresets();
-  presetsEl.innerHTML = presets.map((p, i) =>
-    `<button class="btn" onclick="addReminderPreset(${i})" style="padding:4px 9px;font-size:.85em;background:#fef5e7;border:1px solid #f5cba7;color:#7d4f00;border-radius:4px;cursor:pointer" title="Pré-remplir le champ — tu peux ensuite éditer puis valider">${_escAttr(p)}</button>`
-  ).join('');
+  // On garde l'index d'origine pour pouvoir appeler addReminderPreset(idx) correctement
+  // après tri par couleur.
+  const enriched = presets.map((p, i) => ({
+    label: p.label, color: p.color, idx: i,
+    orderIdx: _reminderColorOrderIndex(p.color),
+  }));
+  // Tri stable par ordre de couleur (les items d'une même couleur conservent
+  // leur ordre relatif d'origine)
+  enriched.sort((a, b) => (a.orderIdx - b.orderIdx) || (a.idx - b.idx));
+  // Groupe par couleur
+  const byColor = new Map();
+  for (const e of enriched) {
+    if (!byColor.has(e.color || REMINDER_DEFAULT_COLOR_ID)) byColor.set(e.color || REMINDER_DEFAULT_COLOR_ID, []);
+    byColor.get(e.color || REMINDER_DEFAULT_COLOR_ID).push(e);
+  }
+  // Rendu : un wrap flex par groupe, séparateurs naturels (gap vertical)
+  const groups = [];
+  for (const [cid, items] of byColor) {
+    const c = _reminderColorById(cid);
+    const buttons = items.map(e =>
+      `<button class="btn" onclick="addReminderPreset(${e.idx})" style="padding:4px 9px;font-size:.85em;background:${c.bg};border:1px solid ${c.border};color:${c.fg};border-radius:4px;cursor:pointer" title="Pré-remplir le champ — tu peux ensuite éditer puis valider">${_escAttr(e.label)}</button>`
+    ).join('');
+    groups.push(`<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${buttons}</div>`);
+  }
+  presetsEl.innerHTML = groups.join('');
+  presetsEl.style.cssText = 'display:flex;flex-direction:column;gap:8px';
 }
 
 // Clic sur un motif prédéfini → pré-remplit le champ texte pour permettre de personnaliser
 // avant de valider (Enter ou bouton Ajouter). Pas d'ajout direct.
 function addReminderPreset(idx) {
-  const label = _reminderPresets()[idx];
+  const p = _reminderPresets()[idx];
+  const label = p && p.label;
   if (!label) return;
   const inp = document.getElementById('mrem-custom');
   if (!inp) return;
@@ -7945,12 +8005,28 @@ function deleteReminder(rid) {
 function removeReminder(rid) { markReminderDone(rid); }
 
 // ── Édition de la liste des motifs proposés (cf. mrempresets) ───────────
+// Couleur sélectionnée pour le prochain motif ajouté (état UI, non persisté)
+let _mrempAddColor = REMINDER_DEFAULT_COLOR_ID;
+
 function openReminderPresets() {
   // Garantit l'init si l'utilisateur arrive ici avant tout autre passage par postLoadHook
-  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
+  if (!Array.isArray(S.reminderPresets)) {
+    S.reminderPresets = DEFAULT_REMINDER_PRESETS.map(p => ({ ...p }));
+  }
   renderReminderPresetsModal();
   openMod('mrempresets');
   setTimeout(() => { const i = document.getElementById('mrempresets-add'); if (i) i.focus(); }, 80);
+}
+
+// Construit un row de swatches pour piquer une couleur, callback `clickFn(colorId)`.
+// `selectedId` = couleur actuellement choisie (mise en évidence).
+function _mrempSwatchesHTML(selectedId, clickFn) {
+  return REMINDER_COLOR_PALETTE.map(c => {
+    const isSel = (c.id === (selectedId || REMINDER_DEFAULT_COLOR_ID));
+    const ring = isSel ? `box-shadow:0 0 0 2px var(--ink-blue);` : '';
+    return `<span onclick="${clickFn}('${c.id}')" title="${c.label}"
+              style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${c.bg};border:2px solid ${c.border};cursor:pointer;${ring}"></span>`;
+  }).join('');
 }
 
 function renderReminderPresetsModal() {
@@ -7959,24 +8035,42 @@ function renderReminderPresetsModal() {
   if (!listEl) return;
   if (!list.length) {
     listEl.innerHTML = '<div style="color:#888;font-size:.9em;padding:10px;text-align:center;background:#f9f9f9;border-radius:4px;border:1px dashed #ddd">Aucun motif — ajoutez-en un ci-dessous ou cliquez sur « ↻ Restaurer les motifs par défaut ».</div>';
-    return;
+  } else {
+    listEl.innerHTML = list.map((p, i) => {
+      const c = _reminderColorById(p.color);
+      const upDisabled = (i === 0) ? 'disabled' : '';
+      const dnDisabled = (i === list.length - 1) ? 'disabled' : '';
+      return `
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:${c.bg};border-left:3px solid ${c.border};border-radius:3px">
+          <input type="text" value="${_escAttr(p.label)}" maxlength="120"
+                 oninput="updateReminderPreset(${i}, this.value)"
+                 style="flex:1;padding:5px 7px;border:1px solid ${c.border};border-radius:3px;font-size:.92em;background:#fff;color:${c.fg}">
+          <span style="display:inline-flex;gap:3px;align-items:center;padding:0 4px"
+                title="Couleur — clic sur un point pour changer">
+            ${_mrempSwatchesHTML(p.color, `updateReminderPresetColor.bind(null, ${i})`)}
+          </span>
+          <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, -1)" ${upDisabled}
+                  title="Monter" style="padding:3px 7px;font-size:.85em">↑</button>
+          <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, 1)" ${dnDisabled}
+                  title="Descendre" style="padding:3px 7px;font-size:.85em">↓</button>
+          <button class="btn btn-d btn-sm" onclick="deleteReminderPreset(${i})"
+                  title="Supprimer ce motif" style="padding:3px 7px;font-size:.85em">✕</button>
+        </div>`;
+    }).join('');
   }
-  listEl.innerHTML = list.map((label, i) => {
-    const upDisabled = (i === 0) ? 'disabled' : '';
-    const dnDisabled = (i === list.length - 1) ? 'disabled' : '';
-    return `
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff7e6;border-left:3px solid #f39c12;border-radius:3px">
-        <input type="text" value="${_escAttr(label)}" maxlength="120"
-               oninput="updateReminderPreset(${i}, this.value)"
-               style="flex:1;padding:5px 7px;border:1px solid #f5cba7;border-radius:3px;font-size:.92em;background:#fff">
-        <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, -1)" ${upDisabled}
-                title="Monter" style="padding:3px 7px;font-size:.85em">↑</button>
-        <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, 1)" ${dnDisabled}
-                title="Descendre" style="padding:3px 7px;font-size:.85em">↓</button>
-        <button class="btn btn-d btn-sm" onclick="deleteReminderPreset(${i})"
-                title="Supprimer ce motif" style="padding:3px 7px;font-size:.85em">✕</button>
-      </div>`;
-  }).join('');
+  // Rangée de swatches pour la couleur du prochain motif ajouté
+  const swEl = document.getElementById('mrempresets-add-swatches');
+  if (swEl) {
+    swEl.innerHTML = _mrempSwatchesHTML(_mrempAddColor, '_setMrempAddColor');
+  }
+}
+
+// Définit la couleur du prochain motif à ajouter (mode "swatch préselectionné")
+function _setMrempAddColor(colorId) {
+  _mrempAddColor = colorId || REMINDER_DEFAULT_COLOR_ID;
+  // Re-render uniquement la rangée de swatches d'ajout (sans toucher au reste)
+  const swEl = document.getElementById('mrempresets-add-swatches');
+  if (swEl) swEl.innerHTML = _mrempSwatchesHTML(_mrempAddColor, '_setMrempAddColor');
 }
 
 function addReminderPresetFromInput() {
@@ -7984,22 +8078,43 @@ function addReminderPresetFromInput() {
   const label = (inp.value || '').trim();
   if (!label) { inp.focus(); return; }
   pushUndo();
-  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
-  S.reminderPresets.push(label);
+  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = [];
+  S.reminderPresets.push({ label, color: _mrempAddColor });
   save();
   inp.value = '';
   renderReminderPresetsModal();
   inp.focus();
 }
 
-// Édition inline (oninput) — debounced via le système d'undo armé pour éviter
-// une entrée undo par frappe.
+// Édition inline du label (oninput) — debounced via le système d'undo armé pour
+// éviter une entrée undo par frappe.
 function updateReminderPreset(idx, value) {
   if (!Array.isArray(S.reminderPresets)) return;
   if (idx < 0 || idx >= S.reminderPresets.length) return;
   if (typeof _evalArmUndo === 'function') _evalArmUndo();
-  S.reminderPresets[idx] = String(value || '');
+  const item = S.reminderPresets[idx];
+  if (typeof item === 'string') {
+    // Migration paresseuse : compat ascendante au cas où le hook n'est pas passé
+    S.reminderPresets[idx] = { label: String(value || ''), color: null };
+  } else {
+    item.label = String(value || '');
+  }
   save();
+}
+
+// Changement de couleur d'un preset (swatch clic). pushUndo car action discrète.
+function updateReminderPresetColor(idx, colorId) {
+  if (!Array.isArray(S.reminderPresets)) return;
+  if (idx < 0 || idx >= S.reminderPresets.length) return;
+  pushUndo();
+  const item = S.reminderPresets[idx];
+  if (typeof item === 'string') {
+    S.reminderPresets[idx] = { label: item, color: colorId };
+  } else {
+    item.color = colorId;
+  }
+  save();
+  renderReminderPresetsModal();
 }
 
 function moveReminderPreset(idx, delta) {
@@ -8017,7 +8132,8 @@ function deleteReminderPreset(idx) {
   if (!Array.isArray(S.reminderPresets)) return;
   const arr = S.reminderPresets;
   if (idx < 0 || idx >= arr.length) return;
-  const label = arr[idx];
+  const item = arr[idx];
+  const label = (typeof item === 'string') ? item : (item && item.label) || '';
   if (!confirm(`Supprimer ce motif ?\n\n« ${label} »\n\nAnnulable via Ctrl+Z.`)) return;
   pushUndo();
   arr.splice(idx, 1);
@@ -8028,7 +8144,7 @@ function deleteReminderPreset(idx) {
 function restoreDefaultReminderPresets() {
   if (!confirm('Remplacer la liste actuelle par les motifs par défaut ?\n\nAnnulable via Ctrl+Z.')) return;
   pushUndo();
-  S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
+  S.reminderPresets = DEFAULT_REMINDER_PRESETS.map(p => ({ ...p }));
   save();
   renderReminderPresetsModal();
   toast('↻ Motifs par défaut restaurés');
