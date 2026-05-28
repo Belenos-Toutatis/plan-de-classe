@@ -3232,6 +3232,29 @@ kbd {
 </div>
 
 <!-- ── MODAL Configuration des liens externes (ENT, Pronote, etc.) ── -->
+<!-- ── MODAL Motifs de rappels personnalisables (cf. mreminders) ── -->
+<div id="mrempresets" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:600px;width:100%">
+    <h2>🔔 Motifs de rappels « À vérifier »</h2>
+    <p style="font-size:.85em;color:#666;margin-bottom:12px;line-height:1.5">
+      Liste des motifs proposés en un clic dans la modale Rappels (clic droit sur un élève en Plan Prof → 🔔 Rappels). Pré-remplissent le champ — l'enseignant peut ensuite éditer avant validation. Stockés dans votre fichier de données (sync, backups).
+    </p>
+    <div id="mrempresets-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
+    <div style="border-top:1px solid #eee;padding-top:12px;margin-top:8px">
+      <div style="font-weight:600;font-size:.95em;margin-bottom:8px">+ Ajouter un motif</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <input type="text" id="mrempresets-add" maxlength="120" placeholder="Faire signer une autorisation de sortie…" style="flex:1;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.95em" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderPresetFromInput()}">
+        <button class="btn btn-p btn-sm" onclick="addReminderPresetFromInput()">+ Ajouter</button>
+      </div>
+      <div style="font-size:.78em;color:#888">Vous pouvez préfixer par un emoji si vous le souhaitez (✍️, 📤, 📞, ⚠️…). Le champ accepte 120 caractères max.</div>
+    </div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-w btn-sm" onclick="restoreDefaultReminderPresets()" title="Remplace la liste par les motifs proposés par défaut">↻ Restaurer les motifs par défaut</button>
+      <button class="btn btn-g" onclick="closeMod2('mrempresets')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <div id="mlinks" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:560px;width:100%">
     <h2>🔗 Liens externes</h2>
@@ -4568,6 +4591,14 @@ kbd {
         </div>
         <div style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:4px">Aussi accessible depuis Plan Prof → mode Tags.</div>
       </div>
+      <!-- Rappels -->
+      <div class="about-section">
+        <h3>🔔 Rappels</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mrempresets', openReminderPresets)">🔔 Motifs « À vérifier » par défaut</button>
+        </div>
+        <div style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:4px">Personnalisez la liste des motifs proposés en un clic dans la modale Rappels (Plan Prof → clic droit sur un élève).</div>
+      </div>
       <!-- Sauvegarde -->
       <div class="about-section">
         <h3>💾 Sauvegarde</h3>
@@ -5377,7 +5408,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-27T13:00:00Z';
+const APP_VERSION   = '2026-05-28T12:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -5921,6 +5952,9 @@ function postLoadHook() {
   if (!S.attendance) S.attendance = {};
   if (!S.tabletPools) S.tabletPools = {};
   if (!Array.isArray(S.userLinks)) S.userLinks = []; // Liens externes utilisateur (ENT, Pronote…)
+  // Motifs de rappels personnalisables (cf. modale mreminders + mrempresets).
+  // Si absent → on installe les défauts. Tableau vide explicite (utilisateur a tout supprimé) → respecté.
+  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
   if (!S.seatingSnapshots) S.seatingSnapshots = {}; // Pool dédupliqué de seatings au moment des appels
   if (!S.tags) S.tags = {};      // Tags cumulables (DF, DNL, etc.) : { id, abbr, name, color }
   // Surlignage des dernières places modifiées (persistant cross-device via JSON)
@@ -7710,14 +7744,21 @@ function saveCtxNotes() {
 // ═══════════════════════════════════════════════════════════
 // RAPPELS / À VÉRIFIER (par élève)
 // ═══════════════════════════════════════════════════════════
-const REMINDER_PRESETS = [
-  '✍️ Faire signer un mot dans le carnet',
-  '✍️ Faire signer une absence dans le carnet',
-  '✍️ Faire signer un retard dans le carnet',
-  '📤 Distribuer un document',
-  '📥 Récupérer un document, un livre ou du matériel',
-  '📞 Appeler / contacter les parents',
+// Motifs pré-remplis proposés dans la modale Rappels. Personnalisables par
+// l'enseignant via ⚙ Réglages → 🔔 Rappels. Persistés dans S.reminderPresets
+// (synchronisé entre machines via le fichier JSON / Nextcloud).
+const DEFAULT_REMINDER_PRESETS = [
+  'Observation : 3 oublis de travail',
+  'Observation : 3 oublis de matériel',
+  'Observation - Attitude incorrect : ',
+  'Faire signer un mot dans le carnet',
+  'Distribuer un document',
+  'Récupérer un document, un livre ou du matériel',
+  'Appeler / contacter les parents',
 ];
+function _reminderPresets() {
+  return Array.isArray(S.reminderPresets) ? S.reminderPresets : DEFAULT_REMINDER_PRESETS;
+}
 
 // Échappement minimal pour insertion dans HTML / attribut title.
 function _escAttr(s) {
@@ -7796,7 +7837,8 @@ function renderRemindersModal() {
   }
   // Boutons motifs prédéfinis
   const presetsEl = document.getElementById('mrem-presets');
-  presetsEl.innerHTML = REMINDER_PRESETS.map((p, i) =>
+  const presets = _reminderPresets();
+  presetsEl.innerHTML = presets.map((p, i) =>
     `<button class="btn" onclick="addReminderPreset(${i})" style="padding:4px 9px;font-size:.85em;background:#fef5e7;border:1px solid #f5cba7;color:#7d4f00;border-radius:4px;cursor:pointer" title="Pré-remplir le champ — tu peux ensuite éditer puis valider">${_escAttr(p)}</button>`
   ).join('');
 }
@@ -7804,7 +7846,7 @@ function renderRemindersModal() {
 // Clic sur un motif prédéfini → pré-remplit le champ texte pour permettre de personnaliser
 // avant de valider (Enter ou bouton Ajouter). Pas d'ajout direct.
 function addReminderPreset(idx) {
-  const label = REMINDER_PRESETS[idx];
+  const label = _reminderPresets()[idx];
   if (!label) return;
   const inp = document.getElementById('mrem-custom');
   if (!inp) return;
@@ -7901,6 +7943,96 @@ function deleteReminder(rid) {
 // des données démo/snapshots qui appelaient removeReminder via onclick).
 // Renvoie vers markReminderDone (comportement le plus prudent).
 function removeReminder(rid) { markReminderDone(rid); }
+
+// ── Édition de la liste des motifs proposés (cf. mrempresets) ───────────
+function openReminderPresets() {
+  // Garantit l'init si l'utilisateur arrive ici avant tout autre passage par postLoadHook
+  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
+  renderReminderPresetsModal();
+  openMod('mrempresets');
+  setTimeout(() => { const i = document.getElementById('mrempresets-add'); if (i) i.focus(); }, 80);
+}
+
+function renderReminderPresetsModal() {
+  const list = _reminderPresets();
+  const listEl = document.getElementById('mrempresets-list');
+  if (!listEl) return;
+  if (!list.length) {
+    listEl.innerHTML = '<div style="color:#888;font-size:.9em;padding:10px;text-align:center;background:#f9f9f9;border-radius:4px;border:1px dashed #ddd">Aucun motif — ajoutez-en un ci-dessous ou cliquez sur « ↻ Restaurer les motifs par défaut ».</div>';
+    return;
+  }
+  listEl.innerHTML = list.map((label, i) => {
+    const upDisabled = (i === 0) ? 'disabled' : '';
+    const dnDisabled = (i === list.length - 1) ? 'disabled' : '';
+    return `
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff7e6;border-left:3px solid #f39c12;border-radius:3px">
+        <input type="text" value="${_escAttr(label)}" maxlength="120"
+               oninput="updateReminderPreset(${i}, this.value)"
+               style="flex:1;padding:5px 7px;border:1px solid #f5cba7;border-radius:3px;font-size:.92em;background:#fff">
+        <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, -1)" ${upDisabled}
+                title="Monter" style="padding:3px 7px;font-size:.85em">↑</button>
+        <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, 1)" ${dnDisabled}
+                title="Descendre" style="padding:3px 7px;font-size:.85em">↓</button>
+        <button class="btn btn-d btn-sm" onclick="deleteReminderPreset(${i})"
+                title="Supprimer ce motif" style="padding:3px 7px;font-size:.85em">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function addReminderPresetFromInput() {
+  const inp = document.getElementById('mrempresets-add');
+  const label = (inp.value || '').trim();
+  if (!label) { inp.focus(); return; }
+  pushUndo();
+  if (!Array.isArray(S.reminderPresets)) S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
+  S.reminderPresets.push(label);
+  save();
+  inp.value = '';
+  renderReminderPresetsModal();
+  inp.focus();
+}
+
+// Édition inline (oninput) — debounced via le système d'undo armé pour éviter
+// une entrée undo par frappe.
+function updateReminderPreset(idx, value) {
+  if (!Array.isArray(S.reminderPresets)) return;
+  if (idx < 0 || idx >= S.reminderPresets.length) return;
+  if (typeof _evalArmUndo === 'function') _evalArmUndo();
+  S.reminderPresets[idx] = String(value || '');
+  save();
+}
+
+function moveReminderPreset(idx, delta) {
+  if (!Array.isArray(S.reminderPresets)) return;
+  const arr = S.reminderPresets;
+  const j = idx + delta;
+  if (idx < 0 || idx >= arr.length || j < 0 || j >= arr.length) return;
+  pushUndo();
+  [arr[idx], arr[j]] = [arr[j], arr[idx]];
+  save();
+  renderReminderPresetsModal();
+}
+
+function deleteReminderPreset(idx) {
+  if (!Array.isArray(S.reminderPresets)) return;
+  const arr = S.reminderPresets;
+  if (idx < 0 || idx >= arr.length) return;
+  const label = arr[idx];
+  if (!confirm(`Supprimer ce motif ?\n\n« ${label} »\n\nAnnulable via Ctrl+Z.`)) return;
+  pushUndo();
+  arr.splice(idx, 1);
+  save();
+  renderReminderPresetsModal();
+}
+
+function restoreDefaultReminderPresets() {
+  if (!confirm('Remplacer la liste actuelle par les motifs par défaut ?\n\nAnnulable via Ctrl+Z.')) return;
+  pushUndo();
+  S.reminderPresets = DEFAULT_REMINDER_PRESETS.slice();
+  save();
+  renderReminderPresetsModal();
+  toast('↻ Motifs par défaut restaurés');
+}
 
 // ═══════════════════════════════════════════════════════════
 // VÉRIFICATION DES MISES À JOUR (via API GitHub publique)
@@ -14796,6 +14928,7 @@ function _resetNukeConfirm() {
   S.conseilClasse = {};
   S.movedHighlights = {};
   S.userLinks = [];
+  delete S.reminderPresets; // postLoadHook réinstallera les défauts
   S.cur = null;
   // Au prochain postLoadHook, migrateTabletPools() recréera les pools par défaut (CM1/CM2)
   // et migrateEvalDefaults() rechargera le référentiel C1-C8 + les domaines du socle.
