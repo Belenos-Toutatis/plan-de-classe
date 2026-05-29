@@ -5409,7 +5409,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-29T22:30:00Z';
+const APP_VERSION   = '2026-05-29T23:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -29865,7 +29865,14 @@ let _evalSaisieSaveTimer = null;
 function _evalSaisieDebouncedSave() {
   if (_evalSaisieSaveTimer) clearTimeout(_evalSaisieSaveTimer);
   _evalSaisieSaveTimer = setTimeout(() => {
-    if (_evalSaisieDirty) { save(); _evalSaisieDirty = false; }
+    if (_evalSaisieDirty) {
+      // Recalcule la date de l'éval : une mini-note sans aucune note ne doit pas
+      // compter (cf. _evalAutoUpdateDate / _mnHasAnyNoteForClass).
+      const evId = document.getElementById('meval-saisie-evalid')?.value;
+      const ev = evId ? S.evaluations?.[evId] : null;
+      if (ev) _evalAutoUpdateDate(ev);
+      save(); _evalSaisieDirty = false;
+    }
   }, 800);
 }
 
@@ -30971,7 +30978,13 @@ function _evalTableurUpdate(inputEl) {
 
   if (_evalTableurSaveTimer) clearTimeout(_evalTableurSaveTimer);
   _evalTableurSaveTimer = setTimeout(() => {
-    if (_evalTableurDirty) { save(); _evalTableurDirty = false; }
+    if (_evalTableurDirty) {
+      // La saisie/suppression d'une note peut faire passer une mini-note de
+      // « non passée » à « passée » (ou l'inverse) → recalcule la date de l'éval
+      // pour qu'elle ne tienne compte que des mini-notes effectivement passées.
+      _evalAutoUpdateDate(ev);
+      save(); _evalTableurDirty = false;
+    }
   }, 800);
 }
 
@@ -34045,6 +34058,21 @@ function _evalNormalizeDates(ev) {
   if (ev.datesManual) { for (const k of Object.keys(ev.datesManual)) if (!idsSet.has(k)) delete ev.datesManual[k]; }
 }
 
+// Vrai si au moins un élève de la classe a une note saisie pour cette mini-note
+// (nombre, 'A' absent, ou 'NN'). Sert à n'agréger dans la date de l'éval que les
+// mini-notes effectivement passées par la classe (cf. _evalAutoUpdateDate) : une
+// mini-note que la classe ne passe pas (aucune note) ne doit pas peser sur la date.
+function _mnHasAnyNoteForClass(ev, mn, classId) {
+  if (!ev || !mn) return false;
+  const cls = S.classes?.[classId];
+  const sids = cls ? (cls.eleves || []) : Object.keys(ev.notes || {});
+  for (const sid of sids) {
+    const v = ev.notes?.[sid]?.values?.[mn.id];
+    if (v !== undefined && v !== null && v !== '') return true;
+  }
+  return false;
+}
+
 // Recalcule la date de chaque classe comme la max des sous-dates correspondantes
 // (mn.dates[cid]||mn.date pour A/C, passation.dates[cid]||passation.date pour B).
 // Une classe avec ev.datesManual[cid] === true est skippée (la date est figée
@@ -34055,7 +34083,13 @@ function _evalAutoUpdateDate(ev) {
   if (ids.length === 0) return;
   const collectFor = (cid) => {
     if (ev.type === 'A' || ev.type === 'C') {
-      const dates = (ev.miniNotes || []).map(m => (cid && m.dates?.[cid]) || m.date).filter(Boolean);
+      // N'agréger que les mini-notes effectivement passées par la classe (≥1 note
+      // saisie). Fallback : si AUCUNE mini-note n'a de note (éval pas encore
+      // commencée), on garde l'ensemble pour conserver la date planifiée.
+      const all  = (ev.miniNotes || []);
+      const done = all.filter(m => _mnHasAnyNoteForClass(ev, m, cid));
+      const pool = done.length ? done : all;
+      const dates = pool.map(m => (cid && m.dates?.[cid]) || m.date).filter(Boolean);
       return dates.length ? dates.reduce((m, d) => d > m ? d : m, '') : null;
     }
     if (ev.type === 'B') {
