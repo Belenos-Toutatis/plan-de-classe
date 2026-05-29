@@ -5409,9 +5409,16 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-30T02:30:00Z';
-const APP_REPO_USER = 'Belenos-Toutatis';
-const APP_REPO_NAME = 'plan-de-classe';
+// Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
+// release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
+// MAJOR (X.0.0) pour un changement de fond / rupture.
+const APP_VERSION    = '2.0.0';
+// Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
+// date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
+// considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
+const APP_BUILD_DATE = '2026-05-30T02:30:00Z';
+const APP_REPO_USER  = 'Belenos-Toutatis';
+const APP_REPO_NAME  = 'plan-de-classe';
 
 // ═══════════════════════════════════════════════════════════
 // STATE & PERSISTENCE
@@ -9259,7 +9266,7 @@ async function checkForUpdate() {
     const commitUrl  = data.html_url || `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
     if (!latestDate) throw new Error('Date du dernier commit introuvable');
 
-    const isUpToDate = APP_VERSION >= latestDate;
+    const isUpToDate = APP_BUILD_DATE >= latestDate;
     const isOnline   = window.location.hostname.endsWith('github.io');
 
     const repoUrl     = `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
@@ -9270,7 +9277,7 @@ async function checkForUpdate() {
       info.innerHTML = `
         <p style="color:#27ae60;font-size:1.15em;margin-bottom:12px"><strong>✅ Vous êtes à jour !</strong></p>
         <div style="background:#f1f8e9;border:1px solid #c5e1a5;padding:10px 14px;border-radius:4px;font-size:.9em;color:#33691e;line-height:1.7">
-          Votre version : <code>${_escAttr(APP_VERSION)}</code><br>
+          Votre version : <code>v${_escAttr(APP_VERSION)}</code> <span style="font-size:.85em;color:#558b2f">(build ${_escAttr(_formatRelDate(APP_BUILD_DATE))})</span><br>
           Dernier commit GitHub : <code>${_escAttr(_formatRelDate(latestDate))}</code> (<a href="${commitUrl}" target="_blank" rel="noopener">${latestSha}</a>)
         </div>
       `;
@@ -9278,7 +9285,7 @@ async function checkForUpdate() {
       info.innerHTML = `
         <p style="color:#e67e22;font-size:1.15em;margin-bottom:12px"><strong>🆕 Une mise à jour est disponible !</strong></p>
         <div style="background:#fff7e6;border:1px solid #f5cba7;padding:10px 14px;border-radius:4px;font-size:.9em;line-height:1.7;margin-bottom:14px">
-          Votre version : <code>${_escAttr(APP_VERSION)}</code><br>
+          Votre version : <code>v${_escAttr(APP_VERSION)}</code> <span style="font-size:.85em;color:#999">(build ${_escAttr(_formatRelDate(APP_BUILD_DATE))})</span><br>
           Dernière sur GitHub : <code>${_escAttr(_formatRelDate(latestDate))}</code> (<a href="${commitUrl}" target="_blank" rel="noopener">${latestSha}</a>)<br>
           Dernier changement : <em>${_escAttr(latestMsg)}</em>
         </div>
@@ -9317,7 +9324,7 @@ async function checkForUpdate() {
         Vous pouvez vérifier manuellement sur <a href="https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}" target="_blank" rel="noopener">github.com/${APP_REPO_USER}/${APP_REPO_NAME}</a>.
       </p>
       <p style="font-size:.85em;color:#777;margin-top:8px">
-        Votre version actuelle : <code>${_escAttr(APP_VERSION)}</code>
+        Votre version actuelle : <code>v${_escAttr(APP_VERSION)}</code>
       </p>
     `;
   }
@@ -9359,12 +9366,12 @@ async function _passiveUpdateCheck() {
     } catch (e) { return; /* offline ou rate-limit : pas de pastille, on retentera plus tard */ }
   }
   // Décide d'afficher la pastille
-  if (APP_VERSION >= latestDate) {
+  if (APP_BUILD_DATE >= latestDate) {
     btn.classList.remove('has-update');
     btn.title = 'À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour';
     return;
   }
-  const ageMs = Date.parse(latestDate) - Date.parse(APP_VERSION);
+  const ageMs = Date.parse(latestDate) - Date.parse(APP_BUILD_DATE);
   const shouldShow = isOnline || (Number.isFinite(ageMs) && ageMs >= _UPDATE_BADGE_LOCAL_MS);
   if (shouldShow) {
     btn.classList.add('has-update');
@@ -26524,14 +26531,9 @@ function init() {
   // Indicateur de version (coin bas-droit) — peuplé dès l'init pour aide au debug
   const verEl = document.getElementById('app-version-tag');
   if (verEl && typeof APP_VERSION === 'string') {
-    // Affiche un format court "JJ/MM HHhMM" + tooltip avec ISO complet
-    const m = APP_VERSION.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-    if (m) {
-      verEl.textContent = `v ${m[3]}/${m[2]} ${m[4]}h${m[5]}`;
-      verEl.title = `Version : ${APP_VERSION}\nClic = vérifier les mises à jour`;
-    } else {
-      verEl.textContent = `v ${APP_VERSION}`;
-    }
+    verEl.textContent = `v ${APP_VERSION}`;
+    const _build = (typeof APP_BUILD_DATE === 'string') ? `\nBuild : ${APP_BUILD_DATE}` : '';
+    verEl.title = `Version : v${APP_VERSION}${_build}\nClic = vérifier les mises à jour`;
   }
   load(); // postLoadHook() à l'intérieur s'occupe de la migration vers le modèle multi-salles
   // Migrer les élèves sans champ groupe (champ ajouté plus tard)
@@ -26697,7 +26699,10 @@ if (_origRenderStudents) {
 // ═══════════════ MODALE À PROPOS ═══════════════
 function openAbout() {
   const el = document.getElementById('about-version-disp');
-  if (el && typeof APP_VERSION !== 'undefined') el.textContent = APP_VERSION;
+  if (el && typeof APP_VERSION !== 'undefined') {
+    el.textContent = 'v' + APP_VERSION;
+    if (typeof APP_BUILD_DATE === 'string') el.title = `Build : ${APP_BUILD_DATE}`;
+  }
   openMod('mabout');
 }
 // Au premier lancement : on ferme la modale de bienvenue ET on enchaîne sur mabout,

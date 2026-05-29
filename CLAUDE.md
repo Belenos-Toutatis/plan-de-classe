@@ -1085,14 +1085,17 @@ Item **🔔 Rappels / À vérifier…** ajouté dans `#ctx` entre Notes et Retir
 
 ## Vérification des mises à jour (modal `mupdate`)
 
-Bouton **🆕 Maj** dans le header → `checkForUpdate()` qui interroge l'API publique GitHub (`/repos/<user>/<repo>/commits/main`, sans auth, limite 60 req/h/IP) et compare la date du dernier commit avec la constante `APP_VERSION` (format ISO `'YYYY-MM-DDTHH:MM:SSZ'`, à incrémenter manuellement avant chaque push qu'on veut considérer comme nouvelle version).
+Bouton **🆕 Maj** dans le header → `checkForUpdate()` qui interroge l'API publique GitHub (`/repos/<user>/<repo>/commits/main`, sans auth, limite 60 req/h/IP) et compare la date du dernier commit avec la constante **`APP_BUILD_DATE`** (format ISO `'YYYY-MM-DDTHH:MM:SSZ'`, à incrémenter manuellement avant chaque push). La version **affichée** à l'utilisateur est un **semver** dans `APP_VERSION` (ex. `'1.0.0'`) — découplée de la détection.
 
 Constantes en haut du `<script>` :
 ```js
-const APP_VERSION   = '2026-05-04T22:30:00Z';
-const APP_REPO_USER = 'Belenos-Toutatis';
-const APP_REPO_NAME = 'plan-de-classe';
+const APP_VERSION    = '2.0.0';                 // semver affiché (PATCH/MINOR/MAJOR)
+const APP_BUILD_DATE = '2026-05-30T02:30:00Z';  // date ISO — sert UNIQUEMENT à la détection MAJ
+const APP_REPO_USER  = 'Belenos-Toutatis';
+const APP_REPO_NAME  = 'plan-de-classe';
 ```
+
+⚠️ **À bumper à chaque push** : `APP_BUILD_DATE` (toujours — sinon la détection signale « MAJ disponible » en boucle), et `APP_VERSION` quand la release le mérite. `APP_BUILD_DATE` doit être ≥ à l'instant réel du push. La comparaison de détection (`checkForUpdate`, `_passiveUpdateCheck`) utilise `APP_BUILD_DATE >= latestCommitDate` ; l'affichage (header chip `v X.Y.Z`, modales, `about-version-disp`) utilise `APP_VERSION`.
 
 Comportement :
 - ✅ **À jour** : message vert + version locale + date du dernier commit GitHub avec lien vers le commit (SHA tronqué).
