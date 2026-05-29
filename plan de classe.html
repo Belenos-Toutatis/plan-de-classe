@@ -5409,7 +5409,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-28T18:00:00Z';
+const APP_VERSION   = '2026-05-29T21:00:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -11145,7 +11145,9 @@ function _buildQcmPlanHTML(cls, salleId, opts) {
       let nameHTML = '';
       if (!opts.hideNames) {
         const sid = seating[k];
-        const stu = sid ? S.eleves[sid] : null;
+        let stu = sid ? S.eleves[sid] : null;
+        // Élève parti / pas encore arrivé : place rendue libre (cohérent avec le tableur de notes)
+        if (stu && !_stuActiveOn(stu)) stu = null;
         nameHTML = stu
           ? `<div class="qcm-pcell-name" title="${_escAttr(stu.prenom + ' ' + stu.nom)}">${_escAttr(stu.prenom)}</div>`
           : (opts.showEmpty !== false ? '<div class="qcm-pcell-empty">libre</div>' : '');
@@ -15528,11 +15530,17 @@ function tapUnplaceFromZone(e) {
 // STUDENT VIEW
 // ═══════════════════════════════════════════════════════════
 // Retourne le prénom + suffixe minimal du nom si plusieurs élèves ont le même prénom dans la classe
-function getDisplayName(cls, sid) {
+function getDisplayName(cls, sid, scope) {
   const stu = S.eleves[sid];
   if (!stu) return '';
-  const siblings = Object.values(cls.seating)
-    .map(s => S.eleves[s])
+  // Portée de détection des homonymes :
+  //  - défaut ('seating') : seuls les élèves placés (le plan n'affiche qu'eux)
+  //  - 'roster' : tout l'effectif de la classe (QCMCam liste placés ET non placés,
+  //    donc un homonyme non placé doit aussi déclencher l'ajout de l'initiale)
+  const pool = scope === 'roster'
+    ? (cls.eleves || []).map(s => S.eleves[s])
+    : Object.values(cls.seating).map(s => S.eleves[s]);
+  const siblings = pool
     .filter(s => s && s.id !== stu.id && s.prenom === stu.prenom);
   if (!siblings.length) return stu.prenom;
   for (let n = 1; n <= stu.nom.length; n++) {
@@ -18339,6 +18347,9 @@ function renderQcmcam() {
   const data = (cls.eleves || []).map(sid => {
     const stu = S.eleves[sid];
     if (!stu) return null;
+    // Élève parti / pas encore arrivé : exclu de QCMCam (comme du tableur de notes),
+    // même non placé — il n'a plus de marqueur ni d'identifiant NA.
+    if (!_stuActiveOn(stu)) return null;
     const pos = getPos(sid, cls);
     const posKey = pos ? `${pos.r},${pos.c}` : null;
     const num = posKey ? qcm?.keyToNum.get(posKey) : null;
@@ -18347,7 +18358,7 @@ function renderQcmcam() {
       isPlaced:   !!pos,
       pos:        num != null ? num : (pos ? '—' : ''),
       posOrder:   pos ? seatOrder(pos.r, pos.c, cc) : Infinity,
-      name:       getDisplayName(cls, sid),
+      name:       getDisplayName(cls, sid, 'roster'),
       nameKey:    `${stu.nom || ''} ${stu.prenom || ''}`,
       ident:      ident,
       _overflow:  pos && num == null,
@@ -18469,7 +18480,7 @@ function _allQcmLines() {
       }
       // Placés (élèves) : triés par ordre de seat (avant→arrière, gauche→droite)
       const placed = Object.entries(cls.seating)
-        .filter(([k, sid]) => S.eleves[sid])
+        .filter(([k, sid]) => S.eleves[sid] && _stuActiveOn(S.eleves[sid]))
         .sort(([ak], [bk]) => {
           const [ar, ac] = ak.split(',').map(Number);
           const [br, bc] = bk.split(',').map(Number);
@@ -18497,7 +18508,7 @@ function _allQcmLines() {
         const [r, c] = key.split(',').map(Number);
         return {
           orderKey: seatOrder(r, c, cc),
-          line: `${num}\t${getDisplayName(cls, sid)}\t${ident}`,
+          line: `${num}\t${getDisplayName(cls, sid, 'roster')}\t${ident}`,
         };
       }).filter(Boolean);
       const merged = [...placedLines, ...aeshLines].sort((a, b) => a.orderKey - b.orderKey);
@@ -18505,12 +18516,12 @@ function _allQcmLines() {
       // Non placés : ajoutés à la suite, triés alphabétiquement, identifiants
       // NA1, NA2, NA3… (numérotation stable, repart à 1 pour chaque classe×salle)
       const unplaced = (cls.eleves || [])
-        .filter(sid => S.eleves[sid] && !placedSids.has(sid))
+        .filter(sid => S.eleves[sid] && !placedSids.has(sid) && _stuActiveOn(S.eleves[sid]))
         .map(sid => ({ sid, stu: S.eleves[sid] }))
         .sort((a, b) => (a.stu.nom || '').localeCompare(b.stu.nom || '', 'fr')
                      || (a.stu.prenom || '').localeCompare(b.stu.prenom || '', 'fr'));
       unplaced.forEach(({ sid }, i) => {
-        lines.push(`NA${i + 1}\t${getDisplayName(cls, sid)}\t${ident}`);
+        lines.push(`NA${i + 1}\t${getDisplayName(cls, sid, 'roster')}\t${ident}`);
       });
     }
     cls.activeRoom = originalRoom;
