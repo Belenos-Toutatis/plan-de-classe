@@ -5409,7 +5409,7 @@ var _bilanHiddenCols = new Set();
 // Format ISO : 'YYYY-MM-DDTHH:MM:SSZ'. Comparé à la date du dernier commit GitHub via l'API publique
 // par checkForUpdate(). Toute date plus récente côté GitHub déclenche une notification de MAJ.
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION   = '2026-05-30T01:30:00Z';
+const APP_VERSION   = '2026-05-30T02:30:00Z';
 const APP_REPO_USER = 'Belenos-Toutatis';
 const APP_REPO_NAME = 'plan-de-classe';
 
@@ -35926,7 +35926,7 @@ function renderBilanTab() {
       const counterClass = remLen > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${rowBg};position:relative">
-        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
         <span class="${counterClass}" title="Nombre de caractères (limite ENT : 600)">${remLen}/600</span>
       </td>`;
     });
@@ -36559,6 +36559,31 @@ function _onBilanRemarqueInput(input) {
     counter.classList.toggle('over', len > 600);
   }
 }
+// Entrée = passer à l'élève suivant (même colonne période/classe) ; Shift+Entrée =
+// retour à la ligne dans la remarque (comportement par défaut du textarea).
+// La valeur est déjà persistée par _onBilanRemarqueInput à chaque frappe.
+function _onBilanRemarqueKey(e, ta) {
+  if (e.key !== 'Enter' || e.shiftKey) return;  // Shift+Entrée → newline (défaut)
+  e.preventDefault();
+  const tbl = ta.closest('table');
+  if (!tbl) { ta.blur(); return; }
+  const per = ta.getAttribute('data-periode');
+  const cid = ta.getAttribute('data-cls');
+  // Textareas de la même colonne (même période + même classe), en ordre d'élèves.
+  const list = Array.from(tbl.querySelectorAll('.bilan-rem-textarea'))
+    .filter(t => t.getAttribute('data-periode') === per && t.getAttribute('data-cls') === cid);
+  const i = list.indexOf(ta);
+  const next = (i >= 0 && i < list.length - 1) ? list[i + 1] : null;
+  if (next) {
+    next.focus();
+    const len = next.value.length;
+    try { next.setSelectionRange(len, len); } catch (_) {}
+    next.scrollIntoView({ block: 'nearest' });
+  } else {
+    ta.blur();  // dernier élève de la colonne
+  }
+}
+
 // Au rendu initial, s'assurer que les textareas avec contenu pré-existant sont
 // à la bonne hauteur (l'attribut rows="1" leur donnerait sinon 1 seule ligne)
 function _initBilanRemarques(rootEl) {
@@ -37125,7 +37150,7 @@ function renderCompetencesTab() {
       const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = compMulti ? ' (' + perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${bg};position:relative">
-        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
         <span class="${counterClsC}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
       </td>`;
     });
