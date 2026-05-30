@@ -309,13 +309,14 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .us.dragging{opacity:.35}
 /* Multi-sélection des élèves non placés (clic = toggle, drag d'un sélectionné = lot) */
 .us.us-selected{outline:3px solid #3498db;outline-offset:1px;background:#eaf4ff}
-/* Tap-to-select (mode tactile) : élève sélectionné en attente de placement.
-   Outline bleu + halo doux, pulse léger pour signaler l'attente d'action. */
-.tap-selected{outline:3px solid #2980b9 !important;outline-offset:1px;box-shadow:0 0 0 4px rgba(41,128,185,.25);animation:tapSelectPulse 1.6s ease-in-out infinite}
-@keyframes tapSelectPulse{
-  0%,100%{box-shadow:0 0 0 4px rgba(41,128,185,.25)}
-  50%   {box-shadow:0 0 0 8px rgba(41,128,185,.10)}
-}
+/* Glisser tactile (Touch Events) — carte fantôme + source saisie + case survolée */
+.td-ghost{position:fixed;z-index:10001;pointer-events:none;transform:translate(-50%,-50%) rotate(-2deg);
+  background:rgba(255,255,255,.94);border:2px solid var(--ink-blue);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-pop);padding:4px;font-size:.8em;overflow:hidden;opacity:.95;
+  display:flex;align-items:center;justify-content:center;text-align:center;color:var(--ink-deep)}
+html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-deep)}
+.td-src{opacity:.4 !important}
+.td-over{outline:4px solid #2980b9 !important;outline-offset:-2px;box-shadow:inset 0 0 0 9999px rgba(41,128,185,.14)}
 /* ─── Listes absences/retards (sous les non-placés en Plan Prof) ─── */
 #att-side{margin-top:10px}
 #att-side .att-block{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;margin-bottom:10px}
@@ -2254,8 +2255,7 @@ kbd {
         <div id="unpl"
           ondragover="event.preventDefault();document.getElementById('unpl').classList.add('drop-zone')"
           ondragleave="document.getElementById('unpl').classList.remove('drop-zone')"
-          ondrop="dropToUnplaced(event)"
-          onpointerdown="tapUnplaceFromZone(event)">
+          ondrop="dropToUnplaced(event)">
           <h3>Élèves non placés</h3>
           <input id="unpl-search" type="text" placeholder="🔍 Rechercher…" oninput="renderUnplaced()"
             style="width:100%;padding:5px 8px;margin-bottom:8px;border:1px solid #ddd;border-radius:4px;font-size:.85em;display:none">
@@ -5412,11 +5412,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.0.0';
+const APP_VERSION    = '2.1.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-05-30T02:30:00Z';
+const APP_BUILD_DATE = '2026-05-30T03:30:00Z';
 const APP_REPO_USER  = 'Belenos-Toutatis';
 const APP_REPO_NAME  = 'plan-de-classe';
 
@@ -5427,67 +5427,159 @@ let S = { classes: {}, eleves: {}, salles: {}, snapshots: {}, competences: {}, c
 let drag = null; // { type:'placed'|'unplaced', sid, fromKey }
 
 // ─── Mode "tap-to-select + tap-to-place" pour iPad / écrans tactiles ──────
-// HTML5 drag&drop natif ne fonctionne pas sur iOS Safari. Sur les écrans
-// tactiles (pointerType='touch' ou 'pen'), un tap sélectionne un élève, un
-// 2e tap sur une cellule cible le déplace. Sur souris (pointerType='mouse'),
-// les handlers retournent immédiatement → drag HTML5 classique conservé.
-// _tapMode peut représenter :
-//   - un élève :  { sid: string, fromKey: 'r,c'|null }
-//   - une AESH :  { aeshIdx: number, fromKey: 'r,c' }   (Phase 1+2 — tactile)
-let _tapMode = null;
-function _tapClear() {
-  _tapMode = null;
-  document.querySelectorAll('.tap-selected').forEach(el => el.classList.remove('tap-selected'));
+// ─────────────────────────────────────────────────────────────
+// GLISSER TACTILE (Touch Events) — remplace l'ancien « tap-tap ».
+// Le drag&drop HTML5 natif ne fonctionne pas au doigt sur iOS Safari. On
+// implémente donc un glisser maison via Touch Events NON passifs (pour pouvoir
+// bloquer le défilement pendant le glisser, fiable sur iPad) :
+//   • appui maintenu ~180 ms → « saisie » (une carte fantôme apparaît) ;
+//   • on glisse → la carte suit le doigt, la case sous le doigt est mise en évidence ;
+//   • on relâche sur une case → placement / échange (réutilise dropOnCell / dropAeshOnCell / dropToUnplaced) ;
+//   • appui maintenu PUIS relâché sans bouger → menu contextuel (cellules élève) ;
+//   • tap rapide → RIEN (donc rater un bouton 📦 ne déplace plus personne — bug du tap-tap supprimé) ;
+//   • swipe rapide → défilement natif conservé (le glisser ne démarre qu'après l'appui maintenu).
+// La souris/stylet gardent le drag&drop HTML5 natif (handlers dragstart/drop intacts).
+let _tdState = null;
+let _tdGhost = null;
+let _tdRecentDrag = false;       // vrai juste après un glisser → neutralise le click synthétique
+const _TD_PICKUP_MS      = 180;  // appui maintenu avant saisie
+const _TD_MOVE_CANCEL_PX = 12;   // mouvement AVANT saisie → c'est un scroll, on annule
+const _TD_DRAG_PX        = 6;    // mouvement APRÈS saisie → c'est un glisser
+const _TD_IGNORE_SEL = '.cctr, .cell-unplace, .isel, button, select, input, textarea, a, .crem-badge';
+
+function _tdCleanup() {
+  if (_tdState) {
+    if (_tdState.timer) clearTimeout(_tdState.timer);
+    if (_tdState.srcEl) _tdState.srcEl.classList.remove('td-src');
+  }
+  if (_tdGhost) { _tdGhost.remove(); _tdGhost = null; }
+  document.querySelectorAll('.td-over').forEach(el => el.classList.remove('td-over'));
+  _tdState = null;
 }
-function _tapSelect(sid, fromKey, sourceEl) {
-  _tapClear();
-  _tapMode = { sid, fromKey };
-  if (sourceEl) sourceEl.classList.add('tap-selected');
-  if (typeof toast === 'function') toast('👆 Tape une case libre pour placer · re-tape pour annuler', 2500);
+function _tdCancel() { _tdCleanup(); }
+
+function _tdMakeGhost(srcEl, x, y) {
+  const r = srcEl.getBoundingClientRect();
+  const g = document.createElement('div');
+  g.className = 'td-ghost';
+  g.style.width  = r.width + 'px';
+  g.style.height = r.height + 'px';
+  g.innerHTML = srcEl.innerHTML;
+  document.body.appendChild(g);
+  _tdGhost = g;
+  _tdMoveGhost(x, y);
 }
-// Variante AESH : sélectionne une AESH placée pour la déplacer au tap suivant.
-function _tapSelectAesh(aeshIdx, fromKey, sourceEl) {
-  _tapClear();
-  _tapMode = { aeshIdx, fromKey };
-  if (sourceEl) sourceEl.classList.add('tap-selected');
-  if (typeof toast === 'function') toast('👆 Tape une case libre pour placer l\'AESH · re-tape pour annuler', 2500);
+function _tdMoveGhost(x, y) {
+  if (!_tdGhost) return;
+  _tdGhost.style.left = x + 'px';
+  _tdGhost.style.top  = y + 'px';
 }
-// Place l'élève sélectionné sur la cellule cible (clé). Réutilise dropOnCell
-// en passant temporairement par la variable globale `drag`.
-function _tapTryPlace(cls, targetKey) {
-  if (!_tapMode || !cls) return false;
-  const m = _tapMode;
-  // Route vers le bon handler selon le contenu du tap mode
-  if (typeof m.aeshIdx === 'number') return _tapTryPlaceAesh(cls, targetKey);
-  const prevDrag = drag;
-  drag = { type: m.fromKey ? 'placed' : 'unplaced', sid: m.sid, fromKey: m.fromKey };
-  try { dropOnCell(cls, targetKey); }
-  finally { drag = prevDrag; _tapClear(); }
-  return true;
+
+// Cellule (Plan Prof) ou zone « non placés » sous le point (x,y), fantôme ignoré.
+function _tdHitTarget(x, y) {
+  if (_tdGhost) _tdGhost.style.display = 'none';
+  const el = document.elementFromPoint(x, y);
+  if (_tdGhost) _tdGhost.style.display = '';
+  if (!el) return null;
+  const cell = el.closest('#tg .cell[data-key]');
+  if (cell) return cell;
+  const zone = el.closest('#unpl');
+  if (zone) return zone;
+  return null;
 }
-// Variante AESH : place l'AESH sélectionnée sur la cellule cible via dropAeshOnCell.
-function _tapTryPlaceAesh(cls, targetKey) {
-  if (!_tapMode || !cls || typeof _tapMode.aeshIdx !== 'number') return false;
-  const m = _tapMode;
-  const prevDrag = drag;
-  drag = { type: 'aesh', aeshIdx: m.aeshIdx, fromKey: m.fromKey };
-  try { dropAeshOnCell(cls, targetKey); }
-  finally { drag = prevDrag; _tapClear(); }
-  return true;
+
+// Descripteur de source → objet `drag` consommé par dropOnCell / dropToUnplaced.
+function _tdDescToDrag(desc) {
+  if (!desc) return null;
+  if (desc.srcType === 'placed') return { type: 'placed', sid: desc.sid, fromKey: desc.fromKey };
+  if (desc.srcType === 'aesh')   return { type: 'aesh', aeshIdx: desc.aeshIdx, fromKey: desc.fromKey };
+  if (desc.srcType === 'unplaced') {
+    // Respecte la multi-sélection (déplacement de lot), comme startDragUnplaced.
+    if (typeof _unplSelected !== 'undefined' && _unplSelected.has(desc.sid) && _unplSelected.size > 1) {
+      return { type: 'unplaced-batch', sids: [..._unplSelected] };
+    }
+    return { type: 'unplaced', sid: desc.sid };
+  }
+  return null;
 }
-// Renvoie l'élève sélectionné dans le panneau "non placés" (mode tap).
-function _tapTryUnplaceTo() {
-  if (!_tapMode) return false;
+
+function _tdDrop(desc, x, y) {
   const cls = getCls();
-  if (!cls) return false;
-  const m = _tapMode;
-  // Si l'élève venait déjà des "non placés", c'est un no-op
-  if (!m.fromKey) { _tapClear(); return true; }
-  const prevDrag = drag;
-  drag = { type: 'placed', sid: m.sid, fromKey: m.fromKey };
-  try { if (typeof dropToUnplaced === 'function') dropToUnplaced({ preventDefault: ()=>{} }); }
-  finally { drag = prevDrag; _tapClear(); }
-  return true;
+  if (!cls || !desc) return;
+  const tgt = _tdHitTarget(x, y);
+  if (!tgt) return;                       // relâché dans le vide → rien
+  drag = _tdDescToDrag(desc);
+  if (tgt.id === 'unpl') {
+    if (drag && drag.type === 'placed') dropToUnplaced({ preventDefault() {} });
+  } else {
+    const key = tgt.dataset.key;
+    if (key) dropOnCell(cls, key);
+  }
+  drag = null;
+}
+
+// Attache le glisser tactile à un élément source.
+//   getDesc() → { srcType:'placed'|'unplaced'|'aesh', sid?, aeshIdx?, fromKey? }
+//   opts.onHold(x,y) → appelé si saisie puis relâché sans glisser (ex. menu contextuel)
+function _tdAttach(el, getDesc, opts) {
+  opts = opts || {};
+  el.addEventListener('touchstart', e => {
+    if (typeof _appelMode !== 'undefined' && _appelMode) return; // mode appel : tap natif (toggle absence)
+    if (e.touches.length !== 1) return;                          // multi-touch → zoom/scroll natif
+    if (e.target.closest(_TD_IGNORE_SEL)) return;                // contrôle interne → son propre handler
+    const t = e.touches[0];
+    _tdCleanup();
+    _tdState = {
+      srcEl: el, getDesc, opts,
+      x0: t.clientX, y0: t.clientY, lx: t.clientX, ly: t.clientY,
+      picked: false, dragging: false, timer: null,
+    };
+    _tdState.timer = setTimeout(() => {
+      if (!_tdState) return;
+      _tdState.picked = true;
+      _tdState.timer = null;
+      el.classList.add('td-src');
+      _tdMakeGhost(el, _tdState.lx, _tdState.ly);
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_) {} }
+    }, _TD_PICKUP_MS);
+  }, { passive: false });
+
+  el.addEventListener('touchmove', e => {
+    if (!_tdState || _tdState.srcEl !== el) return;
+    const t = e.touches[0]; if (!t) return;
+    _tdState.lx = t.clientX; _tdState.ly = t.clientY;
+    const dist = Math.hypot(t.clientX - _tdState.x0, t.clientY - _tdState.y0);
+    if (!_tdState.picked) {
+      if (dist > _TD_MOVE_CANCEL_PX) _tdCleanup(); // bougé avant saisie → c'est un scroll
+      return;
+    }
+    e.preventDefault();                            // saisi → on bloque le défilement
+    if (dist > _TD_DRAG_PX) _tdState.dragging = true;
+    _tdMoveGhost(t.clientX, t.clientY);
+    document.querySelectorAll('.td-over').forEach(x => x.classList.remove('td-over'));
+    const tgt = _tdHitTarget(t.clientX, t.clientY);
+    if (tgt) tgt.classList.add('td-over');
+  }, { passive: false });
+
+  const end = e => {
+    if (!_tdState || _tdState.srcEl !== el) return;
+    const picked = _tdState.picked, dragging = _tdState.dragging;
+    const desc = picked ? _tdState.getDesc() : null;
+    const lx = _tdState.lx, ly = _tdState.ly, opts2 = _tdState.opts;
+    _tdCleanup();
+    if (!picked) return;                  // tap rapide → rien
+    if (dragging) {
+      e.preventDefault();
+      _tdRecentDrag = true;
+      setTimeout(() => { _tdRecentDrag = false; }, 350);
+      _tdDrop(desc, lx, ly);
+    } else if (opts2.onHold) {
+      e.preventDefault();
+      opts2.onHold(lx, ly);               // appui maintenu sans bouger → menu contextuel
+    }
+  };
+  el.addEventListener('touchend', end, { passive: false });
+  el.addEventListener('touchcancel', () => { if (_tdState && _tdState.srcEl === el) _tdCleanup(); }, { passive: false });
 }
 
 let groupFilter = 0; // 0=tous, 1=G1, 2=G2, 3=G3
@@ -11536,13 +11628,9 @@ function switchClass(id) {
   // Réinitialise la sélection de cases en Config Salle (les keys sélectionnées
   // ne correspondent plus à la nouvelle classe/salle)
   if (typeof _cfgSelected !== 'undefined' && _cfgSelected.size) _cfgSelected.clear();
-  // SÉCURITÉ : annule toute sélection tap-to-place en cours. Sinon, un élève
-  // sélectionné par tap dans la classe A pourrait échanger sa position avec
-  // un élève de la classe B (échange CROSS-CLASSE, dangereux).
-  if (typeof _tapMode !== 'undefined' && _tapMode) {
-    if (typeof _tapCancel === 'function') _tapCancel();
-    else _tapMode = null;
-  }
+  // SÉCURITÉ : annule tout glisser tactile en cours au changement de classe
+  // (évite un dépôt cross-classe si une saisie tactile était amorcée).
+  _tdCancel();
   // Reconstitue l'état post-appel pour la nouvelle classe si un appel actif existe
   // dans son créneau (cf. _restorePostAppelFromAttendance).
   _restorePostAppelFromAttendance();
@@ -14562,38 +14650,15 @@ function buildCell(cls, row, col) {
       drag = null;
     });
     cell.addEventListener('dragstart', e => {
-      // Tap mode actif (tactile) → annule le drag HTML5 pour éviter le double-trigger
-      if (_tapMode) { e.preventDefault(); return; }
+      // Glisser tactile en cours → annule le drag HTML5 pour éviter le double-trigger
+      if (_tdState) { e.preventDefault(); return; }
       drag = { type: 'aesh', aeshIdx: aeshIdxHere, fromKey: key };
       e.dataTransfer.effectAllowed = 'move';
       setTimeout(() => cell.style.opacity = '.4', 0);
     });
     cell.addEventListener('dragend', () => { cell.style.opacity = '1'; });
-    // Tap-to-place tactile (touch / pen) — symétrique du handler des cellules élève.
-    // Re-tap sur la même AESH = annulation. Tap-mode élève sur cette AESH = refusé (toast).
-    cell.addEventListener('pointerdown', e => {
-      if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-      if (_tapMode) {
-        // Re-tap sur la même AESH déjà sélectionnée → annule
-        if (typeof _tapMode.aeshIdx === 'number' && _tapMode.aeshIdx === aeshIdxHere && _tapMode.fromKey === key) {
-          e.preventDefault();
-          _tapClear();
-          return;
-        }
-        // Tap mode élève sur cellule AESH → refus (l'élève ne peut s'y poser)
-        if (typeof _tapMode.sid === 'string') {
-          e.preventDefault();
-          toast('Une AESH occupe cette case — déplacez-la d\'abord.');
-          return;
-        }
-        // Tap mode AESH (autre) → tente l'échange via dropAeshOnCell
-        e.preventDefault();
-        _tapTryPlaceAesh(cls, key);
-      } else {
-        e.preventDefault();
-        _tapSelectAesh(aeshIdxHere, key, cell);
-      }
-    });
+    // Glisser tactile (Touch Events) — appui maintenu puis glisser pour déplacer l'AESH.
+    _tdAttach(cell, () => ({ srcType: 'aesh', aeshIdx: aeshIdxHere, fromKey: key }), {});
     return cell;
   }
 
@@ -14610,35 +14675,9 @@ function buildCell(cls, row, col) {
     dropOnCell(cls, key);
   });
 
-  // Tap-to-select + tap-to-place : uniquement écrans tactiles (pointerType
-  // 'touch' ou 'pen'). Sur souris ('mouse'), return immédiat → drag HTML5
-  // classique conservé. Si _tapMode actif : 2e tap = placement ici. Sinon :
-  // 1er tap sur cellule occupée = sélection de l'élève (re-tap = annulation).
-  cell.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-    // Mode appel actif : on laisse le 'click' natif faire toggleAbsence.
-    // Sans cet early return, le tap activerait _tapSelect puis le tap suivant
-    // ferait un échange (= bug tactile en mode appel).
-    if (_appelMode) return;
-    // Ignore les taps sur les contrôles internes (compteurs 📦/📝, bouton ✕ Retirer,
-    // sélecteur tablette, etc.) — leur propre click handler s'en charge.
-    // Sans cet early return, taper sur 📦 d'un élève activait _tapSelect ; le tap suivant
-    // sur 📦 d'un autre élève déclenchait alors un échange involontaire des places.
-    if (e.target.closest('.cctr, .cell-unplace, .isel, button, select, input, .crem-badge')) return;
-    if (_tapMode) {
-      // Re-tap sur la même cellule (= élève déjà sélectionné) → annulation
-      if (sid && _tapMode.sid === sid && _tapMode.fromKey === key) {
-        e.preventDefault();
-        _tapClear();
-        return;
-      }
-      e.preventDefault();
-      _tapTryPlace(cls, key);
-    } else if (sid) {
-      e.preventDefault();
-      _tapSelect(sid, key, cell);
-    }
-  });
+  // (Le glisser tactile des cellules occupées est attaché plus bas, dans la
+  //  branche `if (stu)`, via _tdAttach. Les cellules vides n'ont pas de source
+  //  tactile : elles ne sont que des cibles, résolues par elementFromPoint.)
 
   // Appliquer la coloration selon le mode actif.
   // Priorité : attribut de l'ÉLÈVE (groupe / 1er tag / civilité) ; fallback :
@@ -14820,29 +14859,18 @@ function buildCell(cls, row, col) {
     if (!isGhost) {
       cell.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e, cls, key, stu.id); });
 
-      // Appui long sur mobile → menu contextuel
-      let longPressTimer = null;
-      let longPressMoved = false;
-      cell.addEventListener('touchstart', e => {
-        longPressMoved = false;
-        longPressTimer = setTimeout(() => {
-          if (!longPressMoved) {
-            const t = e.touches[0];
-            const fakeEvt = { clientX: t.clientX, clientY: t.clientY, preventDefault: ()=>{} };
-            showCtxMenu(fakeEvt, cls, key, stu.id);
-          }
-        }, 600);
-      }, { passive: true });
-      cell.addEventListener('touchmove',  () => { longPressMoved = true; clearTimeout(longPressTimer); }, { passive: true });
-      cell.addEventListener('touchend',   () => clearTimeout(longPressTimer), { passive: true });
-      cell.addEventListener('touchcancel',() => clearTimeout(longPressTimer), { passive: true });
+      // Glisser tactile (Touch Events) : appui maintenu → saisie → glisser pour
+      // déplacer/échanger. Appui maintenu PUIS relâché sans bouger → menu contextuel
+      // (remplace l'ancien appui-long 600 ms). Tap rapide → rien.
+      _tdAttach(cell,
+        () => ({ srcType: 'placed', sid: stu.id, fromKey: key }),
+        { onHold: (x, y) => showCtxMenu({ clientX: x, clientY: y, preventDefault: () => {} }, cls, key, stu.id) }
+      );
 
       cell.addEventListener('dragstart', e => {
-        // Sur écran tactile (Surface, etc.), pointerdown peut activer le tap mode
-        // tandis que le navigateur déclenche aussi un drag HTML5. Si on laisse les deux
-        // s'exécuter, on obtient un placement en double (l'élève apparaît à 2 positions).
-        // Règle : tap mode actif → on annule le drag HTML5.
-        if (_tapMode) { e.preventDefault(); return; }
+        // Glisser tactile en cours → annule le drag HTML5 natif (évite le double-trigger
+        // sur les appareils tactiles qui émettent aussi un drag natif sur draggable=true).
+        if (_tdState) { e.preventDefault(); return; }
         drag = { type:'placed', sid: stu.id, fromKey: key };
         e.dataTransfer.effectAllowed = 'move';
         setTimeout(() => cell.style.opacity = '.4', 0);
@@ -15285,7 +15313,6 @@ function renderUnplaced() {
       data-sid="${_escAttr(s.id)}"
       ondragstart="startDragUnplaced(event,'${_escAttr(s.id)}')"
       ondragend="this.classList.remove('dragging')"
-      onpointerdown="tapSelectUnplaced(event,'${_escAttr(s.id)}',this)"
       onclick="unplToggleSelect(event,'${_escAttr(s.id)}')">
       ${otherClsBdg}
       ${s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.7em">G${s.groupe}</span>` : ''}
@@ -15293,6 +15320,12 @@ function renderUnplaced() {
       ${_escAttr(s.prenom)} ${_escAttr(s.nom)}
     </div>`;
   }).join('');
+  // Glisser tactile (Touch Events) sur chaque élève non placé : appui maintenu →
+  // glisser vers une case du plan pour le placer (ou re-déposer dans la liste).
+  // Un tap simple reste géré par onclick=unplToggleSelect (sélection multi).
+  el.querySelectorAll('.us').forEach(usEl => {
+    _tdAttach(usEl, () => ({ srcType: 'unplaced', sid: usEl.dataset.sid }), {});
+  });
   // Purge les sids sélectionnés qui ne sont plus non-placés (= ils viennent
   // d'être placés ailleurs entre 2 renders) puis ré-applique le visuel.
   const stillUnplaced = new Set(list.map(s => s.id));
@@ -15365,9 +15398,9 @@ function renderAttendanceSide() {
 }
 
 function startDragUnplaced(e, sid) {
-  // Tap mode actif (tactile) → on annule le drag HTML5 pour éviter le double-trigger
-  // qui peut placer l'élève en doublon sur Surface Pro / écrans tactiles.
-  if (_tapMode) { e.preventDefault(); return; }
+  // Glisser tactile en cours → annule le drag HTML5 natif (évite le double-trigger
+  // qui peut placer l'élève en doublon sur les écrans tactiles).
+  if (_tdState) { e.preventDefault(); return; }
   // Si l'élève draggé fait partie d'une sélection multi de ≥ 2 élèves, on
   // bascule en mode "drag de lot" : tous les sélectionnés se déplacent ensemble
   // (placement en cascade au drop). Si l'élève draggé n'est PAS sélectionné,
@@ -15406,8 +15439,10 @@ function _unplSelectClear() {
 }
 
 function unplToggleSelect(e, sid) {
-  // Le clic sur un .us déclenche aussi onpointerdown (gérée pour iPad ailleurs).
-  // Sur souris desktop, c'est un clic simple.
+  // Un glisser tactile vient de se terminer → le click synthétique qui suit ne doit
+  // PAS basculer la sélection (sinon glisser un élève le sélectionnerait au passage).
+  if (_tdRecentDrag) { if (e && e.preventDefault) e.preventDefault(); return; }
+  // Sur souris desktop, c'est un clic simple = sélection multi.
   if (e && typeof e.preventDefault === 'function') e.preventDefault();
   if (_unplSelected.has(sid)) _unplSelected.delete(sid);
   else _unplSelected.add(sid);
@@ -15495,21 +15530,6 @@ function _placeBatchCascade(cls, sids, anchorKey) {
   }
 }
 
-// Tap sur un élève du panneau "non placés" — uniquement écrans tactiles
-// (pointerType 'touch' ou 'pen'). Sélectionne l'élève en mode tap-to-place :
-// le prochain tap sur une cellule libre du plan le placera. Re-tap = annulation.
-function tapSelectUnplaced(e, sid, el) {
-  if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-  // Re-tap sur le même élève déjà sélectionné → annulation
-  if (_tapMode && _tapMode.sid === sid && !_tapMode.fromKey) {
-    e.preventDefault();
-    _tapClear();
-    return;
-  }
-  e.preventDefault();
-  _tapSelect(sid, null, el);
-}
-
 function dropToUnplaced(e) {
   e.preventDefault();
   document.getElementById('unpl').classList.remove('drop-zone');
@@ -15518,19 +15538,6 @@ function dropToUnplaced(e) {
   if (!cls) return;
   removeSeat(cls, drag.fromKey);
   drag = null;
-}
-
-// Tap dans la zone "Élèves non placés" — uniquement écrans tactiles. Si un
-// élève PLACÉ est sélectionné en mode tap (depuis une cellule du plan), le
-// dépose ici (= retire de la salle). On ignore les taps qui visent un .us
-// existant (déjà géré par tapSelectUnplaced).
-function tapUnplaceFromZone(e) {
-  if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-  if (!_tapMode || !_tapMode.fromKey) return;
-  // Ignore si le tap visait un élève .us individuel (handler propre)
-  if (e.target && e.target.closest && e.target.closest('.us')) return;
-  e.preventDefault();
-  _tapTryUnplaceTo();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -26449,8 +26456,8 @@ document.addEventListener('keydown', e => {
     const _curTabEl = document.querySelector('.tab.on');
     const _curTabId = _curTabEl ? _curTabEl.id.replace('tab-', '') : '';
     if (_curTabId === 'export-pos') { switchTab('eleves'); return; }
-    // Désélectionne le mode tap-to-place (iPad) si actif
-    if (_tapMode) { _tapClear(); return; }
+    // Annule un glisser tactile en cours (iPad) si actif
+    if (_tdState) { _tdCancel(); return; }
     // 🎲 Carte d'interrogation flottante visible → la fermer en priorité
     {
       const pf = document.getElementById('pick-float');

@@ -396,7 +396,7 @@ Effet sur l'UI quand l'AESH n'est pas présente pour le filtre actif :
 - Élèves liés : badge `🤝 AESH/AESH1/AESH2` rose à côté des autres badges (Plan Prof uniquement).
 - Vue Élève : cellule `AESH` rose simple sans badge.
 - Drag & drop AESH (déplacement / échange avec autre AESH). Drop d'élève sur AESH → toast de refus.
-- Tap-to-place tactile (Surface, iPad) : `_tapMode` étendu — `{aeshIdx, fromKey}` aux côtés de `{sid, fromKey}` ; helpers `_tapSelectAesh` / `_tapTryPlaceAesh`.
+- Glisser tactile (Touch Events) : l'AESH se déplace via `_tdAttach(cell, () => ({srcType:'aesh', aeshIdx, fromKey:key}), {})` — appui maintenu puis glisser (cf. section « Glisser & déposer »).
 - Compteur `tg-count` enrichi : `🧑‍🏫 N/M AESH placées` + `🚫 X AESH absentes` (en mode appel).
 
 ### Mode appel (Phase 2)
@@ -1711,6 +1711,32 @@ Persistance : `localStorage.planClasse_planColorMode`. Setter : `setPlanColorMod
 - 📦 / 📝 −1 : grisés si compteur à 0.
 - ↩ Annuler : grisé si `undoStack` vide.
 - 🎓 Aménagements (sous-menu) : labels « Marquer X » / « Retirer X » selon l'état actuel de chaque statut.
+
+## Glisser & déposer (placement des élèves)
+
+Deux mécanismes coexistent, selon le type de pointeur :
+
+- **Souris / stylet** → drag&drop **HTML5 natif** (`draggable="true"` + `dragstart`/`dragover`/`drop`). Inchangé. Les handlers `dragstart` posent l'objet global `drag = { type:'placed'|'unplaced'|'unplaced-batch'|'aesh', sid?|sids?|aeshIdx?, fromKey? }`, puis `dropOnCell(cls, key)` / `dropAeshOnCell` / `dropToUnplaced` consomment `drag`.
+- **Tactile (doigt, Apple Pencil)** → glisser **maison via Touch Events** (le DnD HTML5 ne marche pas au doigt sur iOS Safari). Remplace l'ancien « tap-tap » (`_tapMode`, supprimé) qui provoquait des déplacements accidentels (tap raté près d'un bouton 📦 → sélection → déplacement au tap suivant).
+
+### Contrôleur tactile `_tdAttach(el, getDesc, opts)`
+Défini juste après la déclaration de `let drag` (~ligne 5430). État global `_tdState` (saisie en cours) + `_tdGhost` (carte fantôme) + `_tdRecentDrag` (neutralise le click synthétique post-glisser).
+- **`getDesc()`** → `{ srcType:'placed'|'unplaced'|'aesh', sid?, aeshIdx?, fromKey? }` (lazy, lu au moment du drop).
+- **`opts.onHold(x,y)`** → callback si saisie PUIS relâché sans bouger (cellules élève : ouvre `showCtxMenu` — remplace l'ancien appui-long 600 ms).
+- Constantes : `_TD_PICKUP_MS=180` (appui maintenu avant saisie), `_TD_MOVE_CANCEL_PX=12` (bouger avant la saisie = défilement → annule), `_TD_DRAG_PX=6` (bouger après la saisie = glisser).
+- Listeners `touchstart/touchmove/touchend/touchcancel` **non passifs** (`{passive:false}`) pour pouvoir bloquer le défilement pendant le glisser (`e.preventDefault()` uniquement une fois la saisie faite).
+- `_tdHitTarget(x,y)` : `elementFromPoint` (fantôme masqué le temps du test) → `.cell[data-key]` de `#tg` ou la zone `#unpl`.
+- `_tdDescToDrag(desc)` → objet `drag` ; respecte la multi-sélection des non-placés (`unplaced-batch`). `_tdDrop(desc,x,y)` pose `drag` puis appelle `dropOnCell`/`dropToUnplaced`.
+- CSS : `.td-ghost` (carte qui suit le doigt), `.td-src` (source estompée), `.td-over` (case survolée).
+
+### Comportements clés
+- **Tap rapide → RIEN** côté placement (corrige le bug du tap-tap : rater un bouton ne déplace plus personne).
+- **Swipe rapide → défilement natif** conservé (le glisser ne démarre qu'après l'appui maintenu de 180 ms).
+- **Appui maintenu + glisser → placement/échange** ; **appui maintenu + relâché sans bouger → menu contextuel** (cellules élève).
+- Points d'entrée câblés : cellules occupées Plan Prof (`buildCell`, branche `if(!isGhost)`), cellules AESH, items « non placés » (`renderUnplaced`, attache JS sur `.us` après render). La **Vue Élève** n'est PAS draggable (projection lecture seule).
+- Garde anti-double : `dragstart` (souris) fait `if (_tdState) { e.preventDefault(); return; }` pour ne pas déclencher un drag natif pendant un glisser tactile (Android émet un drag natif sur appui-long de `draggable=true`).
+- `switchClass` et la touche `Échap` appellent `_tdCancel()` (annule une saisie tactile en cours).
+- ⚠️ Non testable en aperçu desktop sur le ressenti réel iPad — validation finale sur l'appareil. Les `TouchEvent` synthétiques permettent toutefois de vérifier la logique (saisie, échange, annulation, menu contextuel) automatiquement.
 
 ## Conventions de développement
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
