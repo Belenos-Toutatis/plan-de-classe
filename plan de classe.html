@@ -5412,11 +5412,16 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.1.0';
+const APP_VERSION    = '2.1.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-05-30T03:30:00Z';
+const APP_BUILD_DATE = '2026-05-30T05:30:00Z';
+// Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
+// est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
+// inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
+// (sinon faux positif « MAJ disponible » sur sa propre version).
+const APP_UPDATE_TOLERANCE_MS = 10 * 60 * 1000;
 const APP_REPO_USER  = 'Belenos-Toutatis';
 const APP_REPO_NAME  = 'plan-de-classe';
 
@@ -9358,7 +9363,10 @@ async function checkForUpdate() {
     const commitUrl  = data.html_url || `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
     if (!latestDate) throw new Error('Date du dernier commit introuvable');
 
-    const isUpToDate = APP_BUILD_DATE >= latestDate;
+    // Comparaison NUMÉRIQUE (Date.parse gère les décalages +02:00 / Z renvoyés par
+    // GitHub — une comparaison de chaînes serait faussée par le fuseau). À jour tant
+    // que le commit n'est pas plus récent que la date de build au-delà de la tolérance.
+    const isUpToDate = (Date.parse(latestDate) - Date.parse(APP_BUILD_DATE)) <= APP_UPDATE_TOLERANCE_MS;
     const isOnline   = window.location.hostname.endsWith('github.io');
 
     const repoUrl     = `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
@@ -9457,13 +9465,13 @@ async function _passiveUpdateCheck() {
       try { localStorage.setItem(_UPDATE_BADGE_CACHE_KEY, JSON.stringify({ ts: Date.now(), latestDate })); } catch (e) {}
     } catch (e) { return; /* offline ou rate-limit : pas de pastille, on retentera plus tard */ }
   }
-  // Décide d'afficher la pastille
-  if (APP_BUILD_DATE >= latestDate) {
+  // Décide d'afficher la pastille (comparaison numérique + tolérance, cf. checkForUpdate)
+  const ageMs = Date.parse(latestDate) - Date.parse(APP_BUILD_DATE);
+  if (!Number.isFinite(ageMs) || ageMs <= APP_UPDATE_TOLERANCE_MS) {
     btn.classList.remove('has-update');
     btn.title = 'À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour';
     return;
   }
-  const ageMs = Date.parse(latestDate) - Date.parse(APP_BUILD_DATE);
   const shouldShow = isOnline || (Number.isFinite(ageMs) && ageMs >= _UPDATE_BADGE_LOCAL_MS);
   if (shouldShow) {
     btn.classList.add('has-update');

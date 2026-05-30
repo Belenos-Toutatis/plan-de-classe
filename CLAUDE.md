@@ -1089,13 +1089,16 @@ Bouton **🆕 Maj** dans le header → `checkForUpdate()` qui interroge l'API pu
 
 Constantes en haut du `<script>` :
 ```js
-const APP_VERSION    = '2.0.0';                 // semver affiché (PATCH/MINOR/MAJOR)
-const APP_BUILD_DATE = '2026-05-30T02:30:00Z';  // date ISO — sert UNIQUEMENT à la détection MAJ
+const APP_VERSION    = '2.1.1';                 // semver affiché (PATCH/MINOR/MAJOR)
+const APP_BUILD_DATE = '2026-05-30T05:30:00Z';  // date ISO — sert UNIQUEMENT à la détection MAJ
+const APP_UPDATE_TOLERANCE_MS = 10 * 60 * 1000; // marge avant de crier « MAJ dispo »
 const APP_REPO_USER  = 'Belenos-Toutatis';
 const APP_REPO_NAME  = 'plan-de-classe';
 ```
 
-⚠️ **À bumper à chaque push** : `APP_BUILD_DATE` (toujours — sinon la détection signale « MAJ disponible » en boucle), et `APP_VERSION` quand la release le mérite. `APP_BUILD_DATE` doit être ≥ à l'instant réel du push. La comparaison de détection (`checkForUpdate`, `_passiveUpdateCheck`) utilise `APP_BUILD_DATE >= latestCommitDate` ; l'affichage (header chip `v X.Y.Z`, modales, `about-version-disp`) utilise `APP_VERSION`.
+**Comparaison robuste** : la détection (`checkForUpdate`, `_passiveUpdateCheck`) fait `(Date.parse(latestCommit) - Date.parse(APP_BUILD_DATE)) > APP_UPDATE_TOLERANCE_MS` → MAJ dispo. **Numérique via `Date.parse`** (pas une comparaison de chaînes) car GitHub renvoie la date AVEC décalage (`…T07:05:39+02:00`, pas normalisée en `Z`) → une comparaison textuelle serait faussée par le fuseau. La **tolérance** (10 min) absorbe le délai entre « je fige `APP_BUILD_DATE` » et « le commit s'horodate » (sinon faux positif « MAJ dispo » sur sa propre version, cf. incident 2026-05-30 où une date de build estimée 1 h 35 trop tôt déclenchait l'alerte).
+
+⚠️ **À bumper à chaque push** : `APP_BUILD_DATE` (toujours — la régler sur l'**heure UTC réelle** via `date -u +"%Y-%m-%dT%H:%M:%SZ"`, pas une estimation) et `APP_VERSION` quand la release le mérite. L'affichage (header chip `v X.Y.Z`, modales, `about-version-disp`) utilise `APP_VERSION`.
 
 Comportement :
 - ✅ **À jour** : message vert + version locale + date du dernier commit GitHub avec lien vers le commit (SHA tronqué).
