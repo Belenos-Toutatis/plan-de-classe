@@ -1174,6 +1174,25 @@ Apparaît automatiquement après tout placement créant des violations (drag, pa
 - **🎲 Replacer tout aléatoirement** — ouvre la modale `mshuffle` (cf. ci-dessous)
 - **✓ Garder & supprimer les alertes** — `dismissViolations()` met le hash dans `_violationsAcceptedFor` ; tant que le seating ne change pas, plus d'alerte visuelle. Le tooltip mentionne toujours la violation.
 
+### Mode Contraintes in-situ depuis le Plan Prof (`_planCstrMode`)
+
+Bouton **🔒 Contraintes** dans la toolbar Plan Prof (à côté de 🎲 Interroger) → `togglePlanConstraintMode()`. Permet d'éditer les contraintes **pendant la séance** sans aller dans Config Salle. Édite les mêmes modèles : `room.allowedFor[sid]` (places autorisées) et `cls.noNeighbors` (paires à séparer).
+
+Quand actif (`_planCstrMode`), `renderTeacherGrid` route le rendu des cellules vers **`_buildConstraintCell`** (prénom + nom uniquement, sans badges/tablette/compteurs ; AESH et cases vides inertes). Le `#tg` reçoit la classe `.cstr-grid`. Mutuellement exclusif avec le mode appel (entrer dans Contraintes coupe l'appel) et bloqué en consultation snapshot. Quitter via le bouton **✓ Terminer** du bandeau, le bouton toolbar, `Échap`, un changement d'onglet (`showTab`) ou de classe (`switchClass`) — tous appellent `_planCstrExit()` (qui annule un sous-mode non validé).
+
+**Trois états** (`_planCstrSub`) :
+- **`base`** — cliquer un élève → sous-mode `allowed` · glisser un élève sur un autre → sous-mode `pairs`. Les paires existantes (élèves tous deux placés) sont reliées par des **traits SVG pointillés rouges** (surcouche `#cstr-svg` fixe plein écran, `_planCstrDrawPairs`, redessinés au scroll/resize via `_planCstrRedrawLines` en rAF). Les élèves d'une paire ont un liseré rouge (`.cstr-paired`).
+- **`allowed`** (`_planCstrEnterAllowed(sid)`) — peinture clic-glisser des places autorisées de l'élève courant : vert = autorisée (`.cstr-allow`), gris = interdite (`.cstr-forbid`), liseré bleu sur sa place actuelle (`.cstr-current`). Les traits de paires sont **masqués** (gestes cloisonnés). `_planCstrApplyAllowed` + `_planCstrRepaintAllowedStates` (toggle de classes en place, pas de rebuild). Bandeau : **✗ Aucune contrainte** (`_planCstrClearAllowed`) / **↩ Annuler** (`_planCstrCancelAllowed`) / **✓ Valider** (`_planCstrValidateAllowed`).
+- **`pairs`** (`_planCstrTogglePair(cls, a, b)`) — chaque glisser élève→élève crée/retire (toggle) la paire ; on enchaîne. Bandeau : **↩ Annuler** / **✓ Valider**.
+
+**Undo propre** : pendant un sous-mode on mute `S` en direct **sans `save()` ni `pushUndo()`**. À l'entrée, un backup JSON est pris (`_planCstrAllowedBackup` / `_planCstrPairsBackup`). **Valider** = rétablir le backup → `pushUndo()` → appliquer l'état final → `save()` (1 seule entrée d'undo). **Annuler** = restaurer le backup (rien committé).
+
+**Entrées pointer (souris + tactile + stylet) via Pointer Events** — handlers globaux `pointermove`/`pointerup`/`pointercancel` installés une fois (early-return hors mode). `.cstr-grid .cell { touch-action:none }` pour permettre le glisser au doigt sans défilement. Distinction :
+- `pointerdown` sur cellule élève (base/pairs) → `_cstrPtr` ; relâché sans bouger (`!moved`) = **clic** → `allowed` ; relâché après glisser (`moved`, seuil 6px) sur un autre élève placé = **paire**. Un trait orange « pending » (`#cstr-pending`) suit le pointeur pendant le glisser, la cible reçoit `.cstr-pair-target`.
+- `pointerdown` sur cellule en sous-mode `allowed` → `_cstrPaint` ('add'/'remove' selon l'état initial de la case) ; `pointermove` peint les cases survolées (`elementFromPoint`, anti-double via `_cstrPaintLast`).
+
+⚠️ Le ressenti tactile (Surface/iPad) reste à valider sur l'appareil ; la logique (clic, glisser-paire, peinture, annulation) est vérifiée via Pointer Events synthétiques dans l'aperçu desktop.
+
 ## Mélange aléatoire — modale "🔀 Mélanger tout" (`mshuffle`)
 
 Remplace le simple `confirm()` historique. Permet d'ajuster les **règles de répartition spatiale** avant placement, sans toucher aux contraintes (toujours respectées en arrière-plan).

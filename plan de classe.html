@@ -2050,6 +2050,36 @@ kbd {
   .qcm-pcell-name, .qcm-pcell-empty { color: #555 !important; }
 }
 
+/* ─── Mode CONTRAINTES (Plan Prof) ─────────────────────────────────── */
+#cstr-banner{background:#fdeaea;border:1px solid #e74c3c;color:#922b21;padding:8px 14px;display:flex;align-items:center;gap:10px;font-size:.92em;border-radius:4px;margin-bottom:8px;flex-wrap:wrap}
+#cstr-banner strong{font-weight:700}
+#cstr-banner.cstr-banner-allow{background:#eafaf1;border-color:#27ae60;color:#1e8449}
+#cstr-banner.cstr-banner-pairs{background:#fdeaea;border-color:#e74c3c;color:#922b21}
+html[data-theme="dark"] #cstr-banner{background:#3a1f1f !important;border-color:#a04545 !important;color:#f0c9c0 !important}
+html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !important;border-color:#3e8c5e !important;color:#bfe6cf !important}
+
+/* SVG de surcouche : traits pointillés reliant les paires à séparer */
+#cstr-svg{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9985;display:none}
+#cstr-svg.on{display:block}
+#cstr-svg .cstr-pair-line{stroke:#e74c3c;stroke-width:3;stroke-dasharray:7 5;stroke-linecap:round;opacity:.9}
+#cstr-svg .cstr-pending{stroke:#e67e22;stroke-width:3;stroke-dasharray:4 4;stroke-linecap:round;opacity:.85}
+#cstr-svg .cstr-dot{fill:#e74c3c;opacity:.95}
+
+/* Cellules en mode contraintes — touch-action:none sur les cases-tables (sources de
+   glisser / cibles de peinture) mais PAS sur les « sans-table » : on garde ainsi des
+   points d'accroche pour faire défiler la page au doigt pendant l'édition. */
+#tg.cstr-grid .cell:not(.nt){touch-action:none}
+#tg.cstr-grid .cell.cstr-stu{cursor:pointer}
+#tg.cstr-grid .cell.cstr-stu:hover{filter:brightness(.96)}
+#tg.cstr-grid .cell.cstr-inert{cursor:default}
+#tg .cell.cstr-current{outline:3px solid #2980b9 !important;outline-offset:-3px;z-index:11}
+#tg .cell.cstr-allow{background:#d5f5e3 !important;border-color:#27ae60 !important}
+#tg .cell.cstr-forbid{background:#eaecee !important;opacity:.65}
+#tg .cell.cstr-paired{box-shadow:inset 0 0 0 2px #e74c3c}
+#tg .cell.cstr-pair-src{opacity:.5}
+#tg .cell.cstr-pair-target{outline:3px dashed #e74c3c !important;outline-offset:-3px;z-index:11}
+@media print{#cstr-svg{display:none !important}}
+
 </style>
 </head>
 <body>
@@ -2221,6 +2251,7 @@ kbd {
       <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Sauvegarder ou consulter des dispositions de classe">📸 Snapshots</button>
       <button class="btn btn-g btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Mode appel : clic = absent/présent (raccourci touche A)">🙋 Mode appel</button>
       <button class="btn btn-g btn-sm" onclick="openAttendanceModal()" title="Consulter les appels enregistrés">📅 Appels passés</button>
+      <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : cliquez un élève pour ses places autorisées · glissez un élève sur un autre pour les séparer">🔒 Contraintes</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
       <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
       <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Refaire (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
@@ -5188,6 +5219,9 @@ kbd {
 <!-- Wrapper caché hors @media print. Peuplé dynamiquement par printSalleArucoMarkers(). -->
 <div id="am-print"></div>
 
+<!-- ═══════════════ 🔒 CONTRAINTES — surcouche SVG des paires à séparer ═══════════════ -->
+<svg id="cstr-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
 <!-- ═══════════════ 🎲 INTERROGER — carte flottante + traits connecteurs ═══════════════ -->
 <div id="pick-overlay" onclick="_pickHide()" title="Cliquer pour fermer la carte"></div>
 <svg id="pick-svg" xmlns="http://www.w3.org/2000/svg">
@@ -5412,11 +5446,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.1.1';
+const APP_VERSION    = '2.2.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-05-30T05:30:00Z';
+const APP_BUILD_DATE = '2026-05-31T15:33:46Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11309,6 +11343,8 @@ function toast(msg, msOrType=2600) {
 function getCls() { return S.cur ? S.classes[S.cur] : null; }
 
 function showTab(name, btn) {
+  // Quitte le mode contraintes si on s'éloigne du Plan Prof (annule un sous-mode non validé)
+  if (_planCstrMode && name !== 'plan') _planCstrExit();
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
   const tab = document.getElementById('tab-' + name);
@@ -11639,6 +11675,8 @@ function switchClass(id) {
   // SÉCURITÉ : annule tout glisser tactile en cours au changement de classe
   // (évite un dépôt cross-classe si une saisie tactile était amorcée).
   _tdCancel();
+  // Quitte le mode contraintes (annule un sous-mode non validé) au changement de classe
+  if (_planCstrMode) _planCstrExit();
   // Reconstitue l'état post-appel pour la nouvelle classe si un appel actif existe
   // dans son créneau (cf. _restorePostAppelFromAttendance).
   _restorePostAppelFromAttendance();
@@ -14362,13 +14400,29 @@ function renderTeacherGrid() {
   g.style.maxWidth = '';
 
   const aisleRows = _aisleRowsSet(S.salles?.[cls.activeRoom]);
+  g.classList.toggle('cstr-grid', !!_planCstrMode);
   g.innerHTML = '';
   for (let r = rows - 1; r >= 0; r--)
     for (let c = cols - 1; c >= 0; c--) {
-      const cell = buildCell(cls, r, c);
+      const cell = _planCstrMode ? _buildConstraintCell(cls, r, c) : buildCell(cls, r, c);
       if (aisleRows.has(r)) cell.classList.add('aisle-row');
       g.appendChild(cell);
     }
+
+  // Mode contraintes : UI dédiée (bandeau + traits des paires), on court-circuite
+  // le comptage / panneau « non placés » / mode appel (sans objet ici).
+  if (_planCstrMode) {
+    const countEl0 = document.getElementById('tg-count');
+    if (countEl0) countEl0.textContent = '';
+    _planCstrUpdateBanner();
+    _planCstrDrawPairs();
+    const unplBody0 = document.getElementById('unpl-body');
+    if (unplBody0) unplBody0.innerHTML = '<p style="color:#888;font-size:.85em">Mode contraintes actif — édition des places autorisées et des paires à séparer.</p>';
+    const unplSearch0 = document.getElementById('unpl-search'); if (unplSearch0) unplSearch0.style.display = 'none';
+    const attSide0 = document.getElementById('att-side'); if (attSide0) attSide0.innerHTML = '';
+    _updateMovedHighlightBtnUI();
+    return;
+  }
 
   // Comptage élèves (tient compte du filtre groupe actif)
   // En mode tag-seating : on agrège les élèves de TOUTES les classes portant le tag
@@ -14457,6 +14511,454 @@ function renderTeacherGrid() {
   renderAttendanceSide();
   updateAppelBanner();
   _updateMovedHighlightBtnUI();
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODE CONTRAINTES (Plan Prof) — édition in-situ des places
+// autorisées (room.allowedFor) et des paires à séparer (cls.noNeighbors).
+//   • clic sur un élève      → sous-mode « places autorisées » (clic-glisser pour peindre)
+//   • glisser élève → élève  → sous-mode « paires à séparer » (crée/retire la paire)
+// Chaque sous-mode propose Annuler / Valider et revient au mode contraintes de base.
+// Au doigt : appui bref = sélection · appui maintenu + glisser = paire (Pointer Events).
+// ═══════════════════════════════════════════════════════════
+let _planCstrMode = false;             // mode contraintes actif (Plan Prof)
+let _planCstrSub  = 'base';            // 'base' | 'allowed' | 'pairs'
+let _planCstrSid  = null;              // élève en cours d'édition (sous-mode allowed)
+let _planCstrAllowedBackup = null;     // JSON de room.allowedFor[sid] à l'entrée du sous-mode
+let _planCstrPairsBackup   = null;     // JSON de cls.noNeighbors à l'entrée du sous-mode
+let _cstrPtr   = null;                 // suivi pointer pour le glisser de paire { sid, key, srcEl, x0, y0, moved }
+let _cstrPaint = null;                 // 'add' | 'remove' en cours de peinture (sous-mode allowed)
+let _cstrPaintLast = null;             // dernière case peinte (anti double-toggle)
+let _cstrLinesRaf = null;
+
+function togglePlanConstraintMode() {
+  if (_planCstrMode) { _planCstrExit(); return; }
+  _planCstrEnter();
+}
+
+function _planCstrEnter() {
+  const cls = getCls();
+  if (!cls || !cls.activeRoom || !S.salles?.[cls.activeRoom]) {
+    toast('Sélectionnez une classe avec une salle active pour éditer les contraintes.');
+    return;
+  }
+  if (_viewingSnapshot) { toast('Quittez la consultation du snapshot avant d\'éditer les contraintes.'); return; }
+  if (_appelMode) toggleAppelMode();   // les deux modes ne coexistent pas
+  _tdCancel();
+  _planCstrMode = true;
+  _planCstrSub = 'base';
+  _planCstrSid = null;
+  _cstrPtr = null; _cstrPaint = null; _cstrPaintLast = null;
+  window.addEventListener('scroll', _planCstrRedrawLines, true);
+  window.addEventListener('resize', _planCstrRedrawLines);
+  const btn = document.getElementById('btn-cstr-mode');
+  if (btn) { btn.style.background = 'var(--ink-blue)'; btn.style.color = '#fff'; }
+  renderTeacherGrid();
+}
+
+function _planCstrExit() {
+  // Annule un éventuel sous-mode en cours (rétablit l'état d'origine sans commit)
+  if (_planCstrSub === 'allowed') _planCstrRestoreAllowedBackup();
+  else if (_planCstrSub === 'pairs') _planCstrRestorePairsBackup();
+  _planCstrMode = false;
+  _planCstrSub = 'base';
+  _planCstrSid = null;
+  _planCstrAllowedBackup = null;
+  _planCstrPairsBackup = null;
+  _cstrPtr = null; _cstrPaint = null; _cstrPaintLast = null;
+  window.removeEventListener('scroll', _planCstrRedrawLines, true);
+  window.removeEventListener('resize', _planCstrRedrawLines);
+  const b = document.getElementById('cstr-banner'); if (b) b.remove();
+  _planCstrClearLines();
+  const svg = document.getElementById('cstr-svg'); if (svg) svg.classList.remove('on');
+  const g = document.getElementById('tg'); if (g) g.classList.remove('cstr-grid');
+  const btn = document.getElementById('btn-cstr-mode');
+  if (btn) { btn.style.background = ''; btn.style.color = ''; }
+  renderTeacherGrid();
+}
+
+// ── Construction d'une cellule en mode contraintes ──
+function _buildConstraintCell(cls, row, col) {
+  const key = `${row},${col}`;
+  const salle = cls.configuration;
+  const noTbl = (salle.positions_vides || []).includes(key);
+  let sid = cls.seating[key];
+  let stu = sid ? S.eleves[sid] : null;
+  if (stu && !_stuActiveOn(stu)) { sid = null; stu = null; }
+  const room = activeRoomData(cls);
+  const aeshIdxHere = aeshAtKey(cls, key);
+
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.dataset.key = key;
+
+  if (noTbl) { cell.classList.add('nt'); cell.title = 'Pas de table'; return cell; }
+
+  // AESH : inerte (non concernée par les contraintes)
+  if (aeshIdxHere >= 0) {
+    const total = (room && room.aeshCount) || 0;
+    cell.classList.add('aesh', 'cstr-inert');
+    cell.innerHTML = `<span class="cpos">N°${seatLabel(row, col, salle.cols || 10)}</span>` +
+      `<span class="aesh-ico">🧑‍🏫</span><span class="aesh-lbl">${_escAttr(aeshLabel(aeshIdxHere, total))}</span>`;
+    cell.title = 'AESH — non concernée par les contraintes de placement';
+    return cell;
+  }
+
+  // ── Sous-mode « places autorisées » : toutes les cases-tables sont des cibles de peinture ──
+  if (_planCstrSub === 'allowed') {
+    const csid = _planCstrSid;
+    const list = room?.allowedFor?.[csid];
+    const constrained = Array.isArray(list) && list.length > 0;
+    const allowed = constrained ? list.includes(key) : true;
+    cell.classList.add(stu ? 'oc' : 'em');
+    if (constrained) cell.classList.add(allowed ? 'cstr-allow' : 'cstr-forbid');
+    if (csid && sid === csid) cell.classList.add('cstr-current');
+    const occ = stu ? `<div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>` : '';
+    cell.innerHTML = `<span class="cpos">N°${seatLabel(row, col, salle.cols || 10)}</span>${occ}`;
+    const stuName = S.eleves[csid] ? `${S.eleves[csid].prenom} ${S.eleves[csid].nom}` : '?';
+    cell.title = `Place N°${seatLabel(row, col, salle.cols || 10)} — ${constrained ? (allowed ? 'autorisée ✓' : 'non autorisée ✗') : 'libre'} pour ${stuName}` +
+      `\nClic = (dé)autoriser · Clic + glisser = peindre plusieurs cases`;
+    _planCstrAttachAllowedCell(cell, key);
+    return cell;
+  }
+
+  // ── Mode de base / sous-mode « paires » ──
+  if (stu) {
+    cell.classList.add('oc', 'cstr-stu');
+    const np = _planCstrPairCountFor(cls, sid);
+    if (np > 0) cell.classList.add('cstr-paired');
+    cell.innerHTML = `<span class="cpos">N°${seatLabel(row, col, salle.cols || 10)}</span>` +
+      `<div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>`;
+    cell.title = `${stu.prenom} ${stu.nom}\nClic = définir ses places autorisées` +
+      `\nGlisser vers un autre élève = créer / retirer une paire à séparer` +
+      (np > 0 ? `\n🚫 ${np} paire(s) à séparer` : '');
+    _planCstrAttachStudentCell(cell, sid, key);
+  } else {
+    cell.classList.add('em', 'cstr-inert');
+    cell.innerHTML = `<span class="cpos">N°${seatLabel(row, col, salle.cols || 10)}</span>`;
+  }
+  return cell;
+}
+
+function _planCstrPairCountFor(cls, sid) {
+  if (!Array.isArray(cls.noNeighbors)) return 0;
+  return cls.noNeighbors.filter(pk => { const [a, b] = pk.split('|'); return a === sid || b === sid; }).length;
+}
+
+// ── Handlers pointer : cellule élève (base / paires) ──
+function _planCstrAttachStudentCell(cell, sid, key) {
+  cell.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    _cstrPtr = { sid, key, srcEl: cell, x0: e.clientX, y0: e.clientY, moved: false };
+  });
+}
+
+// ── Handlers pointer : cellule cible en sous-mode « allowed » (peinture) ──
+function _planCstrAttachAllowedCell(cell, key) {
+  cell.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    const cls = getCls(); if (!cls) return;
+    const room = activeRoomData(cls); const sid = _planCstrSid;
+    const list = room?.allowedFor?.[sid];
+    const constrained = Array.isArray(list) && list.length > 0;
+    const isAllowedNow = constrained ? list.includes(key) : false;
+    _cstrPaint = isAllowedNow ? 'remove' : 'add';
+    _cstrPaintLast = key;
+    _planCstrApplyAllowed(key, _cstrPaint);
+    _planCstrRepaintAllowedStates();
+  });
+}
+
+function _planCstrApplyAllowed(key, mode) {
+  const cls = getCls(); if (!cls) return;
+  const room = activeRoomData(cls); const sid = _planCstrSid;
+  if (!room.allowedFor) room.allowedFor = {};
+  if (!Array.isArray(room.allowedFor[sid])) room.allowedFor[sid] = [];
+  const list = room.allowedFor[sid];
+  const idx = list.indexOf(key);
+  if (mode === 'add') { if (idx < 0) list.push(key); }
+  else { if (idx >= 0) list.splice(idx, 1); }
+}
+
+// Met à jour en place (sans rebuild complet) les classes allow/forbid de la grille.
+function _planCstrRepaintAllowedStates() {
+  const cls = getCls(); if (!cls) return;
+  const room = activeRoomData(cls); const sid = _planCstrSid;
+  const list = room?.allowedFor?.[sid];
+  const constrained = Array.isArray(list) && list.length > 0;
+  document.querySelectorAll('#tg .cell[data-key]').forEach(cell => {
+    if (cell.classList.contains('nt') || cell.classList.contains('aesh')) return;
+    cell.classList.remove('cstr-allow', 'cstr-forbid');
+    if (constrained) cell.classList.add(list.includes(cell.dataset.key) ? 'cstr-allow' : 'cstr-forbid');
+  });
+  _planCstrUpdateBanner();
+}
+
+// ── Listeners pointer globaux (installés une fois ; inactifs hors mode contraintes) ──
+function _planCstrCellFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return el ? el.closest('#tg .cell[data-key]') : null;
+}
+document.addEventListener('pointermove', e => {
+  if (!_planCstrMode) return;
+  // Peinture des places autorisées
+  if (_cstrPaint) {
+    const cell = _planCstrCellFromPoint(e.clientX, e.clientY);
+    if (cell && cell.dataset.key && cell.dataset.key !== _cstrPaintLast
+        && !cell.classList.contains('nt') && !cell.classList.contains('aesh')) {
+      _planCstrApplyAllowed(cell.dataset.key, _cstrPaint);
+      _cstrPaintLast = cell.dataset.key;
+      _planCstrRepaintAllowedStates();
+    }
+    return;
+  }
+  // Glisser de paire
+  if (_cstrPtr) {
+    const dist = Math.hypot(e.clientX - _cstrPtr.x0, e.clientY - _cstrPtr.y0);
+    if (dist > 6 && !_cstrPtr.moved) { _cstrPtr.moved = true; _cstrPtr.srcEl.classList.add('cstr-pair-src'); }
+    if (_cstrPtr.moved) {
+      _planCstrDrawPending(_cstrPtr.key, e.clientX, e.clientY);
+      document.querySelectorAll('.cstr-pair-target').forEach(x => x.classList.remove('cstr-pair-target'));
+      const cls = getCls();
+      const tgt = _planCstrCellFromPoint(e.clientX, e.clientY);
+      if (cls && tgt && tgt !== _cstrPtr.srcEl) {
+        const tsid = cls.seating[tgt.dataset.key];
+        if (tsid && tsid !== _cstrPtr.sid && S.eleves[tsid] && _stuActiveOn(S.eleves[tsid])) tgt.classList.add('cstr-pair-target');
+      }
+    }
+  }
+});
+document.addEventListener('pointerup', e => {
+  if (!_planCstrMode) return;
+  if (_cstrPaint) { _cstrPaint = null; _cstrPaintLast = null; return; }
+  if (_cstrPtr) {
+    const { sid, srcEl, moved } = _cstrPtr;
+    _cstrPtr = null;
+    if (srcEl) srcEl.classList.remove('cstr-pair-src');
+    _planCstrClearPending();
+    document.querySelectorAll('.cstr-pair-target').forEach(x => x.classList.remove('cstr-pair-target'));
+    const cls = getCls(); if (!cls) return;
+    if (moved) {
+      const tgt = _planCstrCellFromPoint(e.clientX, e.clientY);
+      if (tgt) {
+        const tsid = cls.seating[tgt.dataset.key];
+        if (tsid && tsid !== sid && S.eleves[tsid] && _stuActiveOn(S.eleves[tsid])) {
+          _planCstrTogglePair(cls, sid, tsid);
+        }
+      }
+    } else if (_planCstrSub === 'base') {
+      _planCstrEnterAllowed(sid);
+    }
+  }
+});
+document.addEventListener('pointercancel', () => {
+  if (!_planCstrMode) return;
+  _cstrPaint = null; _cstrPaintLast = null;
+  if (_cstrPtr && _cstrPtr.srcEl) _cstrPtr.srcEl.classList.remove('cstr-pair-src');
+  _cstrPtr = null;
+  _planCstrClearPending();
+  document.querySelectorAll('.cstr-pair-target').forEach(x => x.classList.remove('cstr-pair-target'));
+});
+
+// ── Sous-mode « places autorisées » ──
+function _planCstrEnterAllowed(sid) {
+  if (!sid || !S.eleves[sid]) return;
+  const cls = getCls(); const room = activeRoomData(cls);
+  _planCstrSid = sid;
+  _planCstrSub = 'allowed';
+  _planCstrAllowedBackup = JSON.stringify(room?.allowedFor?.[sid] ?? null);
+  renderTeacherGrid();
+}
+function _planCstrRestoreAllowedBackup() {
+  const cls = getCls(); if (!cls) return;
+  const room = activeRoomData(cls); const sid = _planCstrSid;
+  if (!room || !sid) return;
+  let backup = null;
+  try { backup = JSON.parse(_planCstrAllowedBackup); } catch (_) {}
+  if (!room.allowedFor) room.allowedFor = {};
+  if (Array.isArray(backup) && backup.length) room.allowedFor[sid] = backup;
+  else delete room.allowedFor[sid];
+}
+function _planCstrCancelAllowed() {
+  _planCstrRestoreAllowedBackup();
+  _planCstrSub = 'base'; _planCstrSid = null; _planCstrAllowedBackup = null;
+  renderTeacherGrid();
+  toast('Modifications de places annulées.');
+}
+function _planCstrClearAllowed() {
+  const cls = getCls(); if (!cls) return;
+  const room = activeRoomData(cls); const sid = _planCstrSid;
+  if (room.allowedFor) delete room.allowedFor[sid];
+  _planCstrRepaintAllowedStates();
+  renderTeacherGrid();
+}
+function _planCstrValidateAllowed() {
+  const cls = getCls(); if (!cls) return;
+  const room = activeRoomData(cls); const sid = _planCstrSid;
+  // État final (en mémoire) puis rétablissement du backup pour un undo propre
+  const finalList = (room.allowedFor && Array.isArray(room.allowedFor[sid])) ? room.allowedFor[sid].slice() : null;
+  _planCstrRestoreAllowedBackup();
+  pushUndo();
+  if (!room.allowedFor) room.allowedFor = {};
+  if (finalList && finalList.length) room.allowedFor[sid] = finalList;
+  else delete room.allowedFor[sid];
+  save();
+  _planCstrSub = 'base'; _planCstrSid = null; _planCstrAllowedBackup = null;
+  renderTeacherGrid();
+  const stu = S.eleves[sid];
+  toast(`Places autorisées enregistrées${stu ? ' pour ' + stu.prenom + ' ' + stu.nom : ''}.`);
+}
+
+// ── Sous-mode « paires à séparer » ──
+function _planCstrTogglePair(cls, sidA, sidB) {
+  if (_planCstrSub !== 'pairs') {
+    _planCstrPairsBackup = JSON.stringify(cls.noNeighbors || []);
+    _planCstrSub = 'pairs';
+  }
+  const a = S.eleves[sidA], b = S.eleves[sidB];
+  let added;
+  if (arePairForbidden(cls, sidA, sidB)) { removeNoNeighborPair(cls, sidA, sidB); added = false; }
+  else { addNoNeighborPair(cls, sidA, sidB); added = true; }
+  renderTeacherGrid();
+  if (a && b) toast(added ? `🚫 ${a.prenom} ↔ ${b.prenom} : à séparer` : `${a.prenom} ↔ ${b.prenom} : paire retirée`);
+}
+function _planCstrRestorePairsBackup() {
+  const cls = getCls(); if (!cls) return;
+  let backup = [];
+  try { backup = JSON.parse(_planCstrPairsBackup) || []; } catch (_) {}
+  cls.noNeighbors = backup;
+}
+function _planCstrCancelPairs() {
+  _planCstrRestorePairsBackup();
+  _planCstrSub = 'base'; _planCstrPairsBackup = null;
+  renderTeacherGrid();
+  toast('Modifications de paires annulées.');
+}
+function _planCstrValidatePairs() {
+  const cls = getCls(); if (!cls) return;
+  const finalPairs = (cls.noNeighbors || []).slice();
+  _planCstrRestorePairsBackup();
+  pushUndo();
+  cls.noNeighbors = finalPairs;
+  save();
+  _planCstrSub = 'base'; _planCstrPairsBackup = null;
+  renderTeacherGrid();
+  toast('Paires à séparer enregistrées.');
+}
+
+// ── Bandeau ──
+function _planCstrUpdateBanner() {
+  const tab = document.getElementById('tab-plan'); if (!tab) return;
+  let b = document.getElementById('cstr-banner');
+  if (!_planCstrMode) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'cstr-banner';
+    const firstTb = tab.querySelector('.tb');
+    if (firstTb && firstTb.nextSibling) firstTb.parentNode.insertBefore(b, firstTb.nextSibling);
+    else tab.insertBefore(b, tab.firstChild);
+  }
+  const cls = getCls();
+  if (_planCstrSub === 'allowed') {
+    const stu = S.eleves[_planCstrSid];
+    const room = activeRoomData(cls);
+    const list = room?.allowedFor?.[_planCstrSid];
+    const n = Array.isArray(list) ? list.length : 0;
+    const total = (cls.configuration.rows * cls.configuration.cols) - (cls.configuration.positions_vides || []).length;
+    b.className = 'cstr-banner-allow';
+    b.innerHTML = `<span style="font-size:1.2em">📍</span>
+      <span style="flex:1"><strong>Places autorisées</strong> de <em>${_escAttr(stu ? stu.prenom + ' ' + stu.nom : '?')}</em> — ${n ? n + '/' + total + ' place(s) autorisée(s)' : 'aucune contrainte (peut s\'asseoir partout)'}. Cliquez-glissez les cases.</span>
+      <button class="btn btn-w btn-sm" onclick="_planCstrClearAllowed()" title="Effacer toute contrainte : l'élève pourra s'asseoir partout">✗ Aucune contrainte</button>
+      <button class="btn btn-g btn-sm" onclick="_planCstrCancelAllowed()">↩ Annuler</button>
+      <button class="btn btn-p btn-sm" onclick="_planCstrValidateAllowed()">✓ Valider</button>`;
+  } else if (_planCstrSub === 'pairs') {
+    const nTotal = Array.isArray(cls.noNeighbors) ? cls.noNeighbors.length : 0;
+    b.className = 'cstr-banner-pairs';
+    b.innerHTML = `<span style="font-size:1.2em">🚫</span>
+      <span style="flex:1"><strong>Paires à séparer</strong> — glissez un élève sur un autre pour créer la paire (re-glisser = la retirer). ${nTotal} paire(s) au total.</span>
+      <button class="btn btn-g btn-sm" onclick="_planCstrCancelPairs()">↩ Annuler</button>
+      <button class="btn btn-p btn-sm" onclick="_planCstrValidatePairs()">✓ Valider</button>`;
+  } else {
+    b.className = '';
+    b.innerHTML = `<span style="font-size:1.2em">🔒</span>
+      <span style="flex:1"><strong>Mode contraintes</strong> — <strong>cliquez</strong> un élève pour définir ses places autorisées · <strong>glissez</strong> un élève sur un autre pour les séparer. <span style="color:#922b21">Traits rouges = paires existantes.</span></span>
+      <button class="btn btn-p btn-sm" onclick="_planCstrExit()">✓ Terminer</button>`;
+  }
+}
+
+// ── Traits SVG des paires à séparer ──
+function _cstrSyncSvgViewport() {
+  const svg = document.getElementById('cstr-svg'); if (!svg) return svg;
+  const w = window.innerWidth, h = window.innerHeight;
+  svg.setAttribute('width', w); svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  return svg;
+}
+function _cstrSvgLine(x1, y1, x2, y2, cls2) {
+  const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+  if (cls2) l.setAttribute('class', cls2);
+  return l;
+}
+function _cstrSvgDot(cx, cy) {
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 4);
+  c.setAttribute('class', 'cstr-dot');
+  return c;
+}
+function _planCstrCellOfSid(cls, sid) {
+  for (const [key, s] of Object.entries(cls.seating || {})) {
+    if (s === sid) {
+      const st = S.eleves[sid];
+      if (st && _stuActiveOn(st)) return document.querySelector(`#tg .cell[data-key="${key}"]`);
+    }
+  }
+  return null;
+}
+function _planCstrClearLines() {
+  const svg = document.getElementById('cstr-svg'); if (!svg) return;
+  svg.innerHTML = '';
+}
+function _planCstrDrawPairs() {
+  const svg = _cstrSyncSvgViewport(); if (!svg) return;
+  // Conserve le trait « en cours » (pending) s'il existe
+  const pending = svg.querySelector('#cstr-pending');
+  svg.innerHTML = '';
+  if (pending) svg.appendChild(pending);
+  if (!_planCstrMode || _planCstrSub === 'allowed') { svg.classList.remove('on'); return; }
+  svg.classList.add('on');
+  const cls = getCls();
+  if (!cls || !Array.isArray(cls.noNeighbors)) return;
+  for (const pk of cls.noNeighbors) {
+    const [a, b] = pk.split('|');
+    const ca = _planCstrCellOfSid(cls, a), cb = _planCstrCellOfSid(cls, b);
+    if (!ca || !cb) continue;  // un des deux élèves n'est pas placé / inactif → pas de trait
+    const ra = ca.getBoundingClientRect(), rb = cb.getBoundingClientRect();
+    const ax = ra.left + ra.width / 2, ay = ra.top + ra.height / 2;
+    const bx = rb.left + rb.width / 2, by = rb.top + rb.height / 2;
+    svg.appendChild(_cstrSvgLine(ax, ay, bx, by, 'cstr-pair-line'));
+    svg.appendChild(_cstrSvgDot(ax, ay));
+    svg.appendChild(_cstrSvgDot(bx, by));
+  }
+}
+function _planCstrRedrawLines() {
+  if (_cstrLinesRaf) return;
+  _cstrLinesRaf = requestAnimationFrame(() => { _cstrLinesRaf = null; _planCstrDrawPairs(); });
+}
+function _planCstrDrawPending(srcKey, x, y) {
+  const svg = _cstrSyncSvgViewport(); if (!svg) return;
+  svg.classList.add('on');
+  const cell = document.querySelector(`#tg .cell[data-key="${srcKey}"]`); if (!cell) return;
+  const r = cell.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let p = svg.querySelector('#cstr-pending');
+  if (!p) { p = _cstrSvgLine(cx, cy, x, y, 'cstr-pending'); p.id = 'cstr-pending'; svg.appendChild(p); }
+  p.setAttribute('x1', cx); p.setAttribute('y1', cy); p.setAttribute('x2', x); p.setAttribute('y2', y);
+}
+function _planCstrClearPending() {
+  const p = document.getElementById('cstr-pending'); if (p) p.remove();
 }
 
 // ─── Rendu Plan Prof en MODE CONSULTATION (snapshot positions) ───
@@ -26470,6 +26972,13 @@ document.addEventListener('keydown', e => {
     {
       const pf = document.getElementById('pick-float');
       if (pf && pf.classList.contains('on')) { _pickHide(); return; }
+    }
+    // Mode contraintes (Plan Prof) : Esc → annule le sous-mode en cours, sinon quitte le mode.
+    if (_planCstrMode) {
+      if (_planCstrSub === 'allowed') { _planCstrCancelAllowed(); return; }
+      if (_planCstrSub === 'pairs')   { _planCstrCancelPairs();   return; }
+      _planCstrExit();
+      return;
     }
     // Mode appel actif (Plan Prof) : Esc → quitte le mode appel (équivalent du bouton ↩ Quitter)
     // Si on est en édition d'un appel passé : annule l'édition (cancelEditAttendance) ;
