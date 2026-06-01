@@ -445,8 +445,11 @@ html[data-theme="dark"] .qcm-info-banner a{color:#7fb4d8 !important}
 .svcell .svname{font-size:1.5em;font-weight:800;line-height:1.2;word-break:break-word}
 
 /* ─── TOAST ─── */
-#toast{position:fixed;bottom:18px;right:18px;background:#263545;color:#fff;padding:9px 16px;border-radius:6px;font-size:.88em;opacity:0;transition:opacity .25s;z-index:9999;pointer-events:none;max-width:300px}
+#toast{position:fixed;bottom:18px;right:18px;background:#263545;color:#fff;padding:9px 16px;border-radius:6px;font-size:.88em;opacity:0;transition:opacity .25s,bottom .2s;z-index:9999;pointer-events:none;max-width:300px}
 #toast.on{opacity:1}
+/* Sonomètre actif : son widget occupe le coin bas-droite → on remonte les toasts
+   juste au-dessus pour ne pas le recouvrir. */
+body.noise-widget-on #toast{bottom:112px}
 
 /* ─── PRINT AREA ─── */
 #pa{display:none}
@@ -5542,11 +5545,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.3.0';
+const APP_VERSION    = '2.3.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-01T17:30:00Z';
+const APP_BUILD_DATE = '2026-06-01T21:15:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -23869,12 +23872,24 @@ function updateAutoSyncUI() {
   if (ind && !autoSyncEnabled) ind.textContent = '';
 }
 
-function _showAutoSyncStatus(msg) {
+function _showAutoSyncStatus(msg, title) {
   const ind = document.getElementById('autosync-ind');
   if (!ind) return;
   ind.textContent = msg;
+  ind.title = title || '';            // info-bulle détaillée (vide = pas d'info)
+  ind.style.cursor = title ? 'help' : '';
   ind.style.opacity = '1';
   setTimeout(() => { ind.style.opacity = '0.5'; }, 3000);
+}
+
+// Libellé lisible d'une erreur d'écriture (pour l'info-bulle de « écriture KO »).
+function _autoSaveErrLabel(e) {
+  const n = (e && e.name) || '';
+  if (n === 'NoModificationAllowedError' || n === 'InvalidStateError') return 'fichier verrouillé (synchro en cours ?)';
+  if (n === 'NotFoundError')   return 'fichier/dossier introuvable (déplacé par la synchro ?)';
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'autorisation du dossier à ré-accorder (📂 Ouvrir)';
+  if (n === 'QuotaExceededError') return 'espace disque insuffisant';
+  return n || (e && e.message) || 'erreur inconnue';
 }
 
 async function toggleAutoSync() {
@@ -23894,6 +23909,7 @@ async function toggleAutoSync() {
     autoSyncEnabled = false;
     localStorage.setItem('planClasse_autoSync', '0');
     if (_autoSaveTimer) { clearTimeout(_autoSaveTimer); _autoSaveTimer = null; }
+    if (_autoSaveRetryTimer) { clearTimeout(_autoSaveRetryTimer); _autoSaveRetryTimer = null; }
     updateAutoSyncUI();
     toast('🔄 Sync auto désactivée');
   }
@@ -23903,14 +23919,17 @@ async function toggleAutoSync() {
 // Timestamp du moment où une modif locale a été demandée (utilisé pour avertir
 // l'utilisateur du nombre de secondes de modifs non écrites en cas de reload détecté)
 let _autoSavePendingSince = 0;
+let _autoSaveRetryTimer = null; // reprise unique programmée après un « écriture KO »
 function autoSaveSchedule(delay = 5000) {
   if (!autoSyncEnabled || !dirHandle) return;
+  // Une nouvelle modif arrive : annule une reprise en attente (la prochaine écriture la couvre)
+  if (_autoSaveRetryTimer) { clearTimeout(_autoSaveRetryTimer); _autoSaveRetryTimer = null; }
   if (!_autoSaveTimer) _autoSavePendingSince = Date.now(); // début d'une nouvelle fenêtre d'attente
   if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(autoSaveDoIt, delay);
+  _autoSaveTimer = setTimeout(() => autoSaveDoIt(false), delay);
 }
 
-async function autoSaveDoIt() {
+async function autoSaveDoIt(isRetry) {
   _autoSaveTimer = null;
   _autoSavePendingSince = 0; // plus de modifs en attente
   if (!autoSyncEnabled || !dirHandle) return;
@@ -23947,11 +23966,24 @@ async function autoSaveDoIt() {
       } catch (e) { console.warn('Backup échoué :', e); }
     }
 
+    if (_autoSaveRetryTimer) { clearTimeout(_autoSaveRetryTimer); _autoSaveRetryTimer = null; } // écriture OK → plus de reprise
     const t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     _showAutoSyncStatus(`💾 ${t}`);
   } catch (e) {
     console.warn('Auto-save échoué :', e);
-    _showAutoSyncStatus('⚠️ écriture KO');
+    const label = _autoSaveErrLabel(e);
+    if (!isRetry) {
+      // 1re tentative ratée : c'est souvent transitoire (verrou Nextcloud, etc.) → on
+      // réessaie une fois automatiquement dans quelques secondes.
+      _showAutoSyncStatus('⚠️ écriture KO',
+        `⚠️ Écriture du fichier de sync échouée : ${label}.\nNouvelle tentative dans 6 s… Tes données sont déjà sauvegardées dans le navigateur.`);
+      if (_autoSaveRetryTimer) clearTimeout(_autoSaveRetryTimer);
+      _autoSaveRetryTimer = setTimeout(() => { _autoSaveRetryTimer = null; autoSaveDoIt(true); }, 6000);
+    } else {
+      // La reprise a aussi échoué : on n'insiste pas (la prochaine modif relancera une écriture).
+      _showAutoSyncStatus('⚠️ écriture KO',
+        `⚠️ Écriture du fichier de sync échouée : ${label}.\nÉchec après reprise. Tes données restent dans le navigateur ; la prochaine modification réessaiera. Détails dans la console (F12).`);
+    }
   }
 }
 
@@ -27162,6 +27194,7 @@ async function startNoiseMeter() {
   _noise.active = true;
   _noise.smooth = 0; _noise.overSince = 0; _noise.lastAlert = 0; _noise.alerting = false;
   const w = document.getElementById('noise-widget'); if (w) w.style.display = '';
+  document.body.classList.add('noise-widget-on'); // remonte les toasts au-dessus du widget
   _noiseUpdateBtn();
   _noiseFrame();
   toast('🎙 Sonomètre activé — micro analysé en local uniquement.');
@@ -27176,6 +27209,7 @@ function stopNoiseMeter() {
   _noise.active = false; _noise.alerting = false; _noise.popup = null;
   _noise.ctx = _noise.analyser = _noise.source = _noise.stream = _noise.buf = _noise.raf = null;
   const w = document.getElementById('noise-widget'); if (w) { w.style.display = 'none'; w.classList.remove('alert'); }
+  document.body.classList.remove('noise-widget-on');
   _noiseUpdateBtn();
 }
 
@@ -27239,7 +27273,7 @@ function _noiseRenderMeters(lvl, thr) {
     if (e) e.textContent = _noise.alerting ? '🤫' : (zone === 'loud' ? '😟' : zone === 'warn' ? '🙂' : '😌');
     const m = d.getElementById('npw-msg');
     if (m) m.textContent = _noise.alerting ? '🤫 Trop de bruit !' : (zone === 'loud' ? 'Trop fort' : zone === 'warn' ? 'Ça monte…' : 'Au calme');
-    if (d.body) d.body.className = _noise.alerting ? 'alert' : '';
+    if (d.body) d.body.classList.toggle('alert', _noise.alerting); // ne PAS écraser .compact
   }
 
   const live = document.getElementById('noise-live-num');
@@ -27275,21 +27309,38 @@ function _noiseUpdateBtn() {
 
 // Remplit le document d'une fenêtre (PiP ou classique) avec la jauge. Styles inline
 // car c'est un document autonome qui n'hérite pas du CSS de l'app.
+// Trois contrôles dans la fenêtre : 🔔/🔕 son, ⊟ compact (peu encombrant), ⛶ agrandir (remplir l'écran).
 function _noiseFillWindow(win, thr) {
   const css = `html,body{height:100%}
+*{box-sizing:border-box}
 body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vh;
   font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f6fa;color:#0e1a26;
-  transition:background .25s;user-select:none;overflow:hidden}
+  transition:background .25s;user-select:none;overflow:hidden;position:relative}
 body.alert{animation:flash .7s ease-in-out infinite}
 @keyframes flash{0%,100%{background:#f4f6fa}50%{background:#ffd9d4}}
+#npw-ctrl{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:10}
+.npw-btn{appearance:none;border:1px solid #c8d2e0;background:rgba(255,255,255,.78);color:#1a252f;
+  border-radius:6px;cursor:pointer;font-size:15px;line-height:1;padding:4px 8px;font-family:inherit}
+.npw-btn:hover{background:#fff}
 #npw-emoji{font-size:22vh;line-height:1}
-#npw-wrap{position:relative;width:84vw;height:11vh;min-height:46px;background:#d6dde6;border-radius:99px;overflow:hidden;border:2px solid #c8d2e0}
+#npw-wrap{position:relative;width:84vw;height:11vh;min-height:40px;background:#d6dde6;border-radius:99px;overflow:hidden;border:2px solid #c8d2e0}
 #npw-fill{height:100%;width:0%;background:#2ecc71;transition:width .12s linear,background-color .2s}
 #npw-thr{position:absolute;top:0;bottom:0;width:4px;background:#0e1a26;opacity:.55}
 #npw-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:17vh;line-height:1}
 #npw-msg{font-size:5vh;font-weight:700;color:#56697f}
-body.alert #npw-msg{color:#e74c3c}`;
-  const body = `<div id="npw-emoji">😌</div>`
+body.alert #npw-msg{color:#e74c3c}
+/* Mode compact : strip horizontal minimal (emoji + barre + nombre), peu encombrant */
+body.compact{flex-direction:row;gap:3vw;padding:0 2vw}
+body.compact #npw-emoji{font-size:11vh}
+body.compact #npw-wrap{flex:1;height:38%;min-height:10px}
+body.compact #npw-num{font-size:15vh}
+body.compact #npw-msg{display:none}`;
+  const body = `<div id="npw-ctrl">`
+    + `<button class="npw-btn" id="npw-sound" title="Couper l'alerte sonore" aria-label="Couper ou réactiver l'alerte sonore">🔔</button>`
+    + `<button class="npw-btn" id="npw-compact" title="Réduire : mode compact, peu encombrant (re-cliquer pour rétablir)" aria-label="Mode compact">⊟</button>`
+    + `<button class="npw-btn" id="npw-max" title="Agrandir : remplir l'écran (re-cliquer pour rétablir)" aria-label="Remplir l'écran">⛶</button>`
+    + `</div>`
+    + `<div id="npw-emoji">😌</div>`
     + `<div id="npw-wrap"><div id="npw-fill"></div><div id="npw-thr" style="left:${thr}%"></div></div>`
     + `<div id="npw-num">0</div><div id="npw-msg">Au calme</div>`;
   try {
@@ -27298,6 +27349,59 @@ body.alert #npw-msg{color:#e74c3c}`;
     const style = d.createElement('style'); style.textContent = css;
     (d.head || d.documentElement).appendChild(style);
     d.body.innerHTML = body;
+    d.body.dataset.size = 'normal';
+    // Les boutons vivent dans la fenêtre séparée : on attache les handlers depuis la
+    // fenêtre principale (le clic a lieu DANS la fenêtre cible).
+    const sb = d.getElementById('npw-sound');
+    if (sb) sb.addEventListener('click', () => _noisePopupToggleSound(win));
+    _noiseUpdateSoundBtn(win);
+    const cb = d.getElementById('npw-compact');
+    if (cb) cb.addEventListener('click', () => _noisePopupToggleCompact(win));
+    const mb = d.getElementById('npw-max');
+    if (mb) mb.addEventListener('click', () => _noisePopupToggleMax(win));
+  } catch (_) {}
+}
+
+// Applique une taille à la fenêtre : 'compact' (mini), 'normal', ou 'max' (remplit
+// l'écran). resizeTo/moveTo fonctionnent pour window.open ET pour le PiP Chrome/Edge.
+// ⚠️ Le vrai plein écran (API Fullscreen / F11) n'est PAS autorisé dans une fenêtre
+// Picture-in-Picture — on « remplit l'écran » par redimensionnement, ce qui reste en
+// plus toujours au premier plan (idéal pour projeter).
+function _noisePopupSetSize(win, mode) {
+  try {
+    const b = win.document.body;
+    b.classList.toggle('compact', mode === 'compact');
+    b.dataset.size = mode;
+    if (mode === 'max') {
+      const sc = win.screen || {};
+      const ax = (typeof sc.availLeft === 'number') ? sc.availLeft : 0;
+      const ay = (typeof sc.availTop  === 'number') ? sc.availTop  : 0;
+      try { win.moveTo(ax, ay); } catch (_) {}
+      try { win.resizeTo(sc.availWidth || 1280, sc.availHeight || 800); } catch (_) {}
+    } else {
+      try { win.resizeTo(mode === 'compact' ? 300 : 480, mode === 'compact' ? 130 : 320); } catch (_) {}
+    }
+  } catch (_) {}
+}
+function _noisePopupCurSize(win) { try { return win.document.body.dataset.size || 'normal'; } catch (_) { return 'normal'; } }
+// ⊟ bascule compact ↔ normal
+function _noisePopupToggleCompact(win) { _noisePopupSetSize(win, _noisePopupCurSize(win) === 'compact' ? 'normal' : 'compact'); }
+// ⛶ bascule « remplir l'écran » ↔ normal
+function _noisePopupToggleMax(win) { _noisePopupSetSize(win, _noisePopupCurSize(win) === 'max' ? 'normal' : 'max'); }
+
+// 🔔/🔕 coupe ou réactive l'alerte sonore (réglage global partagé + persisté).
+function _noisePopupToggleSound(win) {
+  _noiseSettings.soundOn = !_noiseSettings.soundOn;
+  _noiseSaveSettings();
+  _noiseUpdateSoundBtn(win);
+  const so = document.getElementById('noise-sound-on'); if (so) so.checked = _noiseSettings.soundOn; // sync modale réglages
+}
+function _noiseUpdateSoundBtn(win) {
+  try {
+    const b = win.document.getElementById('npw-sound');
+    if (!b) return;
+    b.textContent = _noiseSettings.soundOn ? '🔔' : '🔕';
+    b.title = _noiseSettings.soundOn ? "Couper l'alerte sonore" : "Réactiver l'alerte sonore";
   } catch (_) {}
 }
 
