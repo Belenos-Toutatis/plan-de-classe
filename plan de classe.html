@@ -663,8 +663,8 @@ body.rendu-projecting #mrendu-body table.rendu-tbl thead th{position:sticky;top:
 body.rendu-projecting body::before{display:none}
 /* Toolbar zoom flottante : à gauche de la sortie. Ergonomique pour ajuster
    en direct si la salle est plus longue ou plus courte que prévu. */
-.rendu-zoom-bar{position:fixed;top:18px;right:240px;z-index:9999;display:flex;gap:6px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:8px;padding:6px;box-shadow:0 2px 12px rgba(0,0,0,.3)}
-.rendu-zoom-bar button{padding:8px 12px;border:1px solid var(--rule-line);border-radius:5px;background:var(--paper-warm);color:var(--ink-blue);font-family:var(--font-mono);font-size:1em;font-weight:700;cursor:pointer;min-width:42px}
+.rendu-zoom-bar{position:fixed;top:18px;right:200px;z-index:9999;display:flex;gap:4px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:6px;padding:4px;box-shadow:0 2px 12px rgba(0,0,0,.3)}
+.rendu-zoom-bar button{padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper-warm);color:var(--ink-blue);font-family:var(--font-mono);font-size:.67em;font-weight:700;cursor:pointer;min-width:28px}
 .rendu-zoom-bar button:hover{background:var(--ink-blue);color:#fff}
 .btn-toggle-moved.pulse{animation:btnMovedPulse 0.9s ease-in-out infinite;border-color:#ff1493 !important}
 @keyframes btnMovedPulse{
@@ -2999,12 +2999,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div id="mrendu-body" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);padding:10px"></div>
     <p id="mrendu-hint" style="margin:6px 0 0;font-size:.78em;color:var(--pencil);font-style:italic">Vue épurée pour distribuer les résultats : couleurs supprimées sauf sur les compétences (niveau pédagogique signifiant). Bouton 📽 <strong>Projeter</strong> pour passer en plein écran avec grands caractères, ou 🖨 pour imprimer.</p>
     <div id="mrendu-th-tooltip" style="display:none;position:fixed;z-index:10000;padding:12px 22px;background:var(--paper);border:2px solid var(--ink-blue);border-radius:10px;font-family:var(--font-serif);font-size:2.4em;font-weight:700;color:var(--ink-blue);box-shadow:0 4px 18px rgba(0,0,0,.4);max-width:80vw;pointer-events:none"></div>
-    <div id="mrendu-zoom-bar" class="rendu-zoom-bar" style="display:none">
-      <button onclick="_renduZoom(-1)" title="Réduire la taille (Ctrl-)">🔍−</button>
-      <button onclick="_renduZoom(0)" id="mrendu-zoom-pct" title="Revenir à 100% (Ctrl+0)">100%</button>
-      <button onclick="_renduZoom(1)" title="Agrandir (Ctrl+)">🔍+</button>
+    <div id="mrendu-zoom-bar" class="rendu-zoom-bar" style="display:none" title="Glisser pour déplacer cette barre">
+      <button onclick="_renduClickAllowed()&&_renduZoom(-1)" title="Réduire la taille (Ctrl-)">🔍−</button>
+      <button onclick="_renduClickAllowed()&&_renduZoom(0)" id="mrendu-zoom-pct" title="Revenir à 100% (Ctrl+0)">100%</button>
+      <button onclick="_renduClickAllowed()&&_renduZoom(1)" title="Agrandir (Ctrl+)">🔍+</button>
     </div>
-    <button id="mrendu-exit-project" onclick="_renduExitProject()" title="Quitter la projection (Échap)" style="display:none;position:fixed;top:18px;right:18px;z-index:9999;padding:10px 18px;border:2px solid var(--ink-blue);border-radius:8px;background:var(--paper);color:var(--ink-blue);font-family:var(--font-sans);font-size:1.1em;font-weight:700;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.3)">❌ Quitter la projection</button>
+    <button id="mrendu-exit-project" onclick="_renduClickAllowed()&&_renduExitProject()" title="Quitter la projection (Échap) · glisser pour déplacer" style="display:none;position:fixed;top:18px;right:18px;z-index:9999;padding:7px 12px;border:2px solid var(--ink-blue);border-radius:6px;background:var(--paper);color:var(--ink-blue);font-family:var(--font-sans);font-size:.73em;font-weight:700;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.3)">❌ Quitter la projection</button>
   </div>
 </div>
 
@@ -5545,11 +5545,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.3.4';
+const APP_VERSION    = '2.3.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-01T21:15:00Z';
+const APP_BUILD_DATE = '2026-06-01T22:45:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13354,12 +13354,55 @@ function _renduZoom(delta) {
   else _renduZoomLevel = Math.max(_RENDU_ZOOM_MIN, _renduZoomLevel / _RENDU_ZOOM_STEP);
   _renduApplyZoom();
 }
+// Permet de déplacer les panneaux flottants de la projection (barre de zoom +
+// bouton « Quitter ») au cliquer-glisser, pour dégager ce qui est en dessous.
+// Drag depuis n'importe où sur le panneau ; un seuil distingue clic et glissé,
+// et _renduClickAllowed() neutralise le clic du bouton juste après un glissé.
+let _renduDragMoved = false;
+function _renduClickAllowed() { return !_renduDragMoved; }
+function _renduMakeDraggable(el) {
+  if (!el || el.dataset.dragInit) return;
+  el.dataset.dragInit = '1';
+  el.style.touchAction = 'none';
+  el.style.cursor = 'move';
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const rect = el.getBoundingClientRect();
+    const startX = e.clientX, startY = e.clientY;
+    const baseLeft = rect.left, baseTop = rect.top, w = rect.width, h = rect.height;
+    let moved = false;
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return; // sous le seuil = clic
+      moved = true;
+      el.style.left  = Math.max(2, Math.min(window.innerWidth  - w - 2, baseLeft + dx)) + 'px';
+      el.style.top   = Math.max(2, Math.min(window.innerHeight - h - 2, baseTop  + dy)) + 'px';
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+    };
+    const onUp = () => {
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+      try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+      // Si on a glissé, on bloque le clic synthétique qui suit (sinon zoom/quitter se déclenche).
+      if (moved) { _renduDragMoved = true; setTimeout(() => { _renduDragMoved = false; }, 0); }
+    };
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+  });
+}
+
 function _renduStartProject() {
   document.body.classList.add('rendu-projecting');
   const exitBtn = document.getElementById('mrendu-exit-project');
   if (exitBtn) exitBtn.style.display = '';
   const zoomBar = document.getElementById('mrendu-zoom-bar');
   if (zoomBar) zoomBar.style.display = '';
+  _renduMakeDraggable(zoomBar);
+  _renduMakeDraggable(exitBtn);
   // Le titre principal (h2.rendu-project-title) est désormais injecté dans le
   // flux du tableau par _renduRender (visible via CSS body.rendu-projecting).
   _renduZoomLevel = 1.0;

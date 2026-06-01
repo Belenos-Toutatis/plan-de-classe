@@ -953,6 +953,11 @@ Curseurs seuil (10–100) · durée (1–10 s) · temporisation (5–60 s) + son
 ### État & cycle de vie
 État runtime dans `_noise` (active, starting, popup, ctx, analyser, source, stream, buf, raf, smooth, overSince, lastAlert, alerting, alertClearTimer). `_noise.starting` garde-fou contre un double-clic pendant la demande d'autorisation micro. `stopNoiseMeter()` coupe le flux (`stream.getTracks().stop()`), ferme le ctx, **ferme la popup** si ouverte, cache le widget, reset le bouton. Un `beforeunload` ferme aussi la popup (elle ne serait plus pilotée après un reload). La surveillance **ne survit pas à un reload** (getUserMedia exige un geste utilisateur) ; seuls les réglages persistent. La boucle rAF se met en pause quand la fenêtre principale est en arrière-plan/minimisée (acceptable : l'app est la fenêtre active en classe).
 
+## Projection des bilans (modale `mrendu`, mode plein écran)
+La modale de rendu d'un bilan (`#mrendu`) a un bouton **📽 Projeter** (`_renduStartProject`) qui passe en plein écran grands caractères (classe `body.rendu-projecting`). Deux panneaux flottants apparaissent alors : la **barre de zoom** (`#mrendu-zoom-bar` : 🔍− / 100% / 🔍+) et le bouton **❌ Quitter la projection** (`#mrendu-exit-project`).
+
+**Panneaux déplaçables** (`_renduMakeDraggable(el)`) : on peut les glisser n'importe où (Pointer Events + `setPointerCapture`, `touch-action:none`, `cursor:move`) pour dégager le contenu en dessous. Un **seuil de 5 px** distingue clic et glissé ; après un glissé, le flag `_renduDragMoved` neutralise le clic synthétique du bouton via le garde `_renduClickAllowed()` (présent dans chaque `onclick` : `_renduClickAllowed()&&_renduZoom(...)` / `&&_renduExitProject()`) — sinon zoomer/quitter se déclencherait en fin de glissé. Le glissé bascule le panneau de `right:…` vers `left/top` (borné au viewport). Positions conservées dans la session (styles inline sur l'élément), réinitialisées au reload. Attaché une seule fois via `el.dataset.dragInit`. Raccourcis projection (`_renduProjectEscHandler`, capture) : Échap quitte, Ctrl±/0 zoom.
+
 ## Impressions
 - **Plan Prof** (mode 't') : grille avec noms, n° de tablette ("Tab. N"), badges G1/G2, couleurs de groupe sur les sièges, récap tablettes (CE + G1 + G2 en colonnes) en bas. Format **paysage**.
 - **Plan Élève** (mode 's') : grille avec prénoms en grand. Paysage.
