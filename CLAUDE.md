@@ -281,6 +281,8 @@ Migration auto dans `postLoadHook` (les anciens enregistrements reçoivent `null
 
 ### Helpers
 - **`_stuActiveOn(stu, ymd?)`** — `true` si l'élève est actif à la date donnée (défaut : aujourd'hui). Règle : actif ssi `arrivalDate <= ymd < departureDate` (champs `null` = absence de borne). Placé juste après `todayKey()`.
+- **`_stuDepartedOn(stu, ymd?)`** — `true` si l'élève est **parti** (départ effectif) à la date donnée (`departureDate` non nul ET `ymd >= departureDate`). À distinguer d'un élève « pas encore arrivé » : ce dernier garde sa place réservée, un élève parti voit sa place libérée.
+- **`_freeDepartedSeats(ymd?)`** — libère la place des élèves au départ effectif : retire leur `sid` du `seating` de **chaque salle** + nettoie l'affectation tablette de la place (tous pools/modes). L'élève **reste dans la classe** (notes, bilans, historique, absences conservés) — seule sa chaise sur le plan redevient libre. Idempotent. Appelé dans `postLoadHook()` (rattrape les départs devenus effectifs depuis le dernier chargement, y compris via sync depuis une autre machine) et dans `saveEdit()` (libération immédiate dès qu'un départ devient effectif).
 - **`_stuHasAnyNoteInPeriod(sid, classId, periode)`** — `true` si l'élève a au moins une saisie (note numérique, A ou NN) sur ≥ 1 éval comptée de la classe + période. Permet aux bilans d'inclure les élèves partis qui ont laissé des notes dans la période (un élève parti en cours de S1 figure quand même au bilan S1).
 - **`_periodEndDate(periode)`** — renvoie la date de fin (YYYY-MM-DD) de la période donnée pour l'année scolaire courante. Semestre : S1 → 31/01, S2 → 31/08. Trimestre : T1 → 30/11, T2 → dernier jour de février (gère bissextiles via `new Date(y, 2, 0)`), T3 → 31/08. Période vide (« Toutes ») → fin d'année scolaire (31/08). Logique calquée sur `_currentPeriode` (année scolaire = septembre courant → août suivant).
 
@@ -289,7 +291,9 @@ Migration auto dans `postLoadHook` (les anciens enregistrements reçoivent `null
 - **Modifier élève** (`openEdit`/`saveEdit`, modale `me`) : deux champs date `#es-arrival` et `#es-departure`. Validation : `arrivalDate < departureDate` strict (toast d'erreur sinon).
 
 ### Effets
-- **Plan de classe** (`buildCell`, `renderStudentView`) : si `!_stuActiveOn(stu)`, la cellule est rendue comme vide (le sid reste dans `seating` — c'est un masque d'affichage, l'assignation peut réservir l'élève dès qu'il (re)devient actif).
+- **Plan de classe** (`buildCell`, `renderStudentView`) : si `!_stuActiveOn(stu)`, la cellule est rendue comme vide. Deux cas distincts :
+  - **Pas encore arrivé** (`arrivalDate` future) : le sid **reste** dans `seating` — masque d'affichage, la place lui est réservée et le siège le réaccueille dès qu'il devient actif.
+  - **Parti** (`departureDate` atteinte) : sa place est **réellement libérée** par `_freeDepartedSeats` (sid retiré du `seating` + tablette nettoyée) — la chaise redevient libre (réutilisable au drag&drop, remplie au mélange). Le masque de `buildCell`/`renderStudentView` ne sert plus que de filet pour le court instant entre le passage de la date de départ et le prochain nettoyage (`postLoadHook` / `saveEdit`).
 - **Liste « non placés »** (`renderUnplaced`) : exclut les inactifs (et un sid d'inactif présent dans `seating` ne compte pas comme placé).
 - **Compteur `tg-count`** (Plan Prof) : `inFilter` filtré par `_stuActiveOn` → les inactifs ne sont ni placés ni à placer.
 - **Onglet Élèves** (`renderStudents`) : ligne italique + opacity 0,55 + badge `📅 DD/MM/YYYY` (futur) ou `🚪 DD/MM/YYYY` (parti).
@@ -913,6 +917,39 @@ Placement **adjacent** à la cellule (gap 16px), **côté opposé** à celui de 
 
 ### Filtrage des éligibles (`pickRandomStudent`)
 Tirage uniquement parmi les élèves : placés + dans le filtre groupe actif + non-ULIS/UPE2A + non absents (`_absentToday`).
+
+## 🎙 Sonomètre — surveillance du niveau sonore
+
+Bouton **🎙** dans le header (entre 💾 Données et ⓘ, id `#btn-noise`, `toggleNoiseMeter()`) — donc accessible **sur tous les onglets**. Active la mesure du bruit ambiant via le micro (Web Audio API) et alerte quand le niveau est trop élevé de façon soutenue.
+
+### Confidentialité & contraintes
+- **Analyse 100 % locale, en temps réel** : aucun son enregistré ni transmis. Mentionné dans la modale ⓘ → Vie privée et dans la modale de réglages.
+- `getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}})` — on désactive les traitements pour mesurer le niveau **brut** (l'AGC normaliserait le volume et fausserait le sonomètre).
+- **Contexte sécurisé requis** : HTTPS (GitHub Pages) ou `localhost`. Échoue en `file://` → toast explicite. Toutes les erreurs (refus, indispo) sont catchées en toast, jamais d'exception non gérée.
+
+### Niveau (relatif, pas des dB calibrés)
+`_noiseComputeLevel()` : RMS du signal temporel (`getByteTimeDomainData`) → échelle dB → **0–100** (`(20·log10(rms) + 60) / 60 · 100`, clampé). `_noiseFrame()` (boucle `requestAnimationFrame`) applique un lissage exponentiel (`smooth = smooth·0.75 + raw·0.25`). Pas de vrais décibels → l'utilisateur **calibre le seuil** pour sa salle.
+
+### Logique d'alerte (anti-fausses-alertes)
+Alerte déclenchée seulement si le niveau lissé **≥ seuil pendant ≥ `sustainS`** (défaut 3 s) **ET** que la **temporisation `cooldownS`** (défaut 15 s) depuis la dernière alerte est écoulée. `overSince` (début du dépassement continu) remis à 0 dès que le niveau repasse sous le seuil. `_noiseTriggerAlert()` pose l'état visuel (4 s via `alertClearTimer`) + joue le son ; `cooldownS` empêche le re-déclenchement avant expiration.
+
+### Affichages
+- **Petit widget flottant** (`#noise-widget`, `position:fixed` bas-droite, z 985 < modales) : barre de niveau à 3 zones 🟢 calme / 🟠 animé / 🔴 trop fort (`_noiseZone` : loud si ≥ seuil, warn si ≥ seuil−18, sinon calm), marqueur de seuil, n° de niveau, état texte. Boutons ⚙ (réglages) · 🪟 (fenêtre déplaçable) · ✕ (arrêt). **Alerte visuelle par défaut = le widget passe au rouge** (classe `.alert`, halo pulsant).
+- **Fenêtre flottante projetable** (`noiseOpenWindow()`, async) : ouvre une fenêtre séparée déplaçable sur un 2e écran / vidéoprojecteur. **Deux mécanismes, dans l'ordre :**
+  1. **Picture-in-Picture « document »** (`documentPictureInPicture.requestWindow`) si disponible (Chromium/Edge) → fenêtre **toujours au premier plan** (au-dessus des autres fenêtres/applis). C'est la seule manière fiable d'obtenir l'always-on-top depuis le web — `window.open` ne le permet pas.
+  2. **Repli `window.open`** (popup `sonometre_classe`) si PiP indisponible (Firefox/Safari) → fenêtre déplaçable **mais pas toujours au-dessus**. Si bloquée → toast.
+  - Le contenu est rempli par `_noiseFillWindow(win, thr)` (styles inline + IDs `npw-emoji` / `npw-fill` / `npw-thr` / `npw-num` / `npw-msg`, `body.alert` pour le flash) — partagé entre les deux mécanismes (`document.body.innerHTML` + `<style>` injecté, fonctionne sur l'`about:blank` de window.open comme sur le document PiP).
+  - **L'analyse audio reste dans la fenêtre principale** ; `_noiseRenderMeters` pousse les mises à jour dans `_noise.popup.document` à chaque frame. Re-clic = `focus()`. Fermeture (`pagehide`) → `_noise.popup = null`. Remplace l'ancienne grande jauge plein écran (choix utilisateur). ⚠️ La boucle rAF de la fenêtre principale ralentit si celle-ci est **minimisée** ; en usage normal (app visible sur l'écran 1, fenêtre sur l'écran 2) elle tourne normalement.
+- Bouton header : `.noise-on` (vert, actif) / `.noise-alert` (rouge pulsant, en alerte).
+
+### Alerte sonore (`noisePlayAlert`)
+Carillon **cloche claire** (défaut, B5 + E6 + B5 via oscillateurs sine + enveloppes) ou **bip doux** (`soundType: 'bell' | 'beep'`). Réutilise l'`AudioContext` live, ou en crée un éphémère pour le bouton **▶ Tester** des réglages (fermé après 1,7 s).
+
+### Réglages (modale `mnoise`, `openNoiseSettings()`)
+Curseurs seuil (10–100) · durée (1–10 s) · temporisation (5–60 s) + son on/off + type + test. « Niveau actuel » mis à jour en direct par `_noiseRenderMeters` quand la modale est ouverte. Persistance `localStorage.planClasse_noiseSettings` (`_noiseLoadSettings` au chargement du script, `_noiseSaveSettings` à chaque modif). Défauts `NOISE_DEFAULTS = { threshold:60, sustainS:3, cooldownS:15, soundOn:true, soundType:'bell' }`.
+
+### État & cycle de vie
+État runtime dans `_noise` (active, starting, popup, ctx, analyser, source, stream, buf, raf, smooth, overSince, lastAlert, alerting, alertClearTimer). `_noise.starting` garde-fou contre un double-clic pendant la demande d'autorisation micro. `stopNoiseMeter()` coupe le flux (`stream.getTracks().stop()`), ferme le ctx, **ferme la popup** si ouverte, cache le widget, reset le bouton. Un `beforeunload` ferme aussi la popup (elle ne serait plus pilotée après un reload). La surveillance **ne survit pas à un reload** (getUserMedia exige un geste utilisateur) ; seuls les réglages persistent. La boucle rAF se met en pause quand la fenêtre principale est en arrière-plan/minimisée (acceptable : l'app est la fenêtre active en classe).
 
 ## Impressions
 - **Plan Prof** (mode 't') : grille avec noms, n° de tablette ("Tab. N"), badges G1/G2, couleurs de groupe sur les sièges, récap tablettes (CE + G1 + G2 en colonnes) en bas. Format **paysage**.

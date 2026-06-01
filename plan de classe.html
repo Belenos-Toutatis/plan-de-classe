@@ -1976,6 +1976,30 @@ table.dt tbody td, table.tab-list tbody td, .el-list tbody td, #cls-list tbody t
 .about-section a:hover { color: var(--margin-red); }
 .about-section code { font-family: var(--font-mono); font-size: .9em; }
 
+/* ─── Sonomètre (surveillance du niveau sonore de la classe) ─── */
+/* Petit widget flottant côté prof (z sous les modales 1000, au-dessus du contenu) */
+.noise-widget{position:fixed;right:14px;bottom:14px;z-index:985;width:232px;
+  background:var(--paper-warm);border:1px solid var(--rule-line);border-left:4px solid var(--ink-blue);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-pop);padding:8px 10px;font-family:var(--font-sans);user-select:none}
+.noise-widget.alert{border-color:#e74c3c;border-left-color:#e74c3c;animation:noiseAlertPulse .7s ease-in-out infinite}
+@keyframes noiseAlertPulse{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,.55)}50%{box-shadow:0 0 0 9px rgba(231,76,60,0)}}
+.nw-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.nw-title{font-weight:600;font-size:.85em;color:var(--ink-blue)}
+.nw-actions{display:flex;gap:1px}
+.nw-ic{background:transparent;border:none;cursor:pointer;font-size:.95em;padding:2px 5px;border-radius:3px;color:var(--pencil);line-height:1}
+.nw-ic:hover{background:var(--paper-deep);color:var(--ink-deep)}
+.nw-bar-wrap{position:relative;height:16px;background:var(--paper-deep);border-radius:8px;overflow:hidden}
+.nw-bar{height:100%;width:0%;border-radius:8px;background:#2ecc71;transition:width .12s linear,background-color .2s}
+.nw-bar.calm{background:#2ecc71}.nw-bar.warn{background:#f39c12}.nw-bar.loud{background:#e74c3c}
+.nw-thr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-deep);opacity:.7}
+.nw-foot{display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:.8em}
+.nw-num{font-family:var(--font-mono);font-weight:700;color:var(--ink-deep)}
+.nw-state{font-size:.82em;color:var(--pencil)}
+
+/* Bouton header : états actif / alerte */
+.hdr-btn.noise-on{background:rgba(46,204,113,.35);border-color:#2ecc71}
+.hdr-btn.noise-alert{background:rgba(231,76,60,.5);border-color:#e74c3c;animation:hdrPulse .8s ease-in-out infinite}
+
 /* Style kbd minimaliste pour la liste des raccourcis */
 kbd {
   display: inline-block;
@@ -2123,11 +2147,31 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button id="btn-noise" class="hdr-btn" onclick="toggleNoiseMeter()" title="Sonomètre — surveille le niveau sonore de la classe et alerte quand c'est trop fort. Micro analysé en local uniquement, aucun enregistrement.">🎙</button>
     <button id="btn-about" class="hdr-btn" onclick="openAbout()" title="À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour">ⓘ</button>
     <button id="btn-theme" class="hdr-btn theme-toggle" onclick="toggleAppTheme()" title="Basculer entre thème clair (papier) et sombre (veillée)">◐</button>
   </div>
 </div>
 
+<!-- ═══════════════ SONOMÈTRE (surveillance du niveau sonore) ═══════════════ -->
+<div id="noise-widget" class="noise-widget" style="display:none" aria-live="polite">
+  <div class="nw-head">
+    <span class="nw-title">🎙 Sonomètre</span>
+    <span class="nw-actions">
+      <button class="nw-ic" onclick="openNoiseSettings()" title="Réglages (seuil, durée, son)" aria-label="Réglages du sonomètre">⚙</button>
+      <button class="nw-ic" onclick="noiseOpenWindow()" title="Ouvrir dans une fenêtre flottante toujours au premier plan (Picture-in-Picture sur Chrome/Edge ; repli fenêtre déplaçable sinon)" aria-label="Ouvrir dans une fenêtre flottante toujours au premier plan">🪟</button>
+      <button class="nw-ic" onclick="stopNoiseMeter()" title="Arrêter le sonomètre" aria-label="Arrêter le sonomètre">✕</button>
+    </span>
+  </div>
+  <div class="nw-bar-wrap">
+    <div id="noise-bar" class="nw-bar calm"></div>
+    <div id="noise-threshold-marker" class="nw-thr" style="left:60%"></div>
+  </div>
+  <div class="nw-foot">
+    <span id="noise-level-num" class="nw-num">0</span>
+    <span id="noise-state" class="nw-state">🟢 Calme</span>
+  </div>
+</div>
 <!-- ═══════════════ NAV à deux niveaux (anticipe le 2e volet) ═══════════════ -->
 <nav id="nav">
   <div class="tab-group">
@@ -3455,7 +3499,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <h3>🔒 Vie privée (RGPD)</h3>
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55">Toutes les données restent <strong>dans ton navigateur</strong> (<code>localStorage</code>) et dans les fichiers JSON que tu sauvegardes sur ton ordinateur. Aucun serveur tiers, aucun tracking — la seule requête sortante est optionnelle vers <code>api.github.com</code> pour la vérification des mises à jour.</p>
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55"><strong>Recommandation pour les enseignants français</strong> : sauvegarde le fichier JSON dans ton <strong>Nextcloud académique professionnel</strong> — <a href="https://nuage03.apps.education.fr/" target="_blank" rel="noopener">nuage03.apps.education.fr</a> (Apps Education de l'Éducation nationale). C'est l'environnement institutionnel adapté pour héberger des données personnelles d'élèves (hébergement souverain, conforme RGPD). Active alors la <strong>🔄 Sync auto</strong> en pointant vers le dossier synchronisé localement par le client Nextcloud : tu retrouves tes données sur toutes tes machines (poste prof / portable / domicile) sans transmission à un service tiers.</p>
-      <p style="margin:0;font-size:.92em;line-height:1.55">⚠️ Si tu stockes des données pédagogiques sensibles (PPRE, PPS, PAI, ULIS, absences récurrentes), pense à <strong>déclarer cet outil à ton DPO d'établissement</strong> (un mail à <code>dpo@ac-&lt;ton-académie&gt;.fr</code> suffit en général). Détails complets : <a href="https://github.com/Belenos-Toutatis/plan-de-classe#-vie-privée--rgpd" target="_blank" rel="noopener">README → Vie privée &amp; RGPD</a>.</p>
+      <p style="margin:0 0 6px;font-size:.92em;line-height:1.55">⚠️ Si tu stockes des données pédagogiques sensibles (PPRE, PPS, PAI, ULIS, absences récurrentes), pense à <strong>déclarer cet outil à ton DPO d'établissement</strong> (un mail à <code>dpo@ac-&lt;ton-académie&gt;.fr</code> suffit en général). Détails complets : <a href="https://github.com/Belenos-Toutatis/plan-de-classe#-vie-privée--rgpd" target="_blank" rel="noopener">README → Vie privée &amp; RGPD</a>.</p>
+      <p style="margin:0;font-size:.92em;line-height:1.55">🎙 <strong>Sonomètre</strong> : si tu actives la surveillance du niveau sonore (bouton 🎙 du bandeau), le micro est analysé <strong>en temps réel et en local</strong> — aucun son n'est enregistré ni transmis. L'accès micro exige un contexte sécurisé (HTTPS ou <code>localhost</code>).</p>
     </div>
 
     <div class="about-section">
@@ -3478,6 +3523,57 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div class="ma">
       <button class="btn btn-p" onclick="closeMod2('mabout')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Sonomètre — réglages ── -->
+<div id="mnoise" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:480px;width:100%">
+    <h2>🎙 Sonomètre — réglages</h2>
+    <p style="margin:0 0 10px;font-size:.9em;line-height:1.5;color:var(--pencil)">
+      Calibre le seuil pour <strong>ta</strong> salle : le niveau est <strong>relatif</strong> (pas des décibels calibrés).
+      Observe la jauge au calme puis en activité, et place le seuil juste au-dessus du niveau acceptable.
+    </p>
+    <div style="background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:8px 12px;margin-bottom:12px;text-align:center;font-size:.92em">
+      Niveau actuel : <strong id="noise-live-num" style="font-family:var(--font-mono);font-size:1.2em">—</strong> <span style="color:var(--pencil)">/ 100</span>
+    </div>
+
+    <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
+      Seuil d'alerte : <span id="noise-thr-val" style="font-family:var(--font-mono)">60</span> / 100
+      <input type="range" id="noise-thr-range" min="10" max="100" value="60" oninput="noiseSetThreshold(this.value)" style="width:100%;margin-top:4px">
+    </label>
+    <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
+      Durée avant alerte : <span id="noise-sustain-val" style="font-family:var(--font-mono)">3</span> s
+      <span style="font-weight:normal;color:var(--pencil);font-size:.85em">(évite les bruits ponctuels)</span>
+      <input type="range" id="noise-sustain-range" min="1" max="10" value="3" oninput="noiseSetSustain(this.value)" style="width:100%;margin-top:4px">
+    </label>
+    <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
+      Temporisation entre 2 alertes : <span id="noise-cooldown-val" style="font-family:var(--font-mono)">15</span> s
+      <input type="range" id="noise-cooldown-range" min="5" max="60" value="15" oninput="noiseSetCooldown(this.value)" style="width:100%;margin-top:4px">
+    </label>
+
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">Alerte sonore</legend>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.9em;margin-bottom:8px">
+        <input type="checkbox" id="noise-sound-on" onchange="noiseSetSoundOn(this.checked)"> Activer le son
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <select id="noise-sound-type" onchange="noiseSetSoundType(this.value)" style="padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px">
+          <option value="bell">Cloche claire</option>
+          <option value="beep">Bip doux</option>
+        </select>
+        <button class="btn btn-g btn-sm" onclick="noisePlayAlert(true)">▶ Tester</button>
+      </div>
+    </fieldset>
+
+    <p style="margin:0;font-size:.85em;line-height:1.5;color:var(--pencil)">
+      🔒 Le micro est analysé <strong>en local, en temps réel</strong>. Aucun son n'est enregistré ni transmis.
+      Nécessite HTTPS ou localhost (pas un fichier ouvert en <code>file://</code>).
+    </p>
+
+    <div class="ma">
+      <button class="btn btn-p" onclick="closeMod2('mnoise')">Fermer</button>
     </div>
   </div>
 </div>
@@ -5446,11 +5542,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.2.0';
+const APP_VERSION    = '2.3.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-05-31T15:33:46Z';
+const APP_BUILD_DATE = '2026-06-01T17:30:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -6275,6 +6371,11 @@ function postLoadHook() {
     if ('pairsStrictness' in cls) delete cls.pairsStrictness;
   }
   applyAccessorsAll();
+  // Élèves partis (départ effectif) : on libère leur place sur le plan. Rattrape
+  // les départs devenus effectifs depuis le dernier chargement (y compris saisis
+  // sur une autre machine via la sync). N'affecte PAS les élèves pas encore
+  // arrivés (leur place reste réservée).
+  _freeDepartedSeats();
 }
 
 // Migration : pour chaque room, si encore en format historique (ipads/ipads_g1/ipads_g2),
@@ -12412,6 +12513,11 @@ function saveEdit() {
     _moveStudentToClass(s, newClsId);
   }
 
+  // Départ effectif → libère la place de l'élève sur le plan (sa chaise redevient
+  // libre). Sans effet si le départ est dans le futur : il garde sa place jusqu'à
+  // son dernier jour de présence.
+  _freeDepartedSeats();
+
   closeMod2('me');
   save();
   renderStudents();
@@ -15067,9 +15173,12 @@ function buildCell(cls, row, col) {
   const noTbl = cls.configuration.positions_vides.includes(key);
   let   sid   = cls.seating[key];
   let   stu   = sid ? S.eleves[sid] : null;
-  // Élève pas encore arrivé / déjà parti à la date du jour : on traite la
-  // place comme vide (le sid reste dans seating, c'est purement un masque
-  // d'affichage). Le siège pourra réaccueillir l'élève dès qu'il devient actif.
+  // Élève inactif à la date du jour → place rendue vide.
+  //  - Pas encore arrivé : le sid reste dans seating (masque d'affichage), la
+  //    place lui est réservée et le siège le réaccueille dès qu'il devient actif.
+  //  - Déjà parti : sa place a normalement été libérée par _freeDepartedSeats
+  //    (sid retiré du seating). Le masque ici sert de filet pour le court instant
+  //    entre le passage de la date de départ et le prochain nettoyage.
   if (stu && !_stuActiveOn(stu)) { sid = null; stu = null; }
   const ipad  = ipadGet(cls, key, groupFilter);
   const seatG = (cls.groupes || {})[key] || 0;     // groupe de la PLACE (0=non assigné)
@@ -20492,6 +20601,46 @@ function _stuActiveOn(stu, ymd) {
   if (stu.arrivalDate   && d <  stu.arrivalDate)   return false;
   if (stu.departureDate && d >= stu.departureDate) return false;
   return true;
+}
+
+// True si l'élève est PARTI (départ effectif) à la date `ymd` (défaut aujourd'hui).
+// À distinguer d'un élève « pas encore arrivé » (arrivalDate future) : ce dernier
+// garde sa place réservée sur le plan, alors qu'un élève parti ne reviendra pas →
+// sa place doit être réellement libérée (cf. _freeDepartedSeats).
+function _stuDepartedOn(stu, ymd) {
+  if (!stu || !stu.departureDate) return false;
+  return (ymd || todayKey()) >= stu.departureDate;
+}
+
+// Libère la place des élèves dont le départ est effectif à la date `ymd`
+// (défaut aujourd'hui) : retire le sid du seating de chaque salle + nettoie
+// l'affectation tablette de la place (tous pools/modes). Contrairement au simple
+// masque d'affichage de buildCell/renderStudentView (qui RÉSERVE la place pour un
+// futur arrivant), ici on supprime vraiment l'assignation — un élève parti ne
+// revient pas, sa chaise redevient libre (réutilisable au drag&drop / mélange).
+// L'élève reste dans la classe (notes, bilans, historique, absences conservés).
+// Idempotent. Retourne le nombre de places libérées.
+function _freeDepartedSeats(ymd) {
+  const day = ymd || todayKey();
+  let freed = 0;
+  for (const cls of Object.values(S.classes || {})) {
+    for (const room of Object.values(cls.rooms || {})) {
+      const seating = room && room.seating;
+      if (!seating) continue;
+      for (const [key, sid] of Object.entries(seating)) {
+        if (!_stuDepartedOn(sid ? S.eleves[sid] : null, day)) continue;
+        delete seating[key];
+        for (const pool of Object.values(room.ipadsByPool || {})) {
+          if (!pool) continue;
+          for (const mode of ['ce', 'g1', 'g2', 'g3']) {
+            if (pool[mode]) delete pool[mode][key];
+          }
+        }
+        freed++;
+      }
+    }
+  }
+  return freed;
 }
 
 // Appartenance d'un élève à une classe sur une période donnée.
@@ -26941,6 +27090,297 @@ function loadDemoOnDemand() {
   toast('🧪 Données de démo chargées. Pour récupérer vos données : Ctrl+Z.');
   return true;
 }
+
+// ═══════════════════════════════════════════════════════════
+// SONOMÈTRE — surveillance du niveau sonore de la classe
+// Micro via Web Audio API. Analyse 100 % locale : aucun son enregistré ni
+// transmis. Niveau RELATIF 0–100 (pas des dB calibrés) → seuil calibrable.
+// Alerte visuelle (widget rouge / grande jauge) + sonore quand le seuil est
+// dépassé de façon soutenue, avec temporisation anti-spam.
+// ═══════════════════════════════════════════════════════════
+const NOISE_DEFAULTS = { threshold: 60, sustainS: 3, cooldownS: 15, soundOn: true, soundType: 'bell' };
+let _noiseSettings = { ...NOISE_DEFAULTS };
+let _noise = {
+  active: false, starting: false, popup: null,
+  ctx: null, analyser: null, source: null, stream: null, buf: null, raf: null,
+  smooth: 0, overSince: 0, lastAlert: 0, alerting: false, alertClearTimer: null,
+};
+
+function _noiseLoadSettings() {
+  try {
+    const raw = localStorage.getItem('planClasse_noiseSettings');
+    if (raw) _noiseSettings = { ...NOISE_DEFAULTS, ...JSON.parse(raw) };
+  } catch (_) {}
+}
+function _noiseSaveSettings() {
+  try { localStorage.setItem('planClasse_noiseSettings', JSON.stringify(_noiseSettings)); } catch (_) {}
+}
+
+async function toggleNoiseMeter() {
+  if (_noise.active) { stopNoiseMeter(); return; }
+  await startNoiseMeter();
+}
+
+async function startNoiseMeter() {
+  if (_noise.active || _noise.starting) return; // évite un double-clic pendant la demande d'autorisation
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('⚠ Micro non disponible dans ce navigateur.', 'warn'); return;
+  }
+  _noise.starting = true;
+  let stream;
+  try {
+    // On désactive les traitements (AGC/réduction de bruit) pour mesurer le niveau
+    // brut — sinon le navigateur normalise le volume et fausse le sonomètre.
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+  } catch (e) {
+    const msg = (e && e.name === 'NotAllowedError')
+      ? '⚠ Accès micro refusé. Autorise le micro pour utiliser le sonomètre.'
+      : (!window.isSecureContext
+          ? '⚠ Le micro exige HTTPS ou localhost (pas un fichier ouvert en local).'
+          : '⚠ Micro inaccessible (' + (e && e.name ? e.name : 'erreur') + ').');
+    _noise.starting = false;
+    toast(msg, 'warn'); return;
+  }
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (_) {} }
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    source.connect(analyser); // PAS connecté à destination → pas de larsen/écho
+    _noise.ctx = ctx; _noise.analyser = analyser; _noise.source = source;
+    _noise.stream = stream; _noise.buf = new Uint8Array(analyser.fftSize);
+  } catch (e) {
+    try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+    _noise.starting = false;
+    toast('⚠ Initialisation audio échouée.', 'warn'); return;
+  }
+  _noise.starting = false;
+  _noise.active = true;
+  _noise.smooth = 0; _noise.overSince = 0; _noise.lastAlert = 0; _noise.alerting = false;
+  const w = document.getElementById('noise-widget'); if (w) w.style.display = '';
+  _noiseUpdateBtn();
+  _noiseFrame();
+  toast('🎙 Sonomètre activé — micro analysé en local uniquement.');
+}
+
+function stopNoiseMeter() {
+  if (_noise.raf) cancelAnimationFrame(_noise.raf);
+  if (_noise.alertClearTimer) { clearTimeout(_noise.alertClearTimer); _noise.alertClearTimer = null; }
+  try { if (_noise.stream) _noise.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+  try { if (_noise.ctx) _noise.ctx.close(); } catch (_) {}
+  try { if (_noise.popup && !_noise.popup.closed) _noise.popup.close(); } catch (_) {}
+  _noise.active = false; _noise.alerting = false; _noise.popup = null;
+  _noise.ctx = _noise.analyser = _noise.source = _noise.stream = _noise.buf = _noise.raf = null;
+  const w = document.getElementById('noise-widget'); if (w) { w.style.display = 'none'; w.classList.remove('alert'); }
+  _noiseUpdateBtn();
+}
+
+// Niveau instantané 0–100 dérivé du RMS du signal temporel (échelle ~dB).
+function _noiseComputeLevel() {
+  const a = _noise.analyser, buf = _noise.buf;
+  a.getByteTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+  const rms = Math.sqrt(sum / buf.length);        // 0..~1
+  const db  = 20 * Math.log10(rms + 1e-7);        // ~ -140..0 dBFS
+  const level = (db + 60) / 60 * 100;             // -60 dBFS → 0, 0 dBFS → 100
+  return Math.max(0, Math.min(100, level));
+}
+
+function _noiseFrame() {
+  if (!_noise.active) return;
+  const raw = _noiseComputeLevel();
+  _noise.smooth = _noise.smooth * 0.75 + raw * 0.25; // lissage exponentiel (anti-nervosité)
+  const lvl = Math.round(_noise.smooth);
+  const thr = _noiseSettings.threshold;
+
+  const now = performance.now();
+  if (_noise.smooth >= thr) {
+    if (!_noise.overSince) _noise.overSince = now;
+    if ((now - _noise.overSince) >= _noiseSettings.sustainS * 1000
+        && (now - _noise.lastAlert) >= _noiseSettings.cooldownS * 1000) {
+      _noiseTriggerAlert();
+    }
+  } else {
+    _noise.overSince = 0;
+  }
+
+  _noiseRenderMeters(lvl, thr);
+  _noise.raf = requestAnimationFrame(_noiseFrame);
+}
+
+function _noiseZone(lvl, thr) {
+  if (lvl >= thr) return 'loud';
+  if (lvl >= thr - 18) return 'warn';
+  return 'calm';
+}
+
+function _noiseRenderMeters(lvl, thr) {
+  const zone = _noiseZone(lvl, thr);
+  const bar = document.getElementById('noise-bar');
+  if (bar) { bar.style.width = lvl + '%'; bar.className = 'nw-bar ' + zone; }
+  const mk = document.getElementById('noise-threshold-marker'); if (mk) mk.style.left = thr + '%';
+  const num = document.getElementById('noise-level-num'); if (num) num.textContent = lvl;
+  const st = document.getElementById('noise-state');
+  if (st && !_noise.alerting) st.textContent = zone === 'loud' ? '🔴 Trop fort' : zone === 'warn' ? '🟠 Animé' : '🟢 Calme';
+
+  // Fenêtre déplaçable (2e écran / vidéoprojecteur) — pilotée depuis la fenêtre principale
+  if (_noise.popup && !_noise.popup.closed) {
+    const d = _noise.popup.document;
+    const col = zone === 'loud' ? '#e74c3c' : zone === 'warn' ? '#f39c12' : '#2ecc71';
+    const f = d.getElementById('npw-fill'); if (f) { f.style.width = lvl + '%'; f.style.background = col; }
+    const t = d.getElementById('npw-thr'); if (t) t.style.left = thr + '%';
+    const n = d.getElementById('npw-num'); if (n) n.textContent = lvl;
+    const e = d.getElementById('npw-emoji');
+    if (e) e.textContent = _noise.alerting ? '🤫' : (zone === 'loud' ? '😟' : zone === 'warn' ? '🙂' : '😌');
+    const m = d.getElementById('npw-msg');
+    if (m) m.textContent = _noise.alerting ? '🤫 Trop de bruit !' : (zone === 'loud' ? 'Trop fort' : zone === 'warn' ? 'Ça monte…' : 'Au calme');
+    if (d.body) d.body.className = _noise.alerting ? 'alert' : '';
+  }
+
+  const live = document.getElementById('noise-live-num');
+  const mnoiseOpen = document.getElementById('mnoise');
+  if (live && mnoiseOpen && mnoiseOpen.classList.contains('on')) live.textContent = lvl;
+}
+
+function _noiseTriggerAlert() {
+  _noise.lastAlert = performance.now();
+  _noise.alerting = true;
+  const w = document.getElementById('noise-widget'); if (w) w.classList.add('alert');
+  const st = document.getElementById('noise-state'); if (st) st.textContent = '🤫 Trop de bruit !';
+  _noiseUpdateBtn();
+  if (_noiseSettings.soundOn) noisePlayAlert(false);
+  // L'état "alerte" visuel se retire après 4 s ; la temporisation (cooldown)
+  // empêche tout re-déclenchement avant son expiration.
+  if (_noise.alertClearTimer) clearTimeout(_noise.alertClearTimer);
+  _noise.alertClearTimer = setTimeout(_noiseClearAlertVisual, 4000);
+}
+
+function _noiseClearAlertVisual() {
+  _noise.alerting = false;
+  const w = document.getElementById('noise-widget'); if (w) w.classList.remove('alert');
+  _noiseUpdateBtn();
+}
+
+function _noiseUpdateBtn() {
+  const btn = document.getElementById('btn-noise');
+  if (!btn) return;
+  btn.classList.toggle('noise-on', _noise.active && !_noise.alerting);
+  btn.classList.toggle('noise-alert', _noise.active && _noise.alerting);
+}
+
+// Remplit le document d'une fenêtre (PiP ou classique) avec la jauge. Styles inline
+// car c'est un document autonome qui n'hérite pas du CSS de l'app.
+function _noiseFillWindow(win, thr) {
+  const css = `html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vh;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f6fa;color:#0e1a26;
+  transition:background .25s;user-select:none;overflow:hidden}
+body.alert{animation:flash .7s ease-in-out infinite}
+@keyframes flash{0%,100%{background:#f4f6fa}50%{background:#ffd9d4}}
+#npw-emoji{font-size:22vh;line-height:1}
+#npw-wrap{position:relative;width:84vw;height:11vh;min-height:46px;background:#d6dde6;border-radius:99px;overflow:hidden;border:2px solid #c8d2e0}
+#npw-fill{height:100%;width:0%;background:#2ecc71;transition:width .12s linear,background-color .2s}
+#npw-thr{position:absolute;top:0;bottom:0;width:4px;background:#0e1a26;opacity:.55}
+#npw-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:17vh;line-height:1}
+#npw-msg{font-size:5vh;font-weight:700;color:#56697f}
+body.alert #npw-msg{color:#e74c3c}`;
+  const body = `<div id="npw-emoji">😌</div>`
+    + `<div id="npw-wrap"><div id="npw-fill"></div><div id="npw-thr" style="left:${thr}%"></div></div>`
+    + `<div id="npw-num">0</div><div id="npw-msg">Au calme</div>`;
+  try {
+    const d = win.document;
+    d.title = '🎙 Sonomètre';
+    const style = d.createElement('style'); style.textContent = css;
+    (d.head || d.documentElement).appendChild(style);
+    d.body.innerHTML = body;
+  } catch (_) {}
+}
+
+// Ouvre la jauge dans une fenêtre flottante, déplaçable sur un 2e écran / vidéoprojecteur.
+// Priorité au Picture-in-Picture « document » (TOUJOURS au premier plan, Chromium/Edge) ;
+// repli sur une fenêtre window.open classique (déplaçable mais pas toujours au-dessus).
+// L'analyse audio reste dans la fenêtre principale ; celle-ci pousse les mises à jour
+// dans le document de la fenêtre à chaque frame (_noiseRenderMeters).
+async function noiseOpenWindow() {
+  if (!_noise.active) return;
+  if (_noise.popup && !_noise.popup.closed) { try { _noise.popup.focus(); } catch (_) {} return; }
+  const thr = _noiseSettings.threshold;
+  // 1) Picture-in-Picture document : fenêtre toujours au premier plan.
+  if ('documentPictureInPicture' in window) {
+    try {
+      const pip = await documentPictureInPicture.requestWindow({ width: 480, height: 320 });
+      _noiseFillWindow(pip, thr);
+      _noise.popup = pip;
+      pip.addEventListener('pagehide', () => { _noise.popup = null; });
+      return;
+    } catch (_) { /* refus / indispo → repli fenêtre classique */ }
+  }
+  // 2) Repli : fenêtre classique (déplaçable, mais PAS toujours au premier plan).
+  const w = window.open('', 'sonometre_classe', 'width=520,height=380');
+  if (!w) { toast('⚠ Fenêtre bloquée — autorise les pop-ups pour ce site.', 'warn'); return; }
+  _noiseFillWindow(w, thr);
+  _noise.popup = w;
+  try { w.addEventListener('pagehide', () => { _noise.popup = null; }); } catch (_) {}
+}
+
+// Carillon clair (ou bip doux) généré localement via oscillateurs Web Audio.
+function noisePlayAlert(isTest) {
+  let ctx = _noise.ctx, temp = false;
+  if (!ctx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    ctx = new Ctx(); temp = true;
+  }
+  if (ctx.state === 'suspended') { try { ctx.resume(); } catch (_) {} }
+  const t0 = ctx.currentTime;
+  const blip = (freq, start, dur, peak) => {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t0 + start);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t0 + start); o.stop(t0 + start + dur + 0.03);
+  };
+  if (_noiseSettings.soundType === 'beep') {
+    blip(880, 0, 0.18, 0.22);
+    blip(880, 0.22, 0.18, 0.20);
+  } else { // 'bell' : carillon clair B5 + E6
+    blip(987.77, 0,    0.6, 0.40);
+    blip(1318.51, 0.12, 0.7, 0.34);
+    blip(987.77, 0.5,  0.6, 0.30);
+  }
+  if (temp) setTimeout(() => { try { ctx.close(); } catch (_) {} }, 1700);
+}
+
+function openNoiseSettings() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const txt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('noise-thr-range', _noiseSettings.threshold);       txt('noise-thr-val', _noiseSettings.threshold);
+  set('noise-sustain-range', _noiseSettings.sustainS);    txt('noise-sustain-val', _noiseSettings.sustainS);
+  set('noise-cooldown-range', _noiseSettings.cooldownS);  txt('noise-cooldown-val', _noiseSettings.cooldownS);
+  const so = document.getElementById('noise-sound-on'); if (so) so.checked = _noiseSettings.soundOn;
+  set('noise-sound-type', _noiseSettings.soundType);
+  const live = document.getElementById('noise-live-num');
+  if (live) live.textContent = _noise.active ? Math.round(_noise.smooth) : '—';
+  openMod('mnoise');
+}
+function noiseSetThreshold(v){ _noiseSettings.threshold = parseInt(v,10)||60; const e=document.getElementById('noise-thr-val'); if(e)e.textContent=_noiseSettings.threshold; const mk=document.getElementById('noise-threshold-marker'); if(mk)mk.style.left=_noiseSettings.threshold+'%'; _noiseSaveSettings(); }
+function noiseSetSustain(v){ _noiseSettings.sustainS = parseInt(v,10)||3; const e=document.getElementById('noise-sustain-val'); if(e)e.textContent=_noiseSettings.sustainS; _noiseSaveSettings(); }
+function noiseSetCooldown(v){ _noiseSettings.cooldownS = parseInt(v,10)||15; const e=document.getElementById('noise-cooldown-val'); if(e)e.textContent=_noiseSettings.cooldownS; _noiseSaveSettings(); }
+function noiseSetSoundOn(on){ _noiseSettings.soundOn = !!on; _noiseSaveSettings(); }
+function noiseSetSoundType(t){ _noiseSettings.soundType = (t==='beep'?'beep':'bell'); _noiseSaveSettings(); }
+
+_noiseLoadSettings();
+// La fenêtre déplaçable est pilotée par la fenêtre principale : si celle-ci se
+// recharge ou se ferme, on ferme la popup (elle ne serait plus mise à jour).
+window.addEventListener('beforeunload', () => { try { if (_noise.popup && !_noise.popup.closed) _noise.popup.close(); } catch (_) {} });
 
 // ═══════════════════════════════════════════════════════════
 // KEYBOARD SHORTCUTS
