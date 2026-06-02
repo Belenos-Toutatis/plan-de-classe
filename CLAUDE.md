@@ -944,11 +944,19 @@ Alerte déclenchée seulement si le niveau lissé **≥ seuil pendant ≥ `susta
   - **L'analyse audio reste dans la fenêtre principale** ; `_noiseRenderMeters` pousse les mises à jour dans `_noise.popup.document` à chaque frame — il **toggle uniquement la classe `alert`** (pas `body.className =`, qui écraserait `.compact`). Re-clic sur 🪟 = `focus()`. Fermeture (`pagehide`) → `_noise.popup = null`. Remplace l'ancienne grande jauge plein écran (choix utilisateur). ⚠️ La boucle rAF de la fenêtre principale ralentit si celle-ci est **minimisée** ; en usage normal (app visible sur l'écran 1, fenêtre sur l'écran 2) elle tourne normalement.
 - Bouton header : `.noise-on` (vert, actif) / `.noise-alert` (rouge pulsant, en alerte).
 
-### Alerte sonore (`noisePlayAlert`)
-Carillon **cloche claire** (défaut, B5 + E6 + B5 via oscillateurs sine + enveloppes) ou **bip doux** (`soundType: 'bell' | 'beep'`). Réutilise l'`AudioContext` live, ou en crée un éphémère pour le bouton **▶ Tester** des réglages (fermé après 1,7 s).
+### Alerte sonore (`noisePlayAlert` + `_noiseBuildPattern`)
+Sonneries générées localement aux oscillateurs Web Audio (aucun échantillon). `noisePlayAlert(isTest)` crée un **gain maître** = `volume/100` connecté à `destination`, puis délègue à **`_noiseBuildPattern(type, blip)`** qui programme la série de `blip(freq, start, dur, peak, type?)` du motif choisi et renvoie sa durée totale (sert à fermer l'`AudioContext` éphémère du bouton **▶ Tester**). Réutilise l'`AudioContext` live si présent.
+
+**Catalogue (`_NOISE_SOUND_TYPES`, 10 types) — 2 groupes dans le `<select>`** :
+- **Sons classiques** : `bell` (cloche claire, ding-dong B5+E6 ×3 — défaut), `beep` (4 bips), `chime` (carillon descendant), `alarm` (sirène 2 tons, onde carrée), `digital` (bips numériques carrés), `gong` (fondamentale grave + quinte, triangle), `cuckoo` (tierce sol/mi ×3)
+- **Jeux vidéo rétro** (clins d'œil chiptune courts, ondes carrées) : `pacman`, `mario` (thème), `tetris` (Korobeiniki, domaine public)
+
+**Calibrage saturation** : les pics par `blip` sont réglés pour qu'à **volume 100 %** le motif frôle 0 dBFS (limite de saturation, pics mesurés ~0.8–0.92 en rendu offline), sans clipping > 1.0 ; le gain maître met tout à l'échelle linéairement (volume 0 → silence, pas de son généré). Les ondes carrées/triangle utilisent des pics un peu plus bas que les sinus (plus d'énergie harmonique).
+
+**Helpers d'écriture des motifs** : table `_NOTE_HZ` (nom de note → fréquence, La4=440) + `seq([[freq|nom, dur], …], peak, wave)` interne à `_noiseBuildPattern` (joue chaque note staccato à 90 % du créneau ; `0`/`''` = silence). Les motifs simples appellent `blip` directement.
 
 ### Réglages (modale `mnoise`, `openNoiseSettings()`)
-Curseurs seuil (10–100) · durée (1–10 s) · temporisation (5–60 s) + son on/off + type + test. « Niveau actuel » mis à jour en direct par `_noiseRenderMeters` quand la modale est ouverte. Persistance `localStorage.planClasse_noiseSettings` (`_noiseLoadSettings` au chargement du script, `_noiseSaveSettings` à chaque modif). Défauts `NOISE_DEFAULTS = { threshold:60, sustainS:3, cooldownS:15, soundOn:true, soundType:'bell' }`.
+Curseurs seuil (10–100) · durée (1–10 s) · temporisation (5–60 s) + son on/off + **type (menu groupé)** + **volume (0–100)** + test. Changer le type **ou** bouger le curseur de volume **rejoue un aperçu** (`onchange="… noisePlayAlert(true)"`). « Niveau actuel » mis à jour en direct par `_noiseRenderMeters` quand la modale est ouverte. Persistance `localStorage.planClasse_noiseSettings` (`_noiseLoadSettings` au chargement du script, `_noiseSaveSettings` à chaque modif). Défauts `NOISE_DEFAULTS = { threshold:60, sustainS:3, cooldownS:15, soundOn:true, soundType:'bell', volume:70 }`. `_noiseLoadSettings` **normalise** `soundType` : une valeur devenue invalide (son retiré depuis) retombe sur `'bell'`. `noiseSetVolume(v)` clampe 0–100 ; `noiseSetSoundType(t)` valide contre `_NOISE_SOUND_TYPES`.
 
 ### État & cycle de vie
 État runtime dans `_noise` (active, starting, popup, ctx, analyser, source, stream, buf, raf, smooth, overSince, lastAlert, alerting, alertClearTimer). `_noise.starting` garde-fou contre un double-clic pendant la demande d'autorisation micro. `stopNoiseMeter()` coupe le flux (`stream.getTracks().stop()`), ferme le ctx, **ferme la popup** si ouverte, cache le widget, reset le bouton. Un `beforeunload` ferme aussi la popup (elle ne serait plus pilotée après un reload). La surveillance **ne survit pas à un reload** (getUserMedia exige un geste utilisateur) ; seuls les réglages persistent. La boucle rAF se met en pause quand la fenêtre principale est en arrière-plan/minimisée (acceptable : l'app est la fenêtre active en classe).
@@ -1462,7 +1470,9 @@ Choix persistés dans `_qcmcamState.userPicks = { [rawCsvName]: sid | '__skip__'
 - Boutons « ↻ changer » (re-pick dossier), « ↻ » (refresh), « 📄 Ou un fichier ailleurs… » (fallback `<input type="file">`).
 - Fallback navigateur : si `showDirectoryPicker` indisponible (Safari/Firefox), seul l'input natif est affiché.
 
-**Application** (`_evalQcmcamApply`) : `pushUndo()` une fois, applique `'A'` ou `clamp(score, 0, mn.max)` UNIQUEMENT pour les lignes `match.status === 'ok'` (donc ni les `ambig` non résolus, ni les `none` non résolus, ni les `skip`). Met à jour `mn.max`/`mn.date` selon les choix, save, toast récap.
+**Application** (`_evalQcmcamApply`) : `pushUndo()` une fois, applique `'A'` ou `clamp(score, 0, mn.max)` UNIQUEMENT pour les lignes `match.status === 'ok'` (donc ni les `ambig` non résolus, ni les `none` non résolus, ni les `skip`). Met à jour `mn.max` selon les choix, save, toast récap.
+
+**Date appliquée per-classe** (corrige un bug où la date ne « prenait » pas) : le modèle de dates est per-classe (`_mnDateFor(mn, classId)` lit `mn.dates[classId]` **en priorité**, puis `mn.date`). L'import écrit donc `mn.dates[_clsActive.id] = dateDétectée` et recale `mn.date` globale = max des dates per-classe (cascade fallback). L'aperçu (« remplace … » / « déjà appliquée ») lit aussi `_mnDateFor(mn, cls.id)` — sinon écrire la date globale était sans effet visible quand une date per-classe existait déjà.
 
 ### Bug fix : commentaires d'éval stockés comme string
 
