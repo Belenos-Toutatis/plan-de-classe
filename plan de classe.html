@@ -2161,6 +2161,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div class="nw-head">
     <span class="nw-title">🎙 Sonomètre</span>
     <span class="nw-actions">
+      <button class="nw-ic" id="noise-widget-sound" onclick="_noiseWidgetToggleSound()" title="Couper l'alerte sonore" aria-label="Couper ou réactiver l'alerte sonore">🔔</button>
       <button class="nw-ic" onclick="openNoiseSettings()" title="Réglages (seuil, durée, son)" aria-label="Réglages du sonomètre">⚙</button>
       <button class="nw-ic" onclick="noiseOpenWindow()" title="Ouvrir dans une fenêtre flottante toujours au premier plan (Picture-in-Picture sur Chrome/Edge ; repli fenêtre déplaçable sinon)" aria-label="Ouvrir dans une fenêtre flottante toujours au premier plan">🪟</button>
       <button class="nw-ic" onclick="stopNoiseMeter()" title="Arrêter le sonomètre" aria-label="Arrêter le sonomètre">✕</button>
@@ -5562,11 +5563,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.4.5';
+const APP_VERSION    = '2.4.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-02T16:47:07Z';
+const APP_BUILD_DATE = '2026-06-02T17:12:36Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27259,6 +27260,7 @@ async function startNoiseMeter() {
   _noise.smooth = 0; _noise.overSince = 0; _noise.lastAlert = 0; _noise.alerting = false;
   const w = document.getElementById('noise-widget'); if (w) w.style.display = '';
   document.body.classList.add('noise-widget-on'); // remonte les toasts au-dessus du widget
+  _noiseUpdateWidgetSoundBtn();
   _noiseUpdateBtn();
   _noiseFrame();
   toast('🎙 Sonomètre activé — micro analysé en local uniquement.');
@@ -27457,8 +27459,26 @@ function _noisePopupToggleMax(win) { _noisePopupSetSize(win, _noisePopupCurSize(
 function _noisePopupToggleSound(win) {
   _noiseSettings.soundOn = !_noiseSettings.soundOn;
   _noiseSaveSettings();
-  _noiseUpdateSoundBtn(win);
-  const so = document.getElementById('noise-sound-on'); if (so) so.checked = _noiseSettings.soundOn; // sync modale réglages
+  _noiseSyncSoundUI();
+}
+// Met à jour le bouton 🔔/🔕 du petit widget (bas-droite).
+function _noiseUpdateWidgetSoundBtn() {
+  const b = document.getElementById('noise-widget-sound');
+  if (!b) return;
+  b.textContent = _noiseSettings.soundOn ? '🔔' : '🔕';
+  b.title = _noiseSettings.soundOn ? "Couper l'alerte sonore" : "Réactiver l'alerte sonore";
+}
+// Reflète l'état soundOn sur les 3 surfaces : widget, modale réglages, popup.
+function _noiseSyncSoundUI() {
+  _noiseUpdateWidgetSoundBtn();
+  const so = document.getElementById('noise-sound-on'); if (so) so.checked = _noiseSettings.soundOn;
+  if (_noise.popup && !_noise.popup.closed) _noiseUpdateSoundBtn(_noise.popup);
+}
+// Toggle depuis le bouton 🔔 du petit widget.
+function _noiseWidgetToggleSound() {
+  _noiseSettings.soundOn = !_noiseSettings.soundOn;
+  _noiseSaveSettings();
+  _noiseSyncSoundUI();
 }
 function _noiseUpdateSoundBtn(win) {
   try {
@@ -27616,7 +27636,7 @@ function openNoiseSettings() {
 function noiseSetThreshold(v){ _noiseSettings.threshold = parseInt(v,10)||60; const e=document.getElementById('noise-thr-val'); if(e)e.textContent=_noiseSettings.threshold; const mk=document.getElementById('noise-threshold-marker'); if(mk)mk.style.left=_noiseSettings.threshold+'%'; _noiseSaveSettings(); }
 function noiseSetSustain(v){ _noiseSettings.sustainS = parseInt(v,10)||3; const e=document.getElementById('noise-sustain-val'); if(e)e.textContent=_noiseSettings.sustainS; _noiseSaveSettings(); }
 function noiseSetCooldown(v){ _noiseSettings.cooldownS = parseInt(v,10)||15; const e=document.getElementById('noise-cooldown-val'); if(e)e.textContent=_noiseSettings.cooldownS; _noiseSaveSettings(); }
-function noiseSetSoundOn(on){ _noiseSettings.soundOn = !!on; _noiseSaveSettings(); }
+function noiseSetSoundOn(on){ _noiseSettings.soundOn = !!on; _noiseSaveSettings(); _noiseSyncSoundUI(); }
 function noiseSetSoundType(t){ _noiseSettings.soundType = _NOISE_SOUND_TYPES.includes(t)?t:'bell'; _noiseSaveSettings(); }
 function noiseSetVolume(v){ _noiseSettings.volume = Math.max(0, Math.min(100, parseInt(v,10)||0)); const e=document.getElementById('noise-vol-val'); if(e)e.textContent=_noiseSettings.volume; _noiseSaveSettings(); }
 
