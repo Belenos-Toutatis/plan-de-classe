@@ -949,7 +949,9 @@ Sonneries générées localement aux oscillateurs Web Audio (aucun échantillon)
 
 **Catalogue (`_NOISE_SOUND_TYPES`, 10 types) — 2 groupes dans le `<select>`** :
 - **Sons classiques** : `bell` (cloche claire, ding-dong B5+E6 ×3 — défaut), `beep` (4 bips), `chime` (carillon descendant), `alarm` (sirène 2 tons, onde carrée), `digital` (bips numériques carrés), `gong` (fondamentale grave + quinte, triangle), `cuckoo` (tierce sol/mi ×3)
-- **Jeux vidéo rétro** (clins d'œil chiptune courts, ondes carrées) : `pacman`, `mario` (thème), `tetris` (Korobeiniki, domaine public)
+- **Jeux vidéo rétro** (couplet complet qui se résout, ondes carrées) : `pacman` (jingle d'intro complet ≈ 3 s), `mario` (phrase principale complète ≈ 5 s), `tetris` (Korobeiniki, phrase A résolue sur la tonique ≈ 4,8 s — domaine public). Les thèmes vont **jusqu'au bout de leur couplet** (pas coupés en plein milieu). Le minuteur (cf. section dédiée) en a des versions plus longues distinctes.
+
+**Bascule + arrêt du son** : `noisePlayAlert(isTest)` mémorise le son en cours dans `_noise.curSound = { ctx, master, oscs, temp, closeTimer }`. Un second clic sur **▶ Tester** appelle `_noiseStopSound()` (ramp master → 0 + `osc.stop()` ; ferme le ctx seulement si `temp`, jamais le ctx live de l'analyseur). `_noiseStopSound()` est aussi appelé à la **fermeture de la fenêtre flottante** (handlers `pagehide` PiP + window.open), à la **fermeture des réglages** (`_modalReturnTo['mnoise']`) et dans `stopNoiseMeter()` — couper le son n'arrête jamais l'analyse micro.
 
 **Calibrage saturation** : les pics par `blip` sont réglés pour qu'à **volume 100 %** le motif frôle 0 dBFS (limite de saturation, pics mesurés ~0.8–0.92 en rendu offline), sans clipping > 1.0 ; le gain maître met tout à l'échelle linéairement (volume 0 → silence, pas de son généré). Les ondes carrées/triangle utilisent des pics un peu plus bas que les sinus (plus d'énergie harmonique).
 
@@ -960,6 +962,40 @@ Curseurs seuil (10–100) · durée (1–10 s) · temporisation (5–60 s) + son
 
 ### État & cycle de vie
 État runtime dans `_noise` (active, starting, popup, ctx, analyser, source, stream, buf, raf, smooth, overSince, lastAlert, alerting, alertClearTimer). `_noise.starting` garde-fou contre un double-clic pendant la demande d'autorisation micro. `stopNoiseMeter()` coupe le flux (`stream.getTracks().stop()`), ferme le ctx, **ferme la popup** si ouverte, cache le widget, reset le bouton. Un `beforeunload` ferme aussi la popup (elle ne serait plus pilotée après un reload). La surveillance **ne survit pas à un reload** (getUserMedia exige un geste utilisateur) ; seuls les réglages persistent. La boucle rAF se met en pause quand la fenêtre principale est en arrière-plan/minimisée (acceptable : l'app est la fenêtre active en classe).
+
+## ⏲ Minuteur — compte à rebours
+
+Bouton **⏲** dans le header (à gauche du sonomètre, id `#btn-timer`, `openTimerSettings()`) — accessible sur tous les onglets. Réutilise le moteur de sonneries rétro du sonomètre (`_noiseBuildPattern`, `_NOTE_HZ`, `_NOISE_SOUND_TYPES`) **et** la synthèse vocale du navigateur. Module JS situé juste après le module sonomètre (avant les raccourcis clavier).
+
+### État & réglages
+- `TIMER_DEFAULTS = { soundOn:true, soundType:'mario', volume:80, speechOn:false, announces:[600,300,60], lastDurationS:600 }`. Persisté dans `localStorage.planClasse_timerSettings` (`_timerLoadSettings`/`_timerSaveSettings`). `_timerLoadSettings` normalise `soundType` (repli `'mario'`) et `announces` (entiers > 0, triés desc).
+- `_timer` (état runtime éphémère, **ne survit pas à un reload**) : `running, paused, finished, endTime, remainingMs, totalMs, interval, finalTimer, finalCtx, previewCtx, popup, announced (Set)`.
+- Le décompte est basé sur l'**horloge murale** (`endTime = Date.now() + totalMs`) via `setInterval(_timerTick, 250)` — robuste au throttling d'arrière-plan. Pause : stocke `remainingMs`, clear l'interval ; reprise : recalcule `endTime`.
+
+### Réglages (modale `mtimer`, `openTimerSettings()`)
+- **Durées prédéfinies** : 11 boutons 5→55 min (`timerSetDurationPreset(min)` ferme la modale + démarre aussitôt).
+- **Durée libre** : inputs `#timer-min` / `#timer-sec` + bouton ▶ Démarrer (`timerStartFromInputs()`).
+- **Annonce vocale** : checkbox `#timer-speech-on` + checkboxes des moments (`#timer-announce-opts`, valeurs en secondes 900/600/300/180/120/60/30/10, `timerToggleAnnounce(secs, on)`). Bouton « Tester la voix » (`_timerSpeak`). Avertissement si `speechSynthesis` indisponible.
+- **Sonnerie de fin** : checkbox `#timer-sound-on` + `<select>` type (même catalogue groupé que le sonomètre) + ▶ Tester + volume. Le `<select>` et le volume rejouent un **aperçu court** (`_timerPlaySound`) ; ▶ Tester joue/coupe la sonnerie de fin **réelle** (`_timerTestSound`, bascule).
+- Fermer les réglages (`_modalReturnTo['mtimer']`) coupe tout aperçu/test/voix en cours.
+
+### Annonces vocales (`_timerSpeak`, `_timerAnnounceText`)
+À chaque tick, pour chaque point `p` de `announces`, si `restant ≤ p` et `!announced.has(p)` → marque + `_timerSpeak('Il reste X minutes/secondes')` (si `speechOn`). Au démarrage, les points `≥ durée` sont **pré-amorcés** dans `announced` (pas de « il reste 10 min » sur un minuteur de 10 min). À la fin : `_timerSpeak('Temps écoulé')`. Voix `fr-FR`, `speechSynthesis.cancel()` avant chaque énoncé.
+
+### Sonnerie de fin (`_timerPlayFinal`)
+- **Thèmes** (`_TIMER_THEME_TYPES = ['pacman','mario','tetris']`) → **mélodie longue complétée jouée une seule fois** (`_timerBuildExtendedTheme(type, blip)`, ≈ 10 s pour mario/tetris, ≈ 4,5 s pour pacman) — distincte des couplets plus courts du sonomètre. **On ne répète pas** un fragment.
+- **Sons non-thématiques** → motif court de `_noiseBuildPattern` répété pour couvrir ≈ **6 s**.
+- L'`AudioContext` est mémorisé dans `_timer.finalCtx` → `_timerStopFinalSound()` le ferme pour **couper le son** (fermeture de la fenêtre via `_timerOnPopupClosed`, ✕ via `timerStop`/`_timerStopInternals`). `_timerPlayFinal` coupe une sonnerie précédente avant d'en lancer une nouvelle.
+- `_timerMakeBlip(ctx, master, t0, off)` : fabrique un `blip` décalé de `off` (permet de séquencer les répétitions des sons non-thématiques).
+
+### Surfaces d'affichage
+- **Widget replié** (`#timer-widget`, bas-droite, z 986) : titre déplaçable (`_timerInitWidgetDrag`, glisser par `.tw-head`), grand chiffre `MM:SS` (ou `H:MM:SS`) **cliquable = pause/reprise** (`timerTogglePause`, pas de bouton pause dédié), barre de progression, état (« En cours » / « ⏸ En pause » / « ⏰ Terminé ! »). Boutons : 🗣 voix · 🔔 son · ⚙ réglages · 🪟 fenêtre flottante · ✕.
+- **Fenêtre flottante** (`timerOpenWindow`, `_timerFillWindow`) : Picture-in-Picture prioritaire (toujours au premier plan, Chromium/Edge) ; repli `window.open` sinon ; le widget reste comme secours. Ouverte automatiquement au démarrage (geste utilisateur actif). Contrôles dans la fenêtre (`#tpw-ctrl`) : 🗣 · 🔔 · ⚙ (focus fenêtre principale + `openTimerSettings`) · ⛶ (remplir l'écran via `resizeTo`) · ✕. **Clic n'importe où dans la fenêtre (hors `#tpw-ctrl`) = pause/reprise**. L'analyse/le décompte tournent dans la fenêtre principale ; `_timerRender` pousse les mises à jour vers le document de la fenêtre à chaque tick.
+- **Bascules synchronisées** sur les 3 surfaces via `_timerSyncToggleUI()` (widget, modale, popup). `soundOn`/`speechOn` sont les réglages persistés ; les boutons les togglent directement.
+- Bouton header : `.timer-on` (bleu, en cours) / `.timer-alert` (rouge pulsant, terminé).
+
+### Cycle de vie
+`timerStart(totalSec)` → reset interne, calcule `endTime`, pré-amorce les annonces, affiche le widget (`body.timer-widget-on` remonte les toasts), ouvre la fenêtre flottante, lance l'interval. `timerStop()` → tout couper (interval, son, popup, voix), cacher le widget. `_timerFinish()` → stoppe l'interval, marque `finished`, voix « Temps écoulé », sonnerie de fin. Un `beforeunload` ferme la popup. Fermer **uniquement** la fenêtre flottante (`_timerOnPopupClosed`) coupe son + voix mais **laisse le décompte continuer** dans le widget.
 
 ## Projection des bilans (modale `mrendu`, mode plein écran)
 La modale de rendu d'un bilan (`#mrendu`) a un bouton **📽 Projeter** (`_renduStartProject`) qui passe en plein écran grands caractères (classe `body.rendu-projecting`). Deux panneaux flottants apparaissent alors : la **barre de zoom** (`#mrendu-zoom-bar` : 🔍− / 100% / 🔍+) et le bouton **❌ Quitter la projection** (`#mrendu-exit-project`).

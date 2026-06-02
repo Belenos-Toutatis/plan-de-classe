@@ -2003,6 +2003,32 @@ table.dt tbody td, table.tab-list tbody td, .el-list tbody td, #cls-list tbody t
 .hdr-btn.noise-on{background:rgba(46,204,113,.35);border-color:#2ecc71}
 .hdr-btn.noise-alert{background:rgba(231,76,60,.5);border-color:#e74c3c;animation:hdrPulse .8s ease-in-out infinite}
 
+/* ── Minuteur / compte à rebours — widget flottant (replié dans la page) ── */
+.timer-widget{position:fixed;right:14px;bottom:14px;z-index:986;width:200px;
+  background:var(--paper-warm);border:1px solid var(--rule-line);border-left:4px solid var(--ink-blue);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-pop);padding:8px 10px;font-family:var(--font-sans);user-select:none}
+body.noise-widget-on .timer-widget{bottom:190px}
+body.timer-widget-on #toast{bottom:112px}
+.timer-widget.tw-finished{border-color:#e74c3c;border-left-color:#e74c3c;animation:noiseAlertPulse .7s ease-in-out infinite}
+.tw-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;cursor:move}
+.tw-title{font-weight:600;font-size:.82em;color:var(--ink-blue)}
+.tw-actions{display:flex;gap:0}
+.tw-ic{background:transparent;border:none;cursor:pointer;font-size:.92em;padding:2px 4px;border-radius:3px;color:var(--pencil);line-height:1}
+.tw-ic:hover{background:var(--paper-deep);color:var(--ink-deep)}
+.tw-time{font-family:var(--font-mono);font-weight:800;font-size:2.2em;text-align:center;color:var(--ink-deep);line-height:1.1;letter-spacing:1px;cursor:pointer}
+.timer-widget.tw-finished .tw-time{color:#e74c3c}
+.tw-bar-wrap{position:relative;height:7px;background:var(--paper-deep);border-radius:6px;overflow:hidden;margin-top:5px}
+.tw-bar{height:100%;width:100%;border-radius:6px;background:var(--ink-blue);transition:width .25s linear}
+.timer-widget.tw-finished .tw-bar{background:#e74c3c}
+.tw-foot{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:.76em;color:var(--pencil)}
+.hdr-btn.timer-on{background:rgba(52,152,219,.35);border-color:#3498db}
+.hdr-btn.timer-alert{background:rgba(231,76,60,.5);border-color:#e74c3c;animation:hdrPulse .8s ease-in-out infinite}
+/* Grille des durées prédéfinies dans la modale */
+.timer-presets{display:flex;flex-wrap:wrap;gap:6px}
+.timer-presets button{flex:1 1 60px;min-width:60px}
+.timer-ann-opts{display:flex;flex-wrap:wrap;gap:6px 14px}
+.timer-ann-opts label{display:flex;align-items:center;gap:5px;font-size:.88em;white-space:nowrap}
+
 /* Style kbd minimaliste pour la liste des raccourcis */
 kbd {
   display: inline-block;
@@ -2150,6 +2176,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button id="btn-timer" class="hdr-btn" onclick="openTimerSettings()" title="Compte à rebours / minuteur — durées prédéfinies, annonce vocale du temps restant, sonnerie finale (thèmes rétro). S'ouvre dans une fenêtre flottante déplaçable, toujours au premier plan.">⏲</button>
     <button id="btn-noise" class="hdr-btn" onclick="toggleNoiseMeter()" title="Sonomètre — surveille le niveau sonore de la classe et alerte quand c'est trop fort. Micro analysé en local uniquement, aucun enregistrement.">🎙</button>
     <button id="btn-about" class="hdr-btn" onclick="openAbout()" title="À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour">ⓘ</button>
     <button id="btn-theme" class="hdr-btn theme-toggle" onclick="toggleAppTheme()" title="Basculer entre thème clair (papier) et sombre (veillée)">◐</button>
@@ -2175,6 +2202,22 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <span id="noise-level-num" class="nw-num">0</span>
     <span id="noise-state" class="nw-state">🟢 Calme</span>
   </div>
+</div>
+<!-- ═══════════════ MINUTEUR (compte à rebours) — widget replié dans la page ═══════════════ -->
+<div id="timer-widget" class="timer-widget" style="display:none" aria-live="polite">
+  <div class="tw-head" id="timer-widget-head">
+    <span class="tw-title">⏲ Minuteur</span>
+    <span class="tw-actions">
+      <button class="tw-ic" id="timer-w-speech" onclick="timerToggleSpeech()" title="Couper / activer l'annonce vocale" aria-label="Couper ou activer l'annonce vocale">🗣</button>
+      <button class="tw-ic" id="timer-w-sound" onclick="timerToggleSound()" title="Couper / activer la sonnerie finale" aria-label="Couper ou activer la sonnerie finale">🔔</button>
+      <button class="tw-ic" onclick="openTimerSettings()" title="Réglages (annonce vocale, sonnerie)" aria-label="Réglages du minuteur">⚙</button>
+      <button class="tw-ic" onclick="timerOpenWindow()" title="Ouvrir dans une fenêtre flottante toujours au premier plan" aria-label="Fenêtre flottante">🪟</button>
+      <button class="tw-ic" onclick="timerStop()" title="Arrêter le minuteur" aria-label="Arrêter le minuteur">✕</button>
+    </span>
+  </div>
+  <div class="tw-time" id="timer-w-time" onclick="timerTogglePause()" title="Cliquer pour mettre en pause / reprendre">00:00</div>
+  <div class="tw-bar-wrap"><div class="tw-bar" id="timer-w-bar"></div></div>
+  <div class="tw-foot"><span id="timer-w-state">En cours</span><span id="timer-w-total"></span></div>
 </div>
 <!-- ═══════════════ NAV à deux niveaux (anticipe le 2e volet) ═══════════════ -->
 <nav id="nav">
@@ -3595,6 +3638,103 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div class="ma">
       <button class="btn btn-p" onclick="closeMod2('mnoise')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Minuteur — compte à rebours ── -->
+<div id="mtimer" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:500px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>⏲ Compte à rebours</h2>
+    <p style="margin:0 0 12px;font-size:.9em;line-height:1.5;color:var(--pencil)">
+      Choisis une durée prédéfinie (démarre aussitôt) ou saisis une durée libre.
+      Une fois lancé, le minuteur s'ouvre dans une <strong>fenêtre flottante déplaçable, toujours au premier plan</strong> (Chrome/Edge ; repli fenêtre classique sinon), avec un widget de secours en bas à droite.
+    </p>
+
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">⏱ Durées prédéfinies</legend>
+      <div class="timer-presets">
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(5)">5 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(10)">10 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(15)">15 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(20)">20 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(25)">25 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(30)">30 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(35)">35 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(40)">40 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(45)">45 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(50)">50 min</button>
+        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(55)">55 min</button>
+      </div>
+    </fieldset>
+
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🛠 Durée libre</legend>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="number" id="timer-min" min="0" max="599" value="10" style="width:64px;padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px;font-family:var(--font-mono)"> min
+        <input type="number" id="timer-sec" min="0" max="59" value="0" style="width:64px;padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px;font-family:var(--font-mono)"> s
+        <button class="btn btn-p" style="margin-left:auto" onclick="timerStartFromInputs()">▶ Démarrer</button>
+      </div>
+    </fieldset>
+
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🗣 Annonce vocale</legend>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.9em;margin-bottom:8px">
+        <input type="checkbox" id="timer-speech-on" onchange="timerSetSpeechOn(this.checked)"> Annoncer vocalement le temps restant
+      </label>
+      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px">Déclencher l'annonce quand il reste (plusieurs choix possibles) :</div>
+      <div class="timer-ann-opts" id="timer-announce-opts">
+        <label><input type="checkbox" value="900" onchange="timerToggleAnnounce(this.value,this.checked)"> 15 min</label>
+        <label><input type="checkbox" value="600" onchange="timerToggleAnnounce(this.value,this.checked)"> 10 min</label>
+        <label><input type="checkbox" value="300" onchange="timerToggleAnnounce(this.value,this.checked)"> 5 min</label>
+        <label><input type="checkbox" value="180" onchange="timerToggleAnnounce(this.value,this.checked)"> 3 min</label>
+        <label><input type="checkbox" value="120" onchange="timerToggleAnnounce(this.value,this.checked)"> 2 min</label>
+        <label><input type="checkbox" value="60" onchange="timerToggleAnnounce(this.value,this.checked)"> 1 min</label>
+        <label><input type="checkbox" value="30" onchange="timerToggleAnnounce(this.value,this.checked)"> 30 s</label>
+        <label><input type="checkbox" value="10" onchange="timerToggleAnnounce(this.value,this.checked)"> 10 s</label>
+      </div>
+      <div style="margin-top:8px">
+        <button class="btn btn-g btn-sm" onclick="_timerSpeak('Il reste 5 minutes')">▶ Tester la voix</button>
+        <span id="timer-speech-warn" style="display:none;font-size:.82em;color:var(--margin-red)">⚠ Synthèse vocale indisponible dans ce navigateur.</span>
+      </div>
+    </fieldset>
+
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🔔 Sonnerie de fin</legend>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.9em;margin-bottom:8px">
+        <input type="checkbox" id="timer-sound-on" onchange="timerSetSoundOn(this.checked)"> Jouer un son court à la fin (≈ 7 s)
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <select id="timer-sound-type" onchange="timerSetSoundType(this.value); _timerPlaySound(true)" style="padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px">
+          <optgroup label="Sons classiques">
+            <option value="bell">Cloche claire</option>
+            <option value="beep">Bip doux</option>
+            <option value="chime">Carillon descendant</option>
+            <option value="alarm">Alarme deux tons</option>
+            <option value="digital">Bips numériques</option>
+            <option value="gong">Gong grave</option>
+            <option value="cuckoo">Coucou</option>
+          </optgroup>
+          <optgroup label="Jeux vidéo rétro">
+            <option value="pacman">Pac-Man</option>
+            <option value="mario">Mario — thème</option>
+            <option value="tetris">Tetris</option>
+          </optgroup>
+        </select>
+        <button class="btn btn-g btn-sm" onclick="_timerTestSound()" title="Écouter la sonnerie de fin (re-cliquer pour couper)">▶ Tester</button>
+      </div>
+      <label style="display:block;font-size:.9em;font-weight:600">
+        Volume : <span id="timer-vol-val" style="font-family:var(--font-mono)">80</span> / 100
+        <input type="range" id="timer-vol-range" min="0" max="100" value="80" oninput="timerSetVolume(this.value)" onchange="_timerPlaySound(true)" style="width:100%;margin-top:4px">
+      </label>
+    </fieldset>
+
+    <p style="margin:0;font-size:.84em;line-height:1.5;color:var(--pencil)">
+      💡 Pendant le décompte, la fenêtre flottante propose les mêmes boutons (⚙ réglages · 🗣 voix · 🔔 son · ⏸ pause). Tout est traité localement, hors-ligne.
+    </p>
+
+    <div class="ma">
+      <button class="btn btn-p" onclick="closeMod2('mtimer')">Fermer</button>
     </div>
   </div>
 </div>
@@ -5563,11 +5703,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.4.7';
+const APP_VERSION    = '2.5.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-02T17:23:57Z';
+const APP_BUILD_DATE = '2026-06-02T18:40:05Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27199,6 +27339,7 @@ let _noise = {
   active: false, starting: false, popup: null,
   ctx: null, analyser: null, source: null, stream: null, buf: null, raf: null,
   smooth: 0, overSince: 0, lastAlert: 0, alerting: false, alertClearTimer: null,
+  curSound: null,
 };
 
 function _noiseLoadSettings() {
@@ -27268,6 +27409,7 @@ async function startNoiseMeter() {
 
 function stopNoiseMeter() {
   if (_noise.raf) cancelAnimationFrame(_noise.raf);
+  _noiseStopSound();
   if (_noise.alertClearTimer) { clearTimeout(_noise.alertClearTimer); _noise.alertClearTimer = null; }
   try { if (_noise.stream) _noise.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
   try { if (_noise.ctx) _noise.ctx.close(); } catch (_) {}
@@ -27504,7 +27646,7 @@ async function noiseOpenWindow() {
       const pip = await documentPictureInPicture.requestWindow({ width: 480, height: 320 });
       _noiseFillWindow(pip, thr);
       _noise.popup = pip;
-      pip.addEventListener('pagehide', () => { _noise.popup = null; });
+      pip.addEventListener('pagehide', () => { _noise.popup = null; _noiseStopSound(); });
       return;
     } catch (_) { /* refus / indispo → repli fenêtre classique */ }
   }
@@ -27513,11 +27655,25 @@ async function noiseOpenWindow() {
   if (!w) { toast('⚠ Fenêtre bloquée — autorise les pop-ups pour ce site.', 'warn'); return; }
   _noiseFillWindow(w, thr);
   _noise.popup = w;
-  try { w.addEventListener('pagehide', () => { _noise.popup = null; }); } catch (_) {}
+  try { w.addEventListener('pagehide', () => { _noise.popup = null; _noiseStopSound(); }); } catch (_) {}
 }
 
 // Carillon clair (ou bip doux) généré localement via oscillateurs Web Audio.
+// Coupe le son d'alerte/d'aperçu en cours (sans toucher au contexte audio « live »
+// de l'analyseur quand le sonomètre tourne).
+function _noiseStopSound() {
+  const s = _noise.curSound;
+  if (!s) return;
+  _noise.curSound = null;
+  if (s.closeTimer) { clearTimeout(s.closeTimer); s.closeTimer = null; }
+  try { s.master.gain.cancelScheduledValues(s.ctx.currentTime); } catch (_) {}
+  try { s.master.gain.setValueAtTime(0.0001, s.ctx.currentTime); } catch (_) {}
+  for (const o of s.oscs) { try { o.stop(); } catch (_) {} }
+  if (s.temp) { try { s.ctx.close(); } catch (_) {} }
+}
 function noisePlayAlert(isTest) {
+  // Bouton Tester : second clic = coupe le son qui joue (bascule).
+  if (isTest && _noise.curSound) { _noiseStopSound(); return; }
   let ctx = _noise.ctx, temp = false;
   if (!ctx) {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -27535,6 +27691,7 @@ function noisePlayAlert(isTest) {
   const master = ctx.createGain();
   master.gain.value = vol;
   master.connect(ctx.destination);
+  const oscs = [];
   // blip(freq, start, dur, peak, type?) — un oscillateur enveloppé. Les pics sont
   // calibrés pour qu'à volume 100 % le motif frôle 0 dBFS (limite de saturation).
   const blip = (freq, start, dur, peak, type) => {
@@ -27546,9 +27703,15 @@ function noisePlayAlert(isTest) {
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
     o.connect(g); g.connect(master);
     o.start(t0 + start); o.stop(t0 + start + dur + 0.03);
+    oscs.push(o);
   };
   const lastEnd = _noiseBuildPattern(_noiseSettings.soundType, blip);
-  if (temp) setTimeout(() => { try { ctx.close(); } catch (_) {} }, (lastEnd + 0.5) * 1000);
+  const sound = { ctx, master, oscs, temp, closeTimer: null };
+  _noise.curSound = sound;
+  sound.closeTimer = setTimeout(() => {
+    if (_noise.curSound === sound) _noise.curSound = null;
+    if (temp) { try { ctx.close(); } catch (_) {} }
+  }, (lastEnd + 0.5) * 1000);
 }
 
 // Catalogue des motifs de sonnerie. Chaque motif programme une série de `blip`
@@ -27599,19 +27762,24 @@ function _noiseBuildPattern(type, blip) {
       let s = 0; for (let i = 0; i < 3; i++) { blip(G5, s, 0.28, 0.9, 'sine'); blip(E5, s + 0.32, 0.34, 0.9, 'sine'); s += 0.85; } return s;
     }
     // ── Clins d'œil jeux vidéo rétro (motifs chiptune, ondes carrées) ──
-    case 'pacman': { // Petite ritournelle montante/descendante évoquant l'intro
-      const B4=493.88,B5=987.77,Fd5=739.99,Dd5=622.25,C5=523.25,C6=1046.50,G5=783.99,E5=659.25;
-      return seq([[B4,.1],[B5,.1],[Fd5,.1],[Dd5,.1],[B5,.07],[Fd5,.1],[Dd5,.16],
-                  [C5,.1],[C6,.1],[G5,.1],[E5,.1],[C6,.07],[G5,.1],[E5,.18]], 0.85);
+    case 'pacman': { // Pac-Man — jingle d'intro complet (couplet entier, se résout vers le haut)
+      const run1 = [['B4',.09],['B5',.09],['F#5',.09],['D#5',.09],['B5',.07],['F#5',.09],['D#5',.15]];
+      const run2 = [['C5',.09],['C6',.09],['G5',.09],['E5',.09],['C6',.07],['G5',.09],['E5',.15]];
+      const tail = [['D#5',.09],['E5',.09],['F5',.09],['F5',.09],['F#5',.09],['G5',.09],['G5',.09],['G#5',.09],['A5',.09],['B5',.20]];
+      return seq(run1.concat(run2, run1, tail), 0.85);
     }
-    case 'mario': { // Attaque rythmique aiguë évoquant le thème (E E _ E _ C E _ G … G grave)
-      const E5=659.25,C5=523.25,G5=783.99,G4=392.00;
-      return seq([[E5,.12],[E5,.12],[0,.12],[E5,.12],[0,.12],[C5,.12],[E5,.12],[0,.12],
-                  [G5,.14],[0,.34],[G4,.16]], 0.85);
+    case 'mario': { // Super Mario Bros. — phrase principale complète (jusqu'au bout du couplet)
+      const e = 0.11;
+      const m1 = [['E5',e],['E5',e],[0,e],['E5',e],[0,e],['C5',e],['E5',e],[0,e],['G5',e],[0,e],[0,e],[0,e],['G4',e],[0,e],[0,e],[0,e]];
+      const pa = [['C5',e],[0,e],[0,e],['G4',e],[0,e],[0,e],['E4',e],[0,e],[0,e],['A4',e],[0,e],['B4',e],[0,e],['A#4',e],['A4',e],[0,e],
+                  ['G4',e],['E5',e],['G5',e],['A5',e],[0,e],['F5',e],['G5',e],[0,e],['E5',e],[0,e],['C5',e],['D5',e],['B4',e],[0,e],[0,e],[0,e]];
+      return seq(m1.concat(pa), 0.85);
     }
-    case 'tetris': // Korobeiniki (mélodie folklorique, domaine public) — ouverture
-      return seq([['E5',.2],['B4',.1],['C5',.1],['D5',.2],['C5',.1],['B4',.1],
-                  ['A4',.2],['A4',.1],['C5',.1],['E5',.2],['D5',.1],['C5',.1],['B4',.32]], 0.85);
+    case 'tetris': // Korobeiniki (domaine public) — phrase A complète, résolue sur la tonique (La)
+      return seq([['E5',.32],['B4',.16],['C5',.16],['D5',.32],['C5',.16],['B4',.16],
+                  ['A4',.32],['A4',.16],['C5',.16],['E5',.32],['D5',.16],['C5',.16],
+                  ['B4',.32],['C5',.16],['D5',.32],['E5',.32],
+                  ['C5',.32],['A4',.32],['A4',.5]], 0.85);
     case 'bell':
     default: { // Cloche claire — ding-dong B5+E6 répété 3 fois
       const B5 = 987.77, E6 = 1318.51;
@@ -27631,6 +27799,7 @@ function openNoiseSettings() {
   set('noise-vol-range', _noiseSettings.volume);          txt('noise-vol-val', _noiseSettings.volume);
   const live = document.getElementById('noise-live-num');
   if (live) live.textContent = _noise.active ? Math.round(_noise.smooth) : '—';
+  _modalReturnTo['mnoise'] = () => _noiseStopSound(); // fermer les réglages coupe un test en cours
   openMod('mnoise');
 }
 function noiseSetThreshold(v){ _noiseSettings.threshold = parseInt(v,10)||60; const e=document.getElementById('noise-thr-val'); if(e)e.textContent=_noiseSettings.threshold; const mk=document.getElementById('noise-threshold-marker'); if(mk)mk.style.left=_noiseSettings.threshold+'%'; _noiseSaveSettings(); }
@@ -27644,6 +27813,463 @@ _noiseLoadSettings();
 // La fenêtre déplaçable est pilotée par la fenêtre principale : si celle-ci se
 // recharge ou se ferme, on ferme la popup (elle ne serait plus mise à jour).
 window.addEventListener('beforeunload', () => { try { if (_noise.popup && !_noise.popup.closed) _noise.popup.close(); } catch (_) {} });
+
+// ═══════════════════════════════════════════════════════════
+// MINUTEUR / COMPTE À REBOURS
+// Réutilise le moteur de sonneries rétro du sonomètre (_noiseBuildPattern,
+// _NOTE_HZ, _NOISE_SOUND_TYPES) + la synthèse vocale du navigateur. Le décompte
+// tourne dans la fenêtre principale (horloge murale via endTime) et pousse les
+// mises à jour vers le widget replié ET la fenêtre flottante (PiP / window.open).
+// État éphémère (ne survit pas à un reload) ; seuls les réglages persistent.
+// ═══════════════════════════════════════════════════════════
+const TIMER_DEFAULTS = { soundOn: true, soundType: 'mario', volume: 80, speechOn: false, announces: [600, 300, 60], lastDurationS: 600 };
+let _timerSettings = { ...TIMER_DEFAULTS };
+let _timer = {
+  running: false, paused: false, finished: false,
+  endTime: 0, remainingMs: 0, totalMs: 0,
+  interval: null, finalTimer: null, finalCtx: null, popup: null, announced: new Set(),
+};
+
+function _timerLoadSettings() {
+  try {
+    const raw = localStorage.getItem('planClasse_timerSettings');
+    if (raw) _timerSettings = { ...TIMER_DEFAULTS, ...JSON.parse(raw) };
+  } catch (_) {}
+  if (!_NOISE_SOUND_TYPES.includes(_timerSettings.soundType)) _timerSettings.soundType = 'mario';
+  if (!Array.isArray(_timerSettings.announces)) _timerSettings.announces = [...TIMER_DEFAULTS.announces];
+  _timerSettings.announces = _timerSettings.announces.map(n => parseInt(n, 10)).filter(n => n > 0).sort((a, b) => b - a);
+}
+function _timerSaveSettings() {
+  try { localStorage.setItem('planClasse_timerSettings', JSON.stringify(_timerSettings)); } catch (_) {}
+}
+
+function _timerFmt(ms) {
+  let s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); s -= m * 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (pad(m) + ':' + pad(s));
+}
+function _timerAnnounceText(secs) {
+  if (secs >= 60) { const m = Math.round(secs / 60); return 'Il reste ' + m + (m > 1 ? ' minutes' : ' minute'); }
+  return 'Il reste ' + secs + ' secondes';
+}
+
+// ── Réglages (modale) ──
+function openTimerSettings() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const last = _timerSettings.lastDurationS || 600;
+  set('timer-min', Math.floor(last / 60)); set('timer-sec', last % 60);
+  const sp = document.getElementById('timer-speech-on'); if (sp) sp.checked = _timerSettings.speechOn;
+  const so = document.getElementById('timer-sound-on'); if (so) so.checked = _timerSettings.soundOn;
+  set('timer-sound-type', _timerSettings.soundType);
+  set('timer-vol-range', _timerSettings.volume);
+  const vv = document.getElementById('timer-vol-val'); if (vv) vv.textContent = _timerSettings.volume;
+  document.querySelectorAll('#timer-announce-opts input[type=checkbox]').forEach(cb => {
+    cb.checked = _timerSettings.announces.includes(parseInt(cb.value, 10));
+  });
+  const warn = document.getElementById('timer-speech-warn');
+  if (warn) warn.style.display = ('speechSynthesis' in window) ? 'none' : '';
+  // Fermer les réglages coupe toute sonnerie d'aperçu / de test encore en cours.
+  _modalReturnTo['mtimer'] = () => {
+    _timerStopFinalSound();
+    try { if (_timer.previewCtx) _timer.previewCtx.close(); } catch (_) {}
+    _timer.previewCtx = null;
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (_) {}
+  };
+  openMod('mtimer');
+}
+function timerSetSpeechOn(on) { _timerSettings.speechOn = !!on; _timerSaveSettings(); _timerSyncToggleUI(); if (!on) { try { window.speechSynthesis.cancel(); } catch (_) {} } }
+function timerSetSoundOn(on) { _timerSettings.soundOn = !!on; _timerSaveSettings(); _timerSyncToggleUI(); }
+function timerSetSoundType(t) { _timerSettings.soundType = _NOISE_SOUND_TYPES.includes(t) ? t : 'mario'; _timerSaveSettings(); }
+function timerSetVolume(v) { _timerSettings.volume = Math.max(0, Math.min(100, parseInt(v, 10) || 0)); const e = document.getElementById('timer-vol-val'); if (e) e.textContent = _timerSettings.volume; _timerSaveSettings(); }
+function timerToggleAnnounce(secs, on) {
+  secs = parseInt(secs, 10);
+  const set = new Set(_timerSettings.announces);
+  if (on) set.add(secs); else set.delete(secs);
+  _timerSettings.announces = Array.from(set).sort((a, b) => b - a);
+  _timerSaveSettings();
+}
+function timerSetDurationPreset(min) { closeMod2('mtimer'); timerStart(min * 60); }
+function timerStartFromInputs() {
+  const mi = parseInt((document.getElementById('timer-min') || {}).value, 10) || 0;
+  const se = parseInt((document.getElementById('timer-sec') || {}).value, 10) || 0;
+  const tot = mi * 60 + se;
+  if (tot <= 0) { toast('⚠ Durée invalide.', 'warn'); return; }
+  closeMod2('mtimer');
+  timerStart(tot);
+}
+
+// ── Cycle de vie du décompte ──
+function timerStart(totalSec) {
+  totalSec = Math.max(1, Math.round(totalSec));
+  _timerStopInternals();
+  _timer.running = true; _timer.paused = false; _timer.finished = false;
+  _timer.totalMs = totalSec * 1000;
+  _timer.endTime = Date.now() + _timer.totalMs;
+  _timer.remainingMs = _timer.totalMs;
+  _timer.announced = new Set();
+  // Les annonces au-delà (ou égales à) la durée de départ sont marquées comme déjà
+  // faites : pas de « il reste 10 minutes » dès le lancement d'un minuteur de 10 min.
+  for (const p of _timerSettings.announces) { if (p >= totalSec) _timer.announced.add(p); }
+  _timerSettings.lastDurationS = totalSec; _timerSaveSettings();
+  const w = document.getElementById('timer-widget');
+  if (w) { w.style.display = ''; w.classList.remove('tw-finished'); }
+  document.body.classList.add('timer-widget-on');
+  _timerInitWidgetDrag();
+  _timerUpdateBtn(); _timerSyncToggleUI(); _timerRender();
+  if (_timer.interval) clearInterval(_timer.interval);
+  _timer.interval = setInterval(_timerTick, 250);
+  timerOpenWindow(); // fenêtre flottante toujours au premier plan (geste utilisateur actif)
+  toast('⏲ Minuteur lancé : ' + _timerFmt(_timer.totalMs));
+}
+function _timerStopFinalSound() {
+  if (_timer.finalTimer) { clearTimeout(_timer.finalTimer); _timer.finalTimer = null; }
+  try { if (_timer.finalCtx) _timer.finalCtx.close(); } catch (_) {}
+  _timer.finalCtx = null;
+}
+function _timerStopInternals() {
+  if (_timer.interval) { clearInterval(_timer.interval); _timer.interval = null; }
+  _timerStopFinalSound();
+}
+function timerStop() {
+  _timerStopInternals();
+  _timer.running = false; _timer.paused = false; _timer.finished = false;
+  const w = document.getElementById('timer-widget');
+  if (w) { w.style.display = 'none'; w.classList.remove('tw-finished'); }
+  document.body.classList.remove('timer-widget-on');
+  try { if (_timer.popup && !_timer.popup.closed) _timer.popup.close(); } catch (_) {}
+  _timer.popup = null;
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (_) {}
+  _timerUpdateBtn();
+}
+function timerTogglePause() {
+  if (!_timer.running || _timer.finished) return;
+  if (_timer.paused) { _timer.paused = false; _timer.endTime = Date.now() + _timer.remainingMs; }
+  else { _timer.paused = true; _timer.remainingMs = Math.max(0, _timer.endTime - Date.now()); }
+  _timerSyncToggleUI(); _timerRender();
+}
+function _timerTick() {
+  if (!_timer.running || _timer.paused) return;
+  _timer.remainingMs = _timer.endTime - Date.now();
+  if (_timer.remainingMs <= 0) { _timer.remainingMs = 0; _timerRender(); _timerFinish(); return; }
+  const remS = Math.ceil(_timer.remainingMs / 1000);
+  for (const p of _timerSettings.announces) {
+    if (remS <= p && !_timer.announced.has(p)) {
+      _timer.announced.add(p);
+      if (_timerSettings.speechOn) _timerSpeak(_timerAnnounceText(p));
+    }
+  }
+  _timerRender();
+}
+function _timerFinish() {
+  _timerStopInternals();
+  _timer.finished = true; _timer.paused = false;
+  const w = document.getElementById('timer-widget'); if (w) w.classList.add('tw-finished');
+  _timerRender(); _timerUpdateBtn(); _timerSyncToggleUI();
+  if (_timerSettings.speechOn) _timerSpeak('Temps écoulé');
+  if (_timerSettings.soundOn) _timerPlayFinal();
+}
+
+// ── Rendu (widget replié + fenêtre flottante) ──
+function _timerRender() {
+  const remMs = _timer.paused ? _timer.remainingMs
+              : (_timer.running ? Math.max(0, _timer.endTime - Date.now()) : _timer.remainingMs);
+  const txt = _timerFmt(remMs);
+  const frac = _timer.totalMs > 0 ? Math.max(0, Math.min(1, remMs / _timer.totalMs)) : 0;
+  const state = _timer.finished ? '⏰ Terminé !' : (_timer.paused ? '⏸ En pause' : 'En cours');
+  const t = document.getElementById('timer-w-time'); if (t) t.textContent = txt;
+  const b = document.getElementById('timer-w-bar'); if (b) b.style.width = (frac * 100) + '%';
+  const s = document.getElementById('timer-w-state'); if (s) s.textContent = state;
+  const tot = document.getElementById('timer-w-total'); if (tot) tot.textContent = 'sur ' + _timerFmt(_timer.totalMs);
+  if (_timer.popup && !_timer.popup.closed) {
+    try {
+      const d = _timer.popup.document;
+      const nt = d.getElementById('tpw-time'); if (nt) nt.textContent = txt;
+      const nf = d.getElementById('tpw-fill'); if (nf) nf.style.width = (frac * 100) + '%';
+      const nm = d.getElementById('tpw-msg'); if (nm) nm.textContent = state;
+      if (d.body) d.body.classList.toggle('finished', _timer.finished);
+    } catch (_) {}
+  }
+}
+function _timerUpdateBtn() {
+  const btn = document.getElementById('btn-timer'); if (!btn) return;
+  btn.classList.toggle('timer-on', _timer.running && !_timer.finished);
+  btn.classList.toggle('timer-alert', _timer.finished);
+}
+
+// ── Bascules son / voix / pause synchronisées sur les 3 surfaces ──
+function timerToggleSound() { _timerSettings.soundOn = !_timerSettings.soundOn; _timerSaveSettings(); _timerSyncToggleUI(); }
+function timerToggleSpeech() { _timerSettings.speechOn = !_timerSettings.speechOn; _timerSaveSettings(); _timerSyncToggleUI(); if (!_timerSettings.speechOn) { try { window.speechSynthesis.cancel(); } catch (_) {} } }
+function _timerSyncToggleUI() {
+  const sb = document.getElementById('timer-w-sound');
+  if (sb) { sb.textContent = _timerSettings.soundOn ? '🔔' : '🔕'; sb.title = (_timerSettings.soundOn ? 'Couper' : 'Activer') + ' la sonnerie finale'; }
+  const vb = document.getElementById('timer-w-speech');
+  if (vb) { vb.textContent = _timerSettings.speechOn ? '🗣' : '🔇'; vb.title = (_timerSettings.speechOn ? 'Couper' : 'Activer') + " l'annonce vocale"; }
+  const mso = document.getElementById('timer-sound-on'); if (mso) mso.checked = _timerSettings.soundOn;
+  const msp = document.getElementById('timer-speech-on'); if (msp) msp.checked = _timerSettings.speechOn;
+  if (_timer.popup && !_timer.popup.closed) _timerUpdatePopupButtons(_timer.popup);
+}
+
+// ── Synthèse vocale ──
+function _timerSpeak(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'fr-FR'; u.rate = 1; u.volume = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch (_) {}
+}
+
+// ── Sonnerie (réutilise les motifs du sonomètre) ──
+function _timerMakeBlip(ctx, master, t0, off) {
+  return (freq, start, dur, peak, type) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq;
+    const st = t0 + off + start;
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(peak, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+    o.connect(g); g.connect(master);
+    o.start(st); o.stop(st + dur + 0.03);
+  };
+}
+// Aperçu court (changement de type / volume). Pour les thèmes, on joue le DÉBUT de la
+// mélodie longue (la même que le test), coupée vers ~2,6 s → l'aperçu correspond
+// exactement au son réellement joué à la fin, en plus court.
+function _timerPlaySound(isTest) {
+  const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+  try { if (_timer.previewCtx) _timer.previewCtx.close(); } catch (_) {}
+  _timer.previewCtx = null;
+  const ctx = new Ctx();
+  if (ctx.state === 'suspended') { try { ctx.resume(); } catch (_) {} }
+  const vol = Math.max(0, Math.min(100, _timerSettings.volume ?? 80)) / 100;
+  if (vol <= 0) { setTimeout(() => { try { ctx.close(); } catch (_) {} }, 300); return; }
+  _timer.previewCtx = ctx;
+  const t0 = ctx.currentTime;
+  const master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
+  const type = _timerSettings.soundType;
+  let closeAfter;
+  if (_TIMER_THEME_TYPES.includes(type)) {
+    _timerBuildExtendedTheme(type, _timerMakeBlip(ctx, master, t0, 0));
+    closeAfter = 2600; // on n'entend que le début du thème
+  } else {
+    const len = _noiseBuildPattern(type, _timerMakeBlip(ctx, master, t0, 0));
+    closeAfter = (len + 0.5) * 1000;
+  }
+  setTimeout(() => { try { ctx.close(); } catch (_) {} if (_timer.previewCtx === ctx) _timer.previewCtx = null; }, closeAfter);
+}
+// Bouton ▶ Tester : bascule — relance la sonnerie de fin complète, ou la coupe si elle joue déjà.
+function _timerTestSound() {
+  if (_timer.finalCtx) { _timerStopFinalSound(); return; }
+  _timerPlayFinal();
+}
+const _TIMER_THEME_TYPES = ['pacman', 'mario', 'tetris'];
+
+// Thèmes de jeux vidéo en version LONGUE (mélodie complétée, jouée une seule fois) —
+// distincte des fragments courts du sonomètre, qu'on ne veut pas répéter en boucle.
+function _timerBuildExtendedTheme(type, blip) {
+  // seq : notes = [[nom|freq, durée_s], ...]. 0 ou '' = silence. Staccato (90 %).
+  const seq = (notes, peak, wave) => {
+    let s = 0;
+    for (const [spec, d] of notes) {
+      const f = (typeof spec === 'string') ? (_NOTE_HZ[spec] || 0) : spec;
+      if (f > 0) blip(f, s, Math.max(0.05, d * 0.9), peak, wave || 'square');
+      s += d;
+    }
+    return s;
+  };
+  switch (type) {
+    case 'mario': { // Super Mario Bros. — thème principal (intro + 2 phrases), ≈ 10 s
+      const e = 0.13;
+      const m1 = [['E5',e],['E5',e],[0,e],['E5',e],[0,e],['C5',e],['E5',e],[0,e],['G5',e],[0,e],[0,e],[0,e],['G4',e],[0,e],[0,e],[0,e]];
+      const pa = [['C5',e],[0,e],[0,e],['G4',e],[0,e],[0,e],['E4',e],[0,e],[0,e],['A4',e],[0,e],['B4',e],[0,e],['A#4',e],['A4',e],[0,e],
+                  ['G4',e],['E5',e],['G5',e],['A5',e],[0,e],['F5',e],['G5',e],[0,e],['E5',e],[0,e],['C5',e],['D5',e],['B4',e],[0,e],[0,e],[0,e]];
+      return seq(m1.concat(pa, pa), 0.82);
+    }
+    case 'tetris': { // Korobeiniki (domaine public) — section A complète, ≈ 10 s
+      const q = 0.32, e = 0.16, h = 0.5;
+      return seq([
+        ['E5',q],['B4',e],['C5',e],['D5',q],['C5',e],['B4',e],
+        ['A4',q],['A4',e],['C5',e],['E5',q],['D5',e],['C5',e],
+        ['B4',h],['C5',e],['D5',q],['E5',q],
+        ['C5',q],['A4',q],['A4',q],[0,e],
+        ['D5',q],['D5',e],['F5',e],['A5',q],['G5',e],['F5',e],
+        ['E5',h],['C5',e],['E5',q],['D5',e],['C5',e],
+        ['B4',q],['B4',e],['C5',e],['D5',q],['E5',q],
+        ['C5',q],['A4',q],['A4',q],[0,q],
+      ], 0.82);
+    }
+    case 'pacman': { // Pac-Man — jingle d'intro complet (sa forme naturelle), ≈ 4,5 s
+      const run1 = [['B4',.11],['B5',.11],['F#5',.11],['D#5',.11],['B5',.08],['F#5',.11],['D#5',.18]];
+      const run2 = [['C5',.11],['C6',.11],['G5',.11],['E5',.11],['C6',.08],['G5',.11],['E5',.18]];
+      const tail = [['D#5',.11],['E5',.11],['F5',.11],['F5',.11],['F#5',.11],['G5',.11],['G5',.11],['G#5',.11],['A5',.11],['B5',.24]];
+      return seq(run1.concat(run2, run1, tail), 0.82);
+    }
+    default: return 0;
+  }
+}
+
+// Sonnerie de fin. Thèmes → mélodie longue complétée (jouée une fois). Autres sons →
+// motif court répété pour couvrir ≈ 6 s. L'AudioContext est mémorisé (_timer.finalCtx)
+// pour pouvoir couper le son si on ferme la fenêtre ou on arrête le minuteur.
+function _timerPlayFinal() {
+  const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+  _timerStopFinalSound(); // coupe une éventuelle sonnerie précédente
+  const ctx = new Ctx();
+  if (ctx.state === 'suspended') { try { ctx.resume(); } catch (_) {} }
+  const vol = Math.max(0, Math.min(100, _timerSettings.volume ?? 80)) / 100;
+  if (vol <= 0) { setTimeout(() => { try { ctx.close(); } catch (_) {} }, 300); return; }
+  _timer.finalCtx = ctx;
+  const t0 = ctx.currentTime;
+  const master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
+  let total;
+  if (_TIMER_THEME_TYPES.includes(_timerSettings.soundType)) {
+    total = _timerBuildExtendedTheme(_timerSettings.soundType, _timerMakeBlip(ctx, master, t0, 0));
+  } else {
+    const TARGET = 6; let off = 0, guard = 0; // ≈ 6 s suffisent pour les sons non-thématiques
+    while (off < TARGET && guard < 40) {
+      const len = _noiseBuildPattern(_timerSettings.soundType, _timerMakeBlip(ctx, master, t0, off));
+      off += (len || 0.5) + 0.15; guard++;
+    }
+    total = off;
+  }
+  _timer.finalTimer = setTimeout(() => {
+    try { ctx.close(); } catch (_) {}
+    if (_timer.finalCtx === ctx) _timer.finalCtx = null;
+    _timer.finalTimer = null;
+  }, (total + 0.6) * 1000);
+}
+
+// ── Widget replié : déplaçable par sa barre de titre ──
+function _timerInitWidgetDrag() {
+  const w = document.getElementById('timer-widget');
+  const h = document.getElementById('timer-widget-head');
+  if (!w || !h || h.dataset.dragInit) return;
+  h.dataset.dragInit = '1';
+  h.style.touchAction = 'none';
+  h.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return; // les boutons gardent leur clic
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const rect = w.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY, bl = rect.left, bt = rect.top, ww = rect.width, wh = rect.height;
+    try { h.setPointerCapture(e.pointerId); } catch (_) {}
+    const mv = ev => {
+      w.style.left = Math.max(2, Math.min(window.innerWidth - ww - 2, bl + (ev.clientX - sx))) + 'px';
+      w.style.top  = Math.max(2, Math.min(window.innerHeight - wh - 2, bt + (ev.clientY - sy))) + 'px';
+      w.style.right = 'auto'; w.style.bottom = 'auto';
+    };
+    const up = () => {
+      h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+      try { h.releasePointerCapture(e.pointerId); } catch (_) {}
+    };
+    h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  });
+}
+
+// ── Fenêtre flottante (PiP prioritaire = toujours au premier plan ; repli window.open) ──
+function _timerFillWindow(win) {
+  const css = `html,body{height:100%}
+*{box-sizing:border-box}
+body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vh;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f6fa;color:#0e1a26;
+  transition:background .25s;user-select:none;overflow:hidden;position:relative}
+body.finished{animation:tflash .7s ease-in-out infinite}
+@keyframes tflash{0%,100%{background:#f4f6fa}50%{background:#ffd9d4}}
+#tpw-ctrl{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:10}
+.tpw-btn{appearance:none;border:1px solid #c8d2e0;background:rgba(255,255,255,.78);color:#1a252f;
+  border-radius:6px;cursor:pointer;font-size:15px;line-height:1;padding:4px 8px;font-family:inherit}
+.tpw-btn:hover{background:#fff}
+#tpw-msg{font-size:5vh;font-weight:700;color:#56697f}
+body.finished #tpw-msg{color:#e74c3c}
+#tpw-time{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:30vh;line-height:1;letter-spacing:2px}
+body{cursor:pointer}#tpw-ctrl .tpw-btn{cursor:pointer}
+body.finished #tpw-time{color:#e74c3c}
+#tpw-wrap{width:86vw;height:6vh;min-height:18px;background:#d6dde6;border-radius:99px;overflow:hidden;border:2px solid #c8d2e0}
+#tpw-fill{height:100%;width:100%;background:#1a252f;transition:width .25s linear}
+body.finished #tpw-fill{background:#e74c3c}`;
+  const body = `<div id="tpw-ctrl">`
+    + `<button class="tpw-btn" id="tpw-speech" title="Couper / activer l'annonce vocale" aria-label="Annonce vocale">🗣</button>`
+    + `<button class="tpw-btn" id="tpw-sound" title="Couper / activer la sonnerie finale" aria-label="Sonnerie finale">🔔</button>`
+    + `<button class="tpw-btn" id="tpw-settings" title="Réglages (voix, sonnerie)" aria-label="Réglages">⚙</button>`
+    + `<button class="tpw-btn" id="tpw-max" title="Remplir l'écran (re-cliquer pour rétablir)" aria-label="Remplir l'écran">⛶</button>`
+    + `<button class="tpw-btn" id="tpw-close" title="Arrêter le minuteur" aria-label="Arrêter">✕</button>`
+    + `</div>`
+    + `<div id="tpw-msg">En cours</div>`
+    + `<div id="tpw-time">00:00</div>`
+    + `<div id="tpw-wrap"><div id="tpw-fill"></div></div>`;
+  try {
+    const d = win.document;
+    d.title = '⏲ Minuteur';
+    const style = d.createElement('style'); style.textContent = css;
+    (d.head || d.documentElement).appendChild(style);
+    d.body.innerHTML = body;
+    d.body.dataset.size = 'normal';
+    const bind = (id, fn) => { const b = d.getElementById(id); if (b) b.addEventListener('click', fn); };
+    // Clic n'importe où dans la fenêtre (hors boutons de contrôle) = pause / reprise.
+    d.body.addEventListener('click', e => { if (e.target.closest('#tpw-ctrl')) return; timerTogglePause(); });
+    bind('tpw-speech', () => timerToggleSpeech());
+    bind('tpw-sound', () => timerToggleSound());
+    bind('tpw-settings', () => { try { window.focus(); } catch (_) {} openTimerSettings(); });
+    bind('tpw-max', () => _timerPopupToggleMax(win));
+    bind('tpw-close', () => timerStop());
+    _timerUpdatePopupButtons(win);
+  } catch (_) {}
+}
+function _timerUpdatePopupButtons(win) {
+  try {
+    const d = win.document;
+    const sb = d.getElementById('tpw-sound'); if (sb) sb.textContent = _timerSettings.soundOn ? '🔔' : '🔕';
+    const vb = d.getElementById('tpw-speech'); if (vb) vb.textContent = _timerSettings.speechOn ? '🗣' : '🔇';
+  } catch (_) {}
+}
+function _timerPopupSetSize(win, mode) {
+  try {
+    const sc = win.screen || {};
+    win.document.body.dataset.size = mode;
+    if (mode === 'max') {
+      const ax = (typeof sc.availLeft === 'number') ? sc.availLeft : 0;
+      const ay = (typeof sc.availTop === 'number') ? sc.availTop : 0;
+      try { win.moveTo(ax, ay); } catch (_) {}
+      try { win.resizeTo(sc.availWidth || 1280, sc.availHeight || 800); } catch (_) {}
+    } else {
+      try { win.resizeTo(380, 280); } catch (_) {}
+    }
+  } catch (_) {}
+}
+function _timerPopupToggleMax(win) {
+  let cur = 'normal'; try { cur = win.document.body.dataset.size || 'normal'; } catch (_) {}
+  _timerPopupSetSize(win, cur === 'max' ? 'normal' : 'max');
+}
+async function timerOpenWindow() {
+  if (!_timer.running) return;
+  if (_timer.popup && !_timer.popup.closed) { try { _timer.popup.focus(); } catch (_) {} return; }
+  if ('documentPictureInPicture' in window) {
+    try {
+      const pip = await documentPictureInPicture.requestWindow({ width: 380, height: 280 });
+      _timerFillWindow(pip); _timer.popup = pip;
+      pip.addEventListener('pagehide', _timerOnPopupClosed);
+      _timerRender();
+      return;
+    } catch (_) { /* refus / indispo → repli */ }
+  }
+  const w = window.open('', 'minuteur_classe', 'width=400,height=300');
+  if (!w) { toast('⚠ Fenêtre flottante bloquée — le minuteur reste dans le widget en bas à droite. Autorise les pop-ups pour ce site.', 'warn'); return; }
+  _timerFillWindow(w); _timer.popup = w;
+  try { w.addEventListener('pagehide', _timerOnPopupClosed); } catch (_) {}
+  _timerRender();
+}
+// Fermeture de la fenêtre flottante (croix de l'OS / PiP) : on coupe la sonnerie et
+// la voix en cours — le décompte, lui, continue dans le widget replié.
+function _timerOnPopupClosed() {
+  _timer.popup = null;
+  _timerStopFinalSound();
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (_) {}
+}
+
+_timerLoadSettings();
+window.addEventListener('beforeunload', () => { try { if (_timer.popup && !_timer.popup.closed) _timer.popup.close(); } catch (_) {} });
 
 // ═══════════════════════════════════════════════════════════
 // KEYBOARD SHORTCUTS
