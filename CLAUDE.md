@@ -1505,6 +1505,12 @@ Chaque mini-note (Type A/C) peut porter en plus de sa date :
 
 Chaque passation (Type B) — idem : `pass.datesByGroup[cid][g]`, `pass.slotIdsByGroup[cid][g]`. Édité via le clic droit `meval-pass-menu` (nouveau bouton ✓ Enregistrer en bas + section Distinguer par groupe). En-tête de colonne : date + select créneau côte à côte (au lieu d'un libellé statique).
 
+### Date vide explicite sur une mini-note / passation (éval multi-classes)
+
+La date d'une mini-note (Type A) ou d'une passation (Type B) **peut rester vide** pour les classes qui ne l'ont pas faite — sans aucun impact ailleurs : le rattachement à la **période** vient de `ev.periode` (pas de la date), et la **moyenne / les bilans** se calculent sur les notes + la période, jamais sur ces dates. La date ne sert qu'à l'affichage, au filtre « élève présent » (arrivées/départs — fallback sur date d'éval puis aujourd'hui), et au déclenchement de l'auto-remplissage des absents (qui ne se produit qu'en **posant** une vraie date+créneau).
+
+**Sentinelle de vidage (multi-classes)** : `_mnDateFor` / `_passDateFor` lisent désormais `dates[classId]` **par présence de clé** (`hasOwnProperty`), pas par truthy. Vider la date d'une classe sur une éval **multi-classes** stocke une **sentinelle `''`** (`dates[cid] = ''`) au lieu de `delete` → la colonne reste vide pour cette classe **sans retomber** sur la date « globale » `mn.date`/`pass.date` (= max des autres classes). Sur une éval **mono-classe**, on `delete` toujours (comportement legacy inchangé). La sentinelle `''` est filtrée par `Object.values(...).filter(Boolean)` partout (recalcul de `mn.date`/`pass.date`, `_evalAutoUpdateDate`, `_evalRefDatesForClass`) → aucun effet de bord. Sites de vidage gérés : tableur inline (`_tableurEditMn` champ date, `_evalTableurEditPass` champ date) + clic droit (`_tableurMnMenuSave`). ⚠️ Les dates **déjà vidées avant cette version** (clé supprimée) gardent le fallback legacy → il faut les re-vider une fois pour poser la sentinelle. (Type C exclu : date sommative unique par classe, pas de colonne date par question.)
+
 ### Tableur Type A/C — frontière exo + saisie en temps réel
 
 - **Frontière entre exercices** (Type C) : la 1re colonne de chaque nouvel exo (header + cellule de saisie + footer stats) reçoit un `border-left:2px solid var(--ink-blue-soft)`. Set d'indices via `exoBoundarySet` calculé à partir de `exoGroups.colStart`.

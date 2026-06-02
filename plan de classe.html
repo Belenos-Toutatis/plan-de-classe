@@ -5563,11 +5563,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.4.6';
+const APP_VERSION    = '2.4.7';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-02T17:12:36Z';
+const APP_BUILD_DATE = '2026-06-02T17:23:57Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -34156,7 +34156,10 @@ function _evalTableurEditPass(inputEl) {
     const d = inputEl.value || '';
     if (cid) {
       pass.dates = pass.dates || {};
-      if (d) pass.dates[cid] = d; else delete pass.dates[cid];
+      // Vidage explicite : sentinelle '' sur éval multi-classes (cf. _tableurEditMn).
+      if (d) pass.dates[cid] = d;
+      else if (_evalClassIds(ev).length > 1) pass.dates[cid] = '';
+      else delete pass.dates[cid];
       const allDates = Object.values(pass.dates).filter(Boolean);
       pass.date = allDates.reduce((m, x) => (x > m ? x : m), '');
       // Régénère les options du select créneau de la même colonne (les
@@ -34329,7 +34332,12 @@ function _tableurEditMn(inputEl) {
     const cid = inputEl.getAttribute('data-classid');
     if (cid) {
       mn.dates = mn.dates || {};
-      if (d) mn.dates[cid] = d; else delete mn.dates[cid];
+      // Vidage explicite : sur une éval multi-classes, on garde une entrée vide
+      // (sentinelle) pour cette classe afin de NE PAS retomber sur mn.date globale
+      // (= date d'une autre classe). Mono-classe : suppression simple (legacy).
+      if (d) mn.dates[cid] = d;
+      else if (_evalClassIds(ev).length > 1) mn.dates[cid] = '';
+      else delete mn.dates[cid];
       // mn.date "globale" = max des per-classe (pour la cascade fallback)
       const allDates = Object.values(mn.dates).filter(Boolean);
       if (allDates.length > 0) mn.date = allDates.reduce((m, x) => x > m ? x : m, '');
@@ -34610,7 +34618,10 @@ function _tableurMnMenuSave() {
   } else if (cls) {
     // Type A : date + créneau pour la classe active
     mn.dates = mn.dates || {};
-    if (date) mn.dates[cls.id] = date; else delete mn.dates[cls.id];
+    // Vidage explicite : sentinelle '' sur éval multi-classes (cf. _tableurEditMn).
+    if (date) mn.dates[cls.id] = date;
+    else if (_evalClassIds(ev).length > 1) mn.dates[cls.id] = '';
+    else delete mn.dates[cls.id];
     mn.slotIds = mn.slotIds || {};
     if (slot) mn.slotIds[cls.id] = slot; else delete mn.slotIds[cls.id];
     // mn.date "globale" = max des per-classe (pour la cascade fallback)
@@ -35375,7 +35386,10 @@ function _evalDateFor(ev, classId) {
 // différent de G2 dans la même classe.
 function _passDateFor(pass, classId, group) {
   if (group && pass?.datesByGroup?.[classId]?.[group]) return pass.datesByGroup[classId][group];
-  if (pass?.dates?.[classId]) return pass.dates[classId];
+  // Lecture par PRÉSENCE de clé : une date explicitement vidée pour cette classe
+  // (sentinelle '') reste vide et NE retombe PAS sur pass.date globale (= date d'une
+  // autre classe sur une éval multi-classes). Clé absente = legacy → fallback.
+  if (pass?.dates && Object.prototype.hasOwnProperty.call(pass.dates, classId)) return pass.dates[classId] || '';
   return pass?.date || '';
 }
 function _passSlotIdFor(pass, classId, group) {
@@ -35388,7 +35402,9 @@ function _passSlotIdFor(pass, classId, group) {
 // Même cascade que pour les passations.
 function _mnDateFor(mn, classId, group) {
   if (group && mn?.datesByGroup?.[classId]?.[group]) return mn.datesByGroup[classId][group];
-  if (mn?.dates?.[classId]) return mn.dates[classId];
+  // Lecture par PRÉSENCE de clé (cf. _passDateFor) : sentinelle '' = vide explicite,
+  // clé absente = legacy → fallback sur mn.date globale.
+  if (mn?.dates && Object.prototype.hasOwnProperty.call(mn.dates, classId)) return mn.dates[classId] || '';
   return mn?.date || '';
 }
 function _mnSlotIdFor(mn, classId, group) {
