@@ -3586,6 +3586,25 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       Niveau actuel : <strong id="noise-live-num" style="font-family:var(--font-mono);font-size:1.2em">—</strong> <span style="color:var(--pencil)">/ 100</span>
     </div>
 
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:14px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🤫 Plancher de silence (niveau 0)</legend>
+      <p style="margin:0 0 8px;font-size:.84em;line-height:1.45;color:var(--pencil)">
+        Définit le bruit de fond de ta salle qui doit correspondre à <strong>0</strong>. Fais le calme, puis clique pour mesurer : la jauge retombera alors vraiment à zéro quand la classe est silencieuse, pour un réglage plus juste.
+      </p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button id="noise-calib-btn" class="btn btn-g btn-sm" onclick="noiseCalibrateSilence()">🤫 Calibrer le silence</button>
+        <button class="btn btn-p btn-sm" onclick="noiseResetSilence()">↺ Défaut</button>
+        <span id="noise-calib-hint" style="font-size:.82em;color:var(--margin-red)">Active d'abord le sonomètre 🎙</span>
+      </div>
+      <label style="display:block;font-size:.88em;font-weight:600">
+        Réglage fin : plancher = <span id="noise-silence-val" style="font-family:var(--font-mono)">-60</span> dB
+        <input type="range" id="noise-silence-range" min="-80" max="-25" step="1" value="-60" oninput="noiseSetSilence(this.value)" style="width:100%;margin-top:4px">
+        <span style="display:flex;justify-content:space-between;font-weight:normal;color:var(--pencil);font-size:.78em;margin-top:2px">
+          <span>← capte les sons faibles</span><span>ignore le bruit de fond →</span>
+        </span>
+      </label>
+    </fieldset>
+
     <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
       Seuil d'alerte : <span id="noise-thr-val" style="font-family:var(--font-mono)">60</span> / 100
       <input type="range" id="noise-thr-range" min="10" max="100" value="60" oninput="noiseSetThreshold(this.value)" style="width:100%;margin-top:4px">
@@ -5703,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.5.0';
+const APP_VERSION    = '2.6.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-02T18:40:05Z';
+const APP_BUILD_DATE = '2026-06-03T10:57:38Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27331,7 +27350,8 @@ function loadDemoOnDemand() {
 // Alerte visuelle (widget rouge / grande jauge) + sonore quand le seuil est
 // dépassé de façon soutenue, avec temporisation anti-spam.
 // ═══════════════════════════════════════════════════════════
-const NOISE_DEFAULTS = { threshold: 60, sustainS: 3, cooldownS: 15, soundOn: true, soundType: 'bell', volume: 70 };
+const NOISE_DEFAULTS = { threshold: 60, sustainS: 3, cooldownS: 15, soundOn: true, soundType: 'bell', volume: 70, silenceDb: -60 };
+const NOISE_SILENCE_MIN = -80, NOISE_SILENCE_MAX = -25; // bornes du plancher de silence réglable (dBFS)
 const _NOISE_SOUND_TYPES = ['bell','beep','chime','alarm','digital','gong','cuckoo',
   'pacman','mario','tetris'];
 let _noiseSettings = { ...NOISE_DEFAULTS };
@@ -27349,6 +27369,10 @@ function _noiseLoadSettings() {
   } catch (_) {}
   // Type devenu invalide (son retiré depuis) → repli propre sur la cloche.
   if (!_NOISE_SOUND_TYPES.includes(_noiseSettings.soundType)) _noiseSettings.soundType = 'bell';
+  // garde-fou : plancher de silence borné (évite un span ~0 qui ferait exploser le niveau)
+  let s = parseInt(_noiseSettings.silenceDb, 10);
+  if (isNaN(s)) s = NOISE_DEFAULTS.silenceDb;
+  _noiseSettings.silenceDb = Math.max(NOISE_SILENCE_MIN, Math.min(NOISE_SILENCE_MAX, s));
 }
 function _noiseSaveSettings() {
   try { localStorage.setItem('planClasse_noiseSettings', JSON.stringify(_noiseSettings)); } catch (_) {}
@@ -27421,15 +27445,23 @@ function stopNoiseMeter() {
   _noiseUpdateBtn();
 }
 
-// Niveau instantané 0–100 dérivé du RMS du signal temporel (échelle ~dB).
-function _noiseComputeLevel() {
+// dBFS brut instantané du signal temporel (~ -140 silence numérique .. 0 plein échelle).
+function _noiseRawDb() {
   const a = _noise.analyser, buf = _noise.buf;
   a.getByteTimeDomainData(buf);
   let sum = 0;
   for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
   const rms = Math.sqrt(sum / buf.length);        // 0..~1
-  const db  = 20 * Math.log10(rms + 1e-7);        // ~ -140..0 dBFS
-  const level = (db + 60) / 60 * 100;             // -60 dBFS → 0, 0 dBFS → 100
+  return 20 * Math.log10(rms + 1e-7);
+}
+
+// Niveau instantané 0–100. Le plancher (= niveau 0) est réglable (_noiseSettings.silenceDb)
+// pour calibrer le silence réel de la salle ; 0 dBFS reste mappé à 100.
+function _noiseComputeLevel() {
+  const db = _noiseRawDb();
+  const floor = _noiseSettings.silenceDb;         // dBFS qui doit correspondre au niveau 0
+  const span = (0 - floor) || 60;                 // garde-fou (floor ne peut pas atteindre 0)
+  const level = (db - floor) / span * 100;        // floor → 0, 0 dBFS → 100
   return Math.max(0, Math.min(100, level));
 }
 
@@ -27797,6 +27829,9 @@ function openNoiseSettings() {
   const so = document.getElementById('noise-sound-on'); if (so) so.checked = _noiseSettings.soundOn;
   set('noise-sound-type', _noiseSettings.soundType);
   set('noise-vol-range', _noiseSettings.volume);          txt('noise-vol-val', _noiseSettings.volume);
+  _noiseSyncSilenceUI();
+  const cb = document.getElementById('noise-calib-btn'); if (cb) cb.disabled = !_noise.active;
+  const ch = document.getElementById('noise-calib-hint'); if (ch) ch.style.display = _noise.active ? 'none' : '';
   const live = document.getElementById('noise-live-num');
   if (live) live.textContent = _noise.active ? Math.round(_noise.smooth) : '—';
   _modalReturnTo['mnoise'] = () => _noiseStopSound(); // fermer les réglages coupe un test en cours
@@ -27808,6 +27843,57 @@ function noiseSetCooldown(v){ _noiseSettings.cooldownS = parseInt(v,10)||15; con
 function noiseSetSoundOn(on){ _noiseSettings.soundOn = !!on; _noiseSaveSettings(); _noiseSyncSoundUI(); }
 function noiseSetSoundType(t){ _noiseSettings.soundType = _NOISE_SOUND_TYPES.includes(t)?t:'bell'; _noiseSaveSettings(); }
 function noiseSetVolume(v){ _noiseSettings.volume = Math.max(0, Math.min(100, parseInt(v,10)||0)); const e=document.getElementById('noise-vol-val'); if(e)e.textContent=_noiseSettings.volume; _noiseSaveSettings(); }
+
+// ── Plancher de silence (niveau 0) : calibration + réglage fin ──
+function _noiseSyncSilenceUI(){
+  const r = document.getElementById('noise-silence-range'); if (r) r.value = _noiseSettings.silenceDb;
+  const v = document.getElementById('noise-silence-val');   if (v) v.textContent = _noiseSettings.silenceDb;
+}
+function noiseSetSilence(v){
+  let n = parseInt(v, 10); if (isNaN(n)) n = NOISE_DEFAULTS.silenceDb;
+  n = Math.max(NOISE_SILENCE_MIN, Math.min(NOISE_SILENCE_MAX, n));
+  _noiseSettings.silenceDb = n;
+  const e = document.getElementById('noise-silence-val'); if (e) e.textContent = n;
+  _noiseSaveSettings();
+}
+function noiseResetSilence(){
+  _noiseSettings.silenceDb = NOISE_DEFAULTS.silenceDb;
+  _noiseSaveSettings();
+  _noiseSyncSilenceUI();
+  toast('↺ Plancher de silence réinitialisé (' + NOISE_DEFAULTS.silenceDb + ' dB).');
+}
+// Mesure le bruit de fond ambiant pendant ~1,5 s et le fixe comme niveau 0.
+function noiseCalibrateSilence(){
+  if (!_noise.active) { toast('🎙 Active d’abord le sonomètre pour calibrer.', 'warn'); return; }
+  const btn = document.getElementById('noise-calib-btn');
+  if (btn && btn.dataset.busy === '1') return;       // garde-fou anti double-clic
+  const samples = [];
+  const DURATION = 1500, EVERY = 60;
+  let elapsed = 0;
+  if (btn) { btn.dataset.busy = '1'; btn.dataset.lbl = btn.textContent; btn.disabled = true; }
+  const tick = () => {
+    if (!_noise.active) {                              // sonomètre coupé en cours de mesure
+      if (btn) { btn.disabled = false; btn.dataset.busy = ''; btn.textContent = btn.dataset.lbl || '🤫 Calibrer le silence'; }
+      return;
+    }
+    samples.push(_noiseRawDb());
+    elapsed += EVERY;
+    if (btn) btn.textContent = '🤫 Mesure… ' + Math.max(0, Math.ceil((DURATION - elapsed) / 1000)) + ' s';
+    if (elapsed < DURATION) { setTimeout(tick, EVERY); return; }
+    // moyenne en écartant les 20 % d’échantillons les plus forts (ignore un bruit ponctuel)
+    samples.sort((a, b) => a - b);
+    const keep = samples.slice(0, Math.max(1, Math.floor(samples.length * 0.8)));
+    const avg = keep.reduce((s, v) => s + v, 0) / keep.length;
+    let floor = Math.round(avg - 2);                  // petite marge sous le fond mesuré
+    floor = Math.max(NOISE_SILENCE_MIN, Math.min(NOISE_SILENCE_MAX, floor));
+    _noiseSettings.silenceDb = floor;
+    _noiseSaveSettings();
+    _noiseSyncSilenceUI();
+    if (btn) { btn.disabled = false; btn.dataset.busy = ''; btn.textContent = btn.dataset.lbl || '🤫 Calibrer le silence'; }
+    toast('🤫 Silence calibré : la jauge retombe maintenant à 0 au calme (plancher ' + floor + ' dB).');
+  };
+  tick();
+}
 
 _noiseLoadSettings();
 // La fenêtre déplaçable est pilotée par la fenêtre principale : si celle-ci se
