@@ -109,6 +109,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .spec-ppre{background:#f39c12;color:#fff}
 .spec-pap{background:#3f51b5;color:#fff}
 .spec-gev{background:#2980b9;color:#fff}
+.rattrap-btn.rattrap-set{font-weight:700;border-color:var(--ink-blue)}
+#eval-rattrap-pop .rattrap-day:hover{background:var(--paper-deep)}
 .spec-pai{background:#ec4899;color:#fff}
 .spec-agr{background:#00838f;color:#fff}
 .spec-ulis{background:#27ae60;color:#fff}
@@ -5739,11 +5741,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.11.0';
+const APP_VERSION    = '2.11.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T18:52:43Z';
+const APP_BUILD_DATE = '2026-06-04T19:34:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32648,6 +32650,7 @@ function _evalTableurSobrRestore() {
 }
 
 function _evalTableurRender() {
+  if (typeof _rattrapClose === 'function') _rattrapClose(); // un re-render invalide les boutons-ancres
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
@@ -32923,7 +32926,8 @@ function _evalTableurRender() {
     // Rattrapage (Type C — en dernier, après les compétences et la remarque)
     if (isTypeC) {
       const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
-      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><input type="date" value="${_esc(dateIndiv)}" data-sid="${_esc(sid)}" onchange="_evalSetDateIndiv(this)" style="padding:2px 4px;font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px" title="Date individuelle pour cet élève (rattrapage après absence). Vide = date globale de l'éval."></td>`;
+      const dispLbl = dateIndiv ? _esc(_fmtDateFr(dateIndiv)) : '📅 —';
+      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><button type="button" class="rattrap-btn${dateIndiv ? ' rattrap-set' : ''}" data-rattrap-sid="${_esc(sid)}" onclick="_evalRattrapOpen(event,'${_esc(sid)}')" title="Date individuelle pour cet élève (rattrapage après absence). Clic = choisir. Vide = date globale de l'éval." style="font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px;padding:2px 6px;cursor:pointer;min-width:96px">${dispLbl}</button></td>`;
     }
     html += '</tr>';
   });
@@ -33061,18 +33065,160 @@ function _evalSetStudentRemark(inputEl) {
 
 // Saisie d'une date individuelle (rattrapage Type C)
 function _evalSetDateIndiv(inputEl) {
+  _evalSetDateIndivVal(inputEl.getAttribute('data-sid'), inputEl.value);
+}
+// Variante par valeur (utilisée par le calendrier custom du rattrapage).
+function _evalSetDateIndivVal(sid, value) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
-  if (!ev) return;
-  const sid = inputEl.getAttribute('data-sid');
-  const d = inputEl.value;
+  if (!ev || !sid) return;
   pushUndo();
   ev.notes = ev.notes || {};
   ev.notes[sid] = ev.notes[sid] || { values: {} };
-  if (d) ev.notes[sid].dateIndiv = d; else delete ev.notes[sid].dateIndiv;
+  if (value) ev.notes[sid].dateIndiv = value; else delete ev.notes[sid].dateIndiv;
   ev.updatedAt = Date.now();
   save();
 }
+
+// ── Calendrier « maison » pour le rattrapage (Type C) ─────────────────────────
+// Le sélecteur de date natif (<input type=date>) ouvre un calendrier que le
+// navigateur positionne lui-même : dans le tableur plein écran, la colonne
+// Rattrapage est tout à droite, donc le calendrier natif débordait hors de la
+// fenêtre. Ce mini-calendrier est positionné par l'app et BORNÉ au viewport →
+// toujours entièrement visible. Un seul clic l'ouvre, un clic sur un jour saisit.
+const _RATTRAP_MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const _RATTRAP_JOURS = ['L','M','M','J','V','S','D'];
+let _rattrapState = { sid: null, y: 0, mo: 0 };
+
+function _rattrapEnsureEl() {
+  let pop = document.getElementById('eval-rattrap-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'eval-rattrap-pop';
+    pop.style.cssText = 'position:fixed;display:none;z-index:10050;background:var(--paper,#fff);border:1px solid var(--rule-line,#c8d2e0);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:8px;width:236px;font-family:var(--font-sans);color:var(--ink-deep)';
+    document.body.appendChild(pop);
+  }
+  return pop;
+}
+function _rattrapClose() {
+  const pop = document.getElementById('eval-rattrap-pop');
+  if (pop) pop.style.display = 'none';
+  _rattrapState.sid = null;
+}
+function _evalRattrapOpen(event, sid) {
+  if (event) { event.stopPropagation(); }
+  const evalId = document.getElementById('meval-tableur-evalid')?.value;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const cur = ev.notes?.[sid]?.dateIndiv || '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(cur);
+  const now = new Date();
+  _rattrapState = { sid, y: m ? +m[1] : now.getFullYear(), mo: m ? (+m[2] - 1) : now.getMonth() };
+  _rattrapRender();
+  _rattrapPos(event ? event.currentTarget : null);
+}
+function _rattrapNav(delta) {
+  let { y, mo } = _rattrapState;
+  mo += delta;
+  if (mo < 0) { mo = 11; y--; }
+  else if (mo > 11) { mo = 0; y++; }
+  _rattrapState.y = y; _rattrapState.mo = mo;
+  _rattrapRender();
+}
+function _rattrapPick(ymd) {
+  const sid = _rattrapState.sid;
+  if (!sid) return;
+  _evalSetDateIndivVal(sid, ymd);
+  _rattrapUpdateButton(sid, ymd);
+  _rattrapClose();
+}
+function _rattrapUpdateButton(sid, ymd) {
+  const btn = document.querySelector(`button.rattrap-btn[data-rattrap-sid="${CSS.escape(sid)}"]`);
+  if (btn) {
+    btn.textContent = ymd ? _fmtDateFr(ymd) : '📅 —';
+    btn.classList.toggle('rattrap-set', !!ymd);
+  }
+}
+function _rattrapRender() {
+  const pop = _rattrapEnsureEl();
+  const { sid, y, mo } = _rattrapState;
+  const evalId = document.getElementById('meval-tableur-evalid')?.value;
+  const ev = S.evaluations?.[evalId];
+  const cur = ev?.notes?.[sid]?.dateIndiv || '';
+  const todayK = (typeof todayKey === 'function') ? todayKey() : '';
+  const daysInMonth = new Date(y, mo + 1, 0).getDate();
+  let startDow = (new Date(y, mo, 1).getDay() + 6) % 7; // Lundi = 0
+  const pad2 = n => String(n).padStart(2, '0');
+  let cells = '';
+  for (let i = 0; i < startDow; i++) cells += `<span style="visibility:hidden"></span>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ymd = `${y}-${pad2(mo + 1)}-${pad2(d)}`;
+    const isSel = ymd === cur;
+    const isToday = ymd === todayK;
+    const bg = isSel ? 'background:var(--ink-blue,#1a252f);color:#fff;' : (isToday ? 'background:var(--highlighter,#f5d76e);color:#1a252f;' : '');
+    const bd = isToday && !isSel ? 'outline:1px solid var(--margin-red,#b03d2e);' : '';
+    cells += `<button type="button" class="rattrap-day" onclick="_rattrapPick('${ymd}')" style="${bg}${bd}border:0;border-radius:4px;padding:5px 0;cursor:pointer;font-family:var(--font-mono);font-size:.82em;background-color:${isSel?'':'transparent'}">${d}</button>`;
+  }
+  pop.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <button type="button" onclick="_rattrapNav(-1)" title="Mois précédent" style="border:0;background:transparent;cursor:pointer;font-size:1.1em;padding:2px 6px">‹</button>
+      <strong style="font-family:var(--font-serif);font-size:.92em">${_RATTRAP_MOIS[mo]} ${y}</strong>
+      <button type="button" onclick="_rattrapNav(1)" title="Mois suivant" style="border:0;background:transparent;cursor:pointer;font-size:1.1em;padding:2px 6px">›</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:.72em;color:var(--pencil);font-weight:700;margin-bottom:2px">
+      ${_RATTRAP_JOURS.map(j => `<span>${j}</span>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">${cells}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;gap:6px">
+      <button type="button" onclick="_rattrapPick('${todayK}')" style="flex:1;border:1px solid var(--rule-line);background:var(--paper-warm);border-radius:5px;padding:4px;cursor:pointer;font-size:.8em">📅 Aujourd'hui</button>
+      <button type="button" onclick="_rattrapPick('')" style="flex:1;border:1px solid var(--rule-line);background:var(--paper-warm);border-radius:5px;padding:4px;cursor:pointer;font-size:.8em">✕ Effacer</button>
+    </div>`;
+}
+function _rattrapPos(anchor) {
+  const pop = _rattrapEnsureEl();
+  pop.style.display = 'block';
+  pop.style.left = '0px'; pop.style.top = '0px'; // mesurer sans contrainte
+  const pr = pop.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let left, top;
+  if (anchor && anchor.getBoundingClientRect) {
+    const ar = anchor.getBoundingClientRect();
+    left = ar.left;
+    top = ar.bottom + 4;
+    if (top + pr.height > vh - 8) {              // pas la place en dessous → au-dessus
+      const above = ar.top - 4 - pr.height;
+      top = above >= 8 ? above : Math.max(8, vh - 8 - pr.height);
+    }
+  } else { left = (vw - pr.width) / 2; top = (vh - pr.height) / 2; }
+  left = Math.min(Math.max(8, left), vw - 8 - pr.width);   // bornage horizontal
+  top  = Math.min(Math.max(8, top),  vh - 8 - pr.height);  // bornage vertical
+  pop.style.left = Math.round(left) + 'px';
+  pop.style.top  = Math.round(top) + 'px';
+}
+// Fermeture sur clic extérieur / Échap / défilement de fond.
+document.addEventListener('mousedown', e => {
+  const pop = document.getElementById('eval-rattrap-pop');
+  if (!pop || pop.style.display === 'none') return;
+  if (pop.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('button.rattrap-btn')) return; // l'ouverture gère elle-même
+  _rattrapClose();
+}, true);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const pop = document.getElementById('eval-rattrap-pop');
+    if (pop && pop.style.display !== 'none') { e.stopPropagation(); _rattrapClose(); }
+  }
+}, true);
+// Le tableur défile dans son propre conteneur : si on défile pendant que le
+// calendrier est ouvert, le bouton-ancre bouge → on referme proprement.
+document.addEventListener('scroll', () => {
+  const pop = document.getElementById('eval-rattrap-pop');
+  if (pop && pop.style.display !== 'none') _rattrapClose();
+}, true);
+window.addEventListener('resize', () => {
+  const pop = document.getElementById('eval-rattrap-pop');
+  if (pop && pop.style.display !== 'none') _rattrapClose();
+});
 
 function _evalTableurUpdate(inputEl) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
