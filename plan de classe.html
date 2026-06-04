@@ -2196,7 +2196,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   </div>
   <div class="nw-bar-wrap">
     <div id="noise-bar" class="nw-bar calm"></div>
-    <div id="noise-threshold-marker" class="nw-thr" style="left:60%"></div>
+    <div id="noise-threshold-marker" class="nw-thr" style="left:75%"></div>
   </div>
   <div class="nw-foot">
     <span id="noise-level-num" class="nw-num">0</span>
@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.6.5';
+const APP_VERSION    = '2.7.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T13:26:19Z';
+const APP_BUILD_DATE = '2026-06-04T14:16:39Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27363,12 +27363,17 @@ const NOISE_SILENCE_MIN = -80, NOISE_SILENCE_MAX = -25; // bornes du plancher de
 // exponentiel et basé sur le temps écoulé entre frames → comportement identique quel que
 // soit le framerate de la machine. (Ancien lissage : α=0,25/frame ≈ τ 50 ms → trop nerveux.)
 const NOISE_SMOOTH_TAU_MS = 1500;
+// Position visuelle FIXE du repère de seuil sur la barre (%). La barre est rééchelonnée
+// (non-linéaire) pour que le niveau du seuil tombe toujours ici : la plage « normale »
+// [0, seuil] occupe ANCHOR % de la barre, le « trop fort » [seuil, 100] le quart restant.
+// Lecture stable + plus de place pour voir les variations sous le seuil.
+const NOISE_THR_ANCHOR_PCT = 75;
 const _NOISE_SOUND_TYPES = ['bell','beep','chime','alarm','digital','gong','cuckoo',
   'pacman','mario','tetris'];
 let _noiseSettings = { ...NOISE_DEFAULTS };
 let _noise = {
   active: false, starting: false, popup: null,
-  ctx: null, analyser: null, source: null, stream: null, buf: null, raf: null,
+  ctx: null, analyser: null, source: null, filters: null, stream: null, buf: null, raf: null,
   smooth: 0, lastFrameT: 0, overSince: 0, lastAlert: 0, alerting: false, alertClearTimer: null,
   curSound: null,
 };
@@ -27423,8 +27428,22 @@ async function startNoiseMeter() {
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
-    source.connect(analyser); // PAS connecté à destination → pas de larsen/écho
+    // Pondération « façon dBA » : on filtre le micro AVANT la mesure pour suivre la voix
+    // (brouhaha) et ignorer les bruits parasites. Inspiré de la courbe A (IEC 61672), mais
+    // réalisé par filtres temps réel pour garder l'échelle RMS dBFS intacte (recalibrage
+    // simple du plancher de silence) :
+    //  - passe-haut ~130 Hz : coupe les ronflements graves (ventilation, vidéoprojecteur,
+    //    chocs de table, manipulation du micro) — zone fortement atténuée par la courbe A ;
+    //  - cloche +4 dB ~2,8 kHz : accentue les consonnes / la voix, là où l'oreille (et la
+    //    courbe A) est la plus sensible ;
+    //  - passe-bas ~11 kHz : retire le souffle aigu.
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 130;  hp.Q.value = 0.5;
+    const pk = ctx.createBiquadFilter(); pk.type = 'peaking';  pk.frequency.value = 2800; pk.Q.value = 0.8; pk.gain.value = 4;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';  lp.frequency.value = 11000; lp.Q.value = 0.5;
+    source.connect(hp); hp.connect(pk); pk.connect(lp); lp.connect(analyser);
+    // (analyseur NON connecté à destination → pas de larsen/écho)
     _noise.ctx = ctx; _noise.analyser = analyser; _noise.source = source;
+    _noise.filters = [hp, pk, lp];
     _noise.stream = stream; _noise.buf = new Uint8Array(analyser.fftSize);
   } catch (e) {
     try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
@@ -27450,7 +27469,7 @@ function stopNoiseMeter() {
   try { if (_noise.ctx) _noise.ctx.close(); } catch (_) {}
   try { if (_noise.popup && !_noise.popup.closed) _noise.popup.close(); } catch (_) {}
   _noise.active = false; _noise.alerting = false; _noise.popup = null;
-  _noise.ctx = _noise.analyser = _noise.source = _noise.stream = _noise.buf = _noise.raf = null;
+  _noise.ctx = _noise.analyser = _noise.source = _noise.filters = _noise.stream = _noise.buf = _noise.raf = null;
   const w = document.getElementById('noise-widget'); if (w) { w.style.display = 'none'; w.classList.remove('alert'); }
   document.body.classList.remove('noise-widget-on');
   _noiseUpdateBtn();
@@ -27512,11 +27531,25 @@ function _noiseZone(lvl, thr) {
   return 'calm';
 }
 
+// Position d'affichage (%) du niveau sur la barre, rééchelonnée pour ancrer le seuil à
+// NOISE_THR_ANCHOR_PCT. Transformation continue et monotone, par morceaux :
+//   niveau ∈ [0, seuil]   → [0, ANCHOR] %
+//   niveau ∈ [seuil, 100] → [ANCHOR, 100] %
+// La barre atteint donc le repère exactement quand le niveau atteint le seuil.
+function _noiseBarPos(level, thr) {
+  const A = NOISE_THR_ANCHOR_PCT;
+  const t = Math.max(1, Math.min(99, thr || 0));
+  const lv = Math.max(0, Math.min(100, level));
+  const pos = (lv <= t) ? (lv / t) * A : A + ((lv - t) / (100 - t)) * (100 - A);
+  return Math.max(0, Math.min(100, pos));
+}
+
 function _noiseRenderMeters(lvl, thr) {
   const zone = _noiseZone(lvl, thr);
+  const pos = _noiseBarPos(lvl, thr);   // largeur barre rééchelonnée (seuil ancré à 75 %)
   const bar = document.getElementById('noise-bar');
-  if (bar) { bar.style.width = lvl + '%'; bar.className = 'nw-bar ' + zone; }
-  const mk = document.getElementById('noise-threshold-marker'); if (mk) mk.style.left = thr + '%';
+  if (bar) { bar.style.width = pos + '%'; bar.className = 'nw-bar ' + zone; }
+  const mk = document.getElementById('noise-threshold-marker'); if (mk) mk.style.left = NOISE_THR_ANCHOR_PCT + '%';
   const num = document.getElementById('noise-level-num'); if (num) num.textContent = lvl;
   const st = document.getElementById('noise-state');
   if (st && !_noise.alerting) st.textContent = zone === 'loud' ? '🔴 Trop fort' : zone === 'warn' ? '🟠 Animé' : '🟢 Calme';
@@ -27525,8 +27558,8 @@ function _noiseRenderMeters(lvl, thr) {
   if (_noise.popup && !_noise.popup.closed) {
     const d = _noise.popup.document;
     const col = zone === 'loud' ? '#e74c3c' : zone === 'warn' ? '#f39c12' : '#2ecc71';
-    const f = d.getElementById('npw-fill'); if (f) { f.style.width = lvl + '%'; f.style.background = col; }
-    const t = d.getElementById('npw-thr'); if (t) t.style.left = thr + '%';
+    const f = d.getElementById('npw-fill'); if (f) { f.style.width = pos + '%'; f.style.background = col; }
+    const t = d.getElementById('npw-thr'); if (t) t.style.left = NOISE_THR_ANCHOR_PCT + '%';
     const n = d.getElementById('npw-num'); if (n) n.textContent = lvl;
     const e = d.getElementById('npw-emoji');
     if (e) e.textContent = _noise.alerting ? '🤫' : (zone === 'loud' ? '😟' : zone === 'warn' ? '🙂' : '😌');
@@ -27600,7 +27633,7 @@ body.compact #npw-msg{display:none}`;
     + `<button class="npw-btn" id="npw-max" title="Agrandir : remplir l'écran (re-cliquer pour rétablir)" aria-label="Remplir l'écran">⛶</button>`
     + `</div>`
     + `<div id="npw-emoji">😌</div>`
-    + `<div id="npw-wrap"><div id="npw-fill"></div><div id="npw-thr" style="left:${thr}%"></div></div>`
+    + `<div id="npw-wrap"><div id="npw-fill"></div><div id="npw-thr" style="left:${NOISE_THR_ANCHOR_PCT}%"></div></div>`
     + `<div id="npw-num">0</div><div id="npw-msg">Au calme</div>`;
   try {
     const d = win.document;
@@ -27868,7 +27901,7 @@ function openNoiseSettings() {
   _modalReturnTo['mnoise'] = () => _noiseStopSound(); // fermer les réglages coupe un test en cours
   openMod('mnoise');
 }
-function noiseSetThreshold(v){ _noiseSettings.threshold = parseInt(v,10)||60; const e=document.getElementById('noise-thr-val'); if(e)e.textContent=_noiseSettings.threshold; const mk=document.getElementById('noise-threshold-marker'); if(mk)mk.style.left=_noiseSettings.threshold+'%'; _noiseSaveSettings(); }
+function noiseSetThreshold(v){ _noiseSettings.threshold = parseInt(v,10)||60; const e=document.getElementById('noise-thr-val'); if(e)e.textContent=_noiseSettings.threshold; const mk=document.getElementById('noise-threshold-marker'); if(mk)mk.style.left=NOISE_THR_ANCHOR_PCT+'%'; _noiseSaveSettings(); }
 function noiseSetSustain(v){ _noiseSettings.sustainS = parseInt(v,10)||3; const e=document.getElementById('noise-sustain-val'); if(e)e.textContent=_noiseSettings.sustainS; _noiseSaveSettings(); }
 function noiseSetCooldown(v){ _noiseSettings.cooldownS = parseInt(v,10)||15; const e=document.getElementById('noise-cooldown-val'); if(e)e.textContent=_noiseSettings.cooldownS; _noiseSaveSettings(); }
 function noiseSetSoundOn(on){ _noiseSettings.soundOn = !!on; _noiseSaveSettings(); _noiseSyncSoundUI(); }
