@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.6.3';
+const APP_VERSION    = '2.6.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T12:17:54Z';
+const APP_BUILD_DATE = '2026-06-04T12:38:23Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -23635,7 +23635,8 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
         const key = `${r},${c}`;
         const nt   = cls.configuration.positions_vides.includes(key);
         const sid   = cls.seating[key];
-        const stu   = sid ? S.eleves[sid] : null;
+        let   stu   = sid ? S.eleves[sid] : null;
+        if (stu && !_stuActiveOn(stu)) stu = null; // parti/pas encore arrivé → place vide (idem buildCell)
         const ipad  = ipadGet(cls, key, groupFilter);
         const seatG = (cls.groupes || {})[key] || 0;
         const aeshIdxHere = _aeshAtKeyMap[key];
@@ -23676,7 +23677,8 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
         const key = `${r},${c}`;
         const nt  = cls.configuration.positions_vides.includes(key);
         const sid = cls.seating[key];
-        const stu = sid ? S.eleves[sid] : null;
+        let   stu = sid ? S.eleves[sid] : null;
+        if (stu && !_stuActiveOn(stu)) stu = null; // parti/pas encore arrivé → place vide (idem buildCell)
         const aeshIdxHere = _aeshAtKeyMap[key];
         // Phase 4 : AESH non présente pour le filtre groupe actif → cellule vide à l'impression
         const _aeshPrintGhost = (typeof aeshIdxHere === 'number') && !_aeshPresentForFilter(cls, aeshIdxHere, groupFilter);
@@ -23757,7 +23759,8 @@ function buildTeacherPageHTML(cls) {
       const key = `${r},${c}`;
       const nt   = cls.configuration.positions_vides.includes(key);
       const sid   = cls.seating[key];
-      const stu   = sid ? S.eleves[sid] : null;
+      let   stu   = sid ? S.eleves[sid] : null;
+      if (stu && !_stuActiveOn(stu)) stu = null; // parti/pas encore arrivé → place vide (idem buildCell)
       const ipad  = ipadGet(cls, key, 0); // all-classes print always shows CE iPads
       const seatG = (cls.groupes || {})[key] || 0;
       const aeshIdxHere = _aeshAtKeyMap[key];
@@ -23823,7 +23826,7 @@ function buildIpadTable(cls, cc) {
     ...Object.keys(mG1).filter(k => mG1[k]),
     ...Object.keys(mG2).filter(k => mG2[k]),
     ...Object.keys(mG3).filter(k => mG3[k]),
-  ])].filter(k => cls.seating[k] && S.eleves[cls.seating[k]])
+  ])].filter(k => cls.seating[k] && S.eleves[cls.seating[k]] && _stuActiveOn(S.eleves[cls.seating[k]]))
     .sort((a, b) => (mCE[a]||mG1[a]||mG2[a]||mG3[a]||999) - (mCE[b]||mG1[b]||mG2[b]||mG3[b]||999));
 
   if (!keys.length) return '';
