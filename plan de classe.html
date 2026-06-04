@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.7.0';
+const APP_VERSION    = '2.8.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T14:16:39Z';
+const APP_BUILD_DATE = '2026-06-04T18:08:02Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7797,6 +7797,10 @@ let _saveFailed = false;
 let _dirtySinceExport = false;
 function save() {
   try {
+    // Horodatage interne de la version des données : voyage DANS le JSON (localStorage,
+    // sync auto, backups). Permet, à l'ouverture sur une autre machine, de détecter qu'un
+    // fichier de sync plus récent a été déposé par un autre appareil (cf. autoReloadCheck).
+    S.savedAt = Date.now();
     localStorage.setItem(LS_KEY, JSON.stringify(S));
     if (_saveFailed) {
       _saveFailed = false;
@@ -24339,6 +24343,64 @@ async function cleanupOldBackups() {
 }
 
 // Vérifie si le fichier auto est plus récent (modifié à l'extérieur)
+// Applique les données rechargées depuis le disque (remplace S, re-render tout).
+function _applyReloadedData(data, f) {
+  S = data;
+  postLoadHook();
+  if (!S.cur && Object.keys(S.classes).length) S.cur = Object.keys(S.classes)[0];
+  save();
+  refreshSelector();
+  if (S.cur) {
+    const cls = S.classes[S.cur];
+    document.getElementById('cls-sel').value = S.cur;
+    document.getElementById('hdr-yr').textContent = cls.année + '–' + (cls.année+1);
+  }
+  renderClasses();
+  renderUserLinks();
+  // Reconstitue le visuel post-appel pour la classe active si un appel a été
+  // enregistré dans son créneau actif depuis une autre machine (sync auto).
+  _restorePostAppelFromAttendance();
+  const at = document.querySelector('.tab.on');
+  if (at) renderTab(at.id.replace('tab-',''));
+  _lastDiskWriteTs = f.lastModified;
+  toast('✅ Données rechargées depuis disque');
+}
+
+// Le contenu du fichier disque diffère-t-il réellement de S ? (en ignorant le
+// seul champ volatile savedAt, qui change à chaque save même sans modif de fond)
+function _dataDiffersIgnoringSavedAt(data) {
+  try {
+    const a = Object.assign({}, data); delete a.savedAt;
+    const b = Object.assign({}, S);    delete b.savedAt;
+    return JSON.stringify(a) !== JSON.stringify(b);
+  } catch (_) { return true; }
+}
+
+// 1er check à l'ouverture de l'app : si le fichier de sync a été déposé par un
+// AUTRE appareil (savedAt interne plus récent que nos données locales) ET que son
+// contenu diffère réellement, proposer de le charger. C'est le cas « j'ouvre le
+// logiciel sur un 2e ordinateur après avoir travaillé sur le 1er ».
+async function _maybeProposeInitialReload(f) {
+  let data;
+  try { data = JSON.parse(await f.text()); }
+  catch (_) { return; }
+  // Fichier corrompu : on n'embête pas l'utilisateur au démarrage.
+  if (_validateImport(data)) return;
+  const diskSavedAt  = +data.savedAt || 0;
+  const localSavedAt = +S.savedAt    || 0;
+  // diskSavedAt/localSavedAt == 0 → l'une des machines tourne encore une version
+  // antérieure à savedAt (ou n'a pas encore sauvegardé) : on reste silencieux.
+  if (diskSavedAt <= localSavedAt) return;
+  if (!_dataDiffersIgnoringSavedAt(data)) return;
+  const fmt = ts => ts ? new Date(ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'inconnue';
+  const msg =
+    `📥 Une version plus récente de tes données a été déposée par un autre appareil via la synchronisation.\n\n`
+    + `• Fichier de sync : ${fmt(diskSavedAt)}\n`
+    + `• Données ouvertes ici : ${fmt(localSavedAt)}\n\n`
+    + `Charger la version du fichier ?\n(Tes éventuelles modifications locales non synchronisées seront remplacées.)`;
+  if (confirm(msg)) _applyReloadedData(data, f);
+}
+
 async function autoReloadCheck() {
   if (!autoSyncEnabled || !dirHandle) return;
   try {
@@ -24346,11 +24408,15 @@ async function autoReloadCheck() {
     if (perm !== 'granted') return; // pas de prompt silencieux
     const fh = await dirHandle.getFileHandle(AUTO_SAVE_FILENAME);
     const f  = await fh.getFile();
-    // 1er check après chargement de la page : _lastDiskWriteTs vaut 0, ce qui ferait
-    // toujours déclencher la popup (n'importe quel fichier non vide est "plus récent que 0").
-    // On initialise silencieusement avec le lastModified courant : on n'alerte que si le
-    // fichier change APRÈS ce premier check.
-    if (_lastDiskWriteTs === 0) { _lastDiskWriteTs = f.lastModified; return; }
+    // 1er check après chargement de la page : _lastDiskWriteTs vaut 0. On ne peut pas
+    // comparer au lastModified disque (n'importe quel fichier serait "plus récent que 0").
+    // À la place, on compare le savedAt INTERNE du fichier à celui de nos données locales :
+    // si le fichier a été déposé par un autre appareil, on propose de le recharger.
+    if (_lastDiskWriteTs === 0) {
+      _lastDiskWriteTs = f.lastModified;
+      await _maybeProposeInitialReload(f);
+      return;
+    }
     if (f.lastModified > _lastDiskWriteTs + 1500) {
       const txt = await f.text();
       const data = JSON.parse(txt);
@@ -24392,25 +24458,7 @@ async function autoReloadCheck() {
         pendingWarn += `\n\n📝 Une saisie d'évaluation en cours a été préservée dans la sauvegarde locale.`;
       }
       if (confirm(`Le fichier "${AUTO_SAVE_FILENAME}" a été modifié à l'extérieur (${dt}).\n\nRecharger ces données ?${pendingWarn}\n(Tes changements locaux non encore sauvegardés seront écrasés.)`)) {
-        S = data;
-        postLoadHook();
-        if (!S.cur && Object.keys(S.classes).length) S.cur = Object.keys(S.classes)[0];
-        save();
-        refreshSelector();
-        if (S.cur) {
-          const cls = S.classes[S.cur];
-          document.getElementById('cls-sel').value = S.cur;
-          document.getElementById('hdr-yr').textContent = cls.année + '–' + (cls.année+1);
-        }
-        renderClasses();
-        renderUserLinks();
-        // Reconstitue le visuel post-appel pour la classe active si un appel a été
-        // enregistré dans son créneau actif depuis une autre machine (sync auto).
-        _restorePostAppelFromAttendance();
-        const at = document.querySelector('.tab.on');
-        if (at) renderTab(at.id.replace('tab-',''));
-        _lastDiskWriteTs = f.lastModified;
-        toast('✅ Données rechargées depuis disque');
+        _applyReloadedData(data, f);
       } else {
         // Refus → on note la timestamp pour ne pas re-prompter à chaque focus
         _lastDiskWriteTs = f.lastModified;
