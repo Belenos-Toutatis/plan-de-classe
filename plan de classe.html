@@ -107,6 +107,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .spec-badges{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px}
 .spec-badge{display:inline-block;font-size:.58em;font-weight:700;padding:0 3px;border-radius:3px;line-height:1.4;cursor:default;white-space:nowrap}
 .spec-ppre{background:#f39c12;color:#fff}
+.spec-pap{background:#3f51b5;color:#fff}
 .spec-gev{background:#2980b9;color:#fff}
 .spec-pai{background:#ec4899;color:#fff}
 .spec-agr{background:#00838f;color:#fff}
@@ -1652,6 +1653,7 @@ input[type="text"].meval-niveau-input:focus { background: transparent !important
   padding: 1px 4px !important;
 }
 .spec-ppre   { background: var(--maitrise-2) !important; }
+.spec-pap    { background: #3f51b5 !important; color: #fff !important; }
 .spec-gev    { background: var(--maitrise-4) !important; }
 .spec-ulis, .spec-upe2a { background: var(--pencil) !important; }
 .spec-ulis-incl, .spec-upe2a-incl { background: #6f4a8c !important; }
@@ -1661,6 +1663,7 @@ html[data-theme="dark"] .spec-ulis-incl,
 html[data-theme="dark"] .spec-upe2a-incl { background: #4d3463 !important; }
 html[data-theme="dark"] .spec-pai { background: #a83470 !important; }
 html[data-theme="dark"] .spec-agr { background: #00606a !important; }
+html[data-theme="dark"] .spec-pap { background: #303f9f !important; }
 
 /* ─── Titres h3 (modales etc.) ─── */
 h3 {
@@ -2959,10 +2962,13 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Classe <span style="font-size:.78em;color:#888">(en cas de changement de classe en cours d'année — l'historique, les compteurs et les appels passés sont conservés)</span></label>
       <select id="es-cls"></select>
     </div>
-    <div style="font-size:.78em;color:#777;margin-bottom:6px">Scolarité (1 max — PPRE / PPS / ULIS exclusifs entre eux)</div>
+    <div style="font-size:.78em;color:#777;margin-bottom:6px">Scolarité (1 max — PPRE / PAP / PPS / ULIS exclusifs entre eux)</div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#e67e22">
         <input type="checkbox" id="es-ppre" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> PPRE
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#3f51b5">
+        <input type="checkbox" id="es-pap" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> PAP (Plan d'Accompagnement Personnalisé)
       </label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#2980b9">
         <input type="checkbox" id="es-gevasco" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> GEVAsco / PPS
@@ -5541,6 +5547,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div class="ctx-item has-sub" id="ctx-amenagements" onclick="ctxToggleSubmenu(event,this)">🎓 Aménagements
     <div class="ctx-submenu">
       <div class="ctx-item" id="ctx-ppre"      onclick="ctxTogglePpre()">🟠 <span id="ctx-ppre-lbl"></span></div>
+      <div class="ctx-item" id="ctx-pap"       onclick="ctxTogglePap()">🔷 <span id="ctx-pap-lbl"></span></div>
       <div class="ctx-item" id="ctx-gevasco"  onclick="ctxToggleGEVAsco()">🔵 <span id="ctx-gev-lbl"></span></div>
       <div class="ctx-item" id="ctx-ulis"     onclick="ctxToggleUlis()">🟢 <span id="ctx-ulis-lbl"></span></div>
       <div class="ctx-item" id="ctx-ulisincl" onclick="ctxToggleUlisIncl()">🟣 <span id="ctx-ulisincl-lbl"></span></div>
@@ -5732,11 +5739,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.9.0';
+const APP_VERSION    = '2.11.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T18:37:09Z';
+const APP_BUILD_DATE = '2026-06-04T18:52:43Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -6535,6 +6542,7 @@ function postLoadHook() {
   for (const stu of Object.values(S.eleves || {})) {
     if (!Array.isArray(stu.tags)) stu.tags = [];
     if (typeof stu.civilite === 'undefined') stu.civilite = null; // 'M' | 'F' | null
+    if (typeof stu.pap === 'undefined') stu.pap = false; // Plan d'Accompagnement Personnalisé (dispositif scolarité)
     if (typeof stu.agrandissement === 'undefined') stu.agrandissement = false; // photocopies agrandies (cumulable)
     // Arrivées/départs en cours d'année : null = présent par défaut
     if (typeof stu.arrivalDate   === 'undefined') stu.arrivalDate   = null;
@@ -7949,11 +7957,25 @@ function redoLast() {
 // Un élève peut avoir au plus 1 statut de chaque groupe (donc 0, 1 ou 2 statuts au total).
 // Ex. : UPE2A+ + PPRE est valide (allophone en inclusion qui suit aussi un PPRE).
 // ═══════════════════════════════════════════════════════════
-const STATUS_GROUP_A = ['ppre', 'gevasco', 'ulis', 'ulis_incl'];
+const STATUS_GROUP_A = ['ppre', 'pap', 'gevasco', 'ulis', 'ulis_incl'];
 const STATUS_GROUP_B = ['upe2a', 'upe2a_incl'];
 const STATUS_GROUP_C = ['pai'];  // PAI (médical) — seul dans son groupe, cumulable avec tout le reste
 const STATUS_GROUP_D = ['agrandissement']; // Agrandissement (photocopies agrandies) — seul, cumulable avec tout
 const STUDENT_STATUSES = [...STATUS_GROUP_A, ...STATUS_GROUP_B, ...STATUS_GROUP_C, ...STATUS_GROUP_D];
+
+// Agrandissement (photocopies agrandies) : rendu comme SUFFIXE « -A » sur la pastille
+// d'aménagement principale de l'élève (ex. « PPRE-A », « PAP-A », « PPS-A »), et non comme
+// une pastille séparée. _agrPrimaryKey choisit le dispositif principal qui portera le suffixe.
+const _AGR_PRIMARY_ORDER = ['pap', 'ppre', 'gevasco', 'ulis_incl', 'ulis', 'upe2a_incl', 'upe2a', 'pai'];
+function _agrPrimaryKey(stu) {
+  if (!stu) return null;
+  for (const k of _AGR_PRIMARY_ORDER) if (stu[k]) return k;
+  return null;
+}
+// Suffixe '-A' à coller au libellé de la pastille `key` si c'est la pastille principale ET agrandissement actif.
+function _agrSuffix(stu, key) { return (stu && stu.agrandissement && _agrPrimaryKey(stu) === key) ? '-A' : ''; }
+// true si agrandissement actif mais AUCUNE pastille d'aménagement à suffixer → on affiche une pastille « -A » seule.
+function _agrStandalone(stu) { return !!(stu && stu.agrandissement && !_agrPrimaryKey(stu)); }
 
 // Mapping clé interne ↔ suffixe DOM (les clés `_incl` deviennent `-incl` dans les ids HTML).
 const _STATUS_DOM_SUFFIX = { ulis_incl: 'ulis-incl', upe2a_incl: 'upe2a-incl' };
@@ -8033,6 +8055,7 @@ function showCtxMenu(e, cls, key, sid) {
     'ctx-item' + (undoStack.length ? '' : ' disabled');
   // Libellés statuts selon état actuel
   document.getElementById('ctx-ppre-lbl').textContent     = s?.ppre      ? 'Retirer PPRE'           : 'Marquer PPRE';
+  document.getElementById('ctx-pap-lbl').textContent      = s?.pap       ? 'Retirer PAP'            : 'Marquer PAP';
   document.getElementById('ctx-gev-lbl').textContent      = s?.gevasco   ? 'Retirer GEVAsco/PPS'    : 'Marquer GEVAsco/PPS';
   document.getElementById('ctx-ulis-lbl').textContent     = s?.ulis      ? 'Retirer ULIS'           : 'Marquer ULIS';
   document.getElementById('ctx-ulisincl-lbl').textContent = s?.ulis_incl ? 'Retirer ULIS inclusion' : 'Marquer ULIS inclusion';
@@ -8125,6 +8148,7 @@ function _toggleStuStatus(id, statusKey, label, emoji) {
   toast(`${emoji} ${label} ${wasActive ? 'retiré' : 'activé'} : ${s.prenom}`);
 }
 function toggleStuPpre(id)      { _toggleStuStatus(id, 'ppre',       'PPRE',            '🟠'); }
+function toggleStuPap(id)       { _toggleStuStatus(id, 'pap',        'PAP',             '🔷'); }
 function toggleStuGevasco(id)   { _toggleStuStatus(id, 'gevasco',    'GEVAsco/PPS',     '🔵'); }
 function toggleStuUlis(id)      { _toggleStuStatus(id, 'ulis',       'ULIS',            '🟢'); }
 function toggleStuUlisIncl(id)  { _toggleStuStatus(id, 'ulis_incl',  'ULIS inclusion',  '🟣'); }
@@ -8132,6 +8156,28 @@ function toggleStuUpe2a(id)     { _toggleStuStatus(id, 'upe2a',      'UPE2A',   
 function toggleStuUpe2aIncl(id) { _toggleStuStatus(id, 'upe2a_incl', 'UPE2A inclusion', '🟥'); }
 function toggleStuPai(id)       { _toggleStuStatus(id, 'pai',        'PAI',             '⚕️'); }
 function toggleStuAgrandissement(id) { _toggleStuStatus(id, 'agrandissement', 'Agrandissement', '📄'); }
+
+// Boutons cycliques (onglet Élèves — compacité). Un seul bouton parcourt les 3 états.
+// ULIS : Aucun → ULIS (hors classe) → ULIS+ (inclusion) → Aucun.
+function cycleStuUlis(id) {
+  const s = S.eleves[id]; if (!s) return;
+  let msg;
+  if (s.ulis_incl)  { s.ulis_incl = false; s.ulis = false; msg = '⚪ ULIS retiré'; }
+  else if (s.ulis)  { _setStudentStatusExclusive(s, 'ulis_incl'); msg = '🟣 ULIS inclusion activé'; }
+  else              { _setStudentStatusExclusive(s, 'ulis');      msg = '🟢 ULIS activé'; }
+  save(); renderStudents(); renderTeacherGrid();
+  toast(`${msg} : ${s.prenom}`);
+}
+// UPE2A : Aucun → UPE2A (hors classe) → UPE2A+ (inclusion) → Aucun.
+function cycleStuUpe2a(id) {
+  const s = S.eleves[id]; if (!s) return;
+  let msg;
+  if (s.upe2a_incl) { s.upe2a_incl = false; s.upe2a = false; msg = '⚪ UPE2A retiré'; }
+  else if (s.upe2a) { _setStudentStatusExclusive(s, 'upe2a_incl'); msg = '🟥 UPE2A inclusion activé'; }
+  else              { _setStudentStatusExclusive(s, 'upe2a');      msg = '🟦 UPE2A activé'; }
+  save(); renderStudents(); renderTeacherGrid();
+  toast(`${msg} : ${s.prenom}`);
+}
 
 function openStuNotes(id) {
   const s = S.eleves[id]; if (!s) return;
@@ -8157,6 +8203,7 @@ function _ctxToggleStatus(statusKey, label, emoji) {
   closeCtxMenu(); toast(`${emoji} ${label} ${wasActive ? 'retiré' : 'activé'} : ${s.prenom}`);
 }
 function ctxTogglePpre()      { _ctxToggleStatus('ppre',       'PPRE',            '🟠'); }
+function ctxTogglePap()       { _ctxToggleStatus('pap',        'PAP',             '🔷'); }
 function ctxToggleGEVAsco()   { _ctxToggleStatus('gevasco',    'GEVAsco/PPS',     '🔵'); }
 function ctxTogglePai()       { _ctxToggleStatus('pai',        'PAI',             '⚕️'); }
 function ctxToggleAgrandissement() { _ctxToggleStatus('agrandissement', 'Agrandissement', '📄'); }
@@ -12094,7 +12141,7 @@ function _classCounts(cls) {
     if (s.upe2a) { upe2aOut++; continue; }
     present++;
     // Aménagés = présents avec PPRE / PPS / ULIS+ / UPE2A+
-    if (s.ppre || s.gevasco || s.ulis_incl || s.upe2a_incl || s.pai) amenagement++;
+    if (s.ppre || s.pap || s.gevasco || s.ulis_incl || s.upe2a_incl || s.pai) amenagement++;
   }
   // outClass = ULIS hors + UPE2A hors → libellé combiné dans l'UI
   const outClass = ulisOut + upe2aOut;
@@ -12220,7 +12267,7 @@ function renderClasses() {
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Répartition par civilité (♂ garçons / ♀ filles / ? non spécifié)">♂ / ♀</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves normalement en classe (inscrits moins ULIS et UPE2A hors-inclusion)">Normalement présents</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves présents sans aménagement particulier (copie standard)">Non aménagés</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves avec PPRE / PPS / ULIS+ / UPE2A+ — copies souvent adaptées">Aménagés</th>
+          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves avec PPRE / PAP / PPS / ULIS+ / UPE2A+ / PAI — copies souvent adaptées">Aménagés</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves nécessitant des photocopies AGRANDIES (combien d'agrandissements tirer)">📄 Agrandissements</th>
         </tr></thead>
         <tbody>${recapRows}</tbody>
@@ -12237,7 +12284,7 @@ function renderClasses() {
       <div class="rp-hint" style="font-size:.78em;margin-top:6px;line-height:1.5">
         💡 <strong>Inscrits</strong> = total des élèves dans la classe.
         <strong>Normalement présents</strong> = inscrits moins les ULIS et UPE2A hors-inclusion (jamais en classe).
-        <strong>Aménagés</strong> = présents avec PPRE, PPS (Gevasco), ULIS+ ou UPE2A+ — copies souvent adaptées.
+        <strong>Aménagés</strong> = présents avec PPRE, PAP, PPS (Gevasco), ULIS+, UPE2A+ ou PAI — copies souvent adaptées.
         <strong>📄 Agrandissements</strong> = élèves nécessitant des photocopies agrandies (nombre d'agrandissements à tirer).
       </div>
     </div>
@@ -12669,6 +12716,7 @@ function openEdit(id) {
     ).join('');
   }
   document.getElementById('es-ppre').checked        = !!s.ppre;
+  document.getElementById('es-pap').checked         = !!s.pap;
   document.getElementById('es-gevasco').checked     = !!s.gevasco;
   document.getElementById('es-ulis').checked        = !!s.ulis;
   document.getElementById('es-ulis-incl').checked   = !!s.ulis_incl;
@@ -14158,16 +14206,26 @@ function renderStudents() {
     const exclUpe2a    = '— exclusif avec l\'autre statut UPE2A';
     const ppreBtn      = `<button class="btn btn-sm" style="background:${s.ppre?'#e67e22':'#eee'};color:${s.ppre?'#fff':'#999'};min-width:46px"
       onclick="toggleStuPpre('${s.id}')" title="${s.ppre?'Retirer PPRE':'Marquer PPRE '+exclScolaire}">PPRE</button>`;
+    const papBtn       = `<button class="btn btn-sm" style="background:${s.pap?'#3f51b5':'#eee'};color:${s.pap?'#fff':'#999'};min-width:42px"
+      onclick="toggleStuPap('${s.id}')" title="${s.pap?'Retirer PAP':'Marquer PAP (Plan d’Accompagnement Personnalisé) '+exclScolaire}">PAP</button>`;
     const gevascoBtn   = `<button class="btn btn-sm" style="background:${s.gevasco?'#2980b9':'#eee'};color:${s.gevasco?'#fff':'#999'};min-width:46px"
       onclick="toggleStuGevasco('${s.id}')" title="${s.gevasco?'Retirer GEVAsco/PPS':'Marquer GEVAsco/PPS '+exclScolaire}">PPS</button>`;
-    const ulisBtn      = `<button class="btn btn-sm" style="background:${s.ulis?'#27ae60':'#eee'};color:${s.ulis?'#fff':'#999'};min-width:46px"
-      onclick="toggleStuUlis('${s.id}')" title="${s.ulis?'Retirer ULIS':'Marquer ULIS hors classe '+exclScolaire}">ULIS</button>`;
-    const ulisInclBtn  = `<button class="btn btn-sm" style="background:${s.ulis_incl?'#8e44ad':'#eee'};color:${s.ulis_incl?'#fff':'#999'};min-width:62px"
-      onclick="toggleStuUlisIncl('${s.id}')" title="${s.ulis_incl?'Retirer ULIS inclusion':'Marquer ULIS inclusion '+exclScolaire}">ULIS+</button>`;
-    const upe2aBtn     = `<button class="btn btn-sm" style="background:${s.upe2a?'#16a085':'#eee'};color:${s.upe2a?'#fff':'#999'};min-width:60px"
-      onclick="toggleStuUpe2a('${s.id}')" title="${s.upe2a?'Retirer UPE2A':'Marquer UPE2A hors classe '+exclUpe2a+' ; cumulable avec PPRE / PPS / ULIS'}">UPE2A</button>`;
-    const upe2aInclBtn = `<button class="btn btn-sm" style="background:${s.upe2a_incl?'#c0392b':'#eee'};color:${s.upe2a_incl?'#fff':'#999'};min-width:70px"
-      onclick="toggleStuUpe2aIncl('${s.id}')" title="${s.upe2a_incl?'Retirer UPE2A inclusion':'Marquer UPE2A inclusion '+exclUpe2a+' ; cumulable avec PPRE / PPS / ULIS'}">UPE2A+</button>`;
+    // Bouton CYCLIQUE ULIS (compacité) : Aucun → ULIS → ULIS+ → Aucun. Un seul bouton à la place de deux.
+    const _ulisBg = s.ulis_incl ? '#8e44ad' : s.ulis ? '#27ae60' : '#eee';
+    const _ulisLbl = s.ulis_incl ? 'ULIS+' : 'ULIS';
+    const _ulisTip = s.ulis_incl ? 'ULIS inclusion — clic : retirer'
+                   : s.ulis      ? 'ULIS hors classe — clic : passer en ULIS+ (inclusion)'
+                   :               'Clic : marquer ULIS hors classe (puis ULIS+, puis aucun) '+exclScolaire;
+    const ulisBtn      = `<button class="btn btn-sm" style="background:${_ulisBg};color:${(s.ulis||s.ulis_incl)?'#fff':'#999'};min-width:50px"
+      onclick="cycleStuUlis('${s.id}')" title="${_ulisTip}">${_ulisLbl}</button>`;
+    // Bouton CYCLIQUE UPE2A (compacité) : Aucun → UPE2A → UPE2A+ → Aucun.
+    const _upBg = s.upe2a_incl ? '#c0392b' : s.upe2a ? '#16a085' : '#eee';
+    const _upLbl = s.upe2a_incl ? 'UPE2A+' : 'UPE2A';
+    const _upTip = s.upe2a_incl ? 'UPE2A inclusion — clic : retirer'
+                 : s.upe2a      ? 'UPE2A hors classe — clic : passer en UPE2A+ (inclusion)'
+                 :                'Clic : marquer UPE2A hors classe (puis UPE2A+, puis aucun) '+exclUpe2a+' ; cumulable avec PPRE / PAP / PPS / ULIS';
+    const upe2aBtn     = `<button class="btn btn-sm" style="background:${_upBg};color:${(s.upe2a||s.upe2a_incl)?'#fff':'#999'};min-width:62px"
+      onclick="cycleStuUpe2a('${s.id}')" title="${_upTip}">${_upLbl}</button>`;
     // PAI (Projet d'Accueil Individualisé) — médical, cumulable avec TOUS les autres statuts
     const paiBtn       = `<button class="btn btn-sm" style="background:${s.pai?'#ec4899':'#eee'};color:${s.pai?'#fff':'#999'};min-width:40px"
       onclick="toggleStuPai('${s.id}')" title="${s.pai?'Retirer PAI':'Marquer PAI (Projet d’Accueil Individualisé — médical : allergies, asthme, diabète, etc.) — cumulable avec tous les autres statuts'}">PAI</button>`;
@@ -14233,7 +14291,7 @@ function renderStudents() {
         <td style="text-align:center" title="Cumul de retards sur tous les appels enregistrés">
           <span class="badge" style="background:${oubliColor(stats.ret)};color:#222">${stats.ret}</span>
         </td>
-        <td style="white-space:nowrap">${ppreBtn} ${gevascoBtn} ${ulisBtn} ${ulisInclBtn} ${upe2aBtn} ${upe2aInclBtn} ${paiBtn} ${agrBtn} ${notesBtn}</td>
+        <td style="white-space:nowrap">${ppreBtn} ${papBtn} ${gevascoBtn} ${ulisBtn} ${upe2aBtn} ${paiBtn} ${agrBtn} ${notesBtn}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-g btn-sm" onclick="openEdit('${s.id}')" title="Modifier">✏️</button>
           <button class="btn btn-g btn-sm" onclick="openHist('${s.id}')" title="Historique : incidents, notes, absences, retards">🕓</button>
@@ -14259,7 +14317,7 @@ function renderStudents() {
         <th onclick="sortEleves('nt')">📝 Travail non fait${arrow('nt')}</th>
         <th onclick="sortEleves('abs')" title="Cumul absences sur tous les appels enregistrés">🚫 Absences${arrow('abs')}</th>
         <th onclick="sortEleves('ret')" title="Cumul retards sur tous les appels enregistrés">⏰ Retards${arrow('ret')}</th>
-        <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PPS / ULIS / UPE2A — boutons exclusifs intra-groupe) et médicaux (PAI — cumulable). Notes libres en dernier.">Aménagements (PPRE · PPS · ULIS · UPE2A · PAI) / Notes</th>
+        <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PAP / PPS / ULIS / UPE2A — boutons exclusifs intra-groupe), médicaux (PAI — cumulable) et 📄-A = agrandissement (photocopies agrandies — cumulable, affiché en suffixe « PPRE-A », « PAP-A »…). Notes libres en dernier.">Aménagements (PPRE · PAP · PPS · ULIS · UPE2A · PAI · 📄-A) / Notes</th>
         <th style="cursor:default">Actions</th>
       </tr></thead>
       <tbody>${rows}</tbody>
@@ -15684,14 +15742,15 @@ function buildCell(cls, row, col) {
       otherClsBadge,
       aeshLinkedBadge,
       tagBadges,
-      stu.ppre        ? `<span class="spec-badge spec-ppre"      title="${_escAttr(stu.notes||'PPRE')}">PPRE</span>` : '',
-      stu.gevasco     ? `<span class="spec-badge spec-gev"       title="${_escAttr(stu.notes||'GEVAsco/PPS')}">PPS</span>` : '',
-      stu.ulis        ? `<span class="spec-badge spec-ulis"      title="${_escAttr(stu.notes||'ULIS hors classe')}">ULIS</span>` : '',
-      stu.ulis_incl   ? `<span class="spec-badge spec-ulis-incl" title="${_escAttr(stu.notes||'ULIS inclusion')}">ULIS+</span>` : '',
-      stu.upe2a       ? `<span class="spec-badge spec-upe2a"     title="${_escAttr(stu.notes||'UPE2A hors classe')}">UPE2A</span>` : '',
-      stu.upe2a_incl  ? `<span class="spec-badge spec-upe2a-incl" title="${_escAttr(stu.notes||'UPE2A inclusion')}">UPE2A+</span>` : '',
-      stu.pai         ? `<span class="spec-badge spec-pai"        title="${_escAttr(stu.notes||'PAI — Projet d’Accueil Individualisé (médical)')}">PAI</span>` : '',
-      stu.agrandissement ? `<span class="spec-badge spec-agr"     title="Agrandissement — photocopies à agrandir">-A</span>` : '',
+      stu.ppre        ? `<span class="spec-badge spec-ppre"      title="${_escAttr(stu.notes||'PPRE')}">PPRE${_agrSuffix(stu,'ppre')}</span>` : '',
+      stu.pap         ? `<span class="spec-badge spec-pap"       title="${_escAttr(stu.notes||'PAP — Plan d’Accompagnement Personnalisé')}">PAP${_agrSuffix(stu,'pap')}</span>` : '',
+      stu.gevasco     ? `<span class="spec-badge spec-gev"       title="${_escAttr(stu.notes||'GEVAsco/PPS')}">PPS${_agrSuffix(stu,'gevasco')}</span>` : '',
+      stu.ulis        ? `<span class="spec-badge spec-ulis"      title="${_escAttr(stu.notes||'ULIS hors classe')}">ULIS${_agrSuffix(stu,'ulis')}</span>` : '',
+      stu.ulis_incl   ? `<span class="spec-badge spec-ulis-incl" title="${_escAttr(stu.notes||'ULIS inclusion')}">ULIS+${_agrSuffix(stu,'ulis_incl')}</span>` : '',
+      stu.upe2a       ? `<span class="spec-badge spec-upe2a"     title="${_escAttr(stu.notes||'UPE2A hors classe')}">UPE2A${_agrSuffix(stu,'upe2a')}</span>` : '',
+      stu.upe2a_incl  ? `<span class="spec-badge spec-upe2a-incl" title="${_escAttr(stu.notes||'UPE2A inclusion')}">UPE2A+${_agrSuffix(stu,'upe2a_incl')}</span>` : '',
+      stu.pai         ? `<span class="spec-badge spec-pai"        title="${_escAttr(stu.notes||'PAI — Projet d’Accueil Individualisé (médical)')}">PAI${_agrSuffix(stu,'pai')}</span>` : '',
+      _agrStandalone(stu) ? `<span class="spec-badge spec-agr"   title="Agrandissement — photocopies à agrandir">-A</span>` : '',
       stu.notes       ? `<span class="spec-badge" style="background:#7f8c8d;color:#fff" title="${_escAttr(stu.notes)}">📋</span>` : '',
     ].filter(Boolean);
     const specBadges = specList.length ? `<div class="spec-badges">${specList.join('')}</div>` : '';
@@ -15725,7 +15784,7 @@ function buildCell(cls, row, col) {
                       style="${_style}">${_label}</span>`;
       })()}
     `;
-    const specTitle = [stu.ppre?'PPRE':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':''].filter(Boolean).join(' · ');
+    const specTitle = [stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':''].filter(Boolean).join(' · ');
     const notesTitle = stu.notes ? `\n📋 ${stu.notes}` : '';
     let postTitle = '';
     if (_postAppel) {
@@ -16181,14 +16240,15 @@ function renderUnplaced() {
     // Badges aménagements (ULIS, UPE2A, PPS/Gevasco, PPRE) — version compacte
     // pour rester lisible dans le panneau étroit. Tooltip explicite.
     const specBdgs = [];
-    if (s.ulis)       specBdgs.push(`<span style="background:#8e44ad;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="ULIS hors inclusion">ULIS</span>`);
-    if (s.ulis_incl)  specBdgs.push(`<span style="background:#8e44ad;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="ULIS inclusion">ULIS+</span>`);
-    if (s.upe2a)      specBdgs.push(`<span style="background:#c0392b;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="UPE2A hors inclusion (allophone)">UPE2A</span>`);
-    if (s.upe2a_incl) specBdgs.push(`<span style="background:#c0392b;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="UPE2A inclusion (allophone)">UPE2A+</span>`);
-    if (s.gevasco)    specBdgs.push(`<span style="background:#2980b9;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPS / Gevasco">PPS</span>`);
-    if (s.ppre)       specBdgs.push(`<span style="background:#e67e22;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPRE">PPRE</span>`);
-    if (s.pai)        specBdgs.push(`<span style="background:#ec4899;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PAI (médical)">PAI</span>`);
-    if (s.agrandissement) specBdgs.push(`<span style="background:#00838f;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="Agrandissement (photocopies agrandies)">-A</span>`);
+    if (s.ulis)       specBdgs.push(`<span style="background:#8e44ad;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="ULIS hors inclusion">ULIS${_agrSuffix(s,'ulis')}</span>`);
+    if (s.ulis_incl)  specBdgs.push(`<span style="background:#8e44ad;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="ULIS inclusion">ULIS+${_agrSuffix(s,'ulis_incl')}</span>`);
+    if (s.upe2a)      specBdgs.push(`<span style="background:#c0392b;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="UPE2A hors inclusion (allophone)">UPE2A${_agrSuffix(s,'upe2a')}</span>`);
+    if (s.upe2a_incl) specBdgs.push(`<span style="background:#c0392b;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="UPE2A inclusion (allophone)">UPE2A+${_agrSuffix(s,'upe2a_incl')}</span>`);
+    if (s.gevasco)    specBdgs.push(`<span style="background:#2980b9;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPS / Gevasco">PPS${_agrSuffix(s,'gevasco')}</span>`);
+    if (s.ppre)       specBdgs.push(`<span style="background:#e67e22;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPRE">PPRE${_agrSuffix(s,'ppre')}</span>`);
+    if (s.pap)        specBdgs.push(`<span style="background:#3f51b5;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PAP (Plan d'Accompagnement Personnalisé)">PAP${_agrSuffix(s,'pap')}</span>`);
+    if (s.pai)        specBdgs.push(`<span style="background:#ec4899;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PAI (médical)">PAI${_agrSuffix(s,'pai')}</span>`);
+    if (_agrStandalone(s)) specBdgs.push(`<span style="background:#00838f;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="Agrandissement (photocopies agrandies)">-A</span>`);
     return `<div class="us" draggable="true"
       data-sid="${_escAttr(s.id)}"
       ondragstart="startDragUnplaced(event,'${_escAttr(s.id)}')"
@@ -19807,14 +19867,15 @@ let notesSort = _loadPersistedSort('export-pos', { col: 0, dir: 1 }); // col: 0=
 function _amenagementsLabel(stu) {
   if (!stu) return '';
   const parts = [];
-  if (stu.ppre)       parts.push('PPRE');
-  if (stu.gevasco)    parts.push('PPS');
-  if (stu.ulis)       parts.push('ULIS');
-  if (stu.ulis_incl)  parts.push('ULIS+');
-  if (stu.upe2a)      parts.push('UPE2A');
-  if (stu.upe2a_incl) parts.push('UPE2A+');
-  if (stu.pai)        parts.push('PAI');
-  if (stu.agrandissement) parts.push('-A');
+  if (stu.ppre)       parts.push('PPRE'  + _agrSuffix(stu,'ppre'));
+  if (stu.pap)        parts.push('PAP'   + _agrSuffix(stu,'pap'));
+  if (stu.gevasco)    parts.push('PPS'   + _agrSuffix(stu,'gevasco'));
+  if (stu.ulis)       parts.push('ULIS'  + _agrSuffix(stu,'ulis'));
+  if (stu.ulis_incl)  parts.push('ULIS+' + _agrSuffix(stu,'ulis_incl'));
+  if (stu.upe2a)      parts.push('UPE2A' + _agrSuffix(stu,'upe2a'));
+  if (stu.upe2a_incl) parts.push('UPE2A+'+ _agrSuffix(stu,'upe2a_incl'));
+  if (stu.pai)        parts.push('PAI'   + _agrSuffix(stu,'pai'));
+  if (_agrStandalone(stu)) parts.push('-A');
   return parts.join(' + ');
 }
 
@@ -23260,6 +23321,7 @@ function printElevesList() {
         groupe:      e.groupe      ?? null,
         // Statuts et stats : on prend les valeurs live (pas dans le snapshot)
         ppre:       !!live?.ppre,
+        pap:        !!live?.pap,
         gevasco:    !!live?.gevasco,
         ulis:       !!live?.ulis,
         ulis_incl:  !!live?.ulis_incl,
@@ -23281,6 +23343,7 @@ function printElevesList() {
       oublis: s.oublis || 0, non_travail: s.non_travail || 0,
       groupe: s.groupe ?? null,
       ppre:       !!s.ppre,
+      pap:        !!s.pap,
       gevasco:    !!s.gevasco,
       ulis:       !!s.ulis,
       ulis_incl:  !!s.ulis_incl,
@@ -23318,14 +23381,15 @@ function printElevesList() {
   const _useColor = _printColors !== false;
   const _amBadges = s => {
     const badges = [];
-    if (s.ppre)       badges.push({ txt: 'PPRE',   bg: '#f39c12' });
-    if (s.gevasco)    badges.push({ txt: 'PPS',    bg: '#2980b9' });
-    if (s.ulis)       badges.push({ txt: 'ULIS',   bg: '#27ae60' });
-    if (s.ulis_incl)  badges.push({ txt: 'ULIS+',  bg: '#8e44ad' });
-    if (s.upe2a)      badges.push({ txt: 'UPE2A',  bg: '#16a085' });
-    if (s.upe2a_incl) badges.push({ txt: 'UPE2A+', bg: '#c0392b' });
-    if (s.pai)        badges.push({ txt: 'PAI',    bg: '#ec4899' });
-    if (s.agrandissement) badges.push({ txt: '-A',  bg: '#00838f' });
+    if (s.ppre)       badges.push({ txt: 'PPRE'  + _agrSuffix(s,'ppre'),       bg: '#f39c12' });
+    if (s.pap)        badges.push({ txt: 'PAP'   + _agrSuffix(s,'pap'),        bg: '#3f51b5' });
+    if (s.gevasco)    badges.push({ txt: 'PPS'   + _agrSuffix(s,'gevasco'),    bg: '#2980b9' });
+    if (s.ulis)       badges.push({ txt: 'ULIS'  + _agrSuffix(s,'ulis'),       bg: '#27ae60' });
+    if (s.ulis_incl)  badges.push({ txt: 'ULIS+' + _agrSuffix(s,'ulis_incl'),  bg: '#8e44ad' });
+    if (s.upe2a)      badges.push({ txt: 'UPE2A' + _agrSuffix(s,'upe2a'),      bg: '#16a085' });
+    if (s.upe2a_incl) badges.push({ txt: 'UPE2A+'+ _agrSuffix(s,'upe2a_incl'), bg: '#c0392b' });
+    if (s.pai)        badges.push({ txt: 'PAI'   + _agrSuffix(s,'pai'),        bg: '#ec4899' });
+    if (_agrStandalone(s)) badges.push({ txt: '-A', bg: '#00838f' });
     if (!badges.length) return '<span style="color:#bbb">—</span>';
     const baseStyle = 'display:inline-block;border-radius:3px;padding:0 4px;font-size:.75em;font-weight:700;margin:1px 1px 1px 0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
     return badges.map(b => {
@@ -23530,7 +23594,7 @@ function printClassesBilan() {
         <strong>Inscrits</strong> = total des élèves dans la classe.
         <strong>Placés</strong> = élèves placés dans le plan.
         <strong>Normalement présents</strong> = inscrits moins ULIS / UPE2A hors-inclusion (jamais en classe).
-        <strong>Aménagés</strong> = présents avec PPRE, PPS (Gevasco), ULIS+ ou UPE2A+ — copies souvent adaptées.
+        <strong>Aménagés</strong> = présents avec PPRE, PAP, PPS (Gevasco), ULIS+, UPE2A+ ou PAI — copies souvent adaptées.
         <strong>📄 Agrand.</strong> = élèves nécessitant des photocopies agrandies (nombre d'agrandissements à tirer).
       </div>
     </div>
@@ -26272,7 +26336,8 @@ function createDemo(opts) {
   // entre eux MAIS cumulables avec ceux du groupe A. Volontairement, certains indices se
   // chevauchent pour montrer les cumuls (ex. élève 14 = UPE2A+ + PPS).
   const ppreSamples       = [3, 22, 14];   // PPRE — l'index 14 cumule aussi UPE2A+
-  const agrSamples        = [3, 8];        // Agrandissement — l'index 3 cumule PPRE (démontre « PPRE-A »)
+  const papSamples        = [5, 8];        // PAP — l'index 8 cumule agrandissement (démontre « PAP-A »)
+  const agrSamples        = [3, 8];        // Agrandissement — index 3 = PPRE-A, index 8 = PAP-A
   const ppsSamples        = [7, 19];       // PPS (gevasco)
   const ulisIncSamples    = [11];          // ULIS+ (inclusion)
   const upe2aIncSamples   = [14, 19];      // UPE2A+ (inclusion) — l'index 19 cumule aussi PPS
@@ -26320,6 +26385,7 @@ function createDemo(opts) {
         groupe: grp,
         civilite: civ,
         ppre:       ppreSamples.includes(i),
+        pap:        papSamples.includes(i),
         agrandissement: agrSamples.includes(i),
         gevasco:    ppsSamples.includes(i),
         ulis:       isUlisOut,
