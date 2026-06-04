@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.6.1';
+const APP_VERSION    = '2.6.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T08:39:09Z';
+const APP_BUILD_DATE = '2026-06-04T11:50:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27668,12 +27668,23 @@ function _noiseUpdateSoundBtn(win) {
 // repli sur une fenêtre window.open classique (déplaçable mais pas toujours au-dessus).
 // L'analyse audio reste dans la fenêtre principale ; celle-ci pousse les mises à jour
 // dans le document de la fenêtre à chaque frame (_noiseRenderMeters).
+// Le navigateur n'autorise qu'UNE fenêtre Document Picture-in-Picture à la fois :
+// en demander une seconde fermerait la première. Ce helper indique si une PiP est
+// déjà ouverte (typiquement l'autre module — minuteur ↔ sonomètre) ; auquel cas on
+// ouvre la 2e fenêtre en window.open classique pour que les deux coexistent.
+function _docPipBusy() {
+  try { return !!(window.documentPictureInPicture && documentPictureInPicture.window); }
+  catch (_) { return false; }
+}
+
 async function noiseOpenWindow() {
   if (!_noise.active) return;
   if (_noise.popup && !_noise.popup.closed) { try { _noise.popup.focus(); } catch (_) {} return; }
   const thr = _noiseSettings.threshold;
   // 1) Picture-in-Picture document : fenêtre toujours au premier plan.
-  if ('documentPictureInPicture' in window) {
+  //    Sautée si une PiP est déjà ouverte (ex. le minuteur) — sinon elle la remplacerait.
+  const pipBusy = _docPipBusy();
+  if ('documentPictureInPicture' in window && !pipBusy) {
     try {
       const pip = await documentPictureInPicture.requestWindow({ width: 480, height: 320 });
       _noiseFillWindow(pip, thr);
@@ -27688,6 +27699,7 @@ async function noiseOpenWindow() {
   _noiseFillWindow(w, thr);
   _noise.popup = w;
   try { w.addEventListener('pagehide', () => { _noise.popup = null; _noiseStopSound(); }); } catch (_) {}
+  if (pipBusy) toast('ℹ Sonomètre ouvert en fenêtre déplaçable (le minuteur occupe le mode toujours-au-premier-plan).');
 }
 
 // Carillon clair (ou bip doux) généré localement via oscillateurs Web Audio.
@@ -28331,7 +28343,9 @@ function _timerPopupToggleMax(win) {
 async function timerOpenWindow() {
   if (!_timer.running) return;
   if (_timer.popup && !_timer.popup.closed) { try { _timer.popup.focus(); } catch (_) {} return; }
-  if ('documentPictureInPicture' in window) {
+  // PiP sautée si une PiP est déjà ouverte (ex. le sonomètre) — sinon elle la remplacerait.
+  const pipBusy = _docPipBusy();
+  if ('documentPictureInPicture' in window && !pipBusy) {
     try {
       const pip = await documentPictureInPicture.requestWindow({ width: 380, height: 280 });
       _timerFillWindow(pip); _timer.popup = pip;
@@ -28345,6 +28359,7 @@ async function timerOpenWindow() {
   _timerFillWindow(w); _timer.popup = w;
   try { w.addEventListener('pagehide', _timerOnPopupClosed); } catch (_) {}
   _timerRender();
+  if (pipBusy) toast('ℹ Minuteur ouvert en fenêtre déplaçable (le sonomètre occupe le mode toujours-au-premier-plan).');
 }
 // Fermeture de la fenêtre flottante (croix de l'OS / PiP) : on coupe la sonnerie et
 // la voix en cours — le décompte, lui, continue dans le widget replié.
