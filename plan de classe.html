@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.6.4';
+const APP_VERSION    = '2.6.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T12:38:23Z';
+const APP_BUILD_DATE = '2026-06-04T13:26:19Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -16193,7 +16193,8 @@ function renderAttendanceSide() {
   // En mode tag-seating : agrège toutes classes portant le tag
   const elevesAll = effectiveClassEleves(cls).map(id => S.eleves[id]).filter(Boolean);
   const inFilter = elevesAll.filter(s =>
-    (groupFilter === 0 || s.groupe === groupFilter)
+    _stuActiveOn(s)                       // parti / pas encore arrivé → jamais dans les listes d'appel
+    && (groupFilter === 0 || s.groupe === groupFilter)
     && (_tagFilter.size === 0 || studentHasAllTags(s, _tagFilter))
   );
   const inFilterIds = new Set(inFilter.map(s => s.id));
@@ -21207,6 +21208,7 @@ function autoMarkUlisAbsent() {
   for (const sid of cls.eleves || []) {
     const stu = S.eleves[sid];
     if (!stu) continue;
+    if (!_stuActiveOn(stu)) continue; // parti / pas encore arrivé → pas concerné par l'appel
     // ULIS hors et UPE2A hors sont mutuellement exclusifs avec leurs versions "incl" depuis la
     // refonte des statuts (un seul statut à la fois). On peut tester directement stu.ulis / stu.upe2a.
     const isOutClass = stu.ulis || stu.upe2a;
@@ -21230,6 +21232,7 @@ function autoMarkUnplacedAbsent() {
   for (const sid of cls.eleves || []) {
     const stu = S.eleves[sid];
     if (!stu) continue;
+    if (!_stuActiveOn(stu)) continue; // parti / pas encore arrivé → ne pas marquer absent
     if (placedSids.has(sid)) continue;
     if (_absentToday.has(sid) || _lateToday.has(sid)) continue;
     _absentToday.add(sid);
