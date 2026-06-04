@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.6.0';
+const APP_VERSION    = '2.6.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-03T10:57:38Z';
+const APP_BUILD_DATE = '2026-06-04T08:39:09Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32243,8 +32243,7 @@ function _evalTableurSortedSids(cls) {
   // Pattern de ramassage : mode = 'pat-<patternId>'
   if (mode.startsWith('pat-')) {
     const patternId = mode.slice(4);
-    const hash = _evalSeatingHashFor(_ev, cls.id);
-    const snapSeating = hash ? _getSeatingSnapshot(hash) : null;
+    const snapSeating = _evalPatternSeatingFor(_ev, cls.id);
     const ordered = _sidsOrderedByPattern(cls, patternId, snapSeating);
     if (ordered) return ordered.filter(_activeFilter);
   }
@@ -35964,6 +35963,54 @@ function _evalSeatingHashFor(ev, classId) {
   return null;
 }
 
+// Seating à utiliser pour le tri « pattern de ramassage » : c'est le placement
+// EN VIGUEUR LE JOUR DU DEVOIR (la date à laquelle l'enseignant a ramassé les
+// copies), pas celui d'aujourd'hui ni celui figé à la création de l'éval.
+// Reconstitution par ordre de fiabilité :
+//   1. Le seating figé par l'APPEL enregistré ce jour-là (même date, même créneau
+//      si connu, même salle) → photo exacte du placement au moment du ramassage.
+//   2. Le seating capturé à la CRÉATION de l'éval (ev.seatingHashes[classId]).
+//   3. null → le caller (_sidsOrderedByPattern) retombe sur le seating courant.
+function _evalPatternSeatingFor(ev, classId) {
+  // 1. Appel enregistré à la date (et créneau) de l'éval pour cette classe.
+  const date = _evalDateFor(ev, classId);
+  if (date) {
+    const slot   = _evalSlotIdFor(ev, classId);
+    const roomId = S.classes?.[classId]?.activeRoom || null;
+    const records = S.attendance?.[classId];
+    if (records) {
+      const cands = [];
+      for (const r of Object.values(records)) {
+        if (!r || r.date !== date || !r.seatingHash) continue;
+        // Les clés 'r,c' du seating et du pattern sont relatives à une salle donnée :
+        // un appel pris dans une autre salle donnerait un ordre faux. Si l'appel
+        // connaît sa salle (records récents), elle doit correspondre à la salle de réf.
+        if (r.aeshSalleIdSnap && roomId && r.aeshSalleIdSnap !== roomId) continue;
+        // Créneau : si les deux sont connus et diffèrent → on écarte.
+        if (slot && r.slotId && r.slotId !== slot) continue;
+        cands.push(r);
+      }
+      // Priorité : créneau exact d'abord, puis appel le plus récent.
+      cands.sort((a, b) => {
+        const sa = (slot && a.slotId === slot) ? 1 : 0;
+        const sb = (slot && b.slotId === slot) ? 1 : 0;
+        if (sa !== sb) return sb - sa;
+        return (b.ts || 0) - (a.ts || 0);
+      });
+      for (const r of cands) {
+        const snap = _getSeatingSnapshot(r.seatingHash);
+        if (snap && Object.keys(snap).length) return snap;
+      }
+    }
+  }
+  // 2. Seating figé à la création de l'éval.
+  const hash = _evalSeatingHashFor(ev, classId);
+  const snap = hash ? _getSeatingSnapshot(hash) : null;
+  if (snap && Object.keys(snap).length) return snap;
+  // 3. Caller retombe sur le seating courant.
+  return null;
+}
+
 // Date d'une éval pour une classe donnée.
 // Priorité :
 //   1. ev.dates[classId] si explicitement renseigné (Réglages multi-classes)
@@ -39505,8 +39552,7 @@ function _evalExportBuildRows(ev) {
   let sids;
   if (sortMode.startsWith('pat-')) {
     const patternId = sortMode.slice(4);
-    const hash = _evalSeatingHashFor(ev, cls.id);
-    const snapSeating = hash ? _getSeatingSnapshot(hash) : null;
+    const snapSeating = _evalPatternSeatingFor(ev, cls.id);
     sids = _sidsOrderedByPattern(cls, patternId, snapSeating) || cls.eleves.slice();
   } else if (sortMode === 'prenom-nom') {
     sids = cls.eleves.slice().sort((a, b) => {
