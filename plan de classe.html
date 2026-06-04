@@ -5722,11 +5722,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.6.2';
+const APP_VERSION    = '2.6.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T11:50:54Z';
+const APP_BUILD_DATE = '2026-06-04T12:17:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27352,13 +27352,18 @@ function loadDemoOnDemand() {
 // ═══════════════════════════════════════════════════════════
 const NOISE_DEFAULTS = { threshold: 60, sustainS: 3, cooldownS: 15, soundOn: true, soundType: 'bell', volume: 70, silenceDb: -60 };
 const NOISE_SILENCE_MIN = -80, NOISE_SILENCE_MAX = -25; // bornes du plancher de silence réglable (dBFS)
+// Constante de temps du lissage de la valeur affichée (ms). Plus elle est grande, plus la
+// valeur glisse lentement (« oscille plus longtemps ») au lieu de sauter. Le lissage est
+// exponentiel et basé sur le temps écoulé entre frames → comportement identique quel que
+// soit le framerate de la machine. (Ancien lissage : α=0,25/frame ≈ τ 50 ms → trop nerveux.)
+const NOISE_SMOOTH_TAU_MS = 1500;
 const _NOISE_SOUND_TYPES = ['bell','beep','chime','alarm','digital','gong','cuckoo',
   'pacman','mario','tetris'];
 let _noiseSettings = { ...NOISE_DEFAULTS };
 let _noise = {
   active: false, starting: false, popup: null,
   ctx: null, analyser: null, source: null, stream: null, buf: null, raf: null,
-  smooth: 0, overSince: 0, lastAlert: 0, alerting: false, alertClearTimer: null,
+  smooth: 0, lastFrameT: 0, overSince: 0, lastAlert: 0, alerting: false, alertClearTimer: null,
   curSound: null,
 };
 
@@ -27422,7 +27427,7 @@ async function startNoiseMeter() {
   }
   _noise.starting = false;
   _noise.active = true;
-  _noise.smooth = 0; _noise.overSince = 0; _noise.lastAlert = 0; _noise.alerting = false;
+  _noise.smooth = 0; _noise.lastFrameT = 0; _noise.overSince = 0; _noise.lastAlert = 0; _noise.alerting = false;
   const w = document.getElementById('noise-widget'); if (w) w.style.display = '';
   document.body.classList.add('noise-widget-on'); // remonte les toasts au-dessus du widget
   _noiseUpdateWidgetSoundBtn();
@@ -27468,7 +27473,15 @@ function _noiseComputeLevel() {
 function _noiseFrame() {
   if (!_noise.active) return;
   const raw = _noiseComputeLevel();
-  _noise.smooth = _noise.smooth * 0.75 + raw * 0.25; // lissage exponentiel (anti-nervosité)
+  // Lissage exponentiel basé sur le temps écoulé depuis la dernière frame (indépendant du
+  // framerate) : alpha = 1 - e^(-dt/τ). Plus τ (NOISE_SMOOTH_TAU_MS) est grand, plus la valeur
+  // affichée glisse lentement et « oscille longtemps » au lieu de sauter. dt est plafonné à
+  // 250 ms pour éviter un saut brutal au réveil de l'onglet (rAF mis en pause en arrière-plan).
+  const nowT = performance.now();
+  const dt = _noise.lastFrameT ? Math.min(250, nowT - _noise.lastFrameT) : 16.7;
+  _noise.lastFrameT = nowT;
+  const alpha = 1 - Math.exp(-dt / NOISE_SMOOTH_TAU_MS);
+  _noise.smooth = _noise.smooth + alpha * (raw - _noise.smooth);
   const lvl = Math.round(_noise.smooth);
   const thr = _noiseSettings.threshold;
 
