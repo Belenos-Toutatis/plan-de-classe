@@ -109,6 +109,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .spec-ppre{background:#f39c12;color:#fff}
 .spec-gev{background:#2980b9;color:#fff}
 .spec-pai{background:#ec4899;color:#fff}
+.spec-agr{background:#00838f;color:#fff}
 .spec-ulis{background:#27ae60;color:#fff}
 .spec-ulis-incl{background:#8e44ad;color:#fff}
 .spec-upe2a{background:#16a085;color:#fff}
@@ -1655,9 +1656,11 @@ input[type="text"].meval-niveau-input:focus { background: transparent !important
 .spec-ulis, .spec-upe2a { background: var(--pencil) !important; }
 .spec-ulis-incl, .spec-upe2a-incl { background: #6f4a8c !important; }
 .spec-pai    { background: #ec4899 !important; color: #fff !important; }
+.spec-agr    { background: #00838f !important; color: #fff !important; }
 html[data-theme="dark"] .spec-ulis-incl,
 html[data-theme="dark"] .spec-upe2a-incl { background: #4d3463 !important; }
 html[data-theme="dark"] .spec-pai { background: #a83470 !important; }
+html[data-theme="dark"] .spec-agr { background: #00606a !important; }
 
 /* ─── Titres h3 (modales etc.) ─── */
 h3 {
@@ -2984,6 +2987,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#ec4899">
         <input type="checkbox" id="es-pai" style="width:16px;height:16px;flex-shrink:0"> PAI (médical)
+      </label>
+    </div>
+    <div style="font-size:.78em;color:#777;margin-bottom:6px">Agrandissement — l'élève a besoin de photocopies agrandies (cumulable avec tout)</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#00838f">
+        <input type="checkbox" id="es-agrandissement" style="width:16px;height:16px;flex-shrink:0"> 📄 Agrandissement (photocopies agrandies)
       </label>
     </div>
     <div class="fg"><label>Notes (affichées au survol de la place)</label>
@@ -5539,6 +5548,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div class="ctx-item" id="ctx-upe2aincl" onclick="ctxToggleUpe2aIncl()">🟥 <span id="ctx-upe2aincl-lbl"></span></div>
       <div class="ctx-sep"></div>
       <div class="ctx-item" id="ctx-pai"     onclick="ctxTogglePai()">⚕️ <span id="ctx-pai-lbl"></span></div>
+      <div class="ctx-item" id="ctx-agr"     onclick="ctxToggleAgrandissement()">📄 <span id="ctx-agr-lbl"></span></div>
     </div>
   </div>
   <div class="ctx-item" id="ctx-notes"    onclick="ctxEditNotes()">📋 Notes</div>
@@ -5722,11 +5732,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.8.0';
+const APP_VERSION    = '2.9.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-04T18:08:02Z';
+const APP_BUILD_DATE = '2026-06-04T18:37:09Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -6525,6 +6535,7 @@ function postLoadHook() {
   for (const stu of Object.values(S.eleves || {})) {
     if (!Array.isArray(stu.tags)) stu.tags = [];
     if (typeof stu.civilite === 'undefined') stu.civilite = null; // 'M' | 'F' | null
+    if (typeof stu.agrandissement === 'undefined') stu.agrandissement = false; // photocopies agrandies (cumulable)
     // Arrivées/départs en cours d'année : null = présent par défaut
     if (typeof stu.arrivalDate   === 'undefined') stu.arrivalDate   = null;
     if (typeof stu.departureDate === 'undefined') stu.departureDate = null;
@@ -7941,7 +7952,8 @@ function redoLast() {
 const STATUS_GROUP_A = ['ppre', 'gevasco', 'ulis', 'ulis_incl'];
 const STATUS_GROUP_B = ['upe2a', 'upe2a_incl'];
 const STATUS_GROUP_C = ['pai'];  // PAI (médical) — seul dans son groupe, cumulable avec tout le reste
-const STUDENT_STATUSES = [...STATUS_GROUP_A, ...STATUS_GROUP_B, ...STATUS_GROUP_C];
+const STATUS_GROUP_D = ['agrandissement']; // Agrandissement (photocopies agrandies) — seul, cumulable avec tout
+const STUDENT_STATUSES = [...STATUS_GROUP_A, ...STATUS_GROUP_B, ...STATUS_GROUP_C, ...STATUS_GROUP_D];
 
 // Mapping clé interne ↔ suffixe DOM (les clés `_incl` deviennent `-incl` dans les ids HTML).
 const _STATUS_DOM_SUFFIX = { ulis_incl: 'ulis-incl', upe2a_incl: 'upe2a-incl' };
@@ -7952,6 +7964,7 @@ function _statusGroup(statusKey) {
   if (STATUS_GROUP_A.includes(statusKey)) return STATUS_GROUP_A;
   if (STATUS_GROUP_B.includes(statusKey)) return STATUS_GROUP_B;
   if (STATUS_GROUP_C.includes(statusKey)) return STATUS_GROUP_C;
+  if (STATUS_GROUP_D.includes(statusKey)) return STATUS_GROUP_D;
   return null;
 }
 
@@ -8026,6 +8039,7 @@ function showCtxMenu(e, cls, key, sid) {
   document.getElementById('ctx-upe2a-lbl').textContent     = s?.upe2a     ? 'Retirer UPE2A'           : 'Marquer UPE2A';
   document.getElementById('ctx-upe2aincl-lbl').textContent = s?.upe2a_incl ? 'Retirer UPE2A inclusion' : 'Marquer UPE2A inclusion';
   document.getElementById('ctx-pai-lbl').textContent       = s?.pai        ? 'Retirer PAI (médical)'  : 'Marquer PAI (médical — cumulable)';
+  document.getElementById('ctx-agr-lbl').textContent       = s?.agrandissement ? 'Retirer Agrandissement' : 'Marquer Agrandissement (photocopies agrandies)';
   // Compteur de rappels actifs
   const remN = Array.isArray(s?.reminders) ? s.reminders.length : 0;
   document.getElementById('ctx-rem-lbl').textContent =
@@ -8117,6 +8131,7 @@ function toggleStuUlisIncl(id)  { _toggleStuStatus(id, 'ulis_incl',  'ULIS inclu
 function toggleStuUpe2a(id)     { _toggleStuStatus(id, 'upe2a',      'UPE2A',           '🟦'); }
 function toggleStuUpe2aIncl(id) { _toggleStuStatus(id, 'upe2a_incl', 'UPE2A inclusion', '🟥'); }
 function toggleStuPai(id)       { _toggleStuStatus(id, 'pai',        'PAI',             '⚕️'); }
+function toggleStuAgrandissement(id) { _toggleStuStatus(id, 'agrandissement', 'Agrandissement', '📄'); }
 
 function openStuNotes(id) {
   const s = S.eleves[id]; if (!s) return;
@@ -8144,6 +8159,7 @@ function _ctxToggleStatus(statusKey, label, emoji) {
 function ctxTogglePpre()      { _ctxToggleStatus('ppre',       'PPRE',            '🟠'); }
 function ctxToggleGEVAsco()   { _ctxToggleStatus('gevasco',    'GEVAsco/PPS',     '🔵'); }
 function ctxTogglePai()       { _ctxToggleStatus('pai',        'PAI',             '⚕️'); }
+function ctxToggleAgrandissement() { _ctxToggleStatus('agrandissement', 'Agrandissement', '📄'); }
 function ctxToggleUlis()      { _ctxToggleStatus('ulis',       'ULIS',            '🟢'); }
 function ctxToggleUlisIncl()  { _ctxToggleStatus('ulis_incl',  'ULIS inclusion',  '🟣'); }
 function ctxToggleUpe2a()     { _ctxToggleStatus('upe2a',      'UPE2A',           '🟦'); }
@@ -12060,7 +12076,7 @@ function _levelLabel(order) {
 // - amenagement : élèves avec PPRE / PPS (gevasco) / ULIS+ (inclusion) parmi les présents
 // - ulisOut : ULIS hors classe (info — pas dans le total photocopies)
 function _classCounts(cls) {
-  let total = 0, present = 0, amenagement = 0, ulisOut = 0, upe2aOut = 0;
+  let total = 0, present = 0, amenagement = 0, ulisOut = 0, upe2aOut = 0, agrandissement = 0;
   let m = 0, f = 0, civUnk = 0;
   for (const sid of cls.eleves || []) {
     const s = S.eleves[sid];
@@ -12070,6 +12086,9 @@ function _classCounts(cls) {
     if      (s.civilite === 'M') m++;
     else if (s.civilite === 'F') f++;
     else civUnk++;
+    // Agrandissement (photocopies agrandies) : compté sur TOUS les inscrits actifs, indépendamment
+    // de l'inclusion (un ULIS/UPE2A hors classe peut aussi avoir besoin d'un agrandissement quand il vient).
+    if (s.agrandissement) agrandissement++;
     // ULIS hors classe et UPE2A hors classe ne sont jamais en classe → exclus du "normalement présent"
     if (s.ulis)  { ulisOut++;  continue; }
     if (s.upe2a) { upe2aOut++; continue; }
@@ -12079,7 +12098,7 @@ function _classCounts(cls) {
   }
   // outClass = ULIS hors + UPE2A hors → libellé combiné dans l'UI
   const outClass = ulisOut + upe2aOut;
-  return { total, present, amenagement, ulisOut, upe2aOut, outClass, m, f, civUnk };
+  return { total, present, amenagement, ulisOut, upe2aOut, outClass, agrandissement, m, f, civUnk };
 }
 
 function sortedClasses() {
@@ -12102,7 +12121,7 @@ function renderClasses() {
   const levelCount = {};
   // Agrégation par niveau pour le récap photocopies en bas
   const byLevel = {}; // order -> { present, amenagement, total, ulisOut, upe2aOut, outClass, m, f, civUnk, classes:[nom] }
-  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0;
+  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0;
 
   const cards = arr.map(cls => {
     const order = classLevelOrder(cls.nom);
@@ -12111,9 +12130,10 @@ function renderClasses() {
     const bg = levelBgColor(order, secIdx);
     const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
-    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, m:0, f:0, civUnk:0, classes:[] };
+    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, m:0, f:0, civUnk:0, classes:[] };
     byLevel[order].present     += c.present;
     byLevel[order].amenagement += c.amenagement;
+    byLevel[order].agrandissement += c.agrandissement;
     byLevel[order].total       += c.total;
     byLevel[order].ulisOut     += c.ulisOut;
     byLevel[order].upe2aOut    += c.upe2aOut;
@@ -12123,7 +12143,7 @@ function renderClasses() {
     byLevel[order].civUnk      += c.civUnk;
     byLevel[order].classes.push(cls.nom);
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
-    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut;
+    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totAgr += c.agrandissement;
     totM       += c.m;       totF  += c.f;           totCivUnk += c.civUnk;
 
     // Détail explicite pour les photocopies :
@@ -12134,7 +12154,8 @@ function renderClasses() {
     const civDetail = (c.m + c.f + c.civUnk) > 0
       ? ` <span style="color:#3498db;font-weight:600">♂ ${c.m}</span> <span style="color:#e91e63;font-weight:600">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="color:#888" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
       : '';
-    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}`;
+    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span style="color:#00838f;font-weight:600" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
+    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
     const _discIds = _clsDisciplineIds(cls);
     const _discLine = _discIds.length >= 2
       ? `<div class="cc-meta" style="font-size:.8em;color:var(--disc-accent);margin-top:2px">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
@@ -12182,6 +12203,7 @@ function renderClasses() {
       <td style="${tdNum}">${r.present}${_outHint(r.ulisOut, r.upe2aOut)}</td>
       <td style="${tdNum}">${nonAm}</td>
       <td style="${tdNum}">${r.amenagement}</td>
+      <td style="${tdNum}${r.agrandissement>0?';color:#00838f;font-weight:700':''}">${r.agrandissement>0?'📄 '+r.agrandissement:'<span style="color:#bbb">—</span>'}</td>
     </tr>`;
   }).join('');
 
@@ -12199,6 +12221,7 @@ function renderClasses() {
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves normalement en classe (inscrits moins ULIS et UPE2A hors-inclusion)">Normalement présents</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves présents sans aménagement particulier (copie standard)">Non aménagés</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves avec PPRE / PPS / ULIS+ / UPE2A+ — copies souvent adaptées">Aménagés</th>
+          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves nécessitant des photocopies AGRANDIES (combien d'agrandissements tirer)">📄 Agrandissements</th>
         </tr></thead>
         <tbody>${recapRows}</tbody>
         <tfoot><tr class="rp-foot" style="font-weight:700">
@@ -12208,12 +12231,14 @@ function renderClasses() {
           <td style="${tfNum}">${totPresent}${_outHint(totUlisOut, totUpe2aOut)}</td>
           <td style="${tfNum}">${totNonAm}</td>
           <td style="${tfNum}">${totAm}</td>
+          <td style="${tfNum}${totAgr>0?';color:#00838f':''}">${totAgr>0?'📄 '+totAgr:'—'}</td>
         </tr></tfoot>
       </table>
       <div class="rp-hint" style="font-size:.78em;margin-top:6px;line-height:1.5">
         💡 <strong>Inscrits</strong> = total des élèves dans la classe.
         <strong>Normalement présents</strong> = inscrits moins les ULIS et UPE2A hors-inclusion (jamais en classe).
         <strong>Aménagés</strong> = présents avec PPRE, PPS (Gevasco), ULIS+ ou UPE2A+ — copies souvent adaptées.
+        <strong>📄 Agrandissements</strong> = élèves nécessitant des photocopies agrandies (nombre d'agrandissements à tirer).
       </div>
     </div>
   `;
@@ -12248,7 +12273,8 @@ function renderClasses() {
     const civDetail = (c.m + c.f + c.civUnk) > 0
       ? ` <span style="color:#3498db;font-weight:600">♂ ${c.m}</span> <span style="color:#e91e63;font-weight:600">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="color:#888" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
       : '';
-    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}`;
+    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span style="color:#00838f;font-weight:600" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
+    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
     const salleNom = S.salles?.[cls.activeRoom]?.nom || '(salle inconnue)';
     const partsLbl = parts ? ` &nbsp;·&nbsp; <span style="color:#5b2c6f">${parts}</span>` : '';
     return `<div class="cc cc-virtual ${cls.id===S.cur?'on':''}" onclick="switchClass('${cls.id}');renderClasses()">
@@ -12649,6 +12675,7 @@ function openEdit(id) {
   document.getElementById('es-upe2a').checked       = !!s.upe2a;
   document.getElementById('es-upe2a-incl').checked  = !!s.upe2a_incl;
   document.getElementById('es-pai').checked         = !!s.pai;
+  document.getElementById('es-agrandissement').checked = !!s.agrandissement;
   document.getElementById('es-notes').value         = s.notes || '';
   document.getElementById('es-arrival').value       = s.arrivalDate   || '';
   document.getElementById('es-departure').value     = s.departureDate || '';
@@ -12668,6 +12695,8 @@ function saveEdit() {
   _readAndApplyStatusGroup(s, 'es', STATUS_GROUP_B);
   // PAI (médical) — cumulable, lecture directe
   s.pai       = !!document.getElementById('es-pai').checked;
+  // Agrandissement (photocopies agrandies) — cumulable, lecture directe
+  s.agrandissement = !!document.getElementById('es-agrandissement').checked;
   s.notes     = document.getElementById('es-notes').value.trim();
   // Arrivée / départ en cours d'année (premier jour d'absence pour le départ)
   const _arr = (document.getElementById('es-arrival').value || '').trim();
@@ -14142,6 +14171,9 @@ function renderStudents() {
     // PAI (Projet d'Accueil Individualisé) — médical, cumulable avec TOUS les autres statuts
     const paiBtn       = `<button class="btn btn-sm" style="background:${s.pai?'#ec4899':'#eee'};color:${s.pai?'#fff':'#999'};min-width:40px"
       onclick="toggleStuPai('${s.id}')" title="${s.pai?'Retirer PAI':'Marquer PAI (Projet d’Accueil Individualisé — médical : allergies, asthme, diabète, etc.) — cumulable avec tous les autres statuts'}">PAI</button>`;
+    // Agrandissement (photocopies agrandies) — cumulable avec tous les autres statuts. Rendu « PPRE-A » quand cumulé.
+    const agrBtn       = `<button class="btn btn-sm" style="background:${s.agrandissement?'#00838f':'#eee'};color:${s.agrandissement?'#fff':'#999'};min-width:42px"
+      onclick="toggleStuAgrandissement('${s.id}')" title="${s.agrandissement?'Retirer Agrandissement':'Marquer Agrandissement (photocopies agrandies) — cumulable avec tous les autres statuts'}">📄-A</button>`;
     const notesBtn   = `<button class="btn btn-sm" style="background:${s.notes?'#7f8c8d':'#eee'};color:${s.notes?'#fff':'#999'}"
       onclick="openStuNotes('${s.id}')" title="${_escAttr(s.notes||'Ajouter une note')}">📋</button>`;
     const sel = selectedEleves.has(s.id) ? ' selected' : '';
@@ -14201,7 +14233,7 @@ function renderStudents() {
         <td style="text-align:center" title="Cumul de retards sur tous les appels enregistrés">
           <span class="badge" style="background:${oubliColor(stats.ret)};color:#222">${stats.ret}</span>
         </td>
-        <td style="white-space:nowrap">${ppreBtn} ${gevascoBtn} ${ulisBtn} ${ulisInclBtn} ${upe2aBtn} ${upe2aInclBtn} ${paiBtn} ${notesBtn}</td>
+        <td style="white-space:nowrap">${ppreBtn} ${gevascoBtn} ${ulisBtn} ${ulisInclBtn} ${upe2aBtn} ${upe2aInclBtn} ${paiBtn} ${agrBtn} ${notesBtn}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-g btn-sm" onclick="openEdit('${s.id}')" title="Modifier">✏️</button>
           <button class="btn btn-g btn-sm" onclick="openHist('${s.id}')" title="Historique : incidents, notes, absences, retards">🕓</button>
@@ -15659,6 +15691,7 @@ function buildCell(cls, row, col) {
       stu.upe2a       ? `<span class="spec-badge spec-upe2a"     title="${_escAttr(stu.notes||'UPE2A hors classe')}">UPE2A</span>` : '',
       stu.upe2a_incl  ? `<span class="spec-badge spec-upe2a-incl" title="${_escAttr(stu.notes||'UPE2A inclusion')}">UPE2A+</span>` : '',
       stu.pai         ? `<span class="spec-badge spec-pai"        title="${_escAttr(stu.notes||'PAI — Projet d’Accueil Individualisé (médical)')}">PAI</span>` : '',
+      stu.agrandissement ? `<span class="spec-badge spec-agr"     title="Agrandissement — photocopies à agrandir">-A</span>` : '',
       stu.notes       ? `<span class="spec-badge" style="background:#7f8c8d;color:#fff" title="${_escAttr(stu.notes)}">📋</span>` : '',
     ].filter(Boolean);
     const specBadges = specList.length ? `<div class="spec-badges">${specList.join('')}</div>` : '';
@@ -15692,7 +15725,7 @@ function buildCell(cls, row, col) {
                       style="${_style}">${_label}</span>`;
       })()}
     `;
-    const specTitle = [stu.ppre?'PPRE':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':''].filter(Boolean).join(' · ');
+    const specTitle = [stu.ppre?'PPRE':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':''].filter(Boolean).join(' · ');
     const notesTitle = stu.notes ? `\n📋 ${stu.notes}` : '';
     let postTitle = '';
     if (_postAppel) {
@@ -16155,6 +16188,7 @@ function renderUnplaced() {
     if (s.gevasco)    specBdgs.push(`<span style="background:#2980b9;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPS / Gevasco">PPS</span>`);
     if (s.ppre)       specBdgs.push(`<span style="background:#e67e22;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPRE">PPRE</span>`);
     if (s.pai)        specBdgs.push(`<span style="background:#ec4899;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PAI (médical)">PAI</span>`);
+    if (s.agrandissement) specBdgs.push(`<span style="background:#00838f;color:#fff;font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="Agrandissement (photocopies agrandies)">-A</span>`);
     return `<div class="us" draggable="true"
       data-sid="${_escAttr(s.id)}"
       ondragstart="startDragUnplaced(event,'${_escAttr(s.id)}')"
@@ -19780,6 +19814,7 @@ function _amenagementsLabel(stu) {
   if (stu.upe2a)      parts.push('UPE2A');
   if (stu.upe2a_incl) parts.push('UPE2A+');
   if (stu.pai)        parts.push('PAI');
+  if (stu.agrandissement) parts.push('-A');
   return parts.join(' + ');
 }
 
@@ -23231,6 +23266,7 @@ function printElevesList() {
         upe2a:      !!live?.upe2a,
         upe2a_incl: !!live?.upe2a_incl,
         pai:        !!live?.pai,
+        agrandissement: !!live?.agrandissement,
         _archived:  !live,
       };
     });
@@ -23251,6 +23287,7 @@ function printElevesList() {
       upe2a:      !!s.upe2a,
       upe2a_incl: !!s.upe2a_incl,
       pai:        !!s.pai,
+      agrandissement: !!s.agrandissement,
       _archived: false,
     }));
   }
@@ -23288,6 +23325,7 @@ function printElevesList() {
     if (s.upe2a)      badges.push({ txt: 'UPE2A',  bg: '#16a085' });
     if (s.upe2a_incl) badges.push({ txt: 'UPE2A+', bg: '#c0392b' });
     if (s.pai)        badges.push({ txt: 'PAI',    bg: '#ec4899' });
+    if (s.agrandissement) badges.push({ txt: '-A',  bg: '#00838f' });
     if (!badges.length) return '<span style="color:#bbb">—</span>';
     const baseStyle = 'display:inline-block;border-radius:3px;padding:0 4px;font-size:.75em;font-weight:700;margin:1px 1px 1px 0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
     return badges.map(b => {
@@ -23367,7 +23405,7 @@ function printClassesBilan() {
 
   // Agrégation par niveau pour le récap en bas
   const byLevel = {};
-  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totPlaced = 0;
+  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totPlaced = 0, totAgr = 0;
   let totM = 0, totF = 0, totCivUnk = 0;
 
   const tdC = 'padding:5px 10px;border-bottom:1px solid #ddd';
@@ -23385,9 +23423,10 @@ function printClassesBilan() {
     const order = classLevelOrder(cls.nom);
     const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
-    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, m:0, f:0, civUnk:0, classes:[] };
+    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, m:0, f:0, civUnk:0, classes:[] };
     byLevel[order].present     += c.present;
     byLevel[order].amenagement += c.amenagement;
+    byLevel[order].agrandissement += c.agrandissement;
     byLevel[order].total       += c.total;
     byLevel[order].ulisOut     += c.ulisOut;
     byLevel[order].upe2aOut    += c.upe2aOut;
@@ -23397,7 +23436,7 @@ function printClassesBilan() {
     byLevel[order].civUnk      += c.civUnk;
     byLevel[order].classes.push(cls.nom);
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
-    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totPlaced += np;
+    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totPlaced += np; totAgr += c.agrandissement;
     totM       += c.m;       totF  += c.f;            totCivUnk += c.civUnk;
 
     const nonAm = c.present - c.amenagement;
@@ -23411,6 +23450,7 @@ function printClassesBilan() {
       <td style="${tdN}">${c.present}${outHint}</td>
       <td style="${tdN}">${nonAm}</td>
       <td style="${tdN}">${c.amenagement}</td>
+      <td style="${tdN}">${c.agrandissement || '—'}</td>
     </tr>`;
   }).join('');
 
@@ -23431,6 +23471,7 @@ function printClassesBilan() {
       <td style="${tdN}">${r.present}${_outHint(r.ulisOut, r.upe2aOut)}</td>
       <td style="${tdN}">${nonAm}</td>
       <td style="${tdN}">${r.amenagement}</td>
+      <td style="${tdN}">${r.agrandissement || '—'}</td>
     </tr>`;
   }).join('');
 
@@ -23455,6 +23496,7 @@ function printClassesBilan() {
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Normalement présents</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Non aménagés</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Aménagés</th>
+          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Agrand.</th>
         </tr></thead>
         <tbody>${classesRows}</tbody>
         <tfoot><tr>
@@ -23465,6 +23507,7 @@ function printClassesBilan() {
           <td style="${tfN}">${totPresent}${_outHint(totUlisOut, totUpe2aOut)}</td>
           <td style="${tfN}">${totNonAm}</td>
           <td style="${tfN}">${totAm}</td>
+          <td style="${tfN}">${totAgr || '—'}</td>
         </tr></tfoot>
       </table>
 
@@ -23477,6 +23520,7 @@ function printClassesBilan() {
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Normalement présents</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Non aménagés</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Aménagés</th>
+          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Agrand.</th>
         </tr></thead>
         <tbody>${recapRows}</tbody>
       </table>
@@ -23487,6 +23531,7 @@ function printClassesBilan() {
         <strong>Placés</strong> = élèves placés dans le plan.
         <strong>Normalement présents</strong> = inscrits moins ULIS / UPE2A hors-inclusion (jamais en classe).
         <strong>Aménagés</strong> = présents avec PPRE, PPS (Gevasco), ULIS+ ou UPE2A+ — copies souvent adaptées.
+        <strong>📄 Agrand.</strong> = élèves nécessitant des photocopies agrandies (nombre d'agrandissements à tirer).
       </div>
     </div>
   `;
@@ -26227,6 +26272,7 @@ function createDemo(opts) {
   // entre eux MAIS cumulables avec ceux du groupe A. Volontairement, certains indices se
   // chevauchent pour montrer les cumuls (ex. élève 14 = UPE2A+ + PPS).
   const ppreSamples       = [3, 22, 14];   // PPRE — l'index 14 cumule aussi UPE2A+
+  const agrSamples        = [3, 8];        // Agrandissement — l'index 3 cumule PPRE (démontre « PPRE-A »)
   const ppsSamples        = [7, 19];       // PPS (gevasco)
   const ulisIncSamples    = [11];          // ULIS+ (inclusion)
   const upe2aIncSamples   = [14, 19];      // UPE2A+ (inclusion) — l'index 19 cumule aussi PPS
@@ -26274,6 +26320,7 @@ function createDemo(opts) {
         groupe: grp,
         civilite: civ,
         ppre:       ppreSamples.includes(i),
+        agrandissement: agrSamples.includes(i),
         gevasco:    ppsSamples.includes(i),
         ulis:       isUlisOut,
         ulis_incl:  !isUlisOut && ulisIncSamples.includes(i),
