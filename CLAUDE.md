@@ -127,6 +127,27 @@ Onglets sortis de la navigation principale (accessibles via bouton) :
 
 **Désactivation visuelle des chips G1/G2** (`_updateGroupChipsState()`) : si la classe courante n'a aucun élève dans le groupe G1 (resp. G2), le chip correspondant reçoit la classe `.disabled` (opacity .35 + cursor:not-allowed + tooltip explicatif). Empêche le piège « grille entièrement fantôme » qui survenait quand le filtre persisté G1 atterrissait sur une classe sans élève en G1 (toutes les cellules `.ghost`, click handlers non attachés, mode appel inopérant). Appelée au début de `renderTeacherGrid()` et `renderStudentView()`. Le clic sur un chip désactivé est ignoré dans `setGroupFilter()` (early return) et dans le raccourci clavier `1`/`2`.
 
+## Activation des fonctions (Réglages → 🧩 Fonctionnalités)
+
+Permet à l'enseignant de **n'activer que les fonctions dont il a besoin**. 4 interrupteurs (tout activé par défaut → aucun changement pour les fichiers existants), dans une section « 🧩 Fonctionnalités » en tête de la modale ⚙ Réglages (`msettings`) :
+- **📱 Tablettes** · **📷 QCMCam** · **🙋 Appel** · **📊 Évaluations**
+
+### Modèle
+`S.featureFlags = { tablettes, qcmcam, appel, evaluation }` (booléens). **Synchronisé dans le fichier** (sauvegarde JSON, sync auto, undo/redo). Migration dans `postLoadHook()` : crée l'objet et force `true` pour toute clé absente.
+
+### Mécanisme
+`_applyFeatureFlags()` pose des classes sur `<body>` (`ff-no-tablettes` / `ff-no-qcmcam` / `ff-no-appel` / `ff-no-eval`) ; le CSS masque tout ce qui s'y rapporte. Helper `_featureEnabled(key)` (défaut = activé). Appelé : fin de `postLoadHook()`, `undoLast`/`redoLast`, début d'`init()` (avant restauration de l'onglet), et `_toggleFeature(key, on)` (depuis les cases à cocher).
+
+`_toggleFeature` : `pushUndo()` → set flag → si on désactive l'onglet actif, repli sur Classes (via `FEATURE_TABS`) + quitte le mode appel le cas échéant → `save()` → `_applyFeatureFlags()` → refresh des libellés.
+
+### Masquage « complet » (sélecteurs masqués par fonction)
+- **Tablettes** : onglet nav `#nb-ipads`, sélecteur de classe mobile dans Plan Prof (`.ff-tablettes`), items « Affecter/Désaffecter » du menu Actions, pastilles `.cipad` dans les cellules, récap tablettes des impressions (`doPrint('t')`, `buildTeacherPageHTML` : conditionnés par `_featureEnabled('tablettes')`).
+- **QCMCam** : onglet nav `#nb-qcmcam`. (La numérotation de position dans Élèves reste — c'est l'ordre des sièges.)
+- **Appel** : boutons `#btn-appel-mode` + `#btn-appels-passes`, colonnes 🚫/⏰ (classe `.ff-appel`) dans Élèves, Vue d'ensemble, Export positions et liste imprimée (`printElevesList`), raccourci clavier `A` neutralisé.
+- **Évaluations** : groupe nav `#nav-group-eval` (3 onglets), bouton 🎓 Disciplines (en-tête Classes), 📤 Exporter les notes (menu Données) — classe `.ff-eval`.
+
+Au démarrage, un onglet persisté d'une fonction désactivée retombe sur Classes (garde-fou dans `init()`).
+
 ## Modèle de données (multi-salles)
 
 ```js
@@ -1875,3 +1896,30 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - Toute action mutante doit appeler `pushUndo()` AVANT la mutation, sinon l'undo capture le mauvais état
 - Pour les développements longs : travailler sur une copie `plan de classe new.html`, puis remplacer une fois validé (convention demandée par l'utilisateur)
 - Modals empilés (par ex. mhist par-dessus moverview) : utiliser `_modalReturnTo[id]` pour enregistrer un callback à la fermeture, ou bien laisser le modal parent ouvert et bumper le `z-index` du modal enfant à 1010+
+- **Jamais de `confirm()` natif** : toujours utiliser le helper `_uiConfirm(...)` (cf. section dédiée). Le navigateur peut bloquer les dialogues natifs → boutons muets. Les `alert()`/`prompt()` natifs subsistent par endroits (à convertir au besoin via `appAlert` / un champ dans une modale).
+
+## Confirmations in-app (`_uiConfirm` / modale `mconfirm2`)
+
+Tous les `confirm()` natifs ont été remplacés par une **modale interne bloquante** `mconfirm2`, pilotée par le helper :
+
+```js
+_uiConfirm({
+  title,            // titre de la modale
+  message,          // texte (les \n sont rendus via white-space:pre-line)
+  okLabel,          // libellé du bouton de validation (défaut « Confirmer »)
+  okClass,          // classe du bouton OK : 'btn-p' (défaut) | 'btn-d' (danger) | 'btn-w' (warning)
+  onOk,             // callback exécuté à la validation
+  onCancel,         // callback exécuté si fermeture sans valider (Annuler / Échap / clic fond)
+  closeFirst,       // id d'une modale à fermer d'abord (ex. 'mreset') avant d'afficher mconfirm2
+});
+```
+
+**Pourquoi** : un `confirm()` natif bloqué par l'anti-popup du navigateur (case « empêcher cette page d'ouvrir des boîtes de dialogue ») renvoie `false` silencieusement → l'action ne se déclenche jamais, le bouton paraît cassé. La modale interne n'est jamais bloquée.
+
+**Patterns de conversion** :
+- Cas simple `if (!confirm(msg)) return; <body>` → mettre `<body>` dans `onOk: () => { ... }`.
+- Confirmation au milieu d'une fonction avec du code commun après → extraire le code commun dans un worker (`const _finish = () => {...}` / `_commit` / `_proceed`), brancher : `if (cond) { _uiConfirm({..., onOk: _commit}); return; } _commit();`.
+- Confirmation avec branche `else` (ex. rechargement fichier qui note un timestamp au refus) → utiliser `onCancel`.
+- `_uiConfirm` n'est PAS bloquant au sens JS (pas de valeur de retour) : tout ce qui suivait le `confirm()` doit passer dans `onOk`/`onCancel`, pas après l'appel.
+
+**Cas particulier — note hors barème** (`_evalTableurConfirmIfOutOfRange`, tableur d'éval) : utilise `_uiConfirm` avec **Conserver** (`onOk`, garde la valeur) / **Annuler** (`onCancel`, restaure la valeur précédente capturée au focus + recolore). Fenêtre bloquante voulue (choix explicite de l'enseignant).
