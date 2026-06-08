@@ -5804,11 +5804,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.12.2';
+const APP_VERSION    = '2.12.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-09T23:10:00Z';
+const APP_BUILD_DATE = '2026-06-10T03:30:07Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14059,10 +14059,13 @@ function _renduMakeDraggable(el) {
     const startX = e.clientX, startY = e.clientY;
     const baseLeft = rect.left, baseTop = rect.top, w = rect.width, h = rect.height;
     let moved = false;
-    try { el.setPointerCapture(e.pointerId); } catch (_) {}
     const onMove = (ev) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return; // sous le seuil = clic
+      // Capture le pointeur seulement au démarrage du glissé. La capturer dès le
+      // pointerdown redirige le clic vers l'élément capturant (le conteneur) au lieu
+      // du bouton enfant → les boutons de zoom ne se déclenchaient plus.
+      if (!moved) { try { el.setPointerCapture(e.pointerId); } catch (_) {} }
       moved = true;
       el.style.left  = Math.max(2, Math.min(window.innerWidth  - w - 2, baseLeft + dx)) + 'px';
       el.style.top   = Math.max(2, Math.min(window.innerHeight - h - 2, baseTop  + dy)) + 'px';
