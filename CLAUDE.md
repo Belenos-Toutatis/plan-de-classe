@@ -1208,8 +1208,8 @@ Bouton **🆕 Maj** dans le header → `checkForUpdate()` qui interroge l'API pu
 
 Constantes en haut du `<script>` :
 ```js
-const APP_VERSION    = '2.1.1';                 // semver affiché (PATCH/MINOR/MAJOR)
-const APP_BUILD_DATE = '2026-05-30T05:30:00Z';  // date ISO — sert UNIQUEMENT à la détection MAJ
+const APP_VERSION    = '2.12.1';                // semver affiché (PATCH/MINOR/MAJOR) — exemple, valeur réelle en tête du <script>
+const APP_BUILD_DATE = '2026-06-09T22:11:00Z';  // date ISO — sert UNIQUEMENT à la détection MAJ
 const APP_UPDATE_TOLERANCE_MS = 10 * 60 * 1000; // marge avant de crier « MAJ dispo »
 const APP_REPO_USER  = 'Belenos-Toutatis';
 const APP_REPO_NAME  = 'plan-de-classe';
@@ -1897,6 +1897,15 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - Pour les développements longs : travailler sur une copie `plan de classe new.html`, puis remplacer une fois validé (convention demandée par l'utilisateur)
 - Modals empilés (par ex. mhist par-dessus moverview) : utiliser `_modalReturnTo[id]` pour enregistrer un callback à la fermeture, ou bien laisser le modal parent ouvert et bumper le `z-index` du modal enfant à 1010+
 - **Jamais de `confirm()` natif** : toujours utiliser le helper `_uiConfirm(...)` (cf. section dédiée). Le navigateur peut bloquer les dialogues natifs → boutons muets. Les `alert()`/`prompt()` natifs subsistent par endroits (à convertir au besoin via `appAlert` / un champ dans une modale).
+
+## Fiabilité & sécurité — invariants à respecter
+
+- **Suppression d'un élève = `_purgeStudentRefs(id)`** (source unique de vérité). Retire TOUTES les références à un sid (roster, sièges, tablettes legacy `ipads*` + `ipadsByPool`, `allowedFor`, `aeshLinks`, `noNeighbors`, `membership`, `ev.notes/studentRemarks/passations.niveaux`, `conseilClasse`, `bulletinRemarques`) dans toutes les classes. `_deleteStudentInternal` = `_purgeStudentRefs` + `delete S.eleves[id]`. **Tout nouveau champ indexé par sid DOIT être purgé là.**
+- **Suppression d'une classe réelle (`deleteClass`)** route chaque élève via `_deleteStudentInternal`, puis purge les stores indexés par classe (`attendance`, `snapshots`, `movedHighlights`, `bulletinRemarques`/`ClassRemarques`/`WorkedItems`, `conseilClasse`) et supprime les évals devenues orphelines (plus aucune classe vivante via `_evalPrimaryAliveClassId`).
+- **`_auditState({repair})`** lancé en fin de `postLoadHook` : détecte/répare (conservateur) les références orphelines — élèves fantômes (sid hors `S.eleves`), `activeRoom`/`activePool`/`S.cur` invalides. Réutilise `_purgeStudentRefs`. Journalise dans la console + `window.__planClasseErrors`.
+- **Gestionnaire d'erreurs global** (`window.error` + `unhandledrejection` → `_logRuntimeError`) : surface un toast discret + garde un journal `window.__planClasseErrors` (50 derniers). Rend visibles les pannes que les `catch{}` avalaient.
+- **CSP** (balise `<meta>` en `<head>`) : `connect-src` limité à `'self' + api.github.com` et `img-src 'self' data: blob:` (PAS `*`) bloquent l'exfiltration de données élèves en cas de XSS résiduelle. ⚠️ **`font-src 'self' data:` est INDISPENSABLE** : les 3 polices du design system sont embarquées en `data:font/woff2;base64` — sans cette directive, `default-src 'self'` les bloque et l'app retombe en silence sur les polices système.
+- **Échappement au rendu** : toute donnée utilisateur (nom/prénom, libellés, remarques, libellés de créneaux…) injectée en `innerHTML` doit passer par `_escName`/`_escAttr`. `_validateImport` ne nettoie PAS les valeurs (seulement les clés, dont un scan récursif anti prototype-pollution `__proto__`/`constructor`/`prototype`) → la défense est à l'affichage.
 
 ## Confirmations in-app (`_uiConfirm` / modale `mconfirm2`)
 

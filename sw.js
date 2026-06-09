@@ -1,4 +1,4 @@
-const CACHE = 'plan-classe-v3';
+const CACHE = 'plan-classe-v4';
 const FILES = ['plan de classe.html', 'manifest.json'];
 
 self.addEventListener('install', e => {
@@ -39,6 +39,18 @@ self.addEventListener('fetch', e => {
         }
         return response;
       })
-      .catch(() => caches.match(req))
+      .catch(() => caches.match(req).then(hit => {
+        if (hit) return hit;
+        // Hors-ligne ET ressource jamais mise en cache. Pour une navigation, on
+        // sert l'app principale (mono-fichier) ; sinon une réponse 503 lisible
+        // plutôt qu'une erreur réseau brute (respondWith(undefined)).
+        if (req.mode === 'navigate') {
+          return caches.match('plan de classe.html').then(app =>
+            app || new Response('Hors-ligne — application non encore mise en cache.',
+              { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }));
+        }
+        return new Response('Hors-ligne — ressource non disponible.',
+          { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      }))
   );
 });
