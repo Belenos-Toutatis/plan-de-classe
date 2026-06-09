@@ -294,3 +294,38 @@ test('_escJsAttr : neutralise le breakout de chaîne JS dans un attribut inline'
   // Aucune apostrophe non précédée d\'un backslash (sinon elle refermerait la chaîne JS)
   assert.ok(!/(^|[^\\])'/.test(out), 'apostrophe non échappée subsiste : ' + out);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Régressions — points traités après l'audit exhaustif
+// ─────────────────────────────────────────────────────────────────────────────
+test('improveOnly : déterministe et optimal (indépendant de l\'ordre des évals)', () => {
+  // Isole la logique improveOnly en stubant le calcul de note (renvoie e.__note).
+  ev('_evalNoteSur20Rounded = function(e){ return e.__note; }');
+  const oblig = { e0: { id: 'e0', classIds: ['c1'], periode: 'S1', coef: 1, __note: 10 } };
+  const facA  = { eA: { id: 'eA', classIds: ['c1'], periode: 'S1', coef: 10, facultative: { active: true, mode: 'improveOnly' }, __note: 11 } };
+  const facB  = { eB: { id: 'eB', classIds: ['c1'], periode: 'S1', coef: 1,  facultative: { active: true, mode: 'improveOnly' }, __note: 10.5 } };
+  const run = (evals) => {
+    setState({ classes: { c1: { id: 'c1' } }, eleves: { s1: { id: 's1', classe_id: 'c1' } }, evalPrefs: {}, evaluations: evals });
+    return ev('_computeStudentMeanForPeriod("c1","s1","S1",null)');
+  };
+  const r1 = run({ ...oblig, ...facA, ...facB });
+  const r2 = run({ ...oblig, ...facB, ...facA });
+  assert.ok(Math.abs(r1 - r2) < 1e-9, `dépend de l'ordre : ${r1} vs ${r2}`);
+  // Optimal = inclure A (11, coef 10) seul : (10 + 11*10) / 11 = 120/11
+  assert.ok(Math.abs(r1 - (120 / 11)) < 1e-9, `non optimal : ${r1}`);
+});
+
+test('_qcmcamMatchStudent : préfixe de nom contredisant → ambig (pas de match auto)', () => {
+  app.__students = [{ id: 's1', prenom: 'Léo', nom: 'Martin' }];
+  const res = get('_qcmcamMatchStudent("Léo DUR.", globalThis.__students)');
+  assert.equal(res.status, 'ambig', 'doit demander confirmation, pas matcher Léo Martin');
+});
+
+test('_qcmDisplayLabel : place exclue (Cas 3) → 🚫 (pas de numéro legacy trompeur)', () => {
+  setState({
+    classes: { c1: { id: 'c1', activeRoom: 'r1' } }, eleves: {},
+    salles: { r1: { nom: 'S', rows: 8, cols: 15, positions_vides: [], qcmExcluded: ['0,0'] } }, // 8×15 → séquentiel (Cas 3)
+  });
+  assert.equal(ev('_qcmDisplayLabel(S.classes.c1, 0, 0, 15)'), '🚫', 'place exclue → marqueur');
+  assert.match(ev('_qcmDisplayLabel(S.classes.c1, 0, 1, 15)'), /^\d+$/, 'place numérotée → numéro');
+});

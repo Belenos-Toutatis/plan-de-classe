@@ -11667,6 +11667,18 @@ function qcmNumForCell(cls, salleId, r, c) {
   return qcm ? (qcm.keyToNum.get(`${r},${c}`) ?? null) : null;
 }
 
+// Libellé de position À AFFICHER (n° QCMcam). Pour une place SANS numéro QCM (au-delà de
+// la 125e en stratégie séquentielle, ou exclue via salle.qcmExcluded), on renvoie « 🚫 »
+// plutôt qu'un numéro legacy r*10+pos TROMPEUR : ce dernier n'est pas re-saisissable
+// (seatQCMToKey ne le connaît pas) et peut entrer en collision avec un vrai numéro
+// séquentiel d'une AUTRE place. Sans salle active connue → fallback legacy légitime.
+function _qcmDisplayLabel(cls, r, c, cols) {
+  const n = qcmNumForCell(cls, cls?.activeRoom, r, c);
+  if (n != null) return String(n);
+  if (cls && cls.activeRoom) return '🚫';
+  return String(seatLabelQCM(r, c, cols));
+}
+
 // ═══════════════════════════════════════════════════════════
 // IMPRESSION DU PLAN QCMCam (vue prof avec n° QCMCam)
 // ═══════════════════════════════════════════════════════════
@@ -14665,7 +14677,7 @@ function renderStudents() {
       onclick="openStuNotes('${s.id}')" title="${_escAttr(s.notes||'Ajouter une note')}">📋</button>`;
     const sel = selectedEleves.has(s.id) ? ' selected' : '';
     const pos = getPos(s.id, cls);
-    const posLabel = pos ? String(qcmNumForCell(cls, cls.activeRoom, pos.r, pos.c) ?? seatLabelQCM(pos.r, pos.c, cc)) : '';
+    const posLabel = pos ? _qcmDisplayLabel(cls, pos.r, pos.c, cc) : '';
     const posInput = hasActiveRoom
       ? `<input type="text" class="pos-inp" data-sid="${s.id}" data-idx="${idx}"
               value="${posLabel}" placeholder="—"
@@ -15094,7 +15106,7 @@ function refreshPosInputs() {
   document.querySelectorAll('.pos-inp').forEach(inp => {
     const sid = inp.dataset.sid;
     const pos = getPos(sid, cls);
-    inp.value = pos ? String(qcmNumForCell(cls, cls.activeRoom, pos.r, pos.c) ?? seatLabelQCM(pos.r, pos.c, cc)) : '';
+    inp.value = pos ? _qcmDisplayLabel(cls, pos.r, pos.c, cc) : '';
   });
 }
 
@@ -15126,7 +15138,7 @@ function onPosBlur(e) {
   if (!cls) return;
   const cc = cls.configuration?.cols || 10;
   const pos = getPos(sid, cls);
-  const currentLabel = pos ? String(qcmNumForCell(cls, cls.activeRoom, pos.r, pos.c) ?? seatLabelQCM(pos.r, pos.c, cc)) : '';
+  const currentLabel = pos ? _qcmDisplayLabel(cls, pos.r, pos.c, cc) : '';
   const newVal = e.target.value.trim();
   if (newVal === currentLabel) return;
 
@@ -20428,7 +20440,7 @@ function renderExportPositions() {
     const stats = getStudentAttendanceStats(cls.id, sid);
     return {
       sid,
-      pos:        pos ? (qcmNumForCell(cls, cls.activeRoom, pos.r, pos.c) ?? seatLabelQCM(pos.r, pos.c, cc)) : '',
+      pos:        pos ? _qcmDisplayLabel(cls, pos.r, pos.c, cc) : '',
       posOrder:   pos ? seatOrder(pos.r, pos.c, cc) : Infinity,
       groupe:     stu.groupe ? `G${stu.groupe}` : '',
       groupeKey:  stu.groupe || 99, // pour le tri (vides en dernier)
@@ -22630,7 +22642,7 @@ function _evalSeatLabelAtTime(ev, cls, sid) {
         const [r, c] = k.split(',').map(Number);
         if (Number.isFinite(r) && Number.isFinite(c)) {
           const cols = S.salles[cls.activeRoom]?.cols || 0;
-          return String(qcmNumForCell(cls, cls.activeRoom, r, c) ?? seatLabelQCM(r, c, cols));
+          return _qcmDisplayLabel(cls, r, c, cols);
         }
         return '';
       }
@@ -22641,7 +22653,7 @@ function _evalSeatLabelAtTime(ev, cls, sid) {
   const pos = getPos(sid, cls);
   if (!pos) return '';
   const cols = S.salles[cls.activeRoom]?.cols || 0;
-  return String(qcmNumForCell(cls, cls.activeRoom, pos.r, pos.c) ?? seatLabelQCM(pos.r, pos.c, cols));
+  return _qcmDisplayLabel(cls, pos.r, pos.c, cols);
 }
 
 // Enregistre un snapshot de seating dans le pool (s'il n'y est pas déjà) et renvoie son hash.
@@ -37407,13 +37419,17 @@ function _newPassationId() {
 // passations d'une éval Type B, selon la règle S.evalPrefs.meanRule.
 function _computeStudentCompetenceLevel(ev, sid, cId) {
   if (!ev?.passations) return 0;
+  // Date de tri (règles last/weightedRecency) résolue PER-CLASSE de l'élève (éval
+  // multi-classes : la date globale = max des classes ne reflète pas l'ordre réel
+  // dans la classe de cet élève). Fallback p.date via _passDateFor.
+  const _cls = S.eleves?.[sid]?.classe_id;
   // Récupère tous les niveaux saisis (> 0) pour cette compétence sur cet élève
   const entries = [];
   for (const p of ev.passations) {
     if (!p.competenceIds?.includes(cId)) continue;
     const niv = p.niveaux?.[sid]?.[cId];
     if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
-      entries.push({ date: p.date || '', niveau: niv });
+      entries.push({ date: _passDateFor(p, _cls), niveau: niv });
     }
   }
   if (entries.length === 0) return 0;
@@ -37455,6 +37471,7 @@ function _evalNoteTipB(ev, sid) {
   const fmt = (v) => (v == null) ? '—' : (typeof v === 'number' ? _fmtNote(v) : String(v));
   const weighting = ev.weighting || 'equal';
   const meanRule = ev.meanRule || S.evalPrefs?.meanRule || 'arithmetic';
+  const _cls = S.eleves?.[sid]?.classe_id; // date de tri per-classe (cf. _passDateFor)
   const lines = [];
   lines.push(`Note /20 — calcul pour ${(S.eleves?.[sid]?.prenom || '')} ${(S.eleves?.[sid]?.nom || '')}`.trim());
   lines.push(`Règle : ${weighting === 'perCompetence' ? 'moyenne par compétence' : (weighting === 'coef' ? 'pondérée par coef de passation' : 'équitable')} · niveau→points : N1=${pts[0]} N2=${pts[1]} N3=${pts[2]} N4=${pts[3]} · sur ${ptsMax}, ramené à ${noteMax}/20`);
@@ -37472,7 +37489,7 @@ function _evalNoteTipB(ev, sid) {
       for (const p of ev.passations) {
         if (!(p.competenceIds || []).includes(cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
-        if (typeof v === 'number' && v >= 1 && v <= 4) entries.push({ niveau: v, date: p.date || '', code: p.code || '?' });
+        if (typeof v === 'number' && v >= 1 && v <= 4) entries.push({ niveau: v, date: _passDateFor(p, _cls), code: p.code || '?' });
       }
       if (entries.length === 0) { lines.push(`• ${c?.code || cid} : aucune saisie`); continue; }
       let compPts;
@@ -37551,6 +37568,7 @@ function _computeStudentEvalNoteB(ev, sid) {
   };
 
   const weighting = ev.weighting || 'equal';
+  const _cls = S.eleves?.[sid]?.classe_id; // pour la date de tri per-classe (cf. _passDateFor)
 
   if (weighting === 'perCompetence') {
     // Pour chaque compétence : convertit chaque niveau saisi en points,
@@ -37566,7 +37584,7 @@ function _computeStudentEvalNoteB(ev, sid) {
       for (const p of ev.passations) {
         if (!(p.competenceIds || []).includes(cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
-        if (typeof v === 'number' && v >= 1 && v <= 4) entries.push({ niveau: v, date: p.date || '' });
+        if (typeof v === 'number' && v >= 1 && v <= 4) entries.push({ niveau: v, date: _passDateFor(p, _cls) });
       }
       if (entries.length === 0) continue;
       let compPts;
@@ -38401,6 +38419,10 @@ function _computeStudentFacultativeCounted(classId, sid, periode, disciplineFilt
     num += coef * noteSur20;
     den += coef;
   }
+  // Modes déterministes d'abord, puis improveOnly par note DÉCROISSANTE. DOIT rester
+  // aligné sur _computeStudentMeanForPeriod, sinon le hachuré « non comptée » du Bilan
+  // ne correspondrait plus à la note réellement calculée.
+  const improveOnly = [];
   for (const ev of facultatives) {
     const noteSur20 = _evalNoteSur20Rounded(ev, sid);
     if (noteSur20 == null) continue;
@@ -38411,14 +38433,18 @@ function _computeStudentFacultativeCounted(classId, sid, periode, disciplineFilt
     } else if (mode === 'bonus') {
       if (noteSur20 > 10) { counted.add(ev.id); num += coef * (noteSur20 - 10); }
     } else {
-      const num2 = num + coef * noteSur20;
-      const den2 = den + coef;
-      const moyAvec = (den2 > 0) ? num2 / den2 : null;
-      const moyActuelle = (den > 0) ? num / den : null;
-      if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
-        counted.add(ev.id);
-        num = num2; den = den2;
-      }
+      improveOnly.push({ id: ev.id, note: noteSur20, coef });
+    }
+  }
+  improveOnly.sort((a, b) => b.note - a.note);
+  for (const f of improveOnly) {
+    const num2 = num + f.coef * f.note;
+    const den2 = den + f.coef;
+    const moyAvec = (den2 > 0) ? num2 / den2 : null;
+    const moyActuelle = (den > 0) ? num / den : null;
+    if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
+      counted.add(f.id);
+      num = num2; den = den2;
     }
   }
   return counted;
@@ -38459,7 +38485,9 @@ function _computeStudentMeanForPeriod(classId, sid, periode, channelFilter) {
     den += coef;
   }
   const moyOblig = (den > 0) ? num / den : null;
-  // Applique les facultatives
+  // Applique les facultatives. On traite d'abord les modes DÉTERMINISTES (over10,
+  // bonus), puis les improveOnly.
+  const improveOnly = [];
   for (const ev of facultatives) {
     const noteSur20 = _evalNoteSur20Rounded(ev, sid);
     if (noteSur20 == null) continue;
@@ -38477,14 +38505,22 @@ function _computeStudentMeanForPeriod(classId, sid, periode, channelFilter) {
         num += coef * (noteSur20 - 10);
       }
     } else {
-      // improveOnly : on garde la facultative seulement si la moyenne globale s'améliore
-      const num2 = num + coef * noteSur20;
-      const den2 = den + coef;
-      const moyAvec = (den2 > 0) ? num2 / den2 : null;
-      const moyActuelle = (den > 0) ? num / den : null;
-      if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
-        num = num2; den = den2;
-      }
+      improveOnly.push({ note: noteSur20, coef });
+    }
+  }
+  // improveOnly : une facultative n'est gardée que si elle améliore la moyenne. L'ordre
+  // optimal ET déterministe est par note DÉCROISSANTE : on inclut une note ssi elle dépasse
+  // la moyenne courante ; en commençant par les plus hautes, on inclut exactement les notes
+  // supérieures à la moyenne FINALE (point fixe). L'ancien ordre d'insertion donnait un
+  // résultat dépendant de l'ordre des évals et parfois sous-optimal.
+  improveOnly.sort((a, b) => b.note - a.note);
+  for (const f of improveOnly) {
+    const num2 = num + f.coef * f.note;
+    const den2 = den + f.coef;
+    const moyAvec = (den2 > 0) ? num2 / den2 : null;
+    const moyActuelle = (den > 0) ? num / den : null;
+    if (moyAvec != null && (moyActuelle == null || moyAvec > moyActuelle)) {
+      num = num2; den = den2;
     }
   }
   if (den === 0 && num > 0) return num; // cas bonus pur sans aucune obligatoire — improbable mais cohérent
@@ -39487,7 +39523,7 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
         if (!p.competenceIds?.includes(cid)) continue;
         const niv = p.niveaux?.[sid]?.[cid];
         if (typeof niv !== 'number' || niv < 1) continue;
-        entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: p.code, date: p.date || ev.date, niveau: niv });
+        entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: p.code, date: _passDateFor(p, classId) || ev.date, niveau: niv });
       }
     } else if (ev.type === 'A' || ev.type === 'C') {
       // Pour Type C : chaque question rattachée à cette compétence devient un niveau
@@ -39504,7 +39540,7 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
         if (!Number.isFinite(n)) continue;
         const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
         const niv = _noteToLevel(eff, mn.max);
-        if (niv > 0) entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: mn.label, date: ev.date, niveau: niv });
+        if (niv > 0) entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: mn.label, date: _evalDateFor(ev, classId) || ev.date, niveau: niv });
       }
     }
   }
@@ -41176,8 +41212,10 @@ function _qcmcamMatchStudent(rawName, students) {
         const filt = cands2.filter(s => _qcmcamNorm(s.nom).startsWith(nomPref2));
         if (filt.length === 1) return { status: 'ok',    sid: filt[0].id };
         if (filt.length > 1)   return { status: 'ambig', sids: filt.map(s => s.id) };
-        // Aucun nom ne match : si un seul prénom-candidat, on l'accepte ; sinon ambigu.
-        if (cands2.length === 1) return { status: 'ok',    sid: cands2[0].id };
+        // filt.length === 0 : le préfixe de nom du CSV CONTREDIT le(s) candidat(s) prénom
+        // (ex. « Léo DUR. » alors que seul « Léo MARTIN » reste en classe). On NE valide
+        // PAS automatiquement — même un unique candidat — pour ne pas attribuer la note au
+        // mauvais élève. → ambigu : l'utilisateur tranche dans le picker.
         return { status: 'ambig', sids: cands2.map(s => s.id) };
       }
       if (cands2.length === 1) return { status: 'ok',    sid: cands2[0].id };
