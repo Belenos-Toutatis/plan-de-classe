@@ -1897,6 +1897,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - Pour les développements longs : travailler sur une copie `plan de classe new.html`, puis remplacer une fois validé (convention demandée par l'utilisateur)
 - Modals empilés (par ex. mhist par-dessus moverview) : utiliser `_modalReturnTo[id]` pour enregistrer un callback à la fermeture, ou bien laisser le modal parent ouvert et bumper le `z-index` du modal enfant à 1010+
 - **Jamais de `confirm()` natif** : toujours utiliser le helper `_uiConfirm(...)` (cf. section dédiée). Le navigateur peut bloquer les dialogues natifs → boutons muets. Les `alert()`/`prompt()` natifs subsistent par endroits (à convertir au besoin via `appAlert` / un champ dans une modale).
+- **Tests (`test/`, `npm test`)** : harnais Node (`test/harness.js`) qui extrait le gros `<script>` inline, le charge dans un contexte `vm` avec un DOM stubé, neutralise `init()` et expose un pont `__TESTEVAL(code)` exécutant du code dans la portée lexicale du script (accès à `S` + toutes les fonctions hoistées). `test/run.test.js` (`node:test`) couvre la logique pure à risque : suppression en cascade (`_purgeStudentRefs`/`_deleteStudentInternal`/`deleteClass`), audit d'intégrité (`_auditState`), dates/périodes, parseurs (`_evalArithExpr`, `parseUnavailableInput`), validation d'import. **Aucune dépendance** (Node ≥ 18) ; le harnais n'est PAS livré avec l'app. Lancer `npm test` avant chaque push touchant cette logique.
 
 ## Fiabilité & sécurité — invariants à respecter
 
