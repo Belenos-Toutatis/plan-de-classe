@@ -234,3 +234,63 @@ test('_auditState : répare élève fantôme + pointeurs invalides', () => {
   assert.equal(ev('S.salles[S.classes.c1.activeRoom] ? true : false'), true);
   assert.equal(ev('S.classes[S.cur] ? true : false'), true);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Régressions de la passe d'audit exhaustif
+// ─────────────────────────────────────────────────────────────────────────────
+test('migrateEvalDefaults : préserve une config nbLevels≠4 (pas de reset destructeur)', () => {
+  setState({
+    classes: {}, eleves: {}, evaluations: {},
+    evalPrefs: {
+      nbLevels: 6,
+      maitriseColors: ['#111111', '#222222', '#333333', '#444444', '#555555', '#666666'],
+      maitrisePoints: [3, 6, 9, 12, 16, 20],
+    },
+  });
+  ev('migrateEvalDefaults()');
+  assert.equal(ev('S.evalPrefs.nbLevels'), 6);
+  assert.equal(ev('S.evalPrefs.maitriseColors.length'), 6);
+  assert.equal(ev('S.evalPrefs.maitrisePoints.length'), 6);
+  assert.deepEqual(get('S.evalPrefs.maitrisePoints'), [3, 6, 9, 12, 16, 20], 'config utilisateur conservée');
+});
+
+test('migrateEvalDefaults : assainit une couleur forgée (anti-XSS)', () => {
+  setState({
+    classes: {}, eleves: {}, evaluations: {},
+    evalPrefs: { nbLevels: 2, maitriseColors: ['#fff"><img onerror=alert(1)>', '#00ff00'], maitrisePoints: [10, 20] },
+  });
+  ev('migrateEvalDefaults()');
+  const c0 = ev('S.evalPrefs.maitriseColors[0]');
+  assert.ok(!/[<">]/.test(c0), 'couleur dangereuse neutralisée : ' + c0);
+});
+
+test('deleteClass (recomposée) : purge bulletins/conseil/évals SANS supprimer les élèves réels', () => {
+  setState({
+    cur: 'v1',
+    classes: {
+      v1: { id: 'v1', nom: 'DNL', virtual: true, eleves: ['s1'], activeRoom: 'r1', activePool: 'p1',
+            rooms: { r1: { seating: {}, ipadsByPool: {}, allowedFor: {}, aeshLinks: {}, groupes: {}, posTagId: {} } } },
+      c1: { id: 'c1', nom: '6A', eleves: ['s1'], activeRoom: 'r1', activePool: 'p1',
+            rooms: { r1: { seating: {}, ipadsByPool: {}, allowedFor: {}, aeshLinks: {}, groupes: {}, posTagId: {} } } },
+    },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'Al', classe_id: 'c1' } },
+    evaluations: { ev1: { id: 'ev1', classIds: ['v1'], notes: { s1: { values: {} } } } },
+    bulletinRemarques: { v1: { d1: {} } }, conseilClasse: { v1: { d1: {} } },
+    salles: { r1: { nom: 'S', rows: 5, cols: 6, positions_vides: [] } }, tabletPools: { p1: { id: 'p1' } },
+    attendance: {}, snapshots: {}, movedHighlights: {},
+  });
+  ev('deleteClass("v1")');
+  assert.equal(ev('"v1" in S.classes'), false);
+  assert.equal(ev('"s1" in S.eleves'), true, 'élève réel NON supprimé');
+  assert.equal(ev('"c1" in S.classes'), true);
+  assert.equal(ev('"v1" in S.bulletinRemarques'), false);
+  assert.equal(ev('"v1" in S.conseilClasse'), false);
+  assert.equal(ev('"ev1" in S.evaluations'), false, 'éval orpheline de la recomposée supprimée');
+});
+
+test('_escJsAttr : neutralise le breakout de chaîne JS dans un attribut inline', () => {
+  app.__q = "x');alert(1)//";
+  const out = ev('_escJsAttr(globalThis.__q)');
+  // Aucune apostrophe non précédée d\'un backslash (sinon elle refermerait la chaîne JS)
+  assert.ok(!/(^|[^\\])'/.test(out), 'apostrophe non échappée subsiste : ' + out);
+});

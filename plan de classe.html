@@ -6842,17 +6842,25 @@ function migrateEvalDefaults() {
   // Préférences évaluation : on s'assure que chaque champ existe (sinon valeur par défaut)
   if (!S.evalPrefs || typeof S.evalPrefs !== 'object') S.evalPrefs = {};
   const ep = S.evalPrefs;
-  if (!Array.isArray(ep.maitriseColors) || ep.maitriseColors.length !== 4) {
-    ep.maitriseColors = DEFAULT_EVAL_PREFS.maitriseColors.slice();
+  // Nombre de niveaux de maîtrise (2..6) — déterminé EN PREMIER : couleurs / points /
+  // seuils doivent avoir une taille COHÉRENTE avec lui. (Bug corrigé : l'ancien code
+  // forçait length===4 et DÉTRUISAIT silencieusement une config nbLevels≠4 à chaque
+  // chargement — F5, import, undo/redo — + faussait les calculs niveaux 5/6.)
+  if (typeof ep.nbLevels !== 'number' || ep.nbLevels < 2 || ep.nbLevels > 6) {
+    ep.nbLevels = 4;
   }
-  if (!Array.isArray(ep.maitrisePoints) || ep.maitrisePoints.length !== 4) {
-    ep.maitrisePoints = DEFAULT_EVAL_PREFS.maitrisePoints.slice();
+  const _nb = ep.nbLevels;
+  if (!Array.isArray(ep.maitriseColors) || ep.maitriseColors.length !== _nb) {
+    ep.maitriseColors = _defaultColorsForNb(_nb);
+  }
+  if (!Array.isArray(ep.maitrisePoints) || ep.maitrisePoints.length !== _nb) {
+    ep.maitrisePoints = _defaultPointsForNb(_nb);
   }
   if (ep.thresholdMode !== 'midpoint' && ep.thresholdMode !== 'percent') {
     ep.thresholdMode = DEFAULT_EVAL_PREFS.thresholdMode;
   }
-  if (!Array.isArray(ep.thresholdPercents) || ep.thresholdPercents.length !== 3) {
-    ep.thresholdPercents = DEFAULT_EVAL_PREFS.thresholdPercents.slice();
+  if (!Array.isArray(ep.thresholdPercents) || ep.thresholdPercents.length !== _nb - 1) {
+    ep.thresholdPercents = _defaultPercentsForNb(_nb);
   }
   if (ep.periodMode !== 'semestre' && ep.periodMode !== 'trimestre') {
     ep.periodMode = DEFAULT_EVAL_PREFS.periodMode;
@@ -6863,9 +6871,13 @@ function migrateEvalDefaults() {
   if (typeof ep.maxNoteDefault !== 'number' || ep.maxNoteDefault <= 0) {
     ep.maxNoteDefault = DEFAULT_EVAL_PREFS.maxNoteDefault;
   }
-  // Nombre de niveaux de maîtrise (saisie compétences) — défaut 4
-  if (typeof ep.nbLevels !== 'number' || ep.nbLevels < 2 || ep.nbLevels > 6) {
-    ep.nbLevels = 4;
+  // Sécurité : assainit toute couleur (potentiellement forgée via un JSON de sync tiers)
+  // AVANT toute injection inline (value="…" / style="background:…"). Sans ça, une couleur
+  // du genre `#fff"><img onerror=…>` provoquait une XSS à l'ouverture des Réglages/bilans.
+  ep.maitriseColors = ep.maitriseColors.map(c => _safeColor(c));
+  if (Array.isArray(ep.noteThresholds)) {
+    ep.noteThresholds = ep.noteThresholds.map(t =>
+      (t && typeof t === 'object') ? Object.assign({}, t, { color: _safeColor(t.color) }) : t);
   }
   // Libellés des niveaux (personnalisables — par défaut '1','2','3','4',...)
   if (!Array.isArray(ep.niveauLabels) || ep.niveauLabels.length < ep.nbLevels) {
@@ -8384,6 +8396,22 @@ function _escName(s) { return _escAttr(s == null ? '' : String(s)); }
 // dans `_rawHtml(fragment)` afin de signaler explicitement l'intention.
 //   el.innerHTML = _html`<td>${stu.nom}</td>${_rawHtml(badgesHtml)}`;
 // → `stu.nom` est échappé, `badgesHtml` injecté tel quel. Plus de XSS par oubli d'_esc.
+// Échappement pour une valeur placée dans une CHAÎNE JS À L'INTÉRIEUR d'un attribut
+// HTML, ex. `onclick="fn('${...}')"`. Double contexte piégeux : le navigateur
+// HTML-DÉCODE l'attribut AVANT de parser le JS, donc `_escAttr` (qui produit `&#39;`)
+// est INSUFFISANT — `&#39;` redevient `'` et referme la chaîne JS → XSS.
+// Ici on échappe AU NIVEAU JS (`\` `'` retours-ligne) — ces séquences survivent au
+// décodage HTML — et on neutralise `"`/`<`/`>`/`&` au niveau HTML pour ne pas casser
+// l'attribut. À utiliser pour tout argument de texte libre passé à un handler inline.
+function _escJsAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 function _rawHtml(s) { return { __raw: String(s == null ? '' : s) }; }
 function _html(strings, ...values) {
   let out = strings[0];
@@ -9689,6 +9717,22 @@ function mvcSave() {
           delete m[oldId];
         }
       }
+      // Migrer les évaluations rattachées (sinon orphelinage SILENCIEUX : ev.classId/
+      // classIds pointe encore oldId → notes/bilans de la classe disparaissent). Symétrique
+      // à ce que fait deleteClass.
+      if (S.evaluations) {
+        for (const ev of Object.values(S.evaluations)) {
+          if (!ev || typeof ev !== 'object') continue;
+          if (Array.isArray(ev.classIds)) ev.classIds = ev.classIds.map(cid => cid === oldId ? newId : cid);
+          if (ev.classId === oldId) ev.classId = newId;
+          for (const mp of ['dates', 'slotIds', 'datesManual']) {
+            if (ev[mp] && Object.prototype.hasOwnProperty.call(ev[mp], oldId)) {
+              ev[mp][newId] = ev[mp][oldId];
+              delete ev[mp][oldId];
+            }
+          }
+        }
+      }
       // S.cur si nécessaire
       if (S.cur === oldId) S.cur = newId;
     }
@@ -10168,18 +10212,32 @@ function _runRandomPlacement(opts) {
   // (celui avec le moins de violations).
   const NB_TRIES = 30;
   let best = null;
+  const room = cls.rooms?.[cls.activeRoom];
   const initialSeating = JSON.parse(JSON.stringify(cls.seating || {}));
+  // _doOneRandomPlacement mute AUSSI room.aeshSeating (re-tirage des AESH) et le tableau
+  // studentsToPlace (splice des élèves liés, push des évincés). Sans restaurer ces deux
+  // états entre les essais : (a) le aeshSeating final venait du DERNIER essai alors que
+  // best.seating venait d'un essai antérieur → collision élève/AESH ; (b) les élèves liés
+  // spliceés au 1er essai étaient absents des essais suivants → laissés non placés.
+  const initialAesh = room ? JSON.parse(JSON.stringify(room.aeshSeating || {})) : null;
+  const baseToPlace = studentsToPlace.slice();
   for (let i = 0; i < NB_TRIES; i++) {
     cls.seating = JSON.parse(JSON.stringify(initialSeating));
-    _doOneRandomPlacement(cls, studentsToPlace, opts);
+    if (room) room.aeshSeating = JSON.parse(JSON.stringify(initialAesh || {}));
+    _doOneRandomPlacement(cls, baseToPlace.slice(), opts); // copie fraîche → liste préservée
     const violations = _countPlacementViolations(cls);
     if (!best || violations < best.violations) {
-      best = { seating: JSON.parse(JSON.stringify(cls.seating)), violations };
+      best = {
+        seating: JSON.parse(JSON.stringify(cls.seating)),
+        aeshSeating: room ? JSON.parse(JSON.stringify(room.aeshSeating || {})) : null,
+        violations,
+      };
       if (violations === 0) break; // parfait, pas la peine de continuer
     }
   }
-  // Applique le meilleur essai
+  // Applique le meilleur essai (seating ET positions AESH du même essai → cohérents)
   cls.seating = best.seating;
+  if (room && best.aeshSeating) room.aeshSeating = best.aeshSeating;
   // Reset du dismiss et du flag "modal déjà signalée" : on a un nouveau placement
   // → les alertes éventuelles redeviennent visibles ET la modale peut se rouvrir
   _violationsAcceptedFor.delete(cls.id);
@@ -12165,6 +12223,36 @@ function createClass() {
   toast(`Classe ${nom} créée !`);
 }
 
+// Purge les structures indexées par CLASSE (hors S.classes[id] et S.eleves, à la charge
+// du caller). Source unique partagée par les deux branches de deleteClass (réelle +
+// recomposée) ET le rename de classe recomposée. Tout nouveau store keyé par classId va ICI.
+function _purgeClassRefs(id) {
+  if (!id) return;
+  if (S.attendance)             delete S.attendance[id];
+  if (S.movedHighlights)        delete S.movedHighlights[id];
+  if (S.bulletinRemarques)      delete S.bulletinRemarques[id];
+  if (S.bulletinClassRemarques) delete S.bulletinClassRemarques[id];
+  if (S.bulletinWorkedItems)    delete S.bulletinWorkedItems[id];
+  if (S.conseilClasse)          delete S.conseilClasse[id];
+  if (S.snapshots) {
+    for (const sid of Object.keys(S.snapshots)) {
+      if (S.snapshots[sid]?.classId === id) delete S.snapshots[sid];
+    }
+  }
+  // Évaluations : retire la classe ; supprime l'éval si plus aucune classe vivante.
+  if (S.evaluations) {
+    for (const evId of Object.keys(S.evaluations)) {
+      const ev = S.evaluations[evId];
+      if (!ev || typeof ev !== 'object') continue;
+      if (!_evalIncludesClass(ev, id)) continue;
+      if (Array.isArray(ev.classIds)) ev.classIds = ev.classIds.filter(cid => cid !== id);
+      if (ev.classId === id) ev.classId = (ev.classIds && ev.classIds[0]) || null;
+      ['dates', 'slotIds', 'datesManual'].forEach(m => { if (ev[m]) delete ev[m][id]; });
+      if (!_evalPrimaryAliveClassId(ev)) delete S.evaluations[evId];
+    }
+  }
+}
+
 function deleteClass(id) {
   const cls = S.classes[id];
   if (!cls) return;
@@ -12177,39 +12265,17 @@ function deleteClass(id) {
     onOk: () => {
       pushUndo();
       if (cls.virtual) {
+        // Classe recomposée : les élèves restent (ils appartiennent à leur classe
+        // réelle), mais les structures indexées par CETTE classe (bulletins, conseil,
+        // évals rattachées, snapshots…) doivent être purgées comme pour une classe réelle.
         delete S.classes[id];
+        _purgeClassRefs(id);
       } else {
         // Supprime chaque élève via le helper (nettoie seating, tablettes, évals,
         // contraintes, paires, conseil, bulletins, et classes recomposées).
         [...cls.eleves].forEach(eid => _deleteStudentInternal(eid));
         delete S.classes[id];
-        // Purge des structures indexées par classe (sinon données mortes persistées
-        // dans le JSON/sync/backups, faussant les agrégats globaux).
-        if (S.attendance)             delete S.attendance[id];
-        if (S.movedHighlights)        delete S.movedHighlights[id];
-        if (S.bulletinRemarques)      delete S.bulletinRemarques[id];
-        if (S.bulletinClassRemarques) delete S.bulletinClassRemarques[id];
-        if (S.bulletinWorkedItems)    delete S.bulletinWorkedItems[id];
-        if (S.conseilClasse)          delete S.conseilClasse[id];
-        // Snapshots rattachés à cette classe (positions + incidents)
-        if (S.snapshots) {
-          for (const sid of Object.keys(S.snapshots)) {
-            if (S.snapshots[sid]?.classId === id) delete S.snapshots[sid];
-          }
-        }
-        // Évaluations : retire la classe ; supprime l'éval si plus aucune classe vivante
-        if (S.evaluations) {
-          for (const evId of Object.keys(S.evaluations)) {
-            const ev = S.evaluations[evId];
-            if (!ev || typeof ev !== 'object') continue;
-            if (!_evalIncludesClass(ev, id)) continue;
-            if (Array.isArray(ev.classIds)) ev.classIds = ev.classIds.filter(cid => cid !== id);
-            if (ev.classId === id) ev.classId = (ev.classIds && ev.classIds[0]) || null;
-            ['dates', 'slotIds', 'datesManual'].forEach(m => { if (ev[m]) delete ev[m][id]; });
-            // Plus aucune classe encore existante référencée → éval orpheline, on la supprime
-            if (!_evalPrimaryAliveClassId(ev)) delete S.evaluations[evId];
-          }
-        }
+        _purgeClassRefs(id);
       }
       if (S.cur === id) {
         const ids = Object.keys(S.classes);
@@ -12227,6 +12293,22 @@ function switchClass(id) {
   if (!id || !S.classes[id]) return;
   // Si on consulte un snapshot et qu'on change de classe : on quitte la consultation
   if (_viewingSnapshot && _viewingSnapshot.classId !== id) _viewingSnapshot = null;
+  // Mode appel / édition d'un appel passé : l'état transient (_absentToday, _lateToday,
+  // _aeshAbsentToday, _editingAttendanceId) appartient à la classe QU'ON QUITTE. Sans
+  // ça il « fuit » sur la nouvelle classe (sids étrangers marqués absents, record
+  // d'édition pointant une autre classe → écrasement à l'enregistrement). On purge.
+  if (id !== S.cur && (_appelMode || _editingAttendanceId)) {
+    const _oldId = S.cur;
+    _editingAttendanceId = null;
+    _absentToday.clear();
+    _lateToday.clear();
+    if (_oldId) { const _p = _oldId + '|'; for (const k of [..._aeshAbsentToday]) if (k.startsWith(_p)) _aeshAbsentToday.delete(k); }
+    _appelMode = false;
+    _appelSavedSlot = null;
+    const _b = document.getElementById('btn-appel-mode');
+    if (_b) { _b.style.background = ''; _b.style.color = ''; _b.style.borderColor = ''; }
+    _saveAttTransient();
+  }
   S.cur = id;
   document.getElementById('cls-sel').value = id;
   const cls = S.classes[id];
@@ -12685,6 +12767,7 @@ function addStudent() {
   const civ = document.getElementById('ns-civ').value || null;
   const arr = (document.getElementById('ns-arrival')?.value || '').trim() || null;
 
+  pushUndo(); // l'ajout doit être annulable (Ctrl+Z) — cf. convention « pushUndo AVANT mutation »
   const id = uid();
   S.eleves[id] = { id, nom, prenom: prn, classe_id: cls.id, oublis: 0, non_travail: 0, groupe: grp, civilite: civ, tags: [], arrivalDate: arr, departureDate: null };
   cls.eleves.push(id);
@@ -13060,6 +13143,7 @@ function saveEdit() {
   const id = document.getElementById('es-id').value;
   const s = S.eleves[id];
   if (!s) return;
+  pushUndo(); // édition d'élève (et changement de classe) annulable — la modale promet « Ctrl+Z »
   s.nom     = document.getElementById('es-nom').value.trim().toUpperCase();
   s.prenom  = document.getElementById('es-prn').value.trim();
   s.civilite = document.getElementById('es-civ').value || null;
@@ -20881,7 +20965,8 @@ function deleteTabletPool(id) {
         const a = room.ipadsByPool[id];
         const has = (a.ce && Object.values(a.ce).some(Boolean))
                  || (a.g1 && Object.values(a.g1).some(Boolean))
-                 || (a.g2 && Object.values(a.g2).some(Boolean));
+                 || (a.g2 && Object.values(a.g2).some(Boolean))
+                 || (a.g3 && Object.values(a.g3).some(Boolean));
         if (has) usage++;
       }
     }
@@ -22379,11 +22464,12 @@ function _updateNoSlotUi() {
 
 // Helper : trouve un appel déjà enregistré pour (classId, dateStr, slotId).
 // Renvoie { id, record } ou null. Sans slotId on ne détecte pas (pas de notion de créneau).
-function _findExistingAttendance(classId, dateStr, slotId) {
+function _findExistingAttendance(classId, dateStr, slotId, groupe) {
   if (!slotId) return null;
-  const records = S.attendance?.[classId] || {};
+  const g = groupe || 0; // un appel de G1 (1) et un de G2 (2) sur le MÊME créneau sont
+  const records = S.attendance?.[classId] || {}; // DISTINCTS — sinon le 2nd écrasait le 1er.
   for (const [id, r] of Object.entries(records)) {
-    if (r.date === dateStr && r.slotId === slotId) return { id, record: r };
+    if (r.date === dateStr && r.slotId === slotId && (r.groupe || 0) === g) return { id, record: r };
   }
   return null;
 }
@@ -22421,7 +22507,7 @@ function saveAttendanceConfirm() {
   // Détection de conflits (uniquement en CRÉATION, pas en édition explicite via ✏️ Éditer)
   if (!_editingAttendanceId) {
     // Cas 1 : doublon stricte (même classe + date + slot) → propose écrasement
-    const dup = _findExistingAttendance(cls.id, dateStr, slotId);
+    const dup = _findExistingAttendance(cls.id, dateStr, slotId, groupe);
     if (dup) {
       const fmtFr = ymd => new Date(ymd + 'T12:00:00').toLocaleDateString('fr-FR');
       const absN = (dup.record.absents || []).length;
@@ -24962,6 +25048,12 @@ async function cleanupOldBackups() {
 function _applyReloadedData(data, f) {
   S = data;
   postLoadHook();
+  // Un rechargement depuis le disque (sync d'un autre appareil) n'est PAS une action
+  // annulable de la session courante : les piles undo/redo référencent l'état PRÉ-reload.
+  // Les vider évite qu'un Ctrl+Z ramène silencieusement l'ancien état local par-dessus
+  // les données distantes fraîchement chargées.
+  undoStack = [];
+  redoStack = [];
   if (!S.cur && Object.keys(S.classes).length) S.cur = Object.keys(S.classes)[0];
   save();
   refreshSelector();
@@ -37096,7 +37188,10 @@ function _evalAutoUpdateDate(ev) {
 }
 
 function _evalDateFor(ev, classId) {
-  if (ev?.dates?.[classId]) return ev.dates[classId];
+  // Lecture par PRÉSENCE de clé (cohérent avec _mnDateFor/_passDateFor) : une date
+  // explicitement vidée pour cette classe (sentinelle '') reste vide et ne re-dérive PAS
+  // une date depuis les constituants. Clé absente = on poursuit la cascade.
+  if (ev?.dates && Object.prototype.hasOwnProperty.call(ev.dates, classId)) return ev.dates[classId] || '';
   if (!ev || !classId) return ev?.date || '';
   // Étape 2 : dates par-classe explicites sur les constituants
   const perClass = [];
@@ -41278,7 +41373,7 @@ function _evalQcmcamRenderPicker() {
       const dt = f.lastModified ? new Date(f.lastModified) : null;
       const dtLbl = dt ? `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}h${String(dt.getMinutes()).padStart(2,'0')}` : '—';
       const sel = (_qcmcamState.filename === f.name) ? 'background:#dbeafe' : '';
-      html += `<tr style="cursor:pointer;border-bottom:1px solid var(--rule-line-soft);${sel}" onclick="_evalQcmcamSelectFromDir('${_esc(f.name)}')">
+      html += `<tr style="cursor:pointer;border-bottom:1px solid var(--rule-line-soft);${sel}" onclick="_evalQcmcamSelectFromDir('${_escJsAttr(f.name)}')">
         <td style="padding:4px 8px">📄 ${_esc(f.name)}</td>
         <td style="padding:4px 8px;color:var(--pencil);font-family:var(--font-mono);text-align:right;white-space:nowrap">${dtLbl}</td>
       </tr>`;
@@ -41431,7 +41526,7 @@ function _evalQcmcamRenderPreview() {
   // `candSids` : sous-ensemble proposé en premier (ou null → tous les élèves).
   function buildPicker(rawName, candSids) {
     const picked = _qcmcamState.userPicks?.[rawName] || '';
-    const rawAttr = _escAttr(rawName);
+    const rawAttr = _escJsAttr(rawName); // passé à un handler inline → échappement chaîne-JS
     const optHead = `<option value="">— choisir un élève —</option>`;
     const optSkip = `<option value="__skip__"${picked === '__skip__' ? ' selected' : ''}>✗ Ignorer cette ligne</option>`;
     let optsCandidates = '';
@@ -41665,12 +41760,15 @@ function _evalQcmcamApply() {
   }
 
   ev.notes = ev.notes || {};
-  let applied = 0, skipped = 0, nbAbs = 0, nbClamp = 0;
+  let applied = 0, skipped = 0, nbAbs = 0, nbClamp = 0, nbDup = 0;
+  const appliedSids = new Set(); // évite que 2 lignes CSV visant le même élève s'écrasent
   for (const { row, match } of matches) {
     if (match.status !== 'ok') { skipped++; continue; }
     const sid = match.sid;
+    if (appliedSids.has(sid)) { nbDup++; continue; } // doublon → 1re ligne conservée, 2nde ignorée
     let val = row.score;
     if (val == null) { skipped++; continue; }
+    appliedSids.add(sid);
     ev.notes[sid] = ev.notes[sid] || { values: {} };
     ev.notes[sid].values = ev.notes[sid].values || {};
     if (val === 'A') {
@@ -41704,6 +41802,7 @@ function _evalQcmcamApply() {
   if (slotApplied) parts.push(`· 🕒 ${slotApplied}`);
   if (nbAbs > 0) parts.push(`· ${nbAbs} absent${nbAbs>1?'s':''}`);
   if (nbClamp > 0) parts.push(`· ${nbClamp} clampé${nbClamp>1?'s':''}`);
+  if (nbDup > 0) parts.push(`· ${nbDup} doublon${nbDup>1?'s':''} ignoré${nbDup>1?'s':''}`);
   if (skipped > 0) parts.push(`· ${skipped} ignorée${skipped>1?'s':''}`);
   toast(parts.join(' '));
 }
