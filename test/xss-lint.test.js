@@ -1,9 +1,10 @@
 // Lint anti-XSS (statique) — garde-fou contre les régressions.
 //
 // Échoue si une donnée utilisateur à HAUTE confiance (prénom / nom d'élève,
-// nomCourt / nomLong / descriptif / remarque d'évaluation) est interpolée EN CLAIR
-// dans un fragment HTML (ligne contenant `<tag`) sans passer par un échappeur
-// (`_esc`, `_escAttr`, `_escName`) ni par le tagged template `_html`.
+// nomCourt / nomLong / descriptif / remarque d'évaluation, abbr / name de tag,
+// prefix de classe mobile) est interpolée EN CLAIR dans un fragment HTML (ligne
+// contenant `<tag`) sans passer par un échappeur (`_esc`, `_escAttr`, `_escName`)
+// ni par le tagged template `_html`.
 //
 // Heuristique volontairement PRÉCISE (peu de faux positifs) :
 //   - la ligne contient un tag HTML `<lettre` ;
@@ -12,9 +13,10 @@
 //   - le segment ne mentionne pas `_esc`.
 //
 // Limite assumée : ne couvre que les champs à haute confiance d'être de la donnée
-// utilisateur. Les libellés génériques (`.label`, `.abbr`, `.nom` de classe/tag —
-// parfois constants) ne sont pas lintés ici pour éviter le bruit ; l'échappement y
-// reste assuré par revue + le helper `_html` pour le code neuf.
+// utilisateur. Les libellés génériques `.label` et `.code` (souvent portés par des
+// constantes internes : palette de rappels, stratégies de backup, codes de période…)
+// ne sont pas lintés ici pour éviter le bruit ; l'échappement y reste assuré par
+// revue + le helper `_html` pour le code neuf.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -24,7 +26,7 @@ const path = require('node:path');
 test('XSS-lint : aucun champ élève/éval interpolé en clair dans un fragment HTML', () => {
   const file = path.join(__dirname, '..', 'plan de classe.html');
   const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-  const SEG = /\$\{[^}()]*\.(prenom|nom|nomCourt|nomLong|descriptif|remarque)\b[^}()]*\}/g;
+  const SEG = /\$\{[^}()]*\.(prenom|nom|nomCourt|nomLong|descriptif|remarque|abbr|prefix|name)\b[^}()]*\}/g;
   const findings = [];
   for (let i = 0; i < lines.length; i++) {
     const L = lines[i];
