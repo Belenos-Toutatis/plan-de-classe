@@ -5804,11 +5804,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.12.3';
+const APP_VERSION    = '2.12.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-10T03:40:00Z';
+const APP_BUILD_DATE = '2026-06-10T04:39:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -6653,6 +6653,30 @@ function postLoadHook() {
   // pointeurs de salle/pool/classe invalides) issues d'anciens bugs, d'imports partiels
   // ou de fichiers de sync abîmés. Conservateur (ne supprime que ce qui est mort).
   try { _auditState({ repair: true }); } catch (e) { console.warn('Audit intégrité ignoré :', e); }
+  // GC du pool S.seatingSnapshots : les hashes ne sont jamais retirés à la
+  // suppression d'un appel / d'une éval / d'une classe — on ne garde que ceux
+  // encore référencés (record.seatingHash + ev.seatingHash + ev.seatingHashes).
+  try { _gcSeatingSnapshots(); } catch (e) { console.warn('GC seatingSnapshots ignoré :', e); }
+}
+
+// Supprime de S.seatingSnapshots les entrées qu'aucun appel enregistré ni aucune
+// évaluation ne référence plus (sinon elles s'accumulent à vie dans le JSON).
+function _gcSeatingSnapshots() {
+  if (!S.seatingSnapshots || typeof S.seatingSnapshots !== 'object') return;
+  const used = new Set();
+  for (const recs of Object.values(S.attendance || {})) {
+    for (const r of Object.values(recs || {})) {
+      if (r?.seatingHash) used.add(r.seatingHash);
+    }
+  }
+  for (const ev of Object.values(S.evaluations || {})) {
+    if (!ev || typeof ev !== 'object') continue;
+    if (ev.seatingHash) used.add(ev.seatingHash);
+    for (const h of Object.values(ev.seatingHashes || {})) if (h) used.add(h);
+  }
+  for (const h of Object.keys(S.seatingSnapshots)) {
+    if (!used.has(h)) delete S.seatingSnapshots[h];
+  }
 }
 
 // Migration : pour chaque room, si encore en format historique (ipads/ipads_g1/ipads_g2),
@@ -8412,6 +8436,15 @@ function _escJsAttr(s) {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// Anti-injection de formules tableur (OWASP CSV injection) : une cellule commençant
+// par = + - @ TAB ou CR est interprétée comme FORMULE par Excel/LibreOffice à
+// l'import CSV — le quoting CSV ne protège PAS (ré-évaluée après dé-quote). On
+// préfixe d'une apostrophe pour forcer le mode texte. À appeler dans tout
+// échappement de cellule CSV/TSV AVANT le quoting.
+function _csvCellGuard(v) {
+  const s = String(v ?? '');
+  return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+}
 function _rawHtml(s) { return { __raw: String(s == null ? '' : s) }; }
 function _html(strings, ...values) {
   let out = strings[0];
@@ -9710,8 +9743,9 @@ function mvcSave() {
         }
       }
       // Migrer les structures bulletin (per-discipline), conseil de classe,
-      // surlignages déplacés. Sans cela : perte SILENCIEUSE de saisies utilisateur.
-      for (const m of [S.bulletinRemarques, S.bulletinClassRemarques, S.bulletinWorkedItems, S.conseilClasse, S.movedHighlights]) {
+      // surlignages déplacés, dismiss d'alertes de placement. Sans cela : perte
+      // SILENCIEUSE de saisies utilisateur.
+      for (const m of [S.bulletinRemarques, S.bulletinClassRemarques, S.bulletinWorkedItems, S.conseilClasse, S.movedHighlights, S.violationsAccepted]) {
         if (m && m[oldId] !== undefined) {
           m[newId] = m[oldId];
           delete m[oldId];
@@ -9725,12 +9759,15 @@ function mvcSave() {
           if (!ev || typeof ev !== 'object') continue;
           if (Array.isArray(ev.classIds)) ev.classIds = ev.classIds.map(cid => cid === oldId ? newId : cid);
           if (ev.classId === oldId) ev.classId = newId;
-          for (const mp of ['dates', 'slotIds', 'datesManual']) {
-            if (ev[mp] && Object.prototype.hasOwnProperty.call(ev[mp], oldId)) {
-              ev[mp][newId] = ev[mp][oldId];
-              delete ev[mp][oldId];
+          // Toutes les maps per-classe : niveau éval (dates, slotIds, datesManual,
+          // seatingHashes) ET niveau mini-note / passation (dates, slotIds,
+          // datesByGroup, slotIdsByGroup). hasOwnProperty : préserve la sentinelle ''.
+          _forEachEvalPerClassMap(ev, m => {
+            if (Object.prototype.hasOwnProperty.call(m, oldId)) {
+              m[newId] = m[oldId];
+              delete m[oldId];
             }
-          }
+          });
         }
       }
       // S.cur si nécessaire
@@ -9897,6 +9934,15 @@ function editUserLinkPrompt(idx) {
   toast('🔗 Lien mis à jour');
 }
 
+// fetch avec timeout (AbortController). Sur un réseau d'établissement qui blackhole
+// api.github.com (proxy, DNS filtré), un fetch sans timeout laisse la modale MAJ
+// sur « ⏳ Vérification… » indéfiniment. L'AbortError tombe dans le catch existant.
+function _fetchTimeout(url, opts, ms = 8000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
 async function checkForUpdate() {
   const info = document.getElementById('mupdate-info');
   if (info) info.innerHTML = '<p style="color:#666;text-align:center;padding:20px">⏳ Vérification en cours sur GitHub…</p>';
@@ -9904,7 +9950,7 @@ async function checkForUpdate() {
 
   try {
     const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits/main`;
-    const r = await fetch(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
+    const r = await _fetchTimeout(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
     if (!r.ok) throw new Error(`HTTP ${r.status} — ${r.statusText}`);
     const data = await r.json();
     const latestSha  = (data.sha || '').slice(0, 7);
@@ -10010,7 +10056,7 @@ async function _passiveUpdateCheck() {
   if (!latestDate) {
     try {
       const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits/main`;
-      const r = await fetch(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
+      const r = await _fetchTimeout(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
       if (!r.ok) return;
       const data = await r.json();
       latestDate = data.commit?.author?.date || data.commit?.committer?.date;
@@ -12238,6 +12284,29 @@ function createClass() {
 // Purge les structures indexées par CLASSE (hors S.classes[id] et S.eleves, à la charge
 // du caller). Source unique partagée par les deux branches de deleteClass (réelle +
 // recomposée) ET le rename de classe recomposée. Tout nouveau store keyé par classId va ICI.
+// Itère toutes les maps per-classe (clé = classId) d'une évaluation : niveau éval
+// (dates, slotIds, datesManual, seatingHashes) + niveau mini-note et passation
+// (dates, slotIds, datesByGroup, slotIdsByGroup). Partagé entre la purge
+// (_purgeClassRefs) et la migration d'identifiant (mvcSave) — sans cette couverture,
+// les dates/créneaux per-question et l'ordre de ramassage d'une classe renommée
+// étaient perdus silencieusement (ou restaient orphelins à la suppression).
+function _forEachEvalPerClassMap(ev, fn) {
+  if (!ev || typeof ev !== 'object') return;
+  for (const k of ['dates', 'slotIds', 'datesManual', 'seatingHashes']) {
+    if (ev[k] && typeof ev[k] === 'object') fn(ev[k]);
+  }
+  const subs = [
+    ...(Array.isArray(ev.miniNotes)  ? ev.miniNotes  : []),
+    ...(Array.isArray(ev.passations) ? ev.passations : []),
+  ];
+  for (const sub of subs) {
+    if (!sub || typeof sub !== 'object') continue;
+    for (const k of ['dates', 'slotIds', 'datesByGroup', 'slotIdsByGroup']) {
+      if (sub[k] && typeof sub[k] === 'object') fn(sub[k]);
+    }
+  }
+}
+
 function _purgeClassRefs(id) {
   if (!id) return;
   if (S.attendance)             delete S.attendance[id];
@@ -12246,6 +12315,7 @@ function _purgeClassRefs(id) {
   if (S.bulletinClassRemarques) delete S.bulletinClassRemarques[id];
   if (S.bulletinWorkedItems)    delete S.bulletinWorkedItems[id];
   if (S.conseilClasse)          delete S.conseilClasse[id];
+  if (S.violationsAccepted)     delete S.violationsAccepted[id];
   if (S.snapshots) {
     for (const sid of Object.keys(S.snapshots)) {
       if (S.snapshots[sid]?.classId === id) delete S.snapshots[sid];
@@ -12256,10 +12326,12 @@ function _purgeClassRefs(id) {
     for (const evId of Object.keys(S.evaluations)) {
       const ev = S.evaluations[evId];
       if (!ev || typeof ev !== 'object') continue;
+      // Maps per-classe (éval + mini-notes + passations) : nettoyées même si la
+      // classe n'est plus dans classIds (rattrape les orphelins antérieurs).
+      _forEachEvalPerClassMap(ev, m => { delete m[id]; });
       if (!_evalIncludesClass(ev, id)) continue;
       if (Array.isArray(ev.classIds)) ev.classIds = ev.classIds.filter(cid => cid !== id);
       if (ev.classId === id) ev.classId = (ev.classIds && ev.classIds[0]) || null;
-      ['dates', 'slotIds', 'datesManual'].forEach(m => { if (ev[m]) delete ev[m][id]; });
       if (!_evalPrimaryAliveClassId(ev)) delete S.evaluations[evId];
     }
   }
@@ -13041,6 +13113,24 @@ function _auditState(opts = {}) {
   if (S.cur && !S.classes?.[S.cur]) {
     issues.push(`Classe courante introuvable (${S.cur})`);
     if (repair) { S.cur = Object.keys(S.classes || {})[0] || null; repaired++; }
+  }
+
+  // 5) Dimensions de salle invalides (JSON corrompu / forgé : rows NaN, cols 0…)
+  // → sans réparation, la grille se rend silencieusement vide (for r < NaN).
+  for (const [sid, salle] of Object.entries(S.salles || {})) {
+    if (!salle || typeof salle !== 'object') continue;
+    const badRows = !Number.isInteger(salle.rows) || salle.rows < 1 || salle.rows > 40;
+    const badCols = !Number.isInteger(salle.cols) || salle.cols < 1 || salle.cols > 40;
+    const badPv   = !Array.isArray(salle.positions_vides);
+    if (badRows || badCols || badPv) {
+      issues.push(`Salle "${salle.nom || sid}" : dimensions ou places vides invalides`);
+      if (repair) {
+        if (badRows) salle.rows = 4;
+        if (badCols) salle.cols = 8;
+        if (badPv)   salle.positions_vides = [];
+        repaired++;
+      }
+    }
   }
 
   if (issues.length) {
@@ -19955,6 +20045,9 @@ function sortQcm(col) {
 // placés ont "NaN" comme position, exigé par qcmcam.net pour les élèves sans place).
 function _allQcmLines() {
   const lines = [];
+  // Un nom (collé depuis un tableur) ou un nom de salle contenant TAB/retour-ligne
+  // décalerait silencieusement les colonnes du TSV → neutralisés en espace.
+  const tsvSafe = s => String(s ?? '').replace(/[\t\n\r]+/g, ' ');
   for (const cls of Object.values(S.classes)) {
     if (!cls.rooms) continue;
     const originalRoom = cls.activeRoom;
@@ -19963,7 +20056,7 @@ function _allQcmLines() {
       if (!salle) continue;
       cls.activeRoom = salleId; // bascule temporaire pour le proxy
       const cc = cls.configuration.cols || 10;
-      const ident = `${cls.id}-${salle.nom}`;
+      const ident = `${cls.id}-${tsvSafe(salle.nom)}`;
       const room = cls.rooms[salleId] || {};
       // Numérotation QCMCam contrainte à 1..125 (cf. _qcmNumbering)
       const qcm = _qcmNumbering(cls, salleId);
@@ -20005,7 +20098,7 @@ function _allQcmLines() {
         const [r, c] = key.split(',').map(Number);
         return {
           orderKey: seatOrder(r, c, cc),
-          line: `${num}\t${getDisplayName(cls, sid, 'roster')}\t${ident}`,
+          line: `${num}\t${tsvSafe(getDisplayName(cls, sid, 'roster'))}\t${ident}`,
         };
       }).filter(Boolean);
       const merged = [...placedLines, ...aeshLines].sort((a, b) => a.orderKey - b.orderKey);
@@ -20018,7 +20111,7 @@ function _allQcmLines() {
         .sort((a, b) => (a.stu.nom || '').localeCompare(b.stu.nom || '', 'fr')
                      || (a.stu.prenom || '').localeCompare(b.stu.prenom || '', 'fr'));
       unplaced.forEach(({ sid }, i) => {
-        lines.push(`NA${i + 1}\t${getDisplayName(cls, sid, 'roster')}\t${ident}`);
+        lines.push(`NA${i + 1}\t${tsvSafe(getDisplayName(cls, sid, 'roster'))}\t${ident}`);
       });
     }
     cls.activeRoom = originalRoom;
@@ -20621,7 +20714,7 @@ function exportPositionsCsv() {
   if (!cls || !tbl || !tbl.tBodies[0]) return toast('Rien à exporter.');
 
   const escape = v => {
-    const s = String(v ?? '');
+    const s = _csvCellGuard(v);
     if (/[;"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
@@ -28374,18 +28467,23 @@ function _noiseRenderMeters(lvl, thr) {
   const st = document.getElementById('noise-state');
   if (st && !_noise.alerting) st.textContent = zone === 'loud' ? '🔴 Trop fort' : zone === 'warn' ? '🟠 Animé' : '🟢 Calme';
 
-  // Fenêtre déplaçable (2e écran / vidéoprojecteur) — pilotée depuis la fenêtre principale
+  // Fenêtre déplaçable (2e écran / vidéoprojecteur) — pilotée depuis la fenêtre principale.
+  // try/catch : l'accès au document d'une fenêtre en cours de fermeture peut lever —
+  // appelé AVANT le requestAnimationFrame suivant, une exception ici tuerait la
+  // boucle rAF (sonomètre figé en silence, micro toujours ouvert).
   if (_noise.popup && !_noise.popup.closed) {
-    const d = _noise.popup.document;
-    const col = zone === 'loud' ? '#e74c3c' : zone === 'warn' ? '#f39c12' : '#2ecc71';
-    const f = d.getElementById('npw-fill'); if (f) { f.style.width = pos + '%'; f.style.background = col; }
-    const t = d.getElementById('npw-thr'); if (t) t.style.left = NOISE_THR_ANCHOR_PCT + '%';
-    const n = d.getElementById('npw-num'); if (n) n.textContent = lvl;
-    const e = d.getElementById('npw-emoji');
-    if (e) e.textContent = _noise.alerting ? '🤫' : (zone === 'loud' ? '😟' : zone === 'warn' ? '🙂' : '😌');
-    const m = d.getElementById('npw-msg');
-    if (m) m.textContent = _noise.alerting ? '🤫 Trop de bruit !' : (zone === 'loud' ? 'Trop fort' : zone === 'warn' ? 'Ça monte…' : 'Au calme');
-    if (d.body) d.body.classList.toggle('alert', _noise.alerting); // ne PAS écraser .compact
+    try {
+      const d = _noise.popup.document;
+      const col = zone === 'loud' ? '#e74c3c' : zone === 'warn' ? '#f39c12' : '#2ecc71';
+      const f = d.getElementById('npw-fill'); if (f) { f.style.width = pos + '%'; f.style.background = col; }
+      const t = d.getElementById('npw-thr'); if (t) t.style.left = NOISE_THR_ANCHOR_PCT + '%';
+      const n = d.getElementById('npw-num'); if (n) n.textContent = lvl;
+      const e = d.getElementById('npw-emoji');
+      if (e) e.textContent = _noise.alerting ? '🤫' : (zone === 'loud' ? '😟' : zone === 'warn' ? '🙂' : '😌');
+      const m = d.getElementById('npw-msg');
+      if (m) m.textContent = _noise.alerting ? '🤫 Trop de bruit !' : (zone === 'loud' ? 'Trop fort' : zone === 'warn' ? 'Ça monte…' : 'Au calme');
+      if (d.body) d.body.classList.toggle('alert', _noise.alerting); // ne PAS écraser .compact
+    } catch (_) { _noise.popup = null; }
   }
 
   const live = document.getElementById('noise-live-num');
@@ -39472,7 +39570,7 @@ function _bilanExportConfirm() {
     const sel = document.getElementById('bilan-period-filter');
     const periode = sel?.value || 'toutes';
     const csvEsc = s => {
-      const str = String(s ?? '');
+      const str = _csvCellGuard(s);
       return /[";\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
     };
     const lines = [keep(data.head).map(csvEsc).join(';')];
@@ -40807,7 +40905,7 @@ function _evalExportDownloadCsv() {
   // CSV avec ; (séparateur compatible Excel France) et virgule décimale conservée
   const { rows, comps } = _evalExportBuildRows(ev);
   const csvEsc = s => {
-    const str = String(s ?? '');
+    const str = _csvCellGuard(s);
     return /[";\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
   };
   const headers = ['Élève'];

@@ -329,3 +329,106 @@ test('_qcmDisplayLabel : place exclue (Cas 3) → 🚫 (pas de numéro legacy tr
   assert.equal(ev('_qcmDisplayLabel(S.classes.c1, 0, 0, 15)'), '🚫', 'place exclue → marqueur');
   assert.match(ev('_qcmDisplayLabel(S.classes.c1, 0, 1, 15)'), /^\d+$/, 'place numérotée → numéro');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Régressions — 2e passe d'audit (injection CSV, maps per-classe, GC, salles)
+// ─────────────────────────────────────────────────────────────────────────────
+test('_csvCellGuard : neutralise les préfixes de formule, laisse le reste intact', () => {
+  app.__f = '=cmd|\'/c calc\'!A1';
+  assert.equal(ev('_csvCellGuard(globalThis.__f)'), "'" + "=cmd|'/c calc'!A1");
+  assert.equal(ev('_csvCellGuard("+2+5")'), "'+2+5");
+  assert.equal(ev('_csvCellGuard("-2+5")'), "'-2+5");
+  assert.equal(ev('_csvCellGuard("@SUM(A1)")'), "'@SUM(A1)");
+  assert.equal(ev('_csvCellGuard("\\tpayload")'), "'\tpayload");
+  // Valeurs normales inchangées
+  assert.equal(ev('_csvCellGuard("Dupont")'), 'Dupont');
+  assert.equal(ev('_csvCellGuard("12,5")'), '12,5');
+  assert.equal(ev('_csvCellGuard("")'), '');
+  assert.equal(ev('_csvCellGuard(null)'), '');
+});
+
+test('_forEachEvalPerClassMap : visite éval + mini-notes + passations', () => {
+  app.__ev = {
+    dates: { c1: '2026-01-01' }, slotIds: { c1: 'M1' }, datesManual: { c1: true },
+    seatingHashes: { c1: 'h1' },
+    miniNotes: [{ id: 'm1', dates: { c1: '2026-01-02' }, slotIds: { c1: 'M2' },
+                  datesByGroup: { c1: { 1: '2026-01-03' } }, slotIdsByGroup: { c1: { 1: 'S1' } } }],
+    passations: [{ id: 'p1', dates: { c1: '' }, slotIds: { c1: 'M3' },
+                   datesByGroup: { c1: {} }, slotIdsByGroup: { c1: {} } }],
+  };
+  const n = ev('(() => { let i = 0; _forEachEvalPerClassMap(globalThis.__ev, () => i++); return i; })()');
+  assert.equal(n, 12, '4 maps éval + 4 maps mn + 4 maps passation');
+});
+
+test('_purgeClassRefs : nettoie les maps per-classe mn/pass + seatingHashes + violationsAccepted', () => {
+  setState({
+    cur: 'c2',
+    classes: { c2: { id: 'c2', nom: '6B', eleves: [], rooms: {} } },
+    eleves: {},
+    evaluations: { e1: {
+      id: 'e1', classIds: ['c1', 'c2'],
+      dates: { c1: '2026-01-01', c2: '2026-01-02' },
+      seatingHashes: { c1: 'h1', c2: 'h2' },
+      miniNotes: [{ id: 'm1', dates: { c1: '2026-01-05', c2: '2026-01-06' },
+                    slotIds: { c1: 'M1' }, datesByGroup: { c1: { 1: '2026-01-07' } } }],
+      passations: [{ id: 'p1', dates: { c1: '2026-01-08' }, slotIdsByGroup: { c1: { 2: 'S2' } } }],
+    } },
+    violationsAccepted: { c1: 'hashA', c2: 'hashB' },
+    attendance: {}, snapshots: {}, movedHighlights: {}, salles: {}, tabletPools: {},
+  });
+  ev('_purgeClassRefs("c1")');
+  assert.equal(ev('"e1" in S.evaluations'), true, 'éval multi-classes conservée');
+  assert.deepEqual(get('S.evaluations.e1.classIds'), ['c2']);
+  assert.equal(ev('"c1" in S.evaluations.e1.dates'), false);
+  assert.equal(ev('"c1" in S.evaluations.e1.seatingHashes'), false);
+  assert.equal(ev('"c1" in S.evaluations.e1.miniNotes[0].dates'), false);
+  assert.equal(ev('"c1" in S.evaluations.e1.miniNotes[0].slotIds'), false);
+  assert.equal(ev('"c1" in S.evaluations.e1.miniNotes[0].datesByGroup'), false);
+  assert.equal(ev('"c1" in S.evaluations.e1.passations[0].dates'), false);
+  assert.equal(ev('"c1" in S.evaluations.e1.passations[0].slotIdsByGroup'), false);
+  assert.equal(ev('"c1" in S.violationsAccepted'), false);
+  // c2 intact partout
+  assert.equal(ev('S.evaluations.e1.dates.c2'), '2026-01-02');
+  assert.equal(ev('S.evaluations.e1.seatingHashes.c2'), 'h2');
+  assert.equal(ev('S.evaluations.e1.miniNotes[0].dates.c2'), '2026-01-06');
+  assert.equal(ev('S.violationsAccepted.c2'), 'hashB');
+});
+
+test('_gcSeatingSnapshots : conserve les hashes référencés, supprime les orphelins', () => {
+  setState({
+    classes: {}, eleves: {}, salles: {}, tabletPools: {},
+    attendance: { c1: { rec1: { id: 'rec1', seatingHash: 'hAtt' } } },
+    evaluations: {
+      e1: { id: 'e1', classIds: ['c1'], seatingHash: 'hEv' },
+      e2: { id: 'e2', classIds: ['c1'], seatingHashes: { c1: 'hEvC' } },
+    },
+    seatingSnapshots: {
+      hAtt: { '0,0': 's1' }, hEv: { '0,1': 's2' }, hEvC: { '0,2': 's3' },
+      hOrphelin1: {}, hOrphelin2: { '1,1': 'sX' },
+    },
+    snapshots: {}, movedHighlights: {},
+  });
+  ev('_gcSeatingSnapshots()');
+  assert.deepEqual(get('Object.keys(S.seatingSnapshots).sort()'), ['hAtt', 'hEv', 'hEvC']);
+});
+
+test('_auditState : répare des dimensions de salle invalides (NaN / 0 / hors borne)', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: '6A', eleves: [], activeRoom: 'r1', rooms: { r1: { seating: {}, ipadsByPool: {}, allowedFor: {}, aeshLinks: {}, groupes: {}, posTagId: {} } } } },
+    eleves: {},
+    salles: {
+      r1: { nom: 'OK', rows: 5, cols: 6, positions_vides: [] },
+      r2: { nom: 'Cassée', rows: null, cols: 0, positions_vides: 'pas-un-tableau' },
+    },
+    tabletPools: {}, evaluations: {}, attendance: {}, snapshots: {}, movedHighlights: {},
+  });
+  const res = get('_auditState({ repair: true })');
+  assert.ok(res.issues.some(i => /Cassée/.test(i)), 'salle invalide détectée');
+  assert.equal(ev('Number.isInteger(S.salles.r2.rows) && S.salles.r2.rows >= 1'), true);
+  assert.equal(ev('Number.isInteger(S.salles.r2.cols) && S.salles.r2.cols >= 1'), true);
+  assert.equal(ev('Array.isArray(S.salles.r2.positions_vides)'), true);
+  // La salle saine n'est pas touchée
+  assert.equal(ev('S.salles.r1.rows'), 5);
+  assert.equal(ev('S.salles.r1.cols'), 6);
+});
