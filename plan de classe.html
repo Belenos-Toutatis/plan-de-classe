@@ -1205,6 +1205,12 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
    (aide à distinguer les valeurs quand un élève a la même note sur plusieurs
    évals consécutives). Aligné design system "papier d'enseignant". */
 .bilan-evalcell { border-right: 1px solid var(--rule-line-soft); }
+/* Bandeau de période (Bilan des notes) : un bloc coloré par semestre/trimestre,
+   couleurs distinctes par index de période, texte blanc lisible sur tous les fonds. */
+.bilan-perband { text-align:center; font-family:var(--font-mono); font-weight:700; font-size:.74em; letter-spacing:.08em; padding:3px 6px; color:#fff; border-bottom:2px solid var(--rule-line); white-space:nowrap; }
+.bilan-perband-0 { background:#33597f; } /* bleu ardoise (S1 / T1) */
+.bilan-perband-1 { background:#9d5435; } /* terracotta (S2 / T2) */
+.bilan-perband-2 { background:#3f7a55; } /* vert sapin (T3) */
 
 /* Type B saisie sur plan : pastilles de niveau (.evp-pill) */
 .evp-pill { flex: 1; min-width: 26px; height: 30px; border-radius: 50%; border: 2px solid var(--rule-line);
@@ -3680,6 +3686,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
             <option value="pacman">Pac-Man</option>
             <option value="mario">Mario — thème</option>
             <option value="tetris">Tetris</option>
+            <option value="retro-random">🎲 Au hasard (jeu rétro)</option>
           </optgroup>
         </select>
         <button class="btn btn-g btn-sm" onclick="noisePlayAlert(true)">▶ Tester</button>
@@ -3779,6 +3786,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
             <option value="pacman">Pac-Man</option>
             <option value="mario">Mario — thème</option>
             <option value="tetris">Tetris</option>
+            <option value="retro-random">🎲 Au hasard (jeu rétro)</option>
           </optgroup>
         </select>
         <button class="btn btn-g btn-sm" onclick="_timerTestSound()" title="Écouter la sonnerie de fin (re-cliquer pour couper)">▶ Tester</button>
@@ -5804,11 +5812,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.12.4';
+const APP_VERSION    = '2.13.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-10T04:53:00Z';
+const APP_BUILD_DATE = '2026-06-12T22:32:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -28282,7 +28290,30 @@ const NOISE_SMOOTH_TAU_MS = 1500;
 // Lecture stable + plus de place pour voir les variations sous le seuil.
 const NOISE_THR_ANCHOR_PCT = 75;
 const _NOISE_SOUND_TYPES = ['bell','beep','chime','alarm','digital','gong','cuckoo',
-  'pacman','mario','tetris'];
+  'pacman','mario','tetris','retro-random'];
+// Sous-ensembles « jeux vidéo rétro » et « animés » réellement jouables (sans les
+// pseudo-valeurs *-random), sources des tirages au sort du SONOMÈTRE. Le sonomètre résout
+// 'retro-random' / 'anime-random' par récursion dans le switch de _noiseBuildPattern (cf. ces
+// cases). Le minuteur a son propre catalogue restreint (_TIMER_* / _resolveTimerSoundType).
+const _RETRO_GAME_TYPES = ['pacman','mario','tetris'];
+const _ANIME_TYPES = ['dbz','saint-seiya','one-piece','naruto'];
+function _pickRetroType(){ return _RETRO_GAME_TYPES[Math.floor(Math.random()*_RETRO_GAME_TYPES.length)] || 'mario'; }
+function _pickAnimeType(){ return _ANIME_TYPES[Math.floor(Math.random()*_ANIME_TYPES.length)] || 'dbz'; }
+// ── Minuteur : catalogue des sons « longs » (≥ ~7-8 s) ──
+// Seul le jingle court 'mario-1up' reste EXCLU du minuteur (rien à compléter) — dispo au sonomètre.
+// Les génériques d'animés (transcriptions des partitions fournies) sont des thèmes ~8 s : inclus
+// dans les deux modules. Les tirages au sort piochent dans _TIMER_RETRO_TYPES / _TIMER_ANIME_TYPES.
+// FF/Zelda + animés (sauf DBZ) volontairement RETIRÉS du minuteur — on les réintégrera
+// au fur et à mesure qu'on aura travaillé chaque musique (transcription MIDI dédiée).
+const _TIMER_SOUND_TYPES = ['bell','beep','chime','alarm','digital','gong','cuckoo',
+  'pacman','mario','tetris','retro-random'];
+const _TIMER_RETRO_TYPES = ['pacman','mario','tetris'];
+const _TIMER_ANIME_TYPES = [];
+function _resolveTimerSoundType(t){
+  if (t === 'retro-random') return _TIMER_RETRO_TYPES[Math.floor(Math.random()*_TIMER_RETRO_TYPES.length)] || 'mario';
+  if (t === 'anime-random') return _TIMER_ANIME_TYPES[Math.floor(Math.random()*_TIMER_ANIME_TYPES.length)] || 'dbz';
+  return t;
+}
 let _noiseSettings = { ...NOISE_DEFAULTS };
 let _noise = {
   active: false, starting: false, popup: null,
@@ -28776,6 +28807,42 @@ function _noiseBuildPattern(type, blip) {
       let s = 0; for (let i = 0; i < 3; i++) { blip(G5, s, 0.28, 0.9, 'sine'); blip(E5, s + 0.32, 0.34, 0.9, 'sine'); s += 0.85; } return s;
     }
     // ── Clins d'œil jeux vidéo rétro (motifs chiptune, ondes carrées) ──
+    case 'retro-random': // Tire au sort un jeu rétro à chaque déclenchement
+      return _noiseBuildPattern(_pickRetroType(), blip);
+    case 'mario-1up': // Super Mario Bros. — son du « 1-up » (vie supplémentaire)
+      return seq([['E5',.13],['G5',.13],['E6',.13],['C6',.13],['D6',.13],['G6',.20]], 0.85);
+    case 'ff-victory': // Final Fantasy — fanfare de victoire (transcription do majeur)
+      return seq([['C5',.15],['C5',.15],['C5',.15],['C5',.6],['G4',.15],['A4',.15],['C5',.15],['A4',.15],['C5',.6]], 0.85);
+    case 'zelda-theme': // The Legend of Zelda — thème principal (ouverture, transcription en Si♭)
+      return seq([['A#4',.84],['A#4',.14],['A#4',.14],['A#4',.14],['A#4',.28],['A#4',.14],['G#4',.14],['A#4',.56],['F4',.28],['D#4',.14],['F4',.14],['A#4',.28]], 0.85);
+    // ── Génériques d'animés (transcriptions des partitions MuseScore fournies) — thèmes ~8 s ──
+    case 'anime-random': // Tire au sort un générique d'animé à chaque déclenchement
+      return _noiseBuildPattern(_pickAnimeType(), blip);
+    case 'dbz': { // Dragon Ball Z — « We Gotta Power » (2e générique) : intro (5 premières s) du MIDI fourni,
+      // tous les canaux superposés (cordes/cuivres/basse/batterie). Swell d'intro → fanfare de cuivres.
+      // Fréquences brutes ; w: 's'=carré, 't'=triangle, 'n'=sinus (kick batterie).
+      const W = { s:'square', t:'triangle', n:'sine' };
+      const EV = [[98.0,0.0,1.4,0.3,'t'],[196.0,0.0,1.4,0.18,'t'],[220,0.0,0.03,0.1,'s'],[392.0,0.0,0.707,0.18,'t'],[146.8,0.714,1.4,0.18,'t'],[293.7,0.714,1.4,0.18,'t'],[261.6,1.429,0.707,0.18,'t'],[523.3,1.429,0.707,0.18,'t'],[246.9,2.143,1.4,0.18,'t'],[493.9,2.143,1.4,0.18,'t'],[392.0,2.857,0.112,0.34,'s'],[587.3,2.857,0.104,0.34,'s'],[392.0,2.976,0.104,0.34,'s'],[587.3,2.976,0.104,0.34,'s'],[392.0,3.095,0.104,0.34,'s'],[587.3,3.095,0.112,0.34,'s'],[392.0,3.214,0.156,0.34,'s'],[587.3,3.214,0.156,0.34,'s'],[784.0,3.214,0.193,0.34,'s'],[392.0,3.452,0.193,0.34,'s'],[493.9,3.452,0.179,0.34,'s'],[587.3,3.452,0.186,0.34,'s'],[392.0,3.69,0.164,0.34,'s'],[587.3,3.69,0.171,0.34,'s'],[784.0,3.69,0.193,0.34,'s'],[392.0,3.929,0.164,0.34,'s'],[587.3,3.929,0.179,0.34,'s'],[880.0,3.929,0.186,0.34,'s'],[392.0,4.167,0.149,0.34,'s'],[493.9,4.167,0.149,0.34,'s'],[587.3,4.167,0.186,0.34,'s'],[392.0,4.405,0.149,0.34,'s'],[587.3,4.405,0.149,0.34,'s'],[880.0,4.405,0.186,0.34,'s'],[392.0,4.643,0.164,0.34,'s'],[784.0,4.643,0.179,0.34,'s'],[987.8,4.643,0.186,0.34,'s'],[392.0,4.881,0.149,0.34,'s'],[587.3,4.881,0.149,0.34,'s']];
+      let end = 0;
+      for (const [f, st, dur, pk, w] of EV) { blip(f, st, dur, pk, W[w]); if (st + dur > end) end = st + dur; }
+      return end;
+    }
+    case 'saint-seiya': { // Saint Seiya / Chevaliers du Zodiaque — « Pegasus Fantasy » (joué vite)
+      const e = .16;
+      return seq([['G4',e],['C5',2*e],['C5',e],['D5',e],['D#5',2*e],['D5',e],['C5',e],['D5',2*e],['G4',2*e],['0',e],
+                  ['G4',e],['C5',2*e],['C5',e],['D5',e],['D#5',2*e],['F5',e],['D#5',e],['D5',4*e],['0',e],
+                  ['A#4',e],['D5',2*e],['D5',e],['D#5',e],['F5',2*e],['D#5',e],['D5',e],['C5',2*e],['A#4',e],['G4',e],['G#4',2*e],['G4',e],['F4',e],['G4',4*e]], 0.85);
+    }
+    case 'one-piece': { // One Piece — « Overtaken » (motif qui monte)
+      const e = .20;
+      return seq([['A4',e],['A4',e],['G4',e],['G4',e],['E4',2*e],['A4',2*e],['A4',e],['A4',e],['G4',e],['G4',e],['E4',e],['C5',e],['A4',2*e],['0',e],
+                  ['A4',e],['A4',e],['G4',e],['G4',e],['E4',2*e],['A4',2*e],['B4',e],['C5',e],['D5',e],['E5',e],['D5',2*e],['C5',2*e],['B4',e],['A4',e],['B4',2*e],['A4',4*e]], 0.85);
+    }
+    case 'naruto': { // Naruto — « Sadness and Sorrow » (thème mélancolique)
+      const e = .14;
+      return seq([['A4',2*e],['G4',e],['D4',3*e],['0',e],['G4',2*e],['A#4',e],['C5',e],['G4',4*e],['0',e],['A#4',2*e],['A4',e],['A#4',e],['C5',2*e],['F4',e],['D5',3*e],['0',e],['C5',4*e],['0',e],
+                  ['A4',2*e],['G4',e],['D4',3*e],['0',e],['G4',2*e],['A#4',e],['C5',e],['G4',4*e],['0',e],['A#4',2*e],['A4',e],['A#4',e],['C5',2*e],['F4',e],['G4',4*e]], 0.85);
+    }
     case 'pacman': { // Pac-Man — jingle d'intro complet (couplet entier, se résout vers le haut)
       const run1 = [['B4',.09],['B5',.09],['F#5',.09],['D#5',.09],['B5',.07],['F#5',.09],['D#5',.15]];
       const run2 = [['C5',.09],['C6',.09],['G5',.09],['E5',.09],['C6',.07],['G5',.09],['E5',.15]];
@@ -28903,7 +28970,7 @@ function _timerLoadSettings() {
     const raw = localStorage.getItem('planClasse_timerSettings');
     if (raw) _timerSettings = { ...TIMER_DEFAULTS, ...JSON.parse(raw) };
   } catch (_) {}
-  if (!_NOISE_SOUND_TYPES.includes(_timerSettings.soundType)) _timerSettings.soundType = 'mario';
+  if (!_TIMER_SOUND_TYPES.includes(_timerSettings.soundType)) _timerSettings.soundType = 'mario';
   if (!Array.isArray(_timerSettings.announces)) _timerSettings.announces = [...TIMER_DEFAULTS.announces];
   _timerSettings.announces = _timerSettings.announces.map(n => parseInt(n, 10)).filter(n => n > 0).sort((a, b) => b - a);
 }
@@ -28949,7 +29016,7 @@ function openTimerSettings() {
 }
 function timerSetSpeechOn(on) { _timerSettings.speechOn = !!on; _timerSaveSettings(); _timerSyncToggleUI(); if (!on) { try { window.speechSynthesis.cancel(); } catch (_) {} } }
 function timerSetSoundOn(on) { _timerSettings.soundOn = !!on; _timerSaveSettings(); _timerSyncToggleUI(); }
-function timerSetSoundType(t) { _timerSettings.soundType = _NOISE_SOUND_TYPES.includes(t) ? t : 'mario'; _timerSaveSettings(); }
+function timerSetSoundType(t) { _timerSettings.soundType = _TIMER_SOUND_TYPES.includes(t) ? t : 'mario'; _timerSaveSettings(); }
 function timerSetVolume(v) { _timerSettings.volume = Math.max(0, Math.min(100, parseInt(v, 10) || 0)); const e = document.getElementById('timer-vol-val'); if (e) e.textContent = _timerSettings.volume; _timerSaveSettings(); }
 function timerToggleAnnounce(secs, on) {
   secs = parseInt(secs, 10);
@@ -29117,7 +29184,7 @@ function _timerPlaySound(isTest) {
   _timer.previewCtx = ctx;
   const t0 = ctx.currentTime;
   const master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
-  const type = _timerSettings.soundType;
+  const type = _resolveTimerSoundType(_timerSettings.soundType);
   let closeAfter;
   if (_TIMER_THEME_TYPES.includes(type)) {
     _timerBuildExtendedTheme(type, _timerMakeBlip(ctx, master, t0, 0));
@@ -29169,12 +29236,42 @@ function _timerBuildExtendedTheme(type, blip) {
         ['C5',q],['A4',q],['A4',q],[0,q],
       ], 0.82);
     }
-    case 'pacman': { // Pac-Man — jingle d'intro complet (sa forme naturelle), ≈ 4,5 s
+    case 'pacman': { // Pac-Man — jingle d'intro joué 2× pour une sonnerie de fin ≈ 7,5 s
       const run1 = [['B4',.11],['B5',.11],['F#5',.11],['D#5',.11],['B5',.08],['F#5',.11],['D#5',.18]];
       const run2 = [['C5',.11],['C6',.11],['G5',.11],['E5',.11],['C6',.08],['G5',.11],['E5',.18]];
       const tail = [['D#5',.11],['E5',.11],['F5',.11],['F5',.11],['F#5',.11],['G5',.11],['G5',.11],['G#5',.11],['A5',.11],['B5',.24]];
-      return seq(run1.concat(run2, run1, tail), 0.82);
+      const full = run1.concat(run2, run1, tail);
+      return seq(full.concat([['0',.18]], full), 0.82);
     }
+    case 'ff-victory': { // Final Fantasy — fanfare de victoire COMPLÈTE (intro ×3 + réponse), ≈ 8 s
+      const e = .17;
+      return seq([
+        ['C5',e],['C5',e],['C5',e],['C5',3*e],['0',e],
+        ['C5',e],['C5',e],['C5',e],['C5',3*e],['0',e],
+        ['C5',e],['C5',e],['C5',e],['C5',4*e],['0',e],
+        ['G4',2*e],['A4',2*e],['A#4',2*e],['A#4',2*e],
+        ['A4',e],['G4',e],['F4',e],['E4',e],
+        ['F4',2*e],['D4',4*e],['0',e],
+        ['G4',e],['F4',e],['G4',2*e],['A#4',4*e],
+      ], 0.82);
+    }
+    case 'zelda-theme': { // The Legend of Zelda — thème principal COMPLET (section A), ≈ 9 s
+      const e = .13;
+      return seq([
+        ['A#4',6*e],
+        ['A#4',e],['A#4',e],['A#4',e],['A#4',2*e],['A#4',2*e],
+        ['G#4',2*e],['A#4',4*e],
+        ['A#4',e],['F4',e],['A#4',e],['A#4',e],['C5',e],['D5',e],['D#5',e],
+        ['D#5',2*e],['D#5',e],['F5',e],['G5',e],['G#5',2*e],
+        ['G#5',e],['G#5',e],['G5',e],['F5',e],['G5',e],['F5',e],['D#5',2*e],
+        ['D#5',e],['D5',e],['D5',e],['D#5',e],['F5',2*e],
+        ['D#5',e],['D5',e],['C5',e],['C5',e],['D5',e],['D#5',e],
+        ['D5',e],['C5',e],['A#4',e],['A#4',e],['C5',e],['D5',e],
+        ['F5',2*e],['D#5',2*e],['D#5',4*e],
+      ], 0.82);
+    }
+    case 'dbz': case 'saint-seiya': case 'one-piece': case 'naruto':
+      return _noiseBuildPattern(type, blip); // réutilise le thème ~8 s du sonomètre (joué 1×)
     default: return 0;
   }
 }
@@ -29193,12 +29290,14 @@ function _timerPlayFinal() {
   const t0 = ctx.currentTime;
   const master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
   let total;
-  if (_TIMER_THEME_TYPES.includes(_timerSettings.soundType)) {
-    total = _timerBuildExtendedTheme(_timerSettings.soundType, _timerMakeBlip(ctx, master, t0, 0));
+  // '*-random' → un air concret du catalogue MINUTEUR (sons longs uniquement) pour CETTE sonnerie.
+  const type = _resolveTimerSoundType(_timerSettings.soundType);
+  if (_TIMER_THEME_TYPES.includes(type)) {
+    total = _timerBuildExtendedTheme(type, _timerMakeBlip(ctx, master, t0, 0));
   } else {
-    const TARGET = 6; let off = 0, guard = 0; // ≈ 6 s suffisent pour les sons non-thématiques
+    const TARGET = 8; let off = 0, guard = 0; // ≥ ~8 s pour une sonnerie de fin consistante
     while (off < TARGET && guard < 40) {
-      const len = _noiseBuildPattern(_timerSettings.soundType, _timerMakeBlip(ctx, master, t0, off));
+      const len = _noiseBuildPattern(type, _timerMakeBlip(ctx, master, t0, off));
       off += (len || 0.5) + 0.15; guard++;
     }
     total = off;
@@ -38828,7 +38927,12 @@ function renderBilanTab() {
     });
   }
   // Marqueurs : evPeriodBreak[k] = true si l'éval k commence un nouveau bloc période
-  const evPeriodBreak = evs.map((ev, k) => k > 0 && periode === '' && groupByPeriod && ev.periode !== evs[k-1].periode);
+  const _periodGrouping = periode === '' && groupByPeriod && _perOrder.length > 1;
+  const evPeriodBreak = evs.map((ev, k) => k > 0 && _periodGrouping && ev.periode !== evs[k-1].periode);
+  // Séparateur de période = double trait foncé avec creux clair au milieu (3 bandes via
+  // box-shadow inset : foncé 0-2px · clair 2-5px · foncé 5-7px), indépendant du fond
+  // coloré des cellules. padding-left agrandi pour ne pas que le contenu chevauche le trait.
+  const _PER_DIVIDER = 'box-shadow:inset 2px 0 0 0 var(--ink-blue),inset 5px 0 0 0 var(--paper),inset 7px 0 0 0 var(--ink-blue);padding-left:13px;';
   // Marqueurs : evTypeBreak[k] = true si l'éval k commence un nouveau bloc type (tri par type)
   const evTypeBreak = evs.map((ev, k) => k > 0 && _bilanGrouped && (ev.type || '') !== (evs[k-1].type || ''));
 
@@ -38925,12 +39029,42 @@ function renderBilanTab() {
   // Le tableau seul scrolle verticalement, les titres et stats restent visibles.
   html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
   html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
-  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
+  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
+  // Bandeau de période : un <th> coloré par semestre/trimestre couvrant TOUTES ses
+  // colonnes d'éval (couleurs distinctes par période). Visible en mode groupé seulement.
+  if (_periodGrouping && evs.length) {
+    let synthSpan = 0;
+    for (const sd of synthData) {
+      if (!_isBilanColHidden(`bilan:moy:${sd.perCode}`)) synthSpan++;
+      if (!_isBilanColHidden(`bilan:rang:${sd.perCode}`)) synthSpan++;
+      if (!_isBilanColHidden(`bilan:rem:${sd.perCode}`)) synthSpan++;
+      synthSpan++; // Conseil (toujours affiché)
+    }
+    html += '<tr>';
+    html += `<th style="position:sticky;left:0;z-index:3;background:var(--paper-warm);border-bottom:2px solid var(--rule-line)"></th>`;
+    let bi = 0;
+    while (bi < evs.length) {
+      let bj = bi;
+      while (bj + 1 < evs.length && (evs[bj+1].periode || '') === (evs[bi].periode || '')) bj++;
+      const _code = evs[bi].periode || '';
+      const _pcls = ((_perIdx(_code) % 3) + 3) % 3;
+      const _kind = _code[0] === 'T' ? 'TRIMESTRE' : 'SEMESTRE';
+      const _lbl  = (_kind + ' ' + (_code.slice(1) || '')).trim();
+      const _full = _periodeOptions().find(o => o.code === _code)?.label || _code;
+      html += `<th colspan="${bj - bi + 1}" class="bilan-perband bilan-perband-${_pcls}" title="${_escAttr(_full)}">${_esc(_lbl)}</th>`;
+      bi = bj + 1;
+    }
+    if (synthSpan > 0) html += `<th colspan="${synthSpan}" style="background:var(--paper-warm);border-bottom:2px solid var(--rule-line)"></th>`;
+    html += '</tr>';
+  }
+  html += '<tr>';
   html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);min-width:160px"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   // 1 colonne par éval — header avec : code court · coef éditable (sans ×) · date
   for (let ki = 0; ki < evs.length; ki++) {
     const ev = evs[ki];
-    const _brk = (evPeriodBreak[ki] || evTypeBreak[ki]) ? 'border-left:3px solid var(--ink-blue-soft);' : '';
+    // Frontière période = trait épais foncé (priorité), frontière type = trait fin clair.
+    const _brk = evPeriodBreak[ki] ? _PER_DIVIDER
+               : evTypeBreak[ki] ? 'border-left:3px solid var(--ink-blue-soft);' : '';
     // Utilise _evalDateFor (gère per-classe + fallback sur les sous-dates des
     // mini-notes / passations) — sinon les Type A multi-classes n'affichent
     // pas leur date dans le header.
@@ -39046,8 +39180,9 @@ function renderBilanTab() {
       const n = noteSur20(ev, sid);
       const isFac = !!(ev.facultative?.active);
       const facCounts = isFac ? facCounted.has(ev.id) : true;
-      // Séparateur de période en mode groupé
-      const _brk = (evPeriodBreak[k] || evTypeBreak[k]) ? 'border-left:3px solid var(--ink-blue-soft);' : '';
+      // Séparateur de période en mode groupé (période = trait épais foncé, type = trait fin clair)
+      const _brk = evPeriodBreak[k] ? _PER_DIVIDER
+                 : evTypeBreak[k] ? 'border-left:3px solid var(--ink-blue-soft);' : '';
       // Fond hachuré pour les facultatives NON comptées pour cet élève (mode improveOnly
       // qui n'améliore pas la moyenne, ou over10/bonus si note ≤ 10). Le code couleur
       // normal reste visible derrière les hachures grises pour ne pas effacer l'info.
@@ -39191,7 +39326,8 @@ function renderBilanTab() {
   // Stats par éval (ordre chronologique)
   for (let k = 0; k < evs.length; k++) {
     const vals = evValues[k];
-    const _brk = (evPeriodBreak[k] || evTypeBreak[k]) ? 'border-left:3px solid var(--ink-blue-soft);' : '';
+    const _brk = evPeriodBreak[k] ? _PER_DIVIDER
+               : evTypeBreak[k] ? 'border-left:3px solid var(--ink-blue-soft);' : '';
     if (!vals.length) {
       html += `<td class="bilan-evalcell" style="padding:4px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;${_brk}">—</td>`;
     } else {
