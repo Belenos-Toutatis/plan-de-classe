@@ -5812,11 +5812,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.13.0';
+const APP_VERSION    = '2.13.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-12T22:32:00Z';
+const APP_BUILD_DATE = '2026-06-13T13:40:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -39609,16 +39609,28 @@ function _bilanScrapeTableForExport() {
     if (coefInp) {
       const clone = c.cloneNode(true);
       clone.querySelectorAll('input,select,textarea').forEach(el => el.remove());
+      // Isole la pastille de type (A/B/C) : collée au nom dans le DOM (flex sans
+      // espace), elle se confondait avec le libellé à l'export (« CDS Vol/Masse »).
+      // On l'extrait pour la rendre sous forme de tag distinct « [C] nom ».
+      const badge = clone.querySelector('.eval-type-badge');
+      let typeLetter = '';
+      if (badge) { typeLetter = (badge.textContent || '').trim(); badge.remove(); }
       const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
       const coef = coefInp.value || '1';
-      return text + ` (×${coef})`;
+      const prefix = typeLetter ? `[${typeLetter}] ` : '';
+      return prefix + text + ` (×${coef})`;
     }
     // 4) Cellule pastille de notation/rang (span coloré dans le td) : textContent suffit
     // 5) Défaut : textContent nettoyé
     return (c.textContent || '').replace(/\s+/g, ' ').trim();
   };
   const out = { head: [], body: [], foot: [] };
-  const headTr = table.querySelector('thead tr');
+  // En mode « grouper par période », le <thead> commence par une ligne-bandeau
+  // (SEMESTRE 1 / SEMESTRE 2 en colspan). La vraie ligne d'en-têtes de colonnes
+  // est toujours la DERNIÈRE <tr> du thead — sinon on scrapait le bandeau et on
+  // n'obtenait que quelques colonnes fusionnées au lieu des colonnes réelles.
+  const headTrs = table.querySelectorAll('thead tr');
+  const headTr = headTrs[headTrs.length - 1];
   if (headTr) out.head = Array.from(headTr.children).map(scrapeCell);
   for (const tr of table.querySelectorAll('tbody tr')) {
     out.body.push(Array.from(tr.children).map(scrapeCell));
