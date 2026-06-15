@@ -1297,6 +1297,8 @@ body.tableur-sobr-notes #meval-tableur-wrap .meval-cell-note,
 body.tableur-sobr-notes #meval-tableur-wrap .meval-cell-note input.meval-niveau-input { background: transparent !important; color: var(--ink-deep) !important; }
 body.tableur-sobr-comps #meval-tableur-wrap .meval-cell-comp,
 body.tableur-sobr-comps #meval-tableur-wrap .meval-cell-comp input.meval-niveau-input { background: transparent !important; color: var(--ink-deep) !important; }
+/* Sobriété compétences : neutralise aussi la pastille de niveau (couleur portée par .comp-pill) */
+body.tableur-sobr-comps #meval-tableur-wrap .comp-pill { background: transparent !important; color: var(--ink-deep) !important; border: 1px solid var(--rule-line) !important; }
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder { color: var(--pencil-soft) !important; }
 html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
@@ -5812,11 +5814,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.14.1';
+const APP_VERSION    = '2.15.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-15T19:56:00Z';
+const APP_BUILD_DATE = '2026-06-15T20:17:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31253,6 +31255,9 @@ function _evalNewSave() {
       notes:      type === 'B' ? undefined : {},
       passations: type === 'B' ? [] : undefined,
       weighting:  type === 'B' ? weightingChoice : undefined,
+      // Nouvelles évals Type C : bloc Compétences AVANT le Total/Note (préférence par
+      // défaut). Modifiable par éval via le bouton ⇄ dans l'en-tête du tableur.
+      compsBeforeTotal: type === 'C' ? true : undefined,
       createdAt: now, updatedAt: now,
     };
   }
@@ -33629,6 +33634,17 @@ function _evalTableurRender() {
         .filter(Boolean)
     : exoGroups;
 
+  // Position du bloc Compétences (Type C) : AVANT ou APRÈS le bloc Total/Note.
+  // Persisté par éval (ev.compsBeforeTotal). Nouvelles évals → avant (défaut moderne) ;
+  // évals existantes sans le champ → après (comportement historique préservé).
+  const hasComps = isTypeC && inlineComps.length > 0;
+  const compsFirst = hasComps && ev.compsBeforeTotal === true;
+  const SEP_STRONG = 'border-left:2px solid var(--ink-blue-soft);';
+  // Bouton ⇄ pour basculer la position du bloc Compétences (posé sur le 1er en-tête comp).
+  const compsToggleBtn = hasComps
+    ? `<div class="comp-pos-toggle" style="margin-bottom:2px"><button type="button" onclick="event.stopPropagation();_evalToggleCompsPosition('${_esc(evalId)}')" title="${compsFirst ? 'Placer le bloc Compétences APRÈS le Total/Note' : 'Placer le bloc Compétences AVANT le Total/Note'}" aria-label="Déplacer le bloc compétences (avant/après le Total)" style="border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-blue);border-radius:3px;font-size:.7em;line-height:1;padding:1px 5px;cursor:pointer">⇄</button></div>`
+    : '';
+
   let html = '<table id="meval-tableur-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
 
@@ -33646,14 +33662,25 @@ function _evalTableurRender() {
     }
     // Bandeau "Totaux exercices" regroupant tous les Σ
     html += `<th colspan="${exoGroups.length}" style="padding:5px 8px;border-bottom:1px solid var(--rule-line);text-align:center;font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);background:var(--paper-deep);border-left:2px solid var(--ink-blue-soft)" title="Total brut par exercice">Totaux exercices</th>`;
-    if (showBruteCol) {
-      html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;border-left:2px solid var(--ink-blue-soft)" title="Total brut (somme des exercices) sur le barème additionné">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${maxBrut}</span></th>`;
-    }
-    html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600${showBruteCol ? '' : ';border-left:2px solid var(--ink-blue-soft)'}" title="Note finale ramenée sur ${ev.noteMax}">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
-    // Compétences inline (Type C avec exos)
-    for (const c of inlineComps) {
-      html += `<th rowspan="2" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${_esc(c.code)}</th>`;
-    }
+    // Bloc Note (Total brut + Note) et bloc Compétences — ordre configurable
+    // (ev.compsBeforeTotal), séparation forte entre les deux blocs.
+    const mkNoteHeadA = (lead) => {
+      let h = '';
+      if (showBruteCol) {
+        h += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;${lead}" title="Total brut (somme des exercices) sur le barème additionné">Total<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${maxBrut}</span></th>`;
+      }
+      h += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;${showBruteCol ? '' : lead}" title="Note finale ramenée sur ${ev.noteMax}">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+      return h;
+    };
+    const mkCompsHeadA = (lead) => {
+      let h = '';
+      inlineComps.forEach((c, i) => {
+        const bl = i === 0 ? lead : 'border-left:1px solid var(--rule-line-soft);';
+        h += `<th rowspan="2" class="meval-comp-head" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);${bl}" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${i === 0 ? compsToggleBtn : ''}${_esc(c.code)}</th>`;
+      });
+      return h;
+    };
+    html += compsFirst ? (mkCompsHeadA(SEP_STRONG) + mkNoteHeadA(SEP_STRONG)) : (mkNoteHeadA(SEP_STRONG) + mkCompsHeadA(SEP_STRONG));
     // Remarque puis Rattrapage (en derniers)
     html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève">📝 Remarque</th>`;
     html += `<th rowspan="2" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="Date individuelle si l'élève a rattrapé après une absence">📅 Rattrapage</th>`;
@@ -33753,11 +33780,19 @@ function _evalTableurRender() {
     });
   }
   if (!isTypeC || exoGroups.length === 0) {
-    html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
-    // Compétences inline (Type C sans exos)
-    for (const c of inlineComps) {
-      html += `<th style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${_esc(c.code)}</th>`;
-    }
+    // Bloc Note + bloc Compétences (Type C sans exos) — ordre configurable.
+    const mkNoteHeadB = (lead) => `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-weight:600;${lead}">Note<br><span style="font-size:.85em;color:var(--pencil);font-weight:normal">/${ev.noteMax}</span></th>`;
+    const mkCompsHeadB = (lead) => {
+      let h = '';
+      inlineComps.forEach((c, i) => {
+        const bl = i === 0 ? lead : 'border-left:1px solid var(--rule-line-soft);';
+        h += `<th class="meval-comp-head" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;font-family:var(--font-mono);font-weight:600;background:var(--paper-warm);${bl}" title="${_esc(c.name || '')} (niveau atteint sur cette éval)">${i === 0 ? compsToggleBtn : ''}${_esc(c.code)}</th>`;
+      });
+      return h;
+    };
+    // En path2 (pas de Σ exos), le 1er bloc suit les questions → pas de filet ;
+    // seul le 2e bloc reçoit le séparateur fort.
+    html += compsFirst ? (mkCompsHeadB('') + mkNoteHeadB(SEP_STRONG)) : (mkNoteHeadB('') + mkCompsHeadB(SEP_STRONG));
     // Remarque puis Rattrapage (Type C : avec rattrapage en dernier)
     html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);border-left:2px solid var(--ink-blue-soft)" title="Remarque facultative par élève (vaut pour toute l'évaluation)">📝 Remarque</th>`;
     if (isTypeC) {
@@ -33830,36 +33865,38 @@ function _evalTableurRender() {
         html += `<td class="meval-exo-total-cell meval-cell-note" data-row-exo="${_esc(g.id || '__orphans__')}" data-row-exo-max="${max}" style="padding:3px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;font-size:.85em;background:${sbg || 'var(--paper-deep)'};color:${sCol};${borderLeft}" title="Total ${exoLabel} : ${txt}/${max}">${txt}</td>`;
       });
     }
-    // Total brut (somme sur tous les exos) — colonne séparée si maxBrut !== noteMax
-    if (showBruteCol) {
-      const brut = _computeStudentNoteBrut(ev, sid);
-      const bbg = (brut != null) ? _noteColor(brut, maxBrut) : '';
-      const bCol = bbg ? _contrastTextColor(bbg) : 'var(--ink-blue)';
-      html += `<td data-row-brute="1" data-row-brute-max="${maxBrut}" class="meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bbg || 'var(--paper-warm)'};color:${bCol};border-left:2px solid var(--ink-blue-soft)" title="Total brut sur ${maxBrut}">${brut != null ? _fmtNote(brut) : '—'}</td>`;
-    }
-    // Note finale (proportionnée à ev.noteMax)
-    const total = _computeStudentEvalNote(ev, sid);
-    const disp = _studentNoteDisplay(ev, sid);
-    let totalBg, totalColor;
-    if (disp.kind === 'num') totalBg = _noteColor(total, ev.noteMax);
-    else if (disp.kind === 'A') totalBg = '#9ca3af';
-    else if (disp.kind === 'NN') totalBg = 'var(--paper-warm)';
-    else totalBg = '';
-    totalColor = totalBg ? _contrastTextColor(totalBg) : 'var(--ink-blue)';
-    const noteBorderLeft = showBruteCol ? '' : 'border-left:2px solid var(--ink-blue-soft);';
-    html += `<td class="meval-row-total meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${noteBorderLeft}" data-sid="${_esc(sid)}">${disp.text}</td>`;
-    // Compétences inline (Type C : niveau atteint par compétence évaluée)
-    if (isTypeC && inlineComps.length > 0) {
-      const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
-      for (const c of inlineComps) {
-        const niv = _evalStudentLevelForComp(ev, sid, c.id);
-        const isNull = (niv == null);
-        const dispNiv = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
-        const cellBg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
-        const cellColor = _contrastTextColor(cellBg);
-        html += `<td data-row-comp="${_esc(c.id)}" class="meval-cell-comp" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};font-size:.88em;background:${cellBg};color:${cellColor};border-left:1px solid var(--rule-line-soft)" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${dispNiv}</td>`;
+    // Bloc Note (Total brut + Note finale) et bloc Compétences (pastilles) —
+    // ordre configurable (compsFirst) + séparation forte entre les deux blocs.
+    const mkNoteBody = (lead) => {
+      let h = '';
+      if (showBruteCol) {
+        const brut = _computeStudentNoteBrut(ev, sid);
+        const bbg = (brut != null) ? _noteColor(brut, maxBrut) : '';
+        const bCol = bbg ? _contrastTextColor(bbg) : 'var(--ink-blue)';
+        h += `<td data-row-brute="1" data-row-brute-max="${maxBrut}" class="meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bbg || 'var(--paper-warm)'};color:${bCol};${lead}" title="Total brut sur ${maxBrut}">${brut != null ? _fmtNote(brut) : '—'}</td>`;
       }
-    }
+      const total = _computeStudentEvalNote(ev, sid);
+      const disp = _studentNoteDisplay(ev, sid);
+      let totalBg;
+      if (disp.kind === 'num') totalBg = _noteColor(total, ev.noteMax);
+      else if (disp.kind === 'A') totalBg = '#9ca3af';
+      else if (disp.kind === 'NN') totalBg = 'var(--paper-warm)';
+      else totalBg = '';
+      const totalColor = totalBg ? _contrastTextColor(totalBg) : 'var(--ink-blue)';
+      h += `<td class="meval-row-total meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${showBruteCol ? '' : lead}" data-sid="${_esc(sid)}">${disp.text}</td>`;
+      return h;
+    };
+    const mkCompsBody = (lead) => {
+      if (!hasComps) return '';
+      let h = '';
+      inlineComps.forEach((c, i) => {
+        const niv = _evalStudentLevelForComp(ev, sid, c.id);
+        const bl = i === 0 ? lead : 'border-left:1px solid var(--rule-line-soft);';
+        h += `<td data-row-comp="${_esc(c.id)}" class="meval-cell-comp" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow};${bl}" title="Niveau atteint sur ${_esc(c.code)} (calculé automatiquement)">${_compPillHTML(niv)}</td>`;
+      });
+      return h;
+    };
+    html += compsFirst ? (mkCompsBody(SEP_STRONG) + mkNoteBody(SEP_STRONG)) : (mkNoteBody(SEP_STRONG) + mkCompsBody(SEP_STRONG));
     // Remarque (Type A et Type C)
     const remark = ev.studentRemarks?.[sid] || '';
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="${remark ? _escAttr(remark) : 'Remarque facultative pour cet élève'}"></td>`;
@@ -33890,26 +33927,31 @@ function _evalTableurRender() {
       html += `<td data-stat-exo="${_esc(g.id || '__orphans__')}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);${borderLeft}">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v), noteMax: exoMax })}</td>`;
     });
   }
-  // Total brut (si colonne visible)
-  if (showBruteCol) {
-    const brutVals = sids.map(sid => _computeStudentNoteBrut(ev, sid)).filter(v => typeof v === 'number');
-    html += `<td data-stat-brute="1" data-stat-brute-max="${maxBrut}" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)">${_statsCellHTML(brutVals, { fullStats: true, halfMax: maxBrut / 2, noteMax: maxBrut })}</td>`;
-  }
-  // Note finale /noteMax : stats complètes
-  const totals = sids.map(sid => {
-    const raw = _computeStudentEvalNote(ev, sid);
-    return raw == null ? null : _roundNoteToGranularity(raw, ev);
-  }).filter(v => v != null);
-  const noteFootBorder = showBruteCol ? '' : 'border-left:2px solid var(--ink-blue-soft);';
-  html += `<td data-stat-total="1" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);${noteFootBorder}">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2, noteMax: ev.noteMax || 20 })}</td>`;
-  // Compétences inline (Type C)
-  if (isTypeC && inlineComps.length > 0) {
-    for (const c of inlineComps) {
-      const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, c.id))
-                       .filter(v => typeof v === 'number');
-      html += `<td data-stat-comp="${_esc(c.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">${_statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true })}</td>`;
+  // Bloc Note (Total brut + Note) et bloc Compétences (stats) — ordre configurable.
+  const mkNoteFoot = (lead) => {
+    let h = '';
+    if (showBruteCol) {
+      const brutVals = sids.map(sid => _computeStudentNoteBrut(ev, sid)).filter(v => typeof v === 'number');
+      h += `<td data-stat-brute="1" data-stat-brute-max="${maxBrut}" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);${lead}">${_statsCellHTML(brutVals, { fullStats: true, halfMax: maxBrut / 2, noteMax: maxBrut })}</td>`;
     }
-  }
+    const totals = sids.map(sid => {
+      const raw = _computeStudentEvalNote(ev, sid);
+      return raw == null ? null : _roundNoteToGranularity(raw, ev);
+    }).filter(v => v != null);
+    h += `<td data-stat-total="1" style="padding:4px 8px;vertical-align:top;background:var(--paper-warm);${showBruteCol ? '' : lead}">${_statsCellHTML(totals, { fullStats: true, halfMax: (ev.noteMax || 20) / 2, noteMax: ev.noteMax || 20 })}</td>`;
+    return h;
+  };
+  const mkCompsFoot = (lead) => {
+    if (!hasComps) return '';
+    let h = '';
+    inlineComps.forEach((c, i) => {
+      const vals = sids.map(sid => _evalStudentLevelForComp(ev, sid, c.id)).filter(v => typeof v === 'number');
+      const bl = i === 0 ? lead : 'border-left:1px solid var(--rule-line-soft);';
+      h += `<td data-stat-comp="${_esc(c.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${bl}">${_statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true })}</td>`;
+    });
+    return h;
+  };
+  html += compsFirst ? (mkCompsFoot(SEP_STRONG) + mkNoteFoot(SEP_STRONG)) : (mkNoteFoot(SEP_STRONG) + mkCompsFoot(SEP_STRONG));
   // Remarque (Type A et Type C)
   html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
   // Rattrapage (Type C)
@@ -33952,6 +33994,32 @@ function _computeStudentNoteBrut(ev, sid) {
     hasValue = true;
   }
   return hasValue ? sum : null;
+}
+
+// Pastille de niveau de compétence (Type C tableur). niv = nombre (1..n) ou null.
+// Rendu sous forme de badge arrondi coloré (plus reconnaissable qu'une case pleine) ;
+// le mode Sobriété neutralise la couleur via la classe .comp-pill (cf. CSS).
+function _compPillHTML(niv) {
+  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  if (niv == null) {
+    return `<span class="comp-pill comp-pill-empty" style="display:inline-block;min-width:20px;padding:1px 7px;border-radius:11px;border:1px dashed var(--rule-line);color:var(--pencil);font-family:var(--font-mono);font-size:.82em;font-weight:400">${_formatNiveau(0)}</span>`;
+  }
+  const lvl = Math.round(niv);
+  const bg = colors[Math.max(0, Math.min(colors.length - 1, lvl - 1))];
+  const col = _contrastTextColor(bg);
+  return `<span class="comp-pill" style="display:inline-block;min-width:20px;padding:1px 8px;border-radius:11px;background:${bg};color:${col};font-family:var(--font-mono);font-size:.85em;font-weight:700">${_formatNiveau(lvl)}</span>`;
+}
+
+// Bascule la position du bloc Compétences (avant/après le bloc Total/Note) — Type C.
+function _evalToggleCompsPosition(evalId) {
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  pushUndo();
+  ev.compsBeforeTotal = !(ev.compsBeforeTotal === true);
+  ev.updatedAt = Date.now();
+  save();
+  _evalTableurRender();
+  toast(ev.compsBeforeTotal ? '🧩 Compétences placées avant le Total/Note' : '🧩 Compétences placées après le Total/Note');
 }
 
 // ─── Réordonnancement des colonnes Σ « Totaux exercices » (Type C, tableur) ───
@@ -34419,18 +34487,11 @@ function _evalTableurRefreshRowDerived(ev, row) {
     td.style.background = bbg || 'var(--paper-warm)';
     td.style.color = bCol;
   });
-  // Compétences inline (niveau atteint calculé)
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  // Compétences inline (niveau atteint calculé) — rendu en pastille
   row.querySelectorAll('[data-row-comp]').forEach(td => {
     const cid = td.getAttribute('data-row-comp');
     const niv = _evalStudentLevelForComp(ev, sid, cid);
-    const isNull = (niv == null);
-    const idx = Math.max(0, Math.min(colors.length - 1, Math.round(niv) - 1));
-    const cellBg = isNull ? 'var(--paper-warm)' : colors[idx];
-    td.textContent = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
-    td.style.background = cellBg;
-    td.style.color = _contrastTextColor(cellBg);
-    td.style.fontWeight = isNull ? '400' : '700';
+    td.innerHTML = _compPillHTML(niv);
   });
 }
 
@@ -35508,7 +35569,7 @@ function _evalTableurExtractCellText(cell) {
   }
   // Pas d'input : textContent du clone en retirant les badges floats absolus.
   const clone = cell.cloneNode(true);
-  clone.querySelectorAll('.tab-com-badge, .exo-tot-arrows, .exo-tot-grip').forEach(el => el.remove());
+  clone.querySelectorAll('.tab-com-badge, .exo-tot-arrows, .exo-tot-grip, .comp-pos-toggle').forEach(el => el.remove());
   return clone.textContent.replace(/[\t\n]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
