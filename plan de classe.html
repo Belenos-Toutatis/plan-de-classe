@@ -5812,11 +5812,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.13.1';
+const APP_VERSION    = '2.14.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-13T13:40:00Z';
+const APP_BUILD_DATE = '2026-06-15T19:56:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -26487,6 +26487,18 @@ const _NotesExport = (function () {
     if (ev.type === 'A' || ev.type === 'C') {
       // Header questions
       const mns = ev.miniNotes || [];
+      // Bloc Σ « Totaux exercices » (Type C) — colonnes de somme brute par exercice,
+      // dans l'ordre personnalisé affiché à l'écran (ev.exoTotalsOrder). Vide pour Type A.
+      const isCExo = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
+      const exoTotMeta = isCExo
+        ? _evalExoTotalsCurrentOrder(ev).map(key => {
+            const realId = key === '__orphans__' ? null : key;
+            const exo = realId ? (ev.exercices || []).find(e => e.id === realId) : null;
+            const label = exo ? (exo.label || exo.id) : 'Sans exercice';
+            const max = (ev.miniNotes || []).reduce((s, mn) => s + (mn.exerciceId === realId ? (mn.max || 0) : 0), 0);
+            return { realId, label, max };
+          })
+        : [];
       const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
       if (ev.type === 'C') {
         // Affiche aussi l'exercice au-dessus (ligne sup non implémentée — on intègre dans le label)
@@ -26499,6 +26511,7 @@ const _NotesExport = (function () {
       } else {
         for (const mn of mns) head.push(H((mn.label || '') + '\n/' + (mn.max || 0)));
       }
+      for (const em of exoTotMeta) head.push(H('Σ ' + em.label + '\n/' + em.max));
       head.push(H('Total\n/' + (ev.noteMax || 20)));
       head.push(H('Niveau\n1-4'));
       head.push(H('Commentaires'));
@@ -26534,6 +26547,13 @@ const _NotesExport = (function () {
           const cs = comms[mn.id];
           if (Array.isArray(cs) && cs.length) commParts.push((mn.label || mn.id) + ': ' + cs.join(' / '));
         }
+        // Σ par exercice (ordre personnalisé), même calcul que l'écran
+        for (const em of exoTotMeta) {
+          const sum = _computeStudentExoSum(ev, stu.id, em.realId);
+          if (sum == null) { r.push(EMPTY()); continue; }
+          const bg = em.max > 0 ? noteCellBg(sum / em.max * 20) : null;
+          r.push({ v: Math.round(sum * 100) / 100, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
+        }
         const total = _computeStudentEvalNote(ev, stu.id);
         if (total != null) {
           const total20 = (total / (ev.noteMax || 20)) * 20;
@@ -26552,7 +26572,7 @@ const _NotesExport = (function () {
         rows,
         cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
           mns.map(() => ({ width: 9 }))
-        ).concat([{ width: 10 }, { width: 8 }, { width: 30 }, { width: 22 }])
+        ).concat(exoTotMeta.map(() => ({ width: 9 }))).concat([{ width: 10 }, { width: 8 }, { width: 30 }, { width: 22 }])
       };
     }
 
@@ -33598,6 +33618,16 @@ function _evalTableurRender() {
     }
   }
   const showBruteCol = isTypeC && exoGroups.length > 0 && maxBrut !== (ev.noteMax || 20) && maxBrut > 0;
+  // Ordre d'affichage personnalisé du bloc « Totaux exercices » (les colonnes Σ par
+  // exo) — INDÉPENDANT de l'ordre des colonnes de questions. Persisté sur l'éval
+  // (ev.exoTotalsOrder). Les 3 lignes du bloc (sous-en-tête, cellules élèves, footer)
+  // itèrent ce même tableau réordonné ; l'en-tête des questions et exoBoundarySet
+  // continuent d'utiliser exoGroups (ordre naturel) → les questions ne bougent pas.
+  const exoTotalsGroups = (isTypeC && exoGroups.length > 0)
+    ? _evalExoTotalsCurrentOrder(ev)
+        .map(k => exoGroups.find(g => (g.id || '__orphans__') === k))
+        .filter(Boolean)
+    : exoGroups;
 
   let html = '<table id="meval-tableur-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em;font-family:var(--font-sans)">';
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
@@ -33699,12 +33729,27 @@ function _evalTableurRender() {
       ${isTypeC ? _evalTableurCompPickerHTML(mn) : ''}
     </th>`;
   });
-  // Type C avec exos : colonnes Σ regroupées APRÈS toutes les questions
-  if (isTypeC && exoGroups.length > 0) {
-    exoGroups.forEach((g, gi) => {
-      const exoMax = exoMaxes[g.id || '__orphans__'] || 0;
+  // Type C avec exos : colonnes Σ regroupées APRÈS toutes les questions.
+  // Ordre personnalisable (glisser-déposer souris/stylet + flèches ◀ ▶ tactiles).
+  if (isTypeC && exoTotalsGroups.length > 0) {
+    const canReorder = exoTotalsGroups.length >= 2;
+    exoTotalsGroups.forEach((g, gi) => {
+      const key = g.id || '__orphans__';
+      const exoMax = exoMaxes[key] || 0;
       const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
-      html += `<th class="meval-exo-total-head" style="padding:4px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-deep);${borderLeft}font-size:.85em" title="Total ${_esc(g.label)} (sur ${exoMax})">Σ ${_esc(g.label)}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/${exoMax}</span></th>`;
+      const isFirst = gi === 0, isLast = gi === exoTotalsGroups.length - 1;
+      const arrows = canReorder
+        ? `<div class="exo-tot-arrows" style="display:flex;justify-content:center;gap:3px;margin-top:2px" draggable="false">
+             <button type="button" onclick="event.stopPropagation();_evalExoTotalsMove('${_esc(evalId)}','${_esc(key)}',-1)" onmousedown="event.stopPropagation()" ${isFirst ? 'disabled' : ''} title="Déplacer cette colonne vers la gauche" aria-label="Déplacer ${_escAttr('Σ ' + g.label)} vers la gauche" style="border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-blue);border-radius:3px;font-size:.7em;line-height:1;padding:1px 4px;cursor:pointer">◀</button>
+             <button type="button" onclick="event.stopPropagation();_evalExoTotalsMove('${_esc(evalId)}','${_esc(key)}',1)" onmousedown="event.stopPropagation()" ${isLast ? 'disabled' : ''} title="Déplacer cette colonne vers la droite" aria-label="Déplacer ${_escAttr('Σ ' + g.label)} vers la droite" style="border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-blue);border-radius:3px;font-size:.7em;line-height:1;padding:1px 4px;cursor:pointer">▶</button>
+           </div>`
+        : '';
+      const dndAttrs = canReorder
+        ? ` draggable="true" ondragstart="_evalExoTotalDragStart(event,'${_esc(key)}')" ondragover="_evalExoTotalDragOver(event)" ondragleave="_evalExoTotalDragLeave(event)" ondrop="_evalExoTotalDrop(event,'${_esc(evalId)}','${_esc(key)}')" ondragend="_evalExoTotalDragEnd(event)"`
+        : '';
+      const grip = canReorder ? '<span class="exo-tot-grip" style="color:var(--pencil);cursor:grab;font-size:.8em" title="Glisser pour réordonner">⠿</span> ' : '';
+      const tipReorder = canReorder ? ' — glisser ou ◀ ▶ pour réordonner' : '';
+      html += `<th class="meval-exo-total-head" data-exo-total-key="${_esc(key)}"${dndAttrs} style="padding:4px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:64px;font-family:var(--font-mono);font-weight:600;background:var(--paper-deep);${borderLeft}font-size:.85em${canReorder ? ';cursor:grab' : ''}" title="Total ${_esc(g.label)} (sur ${exoMax})${tipReorder}">${grip}Σ ${_esc(g.label)}<br><span style="font-size:.78em;color:var(--pencil);font-weight:normal">/${exoMax}</span>${arrows}</th>`;
     });
   }
   if (!isTypeC || exoGroups.length === 0) {
@@ -33772,8 +33817,9 @@ function _evalTableurRender() {
       html += `<td class="meval-cell-note" style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
-    if (isTypeC && exoGroups.length > 0) {
-      exoGroups.forEach((g, gi) => {
+    // (même ordre personnalisé que le sous-en-tête : exoTotalsGroups)
+    if (isTypeC && exoTotalsGroups.length > 0) {
+      exoTotalsGroups.forEach((g, gi) => {
         const sum = _computeStudentExoSum(ev, sid, g.id);
         const max = exoMaxes[g.id || '__orphans__'] || 0;
         const sbg = (sum != null && max > 0) ? _noteColor(sum, max) : '';
@@ -33835,9 +33881,9 @@ function _evalTableurRender() {
     const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
     html += `<td data-stat-mn="${_esc(mn.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${exoBdr}">${_statsCellHTML(vals, { format: v => _fmtNote(v), noteMax: mn.max })}</td>`;
   });
-  // Type C avec exos : stats Σ par exo regroupées en footer
-  if (isTypeC && exoGroups.length > 0) {
-    exoGroups.forEach((g, gi) => {
+  // Type C avec exos : stats Σ par exo regroupées en footer (ordre personnalisé)
+  if (isTypeC && exoTotalsGroups.length > 0) {
+    exoTotalsGroups.forEach((g, gi) => {
       const sumsExo = sids.map(sid => _computeStudentExoSum(ev, sid, g.id)).filter(v => typeof v === 'number');
       const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
       const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === g.id).reduce((s, m) => s + (m.max || 0), 0);
@@ -33906,6 +33952,104 @@ function _computeStudentNoteBrut(ev, sid) {
     hasValue = true;
   }
   return hasValue ? sum : null;
+}
+
+// ─── Réordonnancement des colonnes Σ « Totaux exercices » (Type C, tableur) ───
+// Clés naturelles du bloc Totaux : un exercice ayant ≥ 1 question, dans l'ordre de
+// ev.exercices, puis '__orphans__' s'il y a des questions sans exercice.
+function _evalExoTotalsKeys(ev) {
+  const keys = [];
+  for (const exo of (ev.exercices || [])) {
+    if ((ev.miniNotes || []).some(mn => mn.exerciceId === exo.id)) keys.push(exo.id);
+  }
+  const hasOrphans = (ev.miniNotes || []).some(mn => !mn.exerciceId || !ev.exercices?.some(e => e.id === mn.exerciceId));
+  if (hasOrphans) keys.push('__orphans__');
+  return keys;
+}
+// Ordre effectif courant = ordre stocké (ev.exoTotalsOrder) filtré sur les clés
+// encore valides, puis les nouvelles clés (exos ajoutés depuis) en ordre naturel.
+function _evalExoTotalsCurrentOrder(ev) {
+  const natural = _evalExoTotalsKeys(ev);
+  const saved = Array.isArray(ev?.exoTotalsOrder) ? ev.exoTotalsOrder : [];
+  const set = new Set(natural);
+  const result = [];
+  for (const k of saved) { if (set.has(k)) { result.push(k); set.delete(k); } }
+  for (const k of natural) { if (set.has(k)) result.push(k); }
+  return result;
+}
+// Décalage d'une colonne Σ d'un cran (flèches ◀ ▶, fiable au tactile).
+function _evalExoTotalsMove(evalId, key, dir) {
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const order = _evalExoTotalsCurrentOrder(ev);
+  const i = order.indexOf(key);
+  if (i < 0) return;
+  const j = i + dir;
+  if (j < 0 || j >= order.length) return;
+  const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+  pushUndo();
+  ev.exoTotalsOrder = order;
+  save();
+  _evalTableurRender();
+}
+
+// Glisser-déposer (souris / stylet) — état + indicateur d'insertion (trait bleu).
+var _evalExoTotalDrag = null;
+function _evalExoTotalClearMarks() {
+  document.querySelectorAll('#meval-tableur-tbl .meval-exo-total-head').forEach(th => {
+    th.style.boxShadow = '';
+    delete th.dataset.dropAfter;
+  });
+}
+function _evalExoTotalDragStart(e, key) {
+  _evalExoTotalDrag = { srcKey: key };
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); } catch (_) {}
+  e.currentTarget.style.opacity = '0.45';
+}
+function _evalExoTotalDragOver(e) {
+  if (!_evalExoTotalDrag) return;
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+  const th = e.currentTarget;
+  const r = th.getBoundingClientRect();
+  const after = (e.clientX - r.left) > r.width / 2;
+  _evalExoTotalClearMarks();
+  // Trait bleu vertical sur le bord où la colonne s'insérera.
+  th.style.boxShadow = after ? 'inset -3px 0 0 0 #2563eb' : 'inset 3px 0 0 0 #2563eb';
+  th.dataset.dropAfter = after ? '1' : '0';
+}
+function _evalExoTotalDragLeave(e) {
+  const th = e.currentTarget;
+  th.style.boxShadow = '';
+  delete th.dataset.dropAfter;
+}
+function _evalExoTotalDrop(e, evalId, key) {
+  e.preventDefault();
+  e.stopPropagation();
+  const after = e.currentTarget.dataset.dropAfter === '1';
+  const drag = _evalExoTotalDrag;
+  _evalExoTotalClearMarks();
+  _evalExoTotalDrag = null;
+  if (!drag || drag.srcKey === key) return;
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const order = _evalExoTotalsCurrentOrder(ev);
+  const from = order.indexOf(drag.srcKey);
+  if (from < 0) return;
+  order.splice(from, 1);
+  let to = order.indexOf(key);
+  if (to < 0) return;
+  if (after) to += 1;
+  order.splice(to, 0, drag.srcKey);
+  pushUndo();
+  ev.exoTotalsOrder = order;
+  save();
+  _evalTableurRender();
+}
+function _evalExoTotalDragEnd(e) {
+  _evalExoTotalClearMarks();
+  document.querySelectorAll('#meval-tableur-tbl .meval-exo-total-head').forEach(th => { th.style.opacity = ''; });
+  _evalExoTotalDrag = null;
 }
 
 // HTML d'un mini-picker de compétence à afficher sous chaque en-tête de
@@ -35364,7 +35508,7 @@ function _evalTableurExtractCellText(cell) {
   }
   // Pas d'input : textContent du clone en retirant les badges floats absolus.
   const clone = cell.cloneNode(true);
-  clone.querySelectorAll('.tab-com-badge').forEach(el => el.remove());
+  clone.querySelectorAll('.tab-com-badge, .exo-tot-arrows, .exo-tot-grip').forEach(el => el.remove());
   return clone.textContent.replace(/[\t\n]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
