@@ -1052,7 +1052,7 @@ L'orientation est imposée via une règle `@page` injectée dynamiquement avant 
 - Bouton **"🔄 Sync ON/OFF"** dans le header (persisté localStorage `planClasse_autoSync`)
 - Quand activé :
   - Après chaque `save()` (debounce 5s), écriture du fichier principal `plan-classe-auto.json`
-  - Au focus de la fenêtre, vérification de `lastModified` du fichier ; si modifié à l'extérieur, popup pour recharger
+  - Au focus de la fenêtre, classification de la version disque par **horloge vectorielle** (cf. ci-dessous) : silence si identique/en retard, popup de rechargement si plus récente, modale de conflit si divergence. (Le `lastModified` n'est plus qu'un gate pas-cher anti re-parse.)
   - Création périodique (max 1 / 10 min) d'un backup horodaté `plan-classe-bk-*.json`
   - Rotation par paliers (plus c'est ancien, plus c'est espacé) :
 
@@ -1066,6 +1066,27 @@ L'orientation est imposée via une règle `@page` injectée dynamiquement avant 
 
 Total max : ~80 backups sur 4 mois.
 
+**Dédup des backups (étape 3)** : un nouveau backup n'est créé que si le **contenu de fond** (hors `savedAt`/`clock`, via `_contentFingerprint(S)`) diffère du dernier backup écrit (`_lastBackupContent`). Évite la prolifération de copies strictement identiques (ouverture d'app, save no-op…). `_lastBackupTs` n'est avancé QUE lors d'une écriture réelle → une vraie modif survenant dans la fenêtre est sauvegardée dès qu'elle arrive.
+
+### Détection de conflit multi-postes (horloge vectorielle — étapes 1 & 2)
+Remplace la comparaison `lastModified` brute (source des faux positifs : Nextcloud retouche le mtime sans changer le contenu) par une classification fondée sur une **horloge vectorielle** qui voyage dans le JSON.
+
+**Socle (étape 1) :**
+- **`_DEVICE_ID`** : identifiant aléatoire stable de CET appareil, en `localStorage` (`planClasse_deviceId`) — **jamais** dans le fichier synchronisé.
+- **`S.clock = { [deviceId]: compteur }`** : horloge vectorielle qui **voyage dans le JSON** (sauvegarde, sync, backups, undo). Chaque appareil n'incrémente que SON compteur. La magnitude est sans importance, seul l'ordre compte.
+- **Monotonie SANS repère privé** : `_clockBumpSelf()` = `S.clock[me] + 1` (la valeur persiste entre reloads via localStorage). **Pas** de high-water global (il injecterait un compteur fantôme dans la lignée partagée lors d'un *adopt* → faux conflits avec un 3ᵉ appareil). Appelé dans `pushUndo()` (toute mutation). L'undo/redo gèrent leur monotonie via **`_clockBumpForward(preMy)`** : capture du compteur AVANT restauration du snapshot, puis `max(restauré, preMy)+1` → ne recule jamais. **Pas** de bump dans `save()` (éviterait une fausse domination lors d'un adopt).
+- **`_clockOnLoad()`** (fin de `postLoadHook`) : init `S.clock`, mémorise **`_baseClock`** (copie de l'horloge chargée).
+- **`_clockMergeMax(target, other)`** : fusion élément par élément (max). **`_clockCompare(a, b)`** → `'equal'` | `'ahead'` (a domine b) | `'behind'` (b domine a) | `'diverged'`.
+
+**Détection (étape 2) :**
+- **`_versionRelation(diskData)`** classe le disque vs `S` : si les deux ont une horloge → `_clockCompare(diskClock, S.clock)` ; sinon **fallback legacy** (`savedAt` + `_dataDiffersIgnoringSavedAt`, qui ignore désormais `savedAt` ET `clock`).
+- **`autoReloadCheck`** (focus) : gate mtime anti re-parse (`_lastParsedMtime`), puis `_versionRelation` → `equal`/`behind` = **silence** (tue les faux positifs) · `ahead` = popup de rechargement · `diverged` = modale conflit. Plus de branche spéciale `_lastDiskWriteTs===0` ni de `_maybeProposeInitialReload` (supprimés — la classification gère le démarrage).
+- **`autoSaveDoIt`** : avant d'écraser, si le disque a bougé → `_versionRelation` → `ahead` = suspend + reload · `diverged` = modale conflit · sinon écrit. Pose `_lastParsedMtime` au mtime réel après écriture.
+- **Modale `mconflict`** (`_openConflictModal`) : deux issues NON destructrices — **`_conflictKeepMine`** (archive l'autre via `_stashVersionToFile(...,'autre')`, fusionne+bump l'horloge pour DOMINER, écrit) · **`_conflictTakeOther`** (archive la mienne, `_applyReloadedData`). Archives = `plan-classe-conflit-{mienne|autre}-AAAA-...json`. Verrou `_conflictPending` (bloque sync/reload pendant la résolution ; relâché à Échap/fond → re-détection au prochain changement disque).
+- `clock` whitelisté dans `_validateImport`. Tests `test/run.test.js` : monotonie `_clockBumpSelf`/`_clockBumpForward`, `_clockMergeMax`, `_clockCompare`, `_versionRelation` (chemin horloge + fallback).
+
+**Étape 3 (faite)** : dédup des backups (cf. section sync ci-dessus) + checkpoints nommés, historique, résumé/diff par version & détection des copies de conflit Nextcloud (cf. *Sauvegardes / chargement* ci-dessous).
+
 ### Indicateur de statut & reprise sur échec (`#autosync-ind`)
 `_showAutoSyncStatus(msg, title?)` met à jour l'indicateur du header (texte + info-bulle `title`). Après une écriture réussie : `💾 HH:MM` (info-bulle vidée). En cas d'échec de `autoSaveDoIt` (exception sur permission / `createWritable` / `write` / `close`) : `⚠️ écriture KO` avec une **info-bulle détaillée** (`_autoSaveErrLabel(e)` traduit `e.name` en libellé lisible : verrou, fichier introuvable, autorisation à ré-accorder, disque plein…). La vraie erreur est aussi loggée (`console.warn('Auto-save échoué :', e)`).
 
@@ -1073,7 +1094,10 @@ Total max : ~80 backups sur 4 mois.
 
 ## Sauvegardes / chargement
 - **Export JSON manuel** : fichier horodaté dans le dossier choisi via "📂 Recharger" (File System Access API, mode `readwrite`). Fallback : téléchargement classique.
-- **Recharger** : modal listant les fichiers `.json` du dossier (les autoSave + backups + exports manuels).
+- **Versions & historique** (modale `mfiles`, `listAndShowFiles`) : liste tous les `.json` du dossier (sync auto + backups + **checkpoints nommés** + archives de conflit + exports). Chaque ligne affiche **icône + type lisible + date + taille** via `_fileKind(name)` (catégorise par préfixe ; extrait le label d'un checkpoint) et `_fmtBytes(n)`. Clic = charge cette version (`loadFromHandle`, avec validation `_validateImport` + confirmation).
+- **Checkpoints nommés (étape 3)** : champ « 📌 Marquer la version actuelle » en tête de `mfiles` → `_makeNamedCheckpoint(label)` écrit `plan-classe-checkpoint-<label-sain>-AAAA-...json` (label nettoyé par `_checkpointSafeLabel`). Sert à poser un repère avant une opération risquée (« avant conseil T2 »).
+- **Résumé/diff par version** : bouton **ℹ️** par ligne → `_toggleVersionInfo(idx)` parse le fichier à la demande (lazy) et déplie un panneau inline `_versionInfoHTML` : compteurs de la version (`_versionSummary` : classes, élèves, évals, salles, appels) + **delta vs état courant** (Δ coloré). Re-clic = referme.
+- **Copies de conflit Nextcloud** : `_fileKind` reconnaît les copies créées par Nextcloud lui-même (EN « conflicted copy », FR « copie en conflit ») → badge ⚠️ « Conflit Nextcloud » (distinct de NOS archives `plan-classe-conflit-*`). `_passiveNcConflictCheck()` (3,5 s après `init`) toast une fois si détectées. `_findNextcloudConflictCopies()` les liste.
 - **Import JSON** : fichier local quelconque, avec confirmation.
 
 ## Export tableur des notes (XLSX + ODS) — module `_NotesExport`
@@ -1614,15 +1638,50 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
   - Badge **★** (étoile orange) dans l'en-tête de colonne, tooltip explicite le mode (improveOnly / bonus / over10).
   - **Cellules non comptées** pour un élève : `opacity:.55` + hachures renforcées (alpha .42, pas 10px) superposées à la couleur de barème. Lisible même sur fond foncé (vert, rouge soutenu). Tooltip : `★ Facultative — NON comptée pour cet élève (mode : X)`. Calcul via `_computeStudentFacultativeCounted(classId, sid, periode)` qui miroie la logique de moyenne pour tracker les facultatives effectivement comptées.
 - **Séparateur vertical entre colonnes d'éval** : classe CSS `.bilan-evalcell` (border-right `1px solid var(--rule-line-soft)`) appliquée aux cellules d'éval des deux bilans (Notes + Compétences). Aide à distinguer les valeurs quand un élève a la même note/niveau sur plusieurs colonnes consécutives. Discret par construction (couleur Seyès du design system).
-- **Colonne 🎓 Conseil** (par période) à droite de Remarque : 4 boutons-pastilles `F` (vert) · `E` (bleu) · `AT` (orange) · `AC` (rouge). F et E mutuellement exclusifs. AT et AC cumulables entre eux et avec F/E. Storage `S.conseilClasse[classId][sid][periode] = { F, E, AT, AC }`. Footer du tableau : totaux par période sous forme de pastilles. `_toggleConseilClasse` préserve la position de scroll de `.bilan-table-scroll` lors du re-render.
+- **Colonne 🎓 Conseil** (par période) à droite de Remarque : boutons-pastilles dont les **mentions sont entièrement paramétrables** (cf. section *Conseil de classe — mentions configurables*). Défauts : `F` Félicitations (bleu) · `E` Encouragements (vert) · `AT` Avertissement travail (orange) · `AC` Avertissement comportement (rouge), avec incompatibilités par défaut `F⊗E`, `E⊗AT`, `E⊗AC`. Storage `S.conseilClasse[classId][disciplineId][sid][periode] = { [mentionId]: true }`. La cellule porte `class="bilan-conseil-cell"` + `data-active="abbr1+abbr2"` (lu par le scrape Copier/CSV). Footer du tableau : totaux par mention sous forme de pastilles. `_toggleConseilClasse` applique les incompatibilités par paires et préserve la position de scroll de `.bilan-table-scroll` lors du re-render.
 - **Préservation du scroll au save de remarque élève** : `_bilanStuRemSave` (modale `mbilan-stuRem`, ouverte via clic sur une note dans le tableau) capture `scrollTop`/`scrollLeft` de `.bilan-table-scroll` avant le re-render et les restaure après — sinon le tableau saute en haut à chaque validation, pénible sur une grande classe quand on annote en bas. Même pattern que `_toggleConseilClasse`.
+
+### Conseil de classe — mentions configurables
+
+Les mentions de la colonne 🎓 Conseil (Félicitations, Encouragements, Avertissements…) forment un **catalogue global paramétrable** — comme les tags / disciplines. Plus de `F/E/AT/AC` codés en dur.
+
+#### Modèle
+```js
+S.conseilMentions = {                              // catalogue global (keyé par id)
+  cm_fel: { id, nom: 'Félicitations', abbr: 'F', color: '#2563eb', ord: 0 },
+  cm_enc: { id, nom: 'Encouragements', abbr: 'E', color: '#16a34a', ord: 1 },
+  cm_avt: { id, nom: 'Avertissement travail', abbr: 'AT', color: '#d97706', ord: 2 },
+  cm_avc: { id, nom: 'Avertissement comportement', abbr: 'AC', color: '#dc2626', ord: 3 },
+}
+S.conseilIncompat = ['cm_enc|cm_fel', 'cm_avt|cm_enc', 'cm_avc|cm_enc']  // paires d'ids triés
+S.conseilClasse[classId][disciplineId][sid][periode] = { [mentionId]: true }  // attributions
+```
+Défauts seedés dans `postLoadHook()` **uniquement si `S.conseilMentions` absent** (= fichier antérieur à la feature → bascule sur les nouveaux défauts : F bleu, E vert, incompatibilités `F⊗E`, `E⊗AT`, `E⊗AC` ; F reste compatible avec les avertissements). Couleurs passées par `_safeColor` au chargement.
+
+#### Incompatibilité = par paires (pas des « groupes »)
+Seul modèle capable d'exprimer les règles asymétriques : E exclut les avertissements mais F non, et AT+AC cohabitent. Activer une mention retire automatiquement ses incompatibles chez l'élève (`_toggleConseilClasse`). Helpers : `_conseilIncompatKey(a,b)` (ids triés joints par `|`), `_conseilAreIncompat`, `_conseilToggleIncompat`.
+
+#### Migration des valeurs legacy
+`_migrateConseilValues()` (dans `postLoadHook`, APRÈS `_bulletinWrapAll` pour avoir la structure à 4 niveaux) remappe chaque feuillet `{ F, E, AT, AC }` → `{ cm_fel, cm_enc, cm_avt, cm_avc }`. Idempotent (ne réécrit que les feuillets contenant encore une clé legacy).
+
+#### Helpers de lecture / rendu
+- `_conseilMentionsSorted()` — mentions triées par `ord` puis `abbr`.
+- `_getConseilActive(classId, sid, periode, channel)` — `Set` des mentionIds actifs (filtré aux mentions encore au catalogue).
+- `_conseilBtnHTML(mention, isOn, …)` — pastille (couleur du catalogue, texte via `_contrastTextColor`).
+- Bilan des notes : colonne + footer bouclent sur `_conseilMentionsSorted()`. Cellules marquées `class="bilan-conseil-cell"` + `data-active` (lu par le scrape export).
+
+#### Configuration (Réglages → 🎓 Conseil de classe → modale `mconseil-mentions`)
+`openConseilMentions` / `renderConseilMentions`. Par mention : abréviation éditable (1–4 car. maj., unique), nom, couleur, compteur d'attributions, suppression (cascade `_conseilPurgeMention` : retire la mention de tous les feuillets + nettoie les paires `conseilIncompat`), et pastilles « ⊘ incompatible avec : … » (rouge = incompatible, clic = bascule symétrique). Ajout via formulaire bas de modale. Toutes les mutations : `pushUndo` + `save` + re-render bilan si ouvert (`_conseilRefreshBilan`).
+
+#### Couverture
+Exports XLSX/ODS (synthèse + bilan période) et scrape Copier/CSV bouclent sur le catalogue. `_validateImport` whiteliste `conseilMentions` + `conseilIncompat`. `_purgeStudentRefs` / `_purgeClassRefs` inchangés (keyés par sid/classId, agnostiques à la forme du feuillet). Tests de régression dans `test/run.test.js` (migration, incompatibilités, purge).
 
 ### Export Copier / CSV — modale de sélection des colonnes (`mbilan-export`)
 
 Les boutons **📋 Copier tout** et **💾 CSV** du Bilan des notes ouvrent désormais une modale intermédiaire qui liste **toutes les colonnes du tableau affiché** (en-têtes scrapés depuis le DOM) avec checkbox. L'utilisateur coche/décoche, puis confirme → export filtré dans l'ordre du tableau.
 
 - État : `_bilanExportState = { mode: 'copy'|'csv', data, checked: boolean[] }`. Reset à chaque ouverture (toutes cochées par défaut).
-- Source de vérité = `_bilanScrapeTableForExport()` : scrape head/body/foot du `#bilan-tbl` rendu, gère les textareas (remarques → `.value`), les pastilles Conseil (extrait F/E/AT/AC actifs séparés par `+`), les en-têtes d'éval (libellé + `(×coef)` depuis l'input numéro). Garantit que l'export reflète EXACTEMENT ce que l'utilisateur voit (tri, groupement par période, colonnes masquées, orphelines incluses ou non).
+- Source de vérité = `_bilanScrapeTableForExport()` : scrape head/body/foot du `#bilan-tbl` rendu, gère les textareas (remarques → `.value`), les cellules Conseil (lit `data-active` sur `.bilan-conseil-cell` — abréviations actives séparées par `+`, robuste aux mentions personnalisées), les en-têtes d'éval (libellé + `(×coef)` depuis l'input numéro). Garantit que l'export reflète EXACTEMENT ce que l'utilisateur voit (tri, groupement par période, colonnes masquées, orphelines incluses ou non).
 - `_bilanCopyAll()` / `_bilanDownloadCsv()` sont devenus des wrappers vers `_bilanOpenExport('copy'|'csv')`.
 - Confirmation (`_bilanExportConfirm`) construit les lignes filtrées et copie au clipboard ou télécharge `bilan-<classe>-<période>.csv`.
 - Toast d'avertissement si 0 colonne cochée.
@@ -1738,7 +1797,7 @@ ev.disciplineId = 'disc_svt_bil'
 S.bulletinRemarques[classId][disciplineId][sid][periode]      = "texte"
 S.bulletinClassRemarques[classId][disciplineId][periode]      = "texte"
 S.bulletinWorkedItems[classId][disciplineId][periode]         = [items]
-S.conseilClasse[classId][disciplineId][sid][periode]          = { F, E, AT, AC }
+S.conseilClasse[classId][disciplineId][sid][periode]          = { [mentionId]: true }
 ```
 
 ### Helpers principaux

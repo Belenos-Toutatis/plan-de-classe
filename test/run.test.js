@@ -432,3 +432,198 @@ test('_auditState : répare des dimensions de salle invalides (NaN / 0 / hors bo
   assert.equal(ev('S.salles.r1.rows'), 5);
   assert.equal(ev('S.salles.r1.cols'), 6);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conseil de classe — mentions configurables (catalogue + incompatibilités).
+// Migration legacy {F,E,AT,AC} → {cm_*:true}, règles d'incompatibilité par paires,
+// purge en cascade d'une mention supprimée.
+// ─────────────────────────────────────────────────────────────────────────────
+function _seedConseil() {
+  setState({
+    classes: {}, eleves: {}, salles: {}, tabletPools: {}, evaluations: {},
+    attendance: {}, snapshots: {}, movedHighlights: {},
+    conseilMentions: {
+      cm_fel: { id: 'cm_fel', nom: 'Félicitations', abbr: 'F', color: '#2563eb', ord: 0 },
+      cm_enc: { id: 'cm_enc', nom: 'Encouragements', abbr: 'E', color: '#16a34a', ord: 1 },
+      cm_avt: { id: 'cm_avt', nom: 'Avertissement travail', abbr: 'AT', color: '#d97706', ord: 2 },
+      cm_avc: { id: 'cm_avc', nom: 'Avertissement comportement', abbr: 'AC', color: '#dc2626', ord: 3 },
+    },
+    conseilIncompat: ['cm_enc|cm_fel', 'cm_avt|cm_enc', 'cm_avc|cm_enc'],
+    conseilClasse: {},
+  });
+}
+
+test('conseil : _migrateConseilValues remappe le legacy {F,E,AT,AC} et est idempotent', () => {
+  _seedConseil();
+  ev(`S.conseilClasse = { C1: { disc_main: { s1: { S1: { F: true, AT: true }, S2: { E: true } } } } };
+      _migrateConseilValues();`);
+  assert.deepEqual(get("S.conseilClasse.C1.disc_main.s1.S1"), { cm_fel: true, cm_avt: true });
+  assert.deepEqual(get("S.conseilClasse.C1.disc_main.s1.S2"), { cm_enc: true });
+  const before = get("S.conseilClasse.C1.disc_main.s1.S1");
+  ev("_migrateConseilValues();");
+  assert.deepEqual(get("S.conseilClasse.C1.disc_main.s1.S1"), before); // idempotent
+});
+
+test('conseil : incompatibilités par paires (E retire F et les avertissements ; AT+AC cumulables)', () => {
+  _seedConseil();
+  // F puis E → E retire F
+  ev("_toggleConseilClasse('C1','sX','S1','cm_fel','disc_main'); _toggleConseilClasse('C1','sX','S1','cm_enc','disc_main');");
+  assert.deepEqual(get("Array.from(_getConseilActive('C1','sX','S1','disc_main')).sort()"), ['cm_enc']);
+  // AT + AC cumulables
+  ev("_toggleConseilClasse('C1','sY','S1','cm_avt','disc_main'); _toggleConseilClasse('C1','sY','S1','cm_avc','disc_main');");
+  assert.deepEqual(get("Array.from(_getConseilActive('C1','sY','S1','disc_main')).sort()"), ['cm_avc', 'cm_avt']);
+  // E retire AT ET AC (défauts E⊗AT, E⊗AC)
+  ev("_toggleConseilClasse('C1','sY','S1','cm_enc','disc_main');");
+  assert.deepEqual(get("Array.from(_getConseilActive('C1','sY','S1','disc_main')).sort()"), ['cm_enc']);
+  // Retrait du dernier marqueur → feuillet supprimé
+  ev("_toggleConseilClasse('C1','sX','S1','cm_enc','disc_main');");
+  assert.equal(ev("!!(S.conseilClasse.C1 && S.conseilClasse.C1.disc_main && S.conseilClasse.C1.disc_main.sX)"), false);
+});
+
+test('conseil : _conseilPurgeMention retire la mention partout + nettoie les paires', () => {
+  _seedConseil();
+  ev(`S.conseilClasse = { C1: { disc_main: { a: { S1: { cm_fel: true, cm_enc: true } }, b: { S1: { cm_fel: true } } } } };
+      _conseilPurgeMention('cm_fel');`);
+  assert.deepEqual(get("S.conseilClasse.C1.disc_main.a.S1"), { cm_enc: true });
+  assert.equal(ev("!!(S.conseilClasse.C1.disc_main.b && S.conseilClasse.C1.disc_main.b.S1)"), false); // feuillet vidé
+  assert.deepEqual(get("S.conseilIncompat"), ['cm_avt|cm_enc', 'cm_avc|cm_enc']); // cm_enc|cm_fel retiré
+});
+
+test('conseil : _conseilIncompatKey trié + _conseilAreIncompat symétrique', () => {
+  _seedConseil();
+  assert.equal(ev("_conseilIncompatKey('cm_fel','cm_enc')"), 'cm_enc|cm_fel');
+  assert.equal(ev("_conseilAreIncompat('cm_fel','cm_enc')"), true);
+  assert.equal(ev("_conseilAreIncompat('cm_enc','cm_fel')"), true);
+  assert.equal(ev("_conseilAreIncompat('cm_fel','cm_avt')"), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Horloge de version (socle multi-postes — étape 1). deviceId + horloge
+// vectorielle monotone, base de chargement, classification disque/mémoire.
+// ─────────────────────────────────────────────────────────────────────────────
+test('clock : _clockBumpSelf incrémente mon compteur', () => {
+  setState({ classes: {}, eleves: {}, salles: {}, clock: {} });
+  const k = JSON.stringify(ev('_DEVICE_ID'));
+  ev('_clockBumpSelf()'); assert.equal(get(`S.clock[${k}]`), 1);
+  ev('_clockBumpSelf()'); assert.equal(get(`S.clock[${k}]`), 2);
+});
+
+test('clock : _clockBumpForward ne recule jamais (monotonie de l\'undo)', () => {
+  const k = JSON.stringify(ev('_DEVICE_ID'));
+  setState({ classes: {}, eleves: {}, salles: {}, clock: { [ev('_DEVICE_ID')]: 5 } });
+  ev('_clockBumpForward(5)'); assert.equal(get(`S.clock[${k}]`), 6);
+  // Simule un undo qui restaure un S.clock antérieur (sans mon entrée) :
+  ev('S.clock = {}');
+  ev('_clockBumpForward(6)'); assert.equal(get(`S.clock[${k}]`), 7, 'avance depuis le compteur pré-undo');
+});
+
+test('clock : _clockMergeMax fusionne élément par élément (max)', () => {
+  assert.deepEqual(
+    JSON.parse(ev('(function(){const t={A:2,B:1};_clockMergeMax(t,{A:1,B:5,C:3});return JSON.stringify(t)})()')),
+    { A: 2, B: 5, C: 3 });
+});
+
+test('clock : _clockOnLoad init l\'horloge + mémorise la base, garde les autres', () => {
+  const me = ev('_DEVICE_ID');
+  const k = JSON.stringify(me);
+  setState({ classes: {}, eleves: {}, salles: {}, clock: { [me]: 3, autreposte: 4 } });
+  ev('_clockOnLoad()');
+  assert.equal(get(`S.clock[${k}]`), 3, 'mon compteur inchangé');
+  assert.equal(get('S.clock.autreposte'), 4, 'horloge des autres appareils préservée');
+  assert.deepEqual(get('_baseClock'), get('S.clock'), '_baseClock = copie de l\'horloge chargée');
+});
+
+test('clock : _clockCompare classe equal / ahead / behind / diverged', () => {
+  assert.equal(ev('_clockCompare({A:2,B:3},{A:2,B:3})'), 'equal');
+  assert.equal(ev('_clockCompare({A:3,B:3},{A:2,B:3})'), 'ahead');
+  assert.equal(ev('_clockCompare({A:2,B:3},{A:2,B:4})'), 'behind');
+  assert.equal(ev('_clockCompare({A:3,B:2},{A:2,B:3})'), 'diverged');
+  assert.equal(ev('_clockCompare({},{})'), 'equal');
+  assert.equal(ev('_clockCompare({A:1},{})'), 'ahead');
+  assert.equal(ev('_clockCompare({},{A:1})'), 'behind');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Détection de conflit (étape 2) — classification disque vs mémoire.
+// ─────────────────────────────────────────────────────────────────────────────
+test('versionRelation : chemin horloge (les deux ont une horloge)', () => {
+  setState({ classes: {}, eleves: {}, salles: {}, clock: { A: 2, B: 3 } });
+  assert.equal(ev('_versionRelation({clock:{A:2,B:3}})'), 'equal');
+  assert.equal(ev('_versionRelation({clock:{A:3,B:3}})'), 'ahead');    // le disque domine
+  assert.equal(ev('_versionRelation({clock:{A:2,B:2}})'), 'behind');   // je domine
+  assert.equal(ev('_versionRelation({clock:{A:3,B:2}})'), 'diverged'); // divergence
+});
+
+test('versionRelation : fallback legacy (un côté sans horloge → savedAt + contenu)', () => {
+  setState({ classes: {}, eleves: {}, salles: {}, clock: {}, savedAt: 5 });
+  // Contenu identique (savedAt/clock ignorés) → equal, même si savedAt diffère :
+  assert.equal(ev('_versionRelation({classes:{},eleves:{},salles:{},savedAt:9})'), 'equal');
+  // Contenu différent + savedAt disque plus récent → ahead :
+  assert.equal(ev('_versionRelation({classes:{c1:{}},eleves:{},salles:{},savedAt:9})'), 'ahead');
+  // Contenu différent + savedAt disque plus ancien → behind :
+  assert.equal(ev('_versionRelation({classes:{c1:{}},eleves:{},salles:{},savedAt:1})'), 'behind');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dédup des backups + robustesse conflit (étape 3a).
+// ─────────────────────────────────────────────────────────────────────────────
+test('contentFingerprint : ignore savedAt/clock, distingue le contenu', () => {
+  assert.equal(
+    ev('_contentFingerprint({classes:{c1:{}},savedAt:1,clock:{A:1}})'),
+    ev('_contentFingerprint({classes:{c1:{}},savedAt:999,clock:{A:5}})'),
+    'même contenu, métadonnées différentes → même empreinte');
+  assert.notEqual(
+    ev('_contentFingerprint({classes:{c1:{}}})'),
+    ev('_contentFingerprint({classes:{c2:{}}})'),
+    'contenu différent → empreinte différente');
+});
+
+test('versionRelation : contenu identique → equal même si horloges divergentes', () => {
+  setState({ classes: {}, eleves: {}, salles: {}, clock: { A: 3, B: 2 } });
+  // Horloges divergentes ({A:2,B:3} vs {A:3,B:2}) MAIS contenu identique → equal :
+  assert.equal(ev('_versionRelation({classes:{},eleves:{},salles:{},clock:{A:2,B:3}})'), 'equal');
+  // Même horloge divergente mais contenu RÉELLEMENT différent → diverged :
+  assert.equal(ev('_versionRelation({classes:{c1:{}},eleves:{},salles:{},clock:{A:2,B:3}})'), 'diverged');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Historique / checkpoints nommés (étape 3b).
+// ─────────────────────────────────────────────────────────────────────────────
+test('fileKind : catégorise auto / backup / checkpoint (label) / conflit / export', () => {
+  assert.equal(get("_fileKind('plan-classe-auto.json').label"), 'Sync auto');
+  assert.equal(get("_fileKind('plan-classe-bk-2026-06-17-14h30m.json').label"), 'Backup');
+  assert.equal(get("_fileKind('plan-classe-checkpoint-avant_conseil_T2-2026-06-17-14h30m15s.json').label"), 'Point « avant conseil T2 »');
+  assert.equal(get("_fileKind('plan-classe-conflit-autre-2026-06-17-14h30m15s.json').label"), 'Archive conflit');
+  assert.equal(get("_fileKind('mon-export.json').label"), 'Export');
+});
+
+test('fmtBytes : o / Ko / Mo', () => {
+  assert.equal(ev("_fmtBytes(500)"), '500 o');
+  assert.equal(ev("_fmtBytes(2048)"), '2 Ko');
+  assert.equal(ev("_fmtBytes(1572864)"), '1,5 Mo');
+});
+
+test('checkpointSafeLabel : nettoie les caractères de chemin + espaces, borne, défaut', () => {
+  assert.equal(ev(`_checkpointSafeLabel('avant conseil/T2')`), 'avant_conseilT2');
+  assert.equal(ev(`_checkpointSafeLabel('')`), 'point');
+  assert.equal(ev(`_checkpointSafeLabel('a'.repeat(60)).length`), 40);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Résumé de version + copies de conflit Nextcloud (étape 3 — fin).
+// ─────────────────────────────────────────────────────────────────────────────
+test('versionSummary : compte classes/élèves/évals/salles/appels', () => {
+  const s = get(`_versionSummary({classes:{a:{},b:{}},eleves:{s1:{}},evaluations:{},salles:{r:{}},attendance:{c1:{r1:{},r2:{}},c2:{r3:{}}},savedAt:123})`);
+  assert.equal(s.classes, 2);
+  assert.equal(s.eleves, 1);
+  assert.equal(s.evaluations, 0);
+  assert.equal(s.salles, 1);
+  assert.equal(s.attendance, 3);  // somme des records sur toutes les classes
+  assert.equal(s.savedAt, 123);
+});
+
+test('fileKind : distingue NOS archives conflit des copies Nextcloud', () => {
+  assert.equal(get(`_fileKind('plan-classe-conflit-autre-2026-06-17-14h30m15s.json').label`), 'Archive conflit');
+  assert.equal(get(`_fileKind('plan-classe-auto (conflicted copy 2026-06-17).json').label`), 'Conflit Nextcloud');
+  assert.equal(get(`_fileKind('plan-classe-auto (copie en conflit 2026-06-17).json').label`), 'Conflit Nextcloud');
+});
