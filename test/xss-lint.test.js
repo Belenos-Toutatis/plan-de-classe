@@ -27,15 +27,22 @@ test('XSS-lint : aucun champ élève/éval interpolé en clair dans un fragment 
   const file = path.join(__dirname, '..', 'plan de classe.html');
   const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
   const SEG = /\$\{[^}()]*\.(prenom|nom|nomCourt|nomLong|descriptif|remarque|abbr|prefix|name)\b[^}()]*\}/g;
+  // Variante avec appel : `.nom` / `.prenom` suivi de `.toUpperCase()` dans la même
+  // interpolation (ex. `${(stu.nom||'').toUpperCase()}`) — le SEG principal exclut
+  // les parenthèses et raterait ce motif.
+  const SEG_UPPER = /\$\{[^}]*\.(nom|prenom)\b[^}]*\.toUpperCase\(\)[^}]*\}/g;
   const findings = [];
   for (let i = 0; i < lines.length; i++) {
     const L = lines[i];
     if (/^\s*(\/\/|\*|<!--)/.test(L)) continue; // ligne de commentaire (JS // ou * , ou HTML) → ignorée
     if (!/<[a-zA-Z]/.test(L)) continue;       // doit ressembler à un fragment HTML
-    let m; SEG.lastIndex = 0;
-    while ((m = SEG.exec(L))) {
-      if (/_esc/.test(m[0])) continue;        // déjà échappé
-      findings.push(`L${i + 1}: ${m[0].trim()}  →  ${L.trim().slice(0, 120)}`);
+    let m;
+    for (const RE of [SEG, SEG_UPPER]) {
+      RE.lastIndex = 0;
+      while ((m = RE.exec(L))) {
+        if (/_esc/.test(m[0])) continue;        // déjà échappé
+        findings.push(`L${i + 1}: ${m[0].trim()}  →  ${L.trim().slice(0, 120)}`);
+      }
     }
   }
   assert.deepEqual(

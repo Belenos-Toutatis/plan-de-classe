@@ -5878,11 +5878,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.19.1';
+const APP_VERSION    = '2.20.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-06-23T20:53:00Z';
+const APP_BUILD_DATE = '2026-07-02T03:19:09Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7037,6 +7037,10 @@ function migrateEvalDefaults() {
     if (ev.type !== 'B' && !Array.isArray(ev.miniNotes)) ev.miniNotes = [];
     if (ev.type === 'B' && !Array.isArray(ev.passations)) ev.passations = [];
     if (ev.type === 'C' && !Array.isArray(ev.exercices)) ev.exercices = [];
+    // Barème et coefficient : normalise les valeurs non numériques / hors bornes
+    // (noteMax > 0 obligatoire, défaut 20 ; coef ≥ 0 autorisé — 0 est légitime, défaut 1)
+    if (!Number.isFinite(+ev.noteMax) || +ev.noteMax <= 0) ev.noteMax = 20; else ev.noteMax = +ev.noteMax;
+    if (!Number.isFinite(+ev.coef) || +ev.coef < 0) ev.coef = 1; else ev.coef = +ev.coef;
     // Notes par élève
     if (!ev.notes || typeof ev.notes !== 'object') ev.notes = {};
     // Champs auxiliaires couramment lus
@@ -7197,6 +7201,15 @@ function deleteTag(id) {
   // Détache les classes recomposées qui pointaient vers ce tag (mais ne les supprime pas)
   for (const c of Object.values(S.classes)) {
     if (c.virtual && c.fromTag === id) c.fromTag = null;
+  }
+  // Retire le tag de toutes les PLACES (room.posTagId) de toutes les classes
+  for (const c of Object.values(S.classes)) {
+    for (const room of Object.values(c.rooms || {})) {
+      if (!room.posTagId) continue;
+      for (const k of Object.keys(room.posTagId)) {
+        if (room.posTagId[k] === id) delete room.posTagId[k];
+      }
+    }
   }
 }
 function studentHasAllTags(stu, tagSet) {
@@ -8045,7 +8058,7 @@ let _baseClock = {};   // horloge de l'état chargé (référence pour la détec
 // appareil lors d'un « prendre l'autre ». L'undo gère sa monotonie via _clockBumpForward.
 function _clockBumpSelf() {
   if (!S.clock || typeof S.clock !== 'object') S.clock = {};
-  S.clock[_DEVICE_ID] = (S.clock[_DEVICE_ID] || 0) + 1;
+  S.clock[_DEVICE_ID] = (+S.clock[_DEVICE_ID] || 0) + 1;
 }
 // Bump « en avant » après undo/redo : le compteur ne recule pas sous sa valeur
 // pré-restauration (preMy), même si le snapshot restauré en porte une plus basse.
@@ -8062,6 +8075,9 @@ function _clockMergeMax(target, other) {
 // (= horloge de la version chargée, référence pour _versionRelation).
 function _clockOnLoad() {
   if (!S.clock || typeof S.clock !== 'object') S.clock = {};
+  // Normalise les valeurs (un JSON forgé/corrompu peut porter des strings → la
+  // concaténation "5"+1="51" fausserait comparaisons et monotonie).
+  for (const d of Object.keys(S.clock)) S.clock[d] = Math.max(0, Math.floor(+S.clock[d]) || 0);
   _baseClock = JSON.parse(JSON.stringify(S.clock));
 }
 // Compare deux horloges vectorielles → 'equal' | 'ahead' (a domine b) |
@@ -8191,8 +8207,11 @@ function undoLast() {
   redoStack.push(JSON.stringify(S));
   if (redoStack.length > MAX_UNDO) redoStack.shift();
   const _preMy = (S.clock && S.clock[_DEVICE_ID]) || 0;
+  const _preClock = { ...(S.clock || {}) };
   S = JSON.parse(undoStack.pop());
   applyAccessorsAll();
+  if (!S.clock || typeof S.clock !== 'object') S.clock = {};
+  _clockMergeMax(S.clock, _preClock);  // les compteurs des AUTRES appareils ne reculent jamais (sinon faux conflit après « Garder ma version »)
   _clockBumpForward(_preMy);  // l'annulation est une nouvelle version (horloge en avant, jamais en arrière)
   _applyFeatureFlags();
   updateUndoRedoUI();
@@ -8211,8 +8230,11 @@ function redoLast() {
   undoStack.push(JSON.stringify(S));
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   const _preMy = (S.clock && S.clock[_DEVICE_ID]) || 0;
+  const _preClock = { ...(S.clock || {}) };
   S = JSON.parse(redoStack.pop());
   applyAccessorsAll();
+  if (!S.clock || typeof S.clock !== 'object') S.clock = {};
+  _clockMergeMax(S.clock, _preClock);  // les compteurs des AUTRES appareils ne reculent jamais
   _clockBumpForward(_preMy);  // refaire = nouvelle version (horloge en avant)
   _applyFeatureFlags();
   updateUndoRedoUI();
@@ -8415,6 +8437,7 @@ function ctxToggleSubmenu(event, el) {
 // - sinon → active la clé en supprimant les autres du MÊME groupe (l'autre groupe reste intact)
 function _toggleStuStatus(id, statusKey, label, emoji) {
   const s = S.eleves[id]; if (!s) return;
+  pushUndo();
   const wasActive = !!s[statusKey];
   if (wasActive) s[statusKey] = false;
   else _setStudentStatusExclusive(s, statusKey);
@@ -8435,6 +8458,7 @@ function toggleStuAgrandissement(id) { _toggleStuStatus(id, 'agrandissement', 'A
 // ULIS : Aucun → ULIS (hors classe) → ULIS+ (inclusion) → Aucun.
 function cycleStuUlis(id) {
   const s = S.eleves[id]; if (!s) return;
+  pushUndo();
   let msg;
   if (s.ulis_incl)  { s.ulis_incl = false; s.ulis = false; msg = '⚪ ULIS retiré'; }
   else if (s.ulis)  { _setStudentStatusExclusive(s, 'ulis_incl'); msg = '🟣 ULIS inclusion activé'; }
@@ -8445,6 +8469,7 @@ function cycleStuUlis(id) {
 // UPE2A : Aucun → UPE2A (hors classe) → UPE2A+ (inclusion) → Aucun.
 function cycleStuUpe2a(id) {
   const s = S.eleves[id]; if (!s) return;
+  pushUndo();
   let msg;
   if (s.upe2a_incl) { s.upe2a_incl = false; s.upe2a = false; msg = '⚪ UPE2A retiré'; }
   else if (s.upe2a) { _setStudentStatusExclusive(s, 'upe2a_incl'); msg = '🟥 UPE2A inclusion activé'; }
@@ -8470,6 +8495,7 @@ function _ctxToggleStatus(statusKey, label, emoji) {
   if (!ctxTarget) return;
   const s = S.eleves[ctxTarget.sid];
   if (!s) return closeCtxMenu();
+  pushUndo();
   const wasActive = !!s[statusKey];
   if (wasActive) s[statusKey] = false;
   else _setStudentStatusExclusive(s, statusKey);
@@ -9122,8 +9148,21 @@ function deleteTagConfirm(id) {
   for (const stu of Object.values(S.eleves)) {
     if (Array.isArray(stu.tags) && stu.tags.includes(id)) n++;
   }
-  const msg = n > 0
-    ? `Supprimer le tag "${t.abbr}" ?\nIl est utilisé par ${n} élève(s) et sera retiré de tous.\n\n(Annulable via Ctrl+Z)`
+  // Compte aussi les PLACES portant ce tag (room.posTagId)
+  let nPlaces = 0;
+  for (const c of Object.values(S.classes)) {
+    for (const room of Object.values(c.rooms || {})) {
+      if (!room.posTagId) continue;
+      for (const k of Object.keys(room.posTagId)) {
+        if (room.posTagId[k] === id) nPlaces++;
+      }
+    }
+  }
+  const usages = [];
+  if (n > 0) usages.push(`${n} élève(s)`);
+  if (nPlaces > 0) usages.push(`${nPlaces} place(s)`);
+  const msg = usages.length
+    ? `Supprimer le tag "${t.abbr}" ?\nIl est utilisé par ${usages.join(' et ')} et sera retiré partout.\n\n(Annulable via Ctrl+Z)`
     : `Supprimer le tag "${t.abbr}" ?\n\n(Annulable via Ctrl+Z)`;
   _uiConfirm({
     title: '🗑 Supprimer le tag', okLabel: '🗑 Supprimer', okClass: 'btn-d', message: msg,
@@ -9868,11 +9907,34 @@ function mvcSave() {
       if (!newSet.has(oldSid)) {
         if (cls.rooms) {
           for (const room of Object.values(cls.rooms)) {
-            if (!room?.seating) continue;
-            for (const k of Object.keys(room.seating)) {
-              if (room.seating[k] === oldSid) delete room.seating[k];
+            if (!room) continue;
+            // Siège + affectation tablette de la clé libérée (même style que _purgeStudentRefs)
+            for (const k of Object.keys(room.seating || {})) {
+              if (room.seating[k] !== oldSid) continue;
+              delete room.seating[k];
+              if (room.ipadsByPool) {
+                for (const pool of Object.values(room.ipadsByPool)) {
+                  if (!pool) continue;
+                  ['ce','g1','g2','g3'].forEach(m => { if (pool[m]) delete pool[m][k]; });
+                }
+              }
+            }
+            // Contraintes de place + liens AESH
+            if (room.allowedFor) delete room.allowedFor[oldSid];
+            if (room.aeshLinks) {
+              for (const idx of Object.keys(room.aeshLinks)) {
+                if (Array.isArray(room.aeshLinks[idx]))
+                  room.aeshLinks[idx] = room.aeshLinks[idx].filter(sid => sid !== oldSid);
+              }
             }
           }
+        }
+        // Paires à séparer contenant l'élève retiré
+        if (Array.isArray(cls.noNeighbors)) {
+          cls.noNeighbors = cls.noNeighbors.filter(pair => {
+            const p = String(pair).split('|');
+            return p[0] !== oldSid && p[1] !== oldSid;
+          });
         }
       }
     }
@@ -12394,6 +12456,7 @@ function createClass() {
   const yr  = parseInt(document.getElementById('nc-yr').value) || 2025;
   if (!id || !nom) return alert('Remplissez tous les champs.');
   if (S.classes[id]) return alert('Cette classe existe déjà.');
+  pushUndo();
 
   const choix = document.getElementById('nc-copy').value;
   let rooms = {};
@@ -12535,11 +12598,12 @@ function switchClass(id) {
   if (!id || !S.classes[id]) return;
   // Si on consulte un snapshot et qu'on change de classe : on quitte la consultation
   if (_viewingSnapshot && _viewingSnapshot.classId !== id) _viewingSnapshot = null;
-  // Mode appel / édition d'un appel passé : l'état transient (_absentToday, _lateToday,
-  // _aeshAbsentToday, _editingAttendanceId) appartient à la classe QU'ON QUITTE. Sans
-  // ça il « fuit » sur la nouvelle classe (sids étrangers marqués absents, record
-  // d'édition pointant une autre classe → écrasement à l'enregistrement). On purge.
-  if (id !== S.cur && (_appelMode || _editingAttendanceId)) {
+  // Mode appel / édition d'un appel passé / post-appel : l'état transient (_absentToday,
+  // _lateToday, _aeshAbsentToday, _editingAttendanceId, _appelSavedSlot) appartient à la
+  // classe QU'ON QUITTE. Sans ça il « fuit » sur la nouvelle classe (sids étrangers marqués
+  // absents, record d'édition pointant une autre classe → écrasement à l'enregistrement).
+  // On purge — y compris en état post-appel (_appelSavedSlot non null, _appelMode false).
+  if (id !== S.cur && (_appelMode || _editingAttendanceId || _appelSavedSlot)) {
     const _oldId = S.cur;
     _editingAttendanceId = null;
     _absentToday.clear();
@@ -14236,7 +14300,7 @@ function _renduRender() {
         const pass = ev.passations?.find(p => p.id === c.passId);
         const niv  = pass?.niveaux?.[sid]?.[c.cid];
         if (niv === 'A') cellHtml = 'A';
-        else if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
+        else if (typeof niv === 'number' && niv >= 1 && niv <= (S.evalPrefs?.nbLevels || 4)) {
           const bg = colors[niv - 1] || '';
           // pass-comp = niveau ponctuel — on peut le considérer comme "compétence" donc on garde la couleur
           cellStyle += `;background:${bg};color:${_contrastTextColor(bg)};font-weight:700`;
@@ -14500,7 +14564,7 @@ function _evalShowNoteDetail(evalId, sid) {
   if (ev.periode) ll.push(_esc(ev.periode));
   ll.push(`coef ${ev.coef ?? 1}`);
   if (note != null) ll.push(`<strong>Note : ${_fmtNote(note)}/${ev.noteMax} (= ${_fmtNote(note20)}/20)</strong>`);
-  document.getElementById('mnotedet-sub').innerHTML = `${_esc(stu.prenom)} ${(stu.nom||'').toUpperCase()} · ` + ll.join(' · ');
+  document.getElementById('mnotedet-sub').innerHTML = `${_esc(stu.prenom)} ${_esc((stu.nom||'').toUpperCase())} · ` + ll.join(' · ');
 
   const body = document.getElementById('mnotedet-body');
   let html = '';
@@ -14524,7 +14588,7 @@ function _evalShowNoteDetail(evalId, sid) {
         anyRow = true;
         let nivCell;
         if (v === 'A') nivCell = `<span style="background:#9ca3af;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">A</span>`;
-        else if (typeof v === 'number' && v >= 1 && v <= 4) {
+        else if (typeof v === 'number' && v >= 1 && v <= (S.evalPrefs?.nbLevels || 4)) {
           const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
           const bg = colors[v - 1] || 'var(--paper-warm)';
           nivCell = `<span style="background:${bg};color:${_contrastTextColor(bg)};padding:2px 8px;border-radius:4px;font-weight:600">${_formatNiveau(v)}</span>`;
@@ -16801,19 +16865,6 @@ function clearAllSeating() {
   });
 }
 
-function setIpad(key, val, gf) {
-  const cls = getCls();
-  if (!cls) return;
-  ipadSet(cls, key, val ? parseInt(val) : 0, gf || 0);
-  save();
-  // Refresh just the ipad display in the cell without full re-render
-  const cell = document.querySelector(`.cell[data-key="${key}"]`);
-  if (!cell) return;
-  const existing = cell.querySelector('.cipad');
-  const label = val ? `Tab. ${val}${gf ? ' '+ipadModeLabel(gf) : ''}` : 'Tab. —';
-  if (existing) existing.textContent = label;
-}
-
 // ═══════════════════════════════════════════════════════════
 // PICKER DE TABLETTE — clic sur "Tab. N" dans une cellule ou
 // le récap Tablettes → ouvre une modale qui liste toutes les
@@ -17281,6 +17332,8 @@ function tgZoomOut()   { tgZoom = Math.max(0.3, +(tgZoom - 0.1).toFixed(1)); tgA
 function tgZoomReset() { tgZoom = 1; tgApplyZoom(); }
 
 function renderStudentView() {
+  // Reset auto des absences (minuit / fin de créneau) — comme renderTeacherGrid
+  _absencesAutoReset();
   // Met à jour l'état des chips G1/G2 selon la classe courante
   _updateGroupChipsState();
 
@@ -22950,18 +23003,25 @@ function _doSaveAttendance({ dateStr, slotId, groupe, label, endTime, overwriteI
   if (!S.attendance) S.attendance = {};
   if (!S.attendance[cls.id]) S.attendance[cls.id] = {};
 
+  // Défense en profondeur : ne garde que les sids de CETTE classe — évite qu'un état
+  // transient hérité d'une autre classe (fuite post-appel) ne pollue le record. En
+  // édition, on conserve aussi les sids du record d'origine (élèves supprimés depuis,
+  // identité préservée dans r.eleves).
+  const _prevRec = _editingAttendanceId ? S.attendance[cls.id][_editingAttendanceId] : null;
+  const _sidOk = sid => cls.eleves.includes(sid) || !!(_prevRec?.eleves?.[sid]);
+  const absents = [..._absentToday].filter(_sidOk);
   const eleves = {};
   // Capture identité minimale pour absents et retards (utile si supprimés plus tard)
-  const allSids = new Set([..._absentToday, ..._lateToday.keys()]);
+  const allSids = new Set([...absents, ..._lateToday.keys()].filter(_sidOk));
   for (const sid of allSids) {
     const stu = S.eleves[sid];
     if (stu) eleves[sid] = { nom: stu.nom, prenom: stu.prenom };
     else {
-      const prev = _editingAttendanceId ? S.attendance[cls.id][_editingAttendanceId]?.eleves?.[sid] : null;
+      const prev = _prevRec?.eleves?.[sid];
       if (prev) eleves[sid] = { nom: prev.nom, prenom: prev.prenom };
     }
   }
-  const retards = Object.fromEntries(_lateToday);
+  const retards = Object.fromEntries([..._lateToday].filter(([sid]) => _sidOk(sid)));
   // AESH absentes pour CETTE classe : extrait les entrées 'classId|salleId|idx' qui matchent
   const _prefix = cls.id + '|';
   const aeshAbsents = [..._aeshAbsentToday]
@@ -22989,7 +23049,7 @@ function _doSaveAttendance({ dateStr, slotId, groupe, label, endTime, overwriteI
     r.slotId  = slotId;
     r.groupe  = groupe;
     r.label   = label;
-    r.absents = [..._absentToday];
+    r.absents = absents;
     r.retards = retards;
     r.eleves  = eleves;
     r.aeshAbsents = aeshAbsents;
@@ -23025,7 +23085,7 @@ function _doSaveAttendance({ dateStr, slotId, groupe, label, endTime, overwriteI
     slotId,
     groupe,
     label,
-    absents: [..._absentToday],
+    absents,
     retards,
     eleves,
     aeshAbsents,                                        // [{salleId, idx}, ...] — Phase 2
@@ -23507,7 +23567,7 @@ function viewAttendance(id, classId) {
     html += `<h3 style="font-size:.95em;margin:8px 0 4px">⏰ Retards (${nR})</h3>`;
     // Tri alphabétique par nom de famille (l'heure d'arrivée reste affichée par ligne)
     const items = Object.entries(r.retards).sort(([a], [b]) => cmpNom(a, b));
-    html += `<ul style="padding-left:22px;margin:4px 0">${items.map(([sid, hhmm]) => `<li style="padding:3px 0">${nameOf(sid)} <span style="background:#facc15;color:#78350f;padding:1px 6px;border-radius:3px;font-size:.85em;font-weight:600;margin-left:6px">arrivé à ${hhmm}</span></li>`).join('')}</ul>`;
+    html += `<ul style="padding-left:22px;margin:4px 0">${items.map(([sid, hhmm]) => `<li style="padding:3px 0">${nameOf(sid)} <span style="background:#facc15;color:#78350f;padding:1px 6px;border-radius:3px;font-size:.85em;font-weight:600;margin-left:6px">arrivé à ${_esc(hhmm)}</span></li>`).join('')}</ul>`;
   }
   // Section AESH absentes (Phase 2). On déduit le label depuis aeshCount actuel de la salle ;
   // si la salle/AESH a depuis été modifiée/supprimée, on affiche un libellé brut.
@@ -23631,7 +23691,9 @@ function editAttendance(id, classId) {
     _uiConfirm({
       title: '🔁 Changer de classe', okLabel: '🔁 Basculer',
       message: `Basculer vers la classe "${targetCls.nom}" pour modifier cet appel ?`,
-      onOk: () => { S.cur = cid; refreshSelector(); _proceed(); },
+      // switchClass purge l'état transient de la classe qu'on quitte (mode appel /
+      // post-appel) avant de basculer — évite la fuite d'absents entre classes.
+      onOk: () => { switchClass(cid); _proceed(); },
     });
     return;
   }
@@ -24981,7 +25043,7 @@ const MINUTE = 60 * 1000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
 const BACKUP_STRATEGIES = {
   off: {
     label: '⏸ Désactivée',
-    desc: 'Aucun backup horodaté n\'est créé. La sync auto continue (fichier principal).',
+    desc: 'Aucun backup horodaté n\'est créé ; les backups existants sont conservés. La sync auto continue (fichier principal).',
     enabled: false,
     minIntervalMs: Infinity,
     tiers: [],
@@ -25106,6 +25168,7 @@ async function toggleAutoSync() {
 // l'utilisateur du nombre de secondes de modifs non écrites en cas de reload détecté)
 let _autoSavePendingSince = 0;
 let _autoSaveRetryTimer = null; // reprise unique programmée après un « écriture KO »
+let _reloadSnoozedMtime = 0;    // mtime d'une version distante déclinée via « Annuler » (snooze)
 function autoSaveSchedule(delay = 5000) {
   if (!autoSyncEnabled || !dirHandle) return;
   // Une nouvelle modif arrive : annule une reprise en attente (la prochaine écriture la couvre)
@@ -25115,15 +25178,20 @@ function autoSaveSchedule(delay = 5000) {
   _autoSaveTimer = setTimeout(() => autoSaveDoIt(false), delay);
 }
 
+let _autoSaveInFlight = false; // mutex : deux runs concurrents (debounce vs retry) pourraient se croiser
+let _autoSaveRerun = false;    // une écriture demandée pendant un run en cours → re-run à la fin
 async function autoSaveDoIt(isRetry) {
   _autoSaveTimer = null;
   _autoSavePendingSince = 0; // plus de modifs en attente
   if (!autoSyncEnabled || !dirHandle) return;
+  if (_autoSaveInFlight) { _autoSaveRerun = true; return; }
+  _autoSaveInFlight = true;
+  try {
   try {
     let perm = await dirHandle.queryPermission({ mode: 'readwrite' });
     if (perm !== 'granted') perm = await dirHandle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') return;
-    const json = JSON.stringify(S, null, 2);
+    let json = JSON.stringify(S, null, 2);
 
     // Garde anti-écrasement (workflow multi-appareils via Nextcloud). Si une modale de
     // conflit est ouverte → on n'écrit pas (l'utilisateur doit trancher d'abord).
@@ -25131,21 +25199,40 @@ async function autoSaveDoIt(isRetry) {
     // Si le fichier disque a bougé depuis NOTRE dernière écriture, on le CLASSE par
     // horloge avant d'écraser (le mtime n'est plus qu'un gate pas-cher : Nextcloud le
     // retouche sans changer le contenu, d'où les faux positifs historiques).
-    if (_lastDiskWriteTs > 0) {
+    // ⚠️ La classification tourne AUSSI quand _lastDiskWriteTs === 0 (première écriture
+    // de la session) : si le fichier existe déjà (déposé par un autre appareil), on ne
+    // doit pas l'écraser à l'aveugle — cas typique du 2ᵉ poste fraîchement ouvert.
+    {
       try {
         const existingFh = await dirHandle.getFileHandle(AUTO_SAVE_FILENAME); // sans create
         const existing   = await existingFh.getFile();
         if (existing.lastModified > _lastDiskWriteTs + 1500) {
           let data; try { data = JSON.parse(await existing.text()); } catch (_) { data = null; }
           const rel = data ? _versionRelation(data) : 'behind';
-          if (rel === 'ahead') {
+          if ((rel === 'ahead' || rel === 'diverged') && _reloadSnoozedMtime && existing.lastModified === _reloadSnoozedMtime) {
+            // Version distante explicitement déclinée (« Annuler » du popup de rechargement) :
+            // on ne harcèle pas l'utilisateur, mais on ne l'écrase JAMAIS sans trace —
+            // archive automatique, puis fusion+bump d'horloge pour dominer proprement.
+            const stashed = await _stashVersionToFile(data, 'autre');
+            if (!stashed) {
+              _showAutoSyncStatus('⏸ sync suspendue',
+                'Version distante déclinée non archivable (disque plein / verrou ?) — écriture suspendue par prudence.');
+              return;
+            }
+            if (!S.clock || typeof S.clock !== 'object') S.clock = {};
+            _clockMergeMax(S.clock, data && data.clock);
+            _clockBumpSelf();
+            _baseClock = JSON.parse(JSON.stringify(S.clock));
+            _reloadSnoozedMtime = 0;
+            json = JSON.stringify(S, null, 2); // re-sérialise avec l'horloge bumpée
+            toast(`Version distante déclinée archivée : « ${stashed} ».`);
+          } else if (rel === 'ahead') {
             // Disque strictement plus récent → ne PAS écraser ; proposer le rechargement.
             _showAutoSyncStatus('⏸ sync suspendue',
               'Le fichier de sync a été modifié par un autre appareil. Écriture suspendue — choisis de recharger via la fenêtre proposée.');
             autoReloadCheck();
             return;
-          }
-          if (rel === 'diverged') {
+          } else if (rel === 'diverged') {
             // Divergence réelle → ne PAS écraser ; modale « garder les deux ».
             _showAutoSyncStatus('⏸ conflit', 'Deux versions ont divergé — résolution demandée avant d\'écrire.');
             if (data) _openConflictModal(data, existing);
@@ -25159,8 +25246,8 @@ async function autoSaveDoIt(isRetry) {
     // Fichier principal (écrasé après la vérification anti-conflit ci-dessus)
     const fh = await dirHandle.getFileHandle(AUTO_SAVE_FILENAME, { create: true });
     const w  = await fh.createWritable();
-    await w.write(json);
-    await w.close();
+    try { await w.write(json); await w.close(); }
+    catch (e) { try { await w.abort(); } catch (_) {} throw e; } // libère le writable (verrou/.crswap) avant la reprise
     // mtime réel du fichier écrit → évite un re-parse inutile au prochain focus.
     try { const wf = await fh.getFile(); _lastDiskWriteTs = wf.lastModified; _lastParsedMtime = wf.lastModified; }
     catch (_) { _lastDiskWriteTs = Date.now(); }
@@ -25184,10 +25271,15 @@ async function autoSaveDoIt(isRetry) {
         const ts = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}m`;
         try {
           const bkName = `${BACKUP_PREFIX}${ts}.json`;
+          // Passage à l'heure d'hiver : deux backups à 1 h d'écart peuvent porter le
+          // même nom (heure locale répétée) — ne pas écraser le premier, on saute.
+          let bkExists = false;
+          try { await dirHandle.getFileHandle(bkName); bkExists = true; } catch (_) {}
+          if (bkExists) throw new Error('backup homonyme existant (DST) — création sautée');
           const fhB = await dirHandle.getFileHandle(bkName, { create: true });
           const wB  = await fhB.createWritable();
-          await wB.write(json);
-          await wB.close();
+          try { await wB.write(json); await wB.close(); }
+          catch (e) { try { await wB.abort(); } catch (_) {} throw e; }
           _lastBackupContent = fp;
           await cleanupOldBackups();
         } catch (e) { console.warn('Backup échoué :', e); }
@@ -25213,6 +25305,10 @@ async function autoSaveDoIt(isRetry) {
         `⚠️ Écriture du fichier de sync échouée : ${label}.\nÉchec après reprise. Tes données restent dans le navigateur ; la prochaine modification réessaiera. Détails dans la console (F12).`);
     }
   }
+  } finally {
+    _autoSaveInFlight = false;
+    if (_autoSaveRerun) { _autoSaveRerun = false; autoSaveSchedule(0); }
+  }
 }
 
 // Parse "plan-classe-bk-AAAA-MM-JJ-HHhMMm.json" → timestamp ou null
@@ -25232,7 +25328,7 @@ function _parseBackupName(name) {
 function _bucketKey(ts, ageMs) {
   // Cherche le 1er palier de la stratégie courante dont maxAgeMs est ≥ ageMs.
   const strat = _currentBackupStrategy();
-  if (!strat.enabled) return 'expired'; // stratégie 'off' → nettoie tout l'historique
+  if (!strat.enabled) return 'keep-' + ts; // stratégie 'off' = on arrête d'en CRÉER, on ne détruit pas l'historique
   for (let i = 0; i < strat.tiers.length; i++) {
     const t = strat.tiers[i];
     if (ageMs < t.maxAgeMs) return i + '-' + Math.floor(ts / t.bucketSizeMs);
@@ -25318,6 +25414,7 @@ function setBackupStrategy(key) {
 
 async function cleanupOldBackups() {
   if (!dirHandle) return;
+  if (!_currentBackupStrategy().enabled) return; // 'off' : aucun backup créé, mais l'existant est CONSERVÉ
   try {
     const backups = [];
     for await (const [name, handle] of dirHandle.entries()) {
@@ -25348,6 +25445,23 @@ async function cleanupOldBackups() {
 // Vérifie si le fichier auto est plus récent (modifié à l'extérieur)
 // Applique les données rechargées depuis le disque (remplace S, re-render tout).
 function _applyReloadedData(data, f) {
+  // Sort des modes de session AVANT de remplacer S : un « ✓ Valider » du mode
+  // Contraintes rétablirait sinon son backup pré-reload par-dessus les données
+  // distantes ; une édition d'appel pointerait un record qui n'existe peut-être plus.
+  try {
+    if (typeof _planCstrMode !== 'undefined' && _planCstrMode && typeof _planCstrExit === 'function') _planCstrExit();
+    if (typeof _editingAttendanceId !== 'undefined' && _editingAttendanceId) { _editingAttendanceId = null; _appelMode = false; }
+    if (typeof _viewingSnapshot !== 'undefined' && _viewingSnapshot) _viewingSnapshot = null;
+  } catch (_) {}
+  // Annule les timers d'éval debouncés : leur callback tardif écrirait une frappe
+  // périmée dans le NOUVEL état (les ids d'éval existent souvent des deux côtés).
+  try {
+    if (typeof _evalTableurSaveTimer !== 'undefined' && _evalTableurSaveTimer) { clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null; }
+    if (typeof _evalSaisieSaveTimer !== 'undefined' && _evalSaisieSaveTimer) { clearTimeout(_evalSaisieSaveTimer); _evalSaisieSaveTimer = null; }
+    if (typeof _evalRemarkSaveTimer !== 'undefined' && _evalRemarkSaveTimer) { clearTimeout(_evalRemarkSaveTimer); _evalRemarkSaveTimer = null; }
+    if (typeof _evalEditPerClassSaveTimer !== 'undefined' && _evalEditPerClassSaveTimer) { clearTimeout(_evalEditPerClassSaveTimer); _evalEditPerClassSaveTimer = null; }
+    if (typeof _evalTableurPassEditTimer !== 'undefined' && _evalTableurPassEditTimer) { clearTimeout(_evalTableurPassEditTimer); _evalTableurPassEditTimer = null; }
+  } catch (_) {}
   S = data;
   postLoadHook();
   // Un rechargement depuis le disque (sync d'un autre appareil) n'est PAS une action
@@ -25373,6 +25487,7 @@ function _applyReloadedData(data, f) {
   if (at) renderTab(at.id.replace('tab-',''));
   _lastDiskWriteTs = f.lastModified;
   _lastParsedMtime = f.lastModified;  // version adoptée → ne pas re-parser ce mtime
+  _reloadSnoozedMtime = 0;            // plus de version distante en attente
   _conflictPending = false; _conflictCtx = null;
   toast('✅ Données rechargées depuis disque');
 }
@@ -25412,6 +25527,11 @@ function _versionRelation(diskData) {
   const dHas = D && Object.keys(D).length > 0;
   const mHas = M && Object.keys(M).length > 0;
   if (dHas && mHas) return _clockCompare(D, M);
+  // Le disque a un historique d'horloge mais pas la mémoire (poste/profil vierge,
+  // aucune mutation locale encore) → le disque porte les vraies données : proposer
+  // le rechargement plutôt que de comparer les savedAt (celui d'un état de démo
+  // fraîchement initialisé serait plus « récent » → écrasement silencieux du fichier).
+  if (dHas && !mHas) return 'ahead';
   const ds = +(diskData && diskData.savedAt) || 0;
   const ms = +S.savedAt || 0;
   if (ds > ms) return 'ahead';
@@ -25422,12 +25542,23 @@ function _versionRelation(diskData) {
 // Flush des timers de saisie d'éval AVANT un éventuel rechargement (sinon la frappe
 // en cours dans le tableur/fiche serait perdue). Renvoie true si du dirty a été flushé.
 function _flushEvalDirtyForReload() {
+  // Couvre les 5 timers debouncés d'éval (même liste que le handler beforeunload) :
+  // les mutations de S sont déjà faites à la frappe, les timers ne portent que le
+  // save() différé → clear + save() suffit.
   const evalDirty = (typeof _evalTableurDirty !== 'undefined' && _evalTableurDirty)
-                 || (typeof _evalSaisieDirty !== 'undefined' && _evalSaisieDirty);
+                 || (typeof _evalSaisieDirty !== 'undefined' && _evalSaisieDirty)
+                 || (typeof _evalTableurSaveTimer      !== 'undefined' && _evalTableurSaveTimer)
+                 || (typeof _evalSaisieSaveTimer       !== 'undefined' && _evalSaisieSaveTimer)
+                 || (typeof _evalRemarkSaveTimer       !== 'undefined' && _evalRemarkSaveTimer)
+                 || (typeof _evalEditPerClassSaveTimer !== 'undefined' && _evalEditPerClassSaveTimer)
+                 || (typeof _evalTableurPassEditTimer  !== 'undefined' && _evalTableurPassEditTimer);
   if (!evalDirty) return false;
   try {
     if (typeof _evalTableurSaveTimer !== 'undefined' && _evalTableurSaveTimer) { clearTimeout(_evalTableurSaveTimer); _evalTableurSaveTimer = null; }
     if (typeof _evalSaisieSaveTimer !== 'undefined' && _evalSaisieSaveTimer) { clearTimeout(_evalSaisieSaveTimer); _evalSaisieSaveTimer = null; }
+    if (typeof _evalRemarkSaveTimer !== 'undefined' && _evalRemarkSaveTimer) { clearTimeout(_evalRemarkSaveTimer); _evalRemarkSaveTimer = null; }
+    if (typeof _evalEditPerClassSaveTimer !== 'undefined' && _evalEditPerClassSaveTimer) { clearTimeout(_evalEditPerClassSaveTimer); _evalEditPerClassSaveTimer = null; }
+    if (typeof _evalTableurPassEditTimer !== 'undefined' && _evalTableurPassEditTimer) { clearTimeout(_evalTableurPassEditTimer); _evalTableurPassEditTimer = null; }
   } catch (_) {}
   save();
   _evalTableurDirty = false;
@@ -25466,6 +25597,9 @@ async function _stashVersionToFile(dataObj, kind) {
 // (archive la mienne).
 function _openConflictModal(diskData, f) {
   if (_conflictPending) return;
+  // Flush de la saisie d'éval en cours : si l'utilisateur choisit « Prendre l'autre »,
+  // l'archive de SA version doit contenir ses dernières frappes (timers debouncés).
+  try { _flushEvalDirtyForReload(); } catch (_) {}
   _conflictPending = true;
   _conflictCtx = { diskData, f };
   const info = document.getElementById('mconflict-info');
@@ -25481,9 +25615,15 @@ function _openConflictModal(diskData, f) {
   openMod('mconflict');
 }
 function _conflictKeepMine() {
-  const ctx = _conflictCtx; if (!ctx) { closeMod('mconflict'); return; }
+  const ctx = _conflictCtx; if (!ctx) { closeMod2('mconflict'); return; }
   const other = ctx.diskData;
   _stashVersionToFile(other, 'autre').then(name => {
+    if (!name) {
+      // Archive impossible (disque plein, verrou…) : ne PAS résoudre — la promesse
+      // « rien n'est perdu » serait fausse. La modale reste ouverte pour réessayer.
+      toast('⚠️ Impossible d\'archiver l\'autre version — résolution annulée, réessaie.', 'err');
+      return;
+    }
     // Mon horloge doit DOMINER celle du disque pour superséder la version divergente.
     if (!S.clock || typeof S.clock !== 'object') S.clock = {};
     _clockMergeMax(S.clock, other && other.clock);
@@ -25491,20 +25631,24 @@ function _conflictKeepMine() {
     _baseClock = JSON.parse(JSON.stringify(S.clock));
     delete _modalReturnTo['mconflict'];
     _conflictPending = false; _conflictCtx = null;
-    closeMod('mconflict');
+    closeMod2('mconflict');
     save();  // persiste + planifie l'écriture (qui domine désormais le disque)
-    toast(name ? `Ta version est conservée. L'autre archivée : « ${name} ».` : 'Ta version est conservée.', 'success');
+    toast(`Ta version est conservée. L'autre archivée : « ${name} ».`, 'success');
   });
 }
 function _conflictTakeOther() {
-  const ctx = _conflictCtx; if (!ctx) { closeMod('mconflict'); return; }
+  const ctx = _conflictCtx; if (!ctx) { closeMod2('mconflict'); return; }
   const mine = JSON.parse(JSON.stringify(S));
   _stashVersionToFile(mine, 'mienne').then(name => {
+    if (!name) {
+      toast('⚠️ Impossible d\'archiver ta version — résolution annulée, réessaie.', 'err');
+      return;
+    }
     delete _modalReturnTo['mconflict'];
     _conflictPending = false; _conflictCtx = null;
-    closeMod('mconflict');
+    closeMod2('mconflict');
     _applyReloadedData(ctx.diskData, ctx.f);
-    toast(name ? `Version de l'autre appareil chargée. La tienne archivée : « ${name} ».` : `Version de l'autre appareil chargée.`, 'success');
+    toast(`Version de l'autre appareil chargée. La tienne archivée : « ${name} ».`, 'success');
   });
 }
 
@@ -25536,8 +25680,11 @@ async function autoReloadCheck() {
     const rel = _versionRelation(data);
     if (rel === 'equal' || rel === 'behind') {
       // equal  : même version (mtime retouché par Nextcloud) → silence → plus de faux positifs.
-      // behind : je suis en avance (mon écriture pas encore reflétée / lag de sync) → silence.
+      // behind : je suis en avance (mon écriture pas encore reflétée / lag de sync) → silence,
+      //          mais on re-planifie une écriture : sans ça un fichier périmé (fermeture avant
+      //          le debounce de 5 s) resterait périmé indéfiniment tant qu'aucune modif n'arrive.
       _lastDiskWriteTs = f.lastModified;
+      if (rel === 'behind') autoSaveSchedule(0);
       return;
     }
     // Flush de la saisie d'éval en cours AVANT un éventuel reload (préservée en localStorage).
@@ -25550,7 +25697,10 @@ async function autoReloadCheck() {
         title: '📥 Version plus récente disponible', okLabel: '📥 Recharger', okClass: 'btn-w',
         message: `Une version plus récente a été déposée par un autre appareil (${dt}).\n\nLa charger ?${pendingWarn}`,
         onOk: () => _applyReloadedData(data, f),
-        onCancel: () => { _lastDiskWriteTs = f.lastModified; },
+        // Annuler = snooze : on ne re-propose pas cette même version (gate mtime),
+        // mais on n'arme PAS d'écrasement silencieux — avant toute écriture locale,
+        // autoSaveDoIt archivera automatiquement la version déclinée (cf. _reloadSnoozedMtime).
+        onCancel: () => { _reloadSnoozedMtime = f.lastModified; },
       });
       return;
     }
@@ -25923,8 +26073,19 @@ async function loadFromHandle(idx) {
       title: '📂 Charger le fichier', okLabel: '📂 Charger', okClass: 'btn-w',
       message: `Charger "${name}" ?\nLes modifications non exportées seront perdues.`,
       onOk: () => {
+        // Capture de l'horloge de l'état ABANDONNÉ : la version restaurée doit ensuite
+        // DOMINER le fichier de sync courant (sinon la sync classe la restauration
+        // « en retard » et repropose de recharger exactement ce qu'on vient de fuir).
+        const prevClock = { ...((S && S.clock) || {}) };
         S = data;
         postLoadHook();
+        if (!S.clock || typeof S.clock !== 'object') S.clock = {};
+        _clockMergeMax(S.clock, prevClock);
+        _clockBumpSelf();
+        _baseClock = JSON.parse(JSON.stringify(S.clock));
+        // La restauration n'est pas une action annulable de la session : les piles
+        // référencent l'état pré-restauration (cohérent avec _applyReloadedData).
+        undoStack = []; redoStack = []; updateUndoRedoUI();
         if (!S.cur && Object.keys(S.classes).length) S.cur = Object.keys(S.classes)[0];
         save();
         saveLastFile(name, JSON.parse(JSON.stringify(S)));
@@ -26653,6 +26814,9 @@ const _NotesExport = (function () {
     head.push(H('Remarques'));
     head.push(H('Compétences (moy /4)'));
     rows.push(head);
+    // Même arrondi que l'affichage du Bilan (granulométrie meanGranularity)
+    const _mgS = (S.evalPrefs?.meanGranularity ?? 0.01);
+    const _rndMoyS = (v) => (v == null || _mgS <= 0) ? v : Math.round(Math.round(v / _mgS) * _mgS * 10000) / 10000;
     let n = 0;
     for (const stu of students) {
       n++;
@@ -26666,7 +26830,7 @@ const _NotesExport = (function () {
         const moy = _computeStudentMeanForPeriod(cls.id, stu.id, p);
         if (moy != null) {
           const bg = noteCellBg(moy);
-          r.push({ v: Math.round(moy * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null });
+          r.push({ v: _rndMoyS(moy), t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null });
           sumY += moy; denY++;
         } else {
           r.push(EMPTY());
@@ -26678,7 +26842,7 @@ const _NotesExport = (function () {
       const moyY = denY > 0 ? sumY / denY : null;
       if (moyY != null) {
         const bg = noteCellBg(moyY);
-        r.push({ v: Math.round(moyY * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null, bold: true });
+        r.push({ v: _rndMoyS(moyY), t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null, bold: true });
       } else r.push(EMPTY());
       // Remarques (concaténation périodes)
       const allRem = periods.map(p => {
@@ -26728,9 +26892,23 @@ const _NotesExport = (function () {
       sid: stu.id,
       moy: _computeStudentMeanForPeriod(cls.id, stu.id, periode)
     }));
+    // Rang "min" avec ex æquo : deux moyennes identiques à l'affichage (arrondies
+    // à la granulométrie meanGranularity) reçoivent le même rang — comme le Bilan.
+    const _mg = (S.evalPrefs?.meanGranularity ?? 0.01);
+    const _rndMoy = (v) => (v == null || _mg <= 0) ? v : Math.round(v / _mg) * _mg;
     const sortedForRank = rankNotes.filter(x => x.moy != null).slice().sort((a, b) => b.moy - a.moy);
     const rankMap = {};
-    sortedForRank.forEach((x, i) => { rankMap[x.sid] = i + 1; });
+    let _lastMoy = null, _lastRank = 0;
+    sortedForRank.forEach((x, i) => {
+      const mr = _rndMoy(x.moy);
+      if (_lastMoy != null && Math.abs(mr - _lastMoy) < 0.001) {
+        rankMap[x.sid] = _lastRank;
+      } else {
+        rankMap[x.sid] = i + 1;
+        _lastRank = i + 1;
+        _lastMoy = mr;
+      }
+    });
     // Header
     const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
     for (const ev of evs) {
@@ -26756,11 +26934,10 @@ const _NotesExport = (function () {
       for (const ev of evs) {
         const note = _computeStudentEvalNote(ev, stu.id);
         if (note == null) {
-          // Vérifie s'il y a au moins un 'A' ou 'NN' explicite
-          const vals = ev.notes?.[stu.id]?.values || {};
-          let anyA = false, anyNN = false;
-          for (const k in vals) { if (vals[k] === 'A') anyA = true; if (vals[k] === 'NN') anyNN = true; }
-          r.push(S0(anyA ? 'A' : (anyNN ? 'NN' : ''), { align: 'center', italic: anyA || anyNN, color: anyA ? 'B03D2E' : '56697F' }));
+          // Détecte un 'A' ou 'NN' explicite (gère aussi le Type B via les passations)
+          const reason = _studentNoteAbsenceReason(ev, stu.id);
+          const code = (reason === 'A' || reason === 'NN') ? reason : '';
+          r.push(S0(code, { align: 'center', italic: !!code, color: code === 'A' ? 'B03D2E' : '56697F' }));
           continue;
         }
         const note20 = (note / (ev.noteMax || 20)) * 20;
@@ -26770,7 +26947,8 @@ const _NotesExport = (function () {
       const moy = _computeStudentMeanForPeriod(cls.id, stu.id, periode);
       if (moy != null) {
         const bg = noteCellBg(moy);
-        r.push({ v: Math.round(moy * 100) / 100, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null, bold: true });
+        // Même arrondi que l'affichage du Bilan (granulométrie meanGranularity)
+        r.push({ v: Math.round(_rndMoy(moy) * 10000) / 10000, t: 'n', border: true, align: 'right', bg, color: bg ? textOnHex(bg) : null, bold: true });
         r.push(S0(rankMap[stu.id] || '', { align: 'center' }));
       } else { r.push(EMPTY()); r.push(EMPTY()); }
       const rem = _getBulletinRemarque(cls.id, stu.id, periode);
@@ -27012,7 +27190,7 @@ const _NotesExport = (function () {
         for (const col of cols) {
           const niv = col.p.niveaux?.[stu.id]?.[col.cid];
           if (niv === 'A') r.push(S0('A', { align: 'center', italic: true, color: 'B03D2E' }));
-          else if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
+          else if (typeof niv === 'number' && niv >= 1 && niv <= (S.evalPrefs?.nbLevels || 4)) {
             const bg = levelCellBg(niv);
             r.push({ v: niv, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
           } else r.push(EMPTY());
@@ -27536,7 +27714,7 @@ function createDemo(opts) {
       activePool: 'pool_cm1'
     };
     for (const sId of alloc.salles) {
-      cls.rooms[sId] = { seating:{}, groupes:{}, ipadsByPool:{} };
+      cls.rooms[sId] = _newRoomTemplate();
     }
     S.classes[alloc.id] = cls;
     setupClassAccessors(cls);
@@ -29146,8 +29324,9 @@ function _noiseStopSound() {
   if (s.temp) { try { s.ctx.close(); } catch (_) {} }
 }
 function noisePlayAlert(isTest) {
-  // Bouton Tester : second clic = coupe le son qui joue (bascule).
-  if (isTest && _noise.curSound) { _noiseStopSound(); return; }
+  // Un son est déjà en cours : on le coupe d'abord (évite la superposition d'une
+  // alerte réelle sur un test). Bouton Tester : second clic = bascule (coupe et stop).
+  if (_noise.curSound) { _noiseStopSound(); if (isTest) return; }
   let ctx = _noise.ctx, temp = false;
   if (!ctx) {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -29518,12 +29697,17 @@ function _timerTick() {
   _timer.remainingMs = _timer.endTime - Date.now();
   if (_timer.remainingMs <= 0) { _timer.remainingMs = 0; _timerRender(); _timerFinish(); return; }
   const remS = Math.ceil(_timer.remainingMs / 1000);
+  // Si plusieurs seuils sont franchis dans le même tick (onglet longtemps en arrière-plan),
+  // on n'énonce que le plus proche de zéro : _timerSpeak fait speechSynthesis.cancel()
+  // avant chaque énoncé, deux appels consécutifs escamoteraient le premier.
+  let toSpeak = null;
   for (const p of _timerSettings.announces) {
     if (remS <= p && !_timer.announced.has(p)) {
       _timer.announced.add(p);
-      if (_timerSettings.speechOn) _timerSpeak(_timerAnnounceText(p));
+      if (toSpeak === null || p < toSpeak) toSpeak = p;
     }
   }
+  if (toSpeak !== null && _timerSettings.speechOn) _timerSpeak(_timerAnnounceText(toSpeak));
   _timerRender();
 }
 function _timerFinish() {
@@ -29885,9 +30069,7 @@ document.addEventListener('keydown', e => {
         const z = parseInt(m.style.zIndex || '1000', 10);
         if (z > topZ) { topZ = z; topMod = m; }
       });
-      topMod.classList.remove('on');
-      topMod.style.zIndex = '';
-      _afterModalClose(topMod.id);
+      closeMod2(topMod.id); // fermeture complète (teardown a11y + hooks _modalReturnTo)
       return;
     }
     // Onglet Export positions : Esc → retour à la vue Élèves (équivalent du bouton ↩ Retour Élèves)
@@ -30655,6 +30837,44 @@ function _evalPrefsSave() {
       }
     }
     if (cleaned > 0) toast(`⚠ Mode de période modifié — ${cleaned} restriction(s) d'appartenance par période effacée(s) (à reconfigurer si besoin)`, 'warn');
+    // Remappe les périodes de l'ancien mode vers le nouveau : par DATE quand l'éval
+    // en a une, sinon positionnel (S1→T1, S2→T3 / T1·T2→S1, T3→S2). Sans ça, une
+    // éval 'S1' ne matcherait plus aucune colonne T1/T2/T3 → moyennes fantômes.
+    const oldPrefix = (periodMode === 'trimestre') ? 'S' : 'T';
+    const posMap = (periodMode === 'trimestre')
+      ? { S1: 'T1', S2: 'T3' }
+      : { T1: 'S1', T2: 'S1', T3: 'S2' };
+    let remapped = 0;
+    for (const ev of Object.values(S.evaluations || {})) {
+      const per = ev && ev.periode;
+      if (!per || per[0] !== oldPrefix) continue;
+      let np = null;
+      try { np = _periodeForDate(_evalDateFor(ev, _evalPrimaryAliveClassId(ev)), periodMode); } catch (_) {}
+      ev.periode = np || posMap[per] || per;
+      remapped++;
+    }
+    // Stores bulletin/conseil keyés par période (pas de date → positionnel). En cas
+    // de collision (T1 et T2 → S1) : textes concaténés, listes fusionnées, mentions unies.
+    const mergeVals = (a, b) => {
+      if (Array.isArray(a) && Array.isArray(b)) return a.concat(b.filter(x => !a.includes(x)));
+      if (a && b && typeof a === 'object' && typeof b === 'object') return Object.assign({}, a, b);
+      if (typeof a === 'string' && typeof b === 'string') return (a && b && a !== b) ? (a + '\n' + b) : (a || b);
+      return (b !== undefined && b !== null) ? b : a;
+    };
+    const remapLeaf = (perObj) => {
+      if (!perObj || typeof perObj !== 'object' || Array.isArray(perObj)) return;
+      for (const per of Object.keys(perObj)) {
+        if (per[0] !== oldPrefix || !posMap[per]) continue;
+        const np = posMap[per];
+        perObj[np] = (np in perObj) ? mergeVals(perObj[np], perObj[per]) : perObj[per];
+        delete perObj[per];
+      }
+    };
+    for (const l1 of Object.values(S.bulletinClassRemarques || {})) for (const perObj of Object.values(l1 || {})) remapLeaf(perObj);
+    for (const l1 of Object.values(S.bulletinWorkedItems || {})) for (const perObj of Object.values(l1 || {})) remapLeaf(perObj);
+    for (const l1 of Object.values(S.bulletinRemarques || {})) for (const l2 of Object.values(l1 || {})) for (const perObj of Object.values(l2 || {})) remapLeaf(perObj);
+    for (const l1 of Object.values(S.conseilClasse || {})) for (const l2 of Object.values(l1 || {})) for (const perObj of Object.values(l2 || {})) remapLeaf(perObj);
+    if (remapped > 0) toast(`🔁 ${remapped} évaluation(s) remappée(s) vers le mode ${periodMode === 'trimestre' ? 'trimestre' : 'semestre'} (par date quand disponible)`);
   }
   S.evalPrefs.maitriseColors    = colors;
   S.evalPrefs.maitriseColorsAuto = colorsAuto;
@@ -30735,12 +30955,23 @@ function _currentPeriode() {
     if (m >= 9 || m === 1) return 'S1';
     return 'S2';
   }
-  // trimestre
+  // trimestre — aligné sur _periodEndDate : T1 → 30/11, T2 → fin février, T3 → 31/08.
   if (m >= 9 && m <= 11) return 'T1';
-  if (m === 12 || (m === 1)) return 'T1';   // T1 couvre sept-déc
-  // T2 : janvier-mars  ; T3 : avril-août. (Approximation, l'utilisateur peut ajuster manuellement.)
-  if (m === 2 || m === 3) return 'T2';
+  if (m === 12 || m === 1 || m === 2) return 'T2';
   return 'T3';
+}
+
+// Période (du mode demandé) dans laquelle tombe une date YYYY-MM-DD.
+// Bornes alignées sur _periodEndDate : S1 → 31/01 · T1 → 30/11 · T2 → fin février.
+function _periodeForDate(ymd, mode) {
+  const m = parseInt(String(ymd || '').slice(5, 7), 10);
+  if (!Number.isFinite(m) || m < 1 || m > 12) return null;
+  if (mode === 'trimestre') {
+    if (m >= 9 && m <= 11) return 'T1';
+    if (m === 12 || m === 1 || m === 2) return 'T2';
+    return 'T3';
+  }
+  return (m >= 9 || m === 1) ? 'S1' : 'S2';
 }
 
 // Liste des codes de période disponibles selon le mode (alimente les selects).
@@ -30839,26 +31070,24 @@ function _fmtNote(n) {
 function _noteToLevel(score, max) {
   if (score == null || !Number.isFinite(score) || max == null || max <= 0) return 0;
   const prefs = S.evalPrefs || {};
+  const nb = prefs.nbLevels || 4; // 2..6 niveaux configurables
   if (prefs.thresholdMode === 'percent') {
     const pct = (score / max) * 100;
     const seps = prefs.thresholdPercents || [40, 60, 85];
-    if (pct < seps[0]) return 1;
-    if (pct < seps[1]) return 2;
-    if (pct < seps[2]) return 3;
-    return 4;
+    for (let i = 0; i < nb - 1; i++) {
+      if (pct < seps[i]) return i + 1;
+    }
+    return nb;
   }
   // 'midpoint' — seuils au milieu entre les valeurs maitrisePoints, ramenés au barème
   const pts = prefs.maitrisePoints || [5, 8, 15, 20];
-  const ptsMax = pts[3] || 20;
+  const ptsMax = pts[nb - 1] || 20;
   // Convertit score à l'échelle des maitrisePoints
   const scaled = (score / max) * ptsMax;
-  const t12 = (pts[0] + pts[1]) / 2;
-  const t23 = (pts[1] + pts[2]) / 2;
-  const t34 = (pts[2] + pts[3]) / 2;
-  if (scaled < t12) return 1;
-  if (scaled < t23) return 2;
-  if (scaled < t34) return 3;
-  return 4;
+  for (let i = 0; i < nb - 1; i++) {
+    if (scaled < (pts[i] + pts[i + 1]) / 2) return i + 1;
+  }
+  return nb;
 }
 
 // Parse les commentaires d'une mini-note pour extraire les ajustements de points.
@@ -35877,8 +36106,10 @@ function _evalBilanCopy() {
   const sortMode = document.getElementById('meval-bilan-sort')?.value || 'code';
   const comps = _evalListEvaluatedCompetences(ev, sortMode);
   const sids = _evalTableurSortedSids(cls);
+  // Garde anti-injection formule + neutralisation des tabs/retours-ligne (TSV)
+  const tsvEsc = s => _csvCellGuard(String(s ?? '')).replace(/[\t\r\n]+/g, ' ');
   const headers = ['Élève', ...comps.map(c => c.code), `Note (/${ev.noteMax || 20})`];
-  const lines = [headers.join('\t')];
+  const lines = [headers.map(tsvEsc).join('\t')];
   for (const sid of sids) {
     const stu = S.eleves[sid];
     if (!stu) continue;
@@ -35890,7 +36121,7 @@ function _evalBilanCopy() {
     }
     const disp = _studentNoteDisplay(ev, sid);
     cells.push(disp.kind === 'none' ? '' : disp.text);
-    lines.push(cells.join('\t'));
+    lines.push(cells.map(tsvEsc).join('\t'));
   }
   const tsv = lines.join('\n');
   navigator.clipboard.writeText(tsv).then(
@@ -38114,12 +38345,14 @@ function _evalAutoFillAbsentsForMn(ev, mn, classId) {
   if (ev.type !== 'A' && ev.type !== 'C') return 0;
   const cls = S.classes?.[classId];
   if (!cls) return 0;
-  // Lit la date/le slot effectifs en cascade — robuste aux différences de niveau
-  // selon le type d'éval et le point d'entrée (modale Réglages = ev-level ;
-  // tableur inline Type A = mn-level ; tableur inline Type C = mn-level
-  // propagé à ev pour la date mais pas pour le slot).
-  const defDate = mn.dates?.[classId] || ev.dates?.[classId] || mn.date || ev.date;
-  const defSlot = mn.slotIds?.[classId] || ev.slotIds?.[classId] || mn.slotId || ev.slotId;
+  // Lit la date/le slot effectifs via les helpers (lecture par PRÉSENCE de clé) —
+  // robuste aux différences de niveau selon le type d'éval et le point d'entrée,
+  // ET respecte la sentinelle '' : une date de mini-note explicitement vidée pour
+  // cette classe ne retombe PAS sur la date d'éval (pas d'auto-fill dans ce cas).
+  const _mnHasKey = mn.dates && Object.prototype.hasOwnProperty.call(mn.dates, classId);
+  const defDate = _mnHasKey ? _mnDateFor(mn, classId)
+                            : (_mnDateFor(mn, classId) || _evalDateFor(ev, classId));
+  const defSlot = _mnSlotIdFor(mn, classId) || _evalSlotIdFor(ev, classId);
   const pgDates = mn.datesByGroup?.[classId];
   const pgSlots = mn.slotIdsByGroup?.[classId];
   if (!defDate) return 0;
@@ -38151,8 +38384,10 @@ function _evalAutoFillAbsentsForPass(ev, pass, classId) {
   if (ev.type !== 'B') return 0;
   const cls = S.classes?.[classId];
   if (!cls) return 0;
-  const defDate = pass.dates?.[classId] || pass.date;
-  const defSlot = pass.slotIds?.[classId] || pass.slotId;
+  // Helpers = lecture par PRÉSENCE de clé : la sentinelle '' (date vidée pour cette
+  // classe) reste vide et ne retombe pas sur pass.date globale → pas d'auto-fill.
+  const defDate = _passDateFor(pass, classId);
+  const defSlot = _passSlotIdFor(pass, classId);
   if (!defDate) return 0;
   const pgDates = pass.datesByGroup?.[classId];
   const pgSlots = pass.slotIdsByGroup?.[classId];
@@ -38237,12 +38472,13 @@ function _computeStudentCompetenceLevel(ev, sid, cId) {
   // multi-classes : la date globale = max des classes ne reflète pas l'ordre réel
   // dans la classe de cet élève). Fallback p.date via _passDateFor.
   const _cls = S.eleves?.[sid]?.classe_id;
+  const _nb = S.evalPrefs?.nbLevels || 4;
   // Récupère tous les niveaux saisis (> 0) pour cette compétence sur cet élève
   const entries = [];
   for (const p of ev.passations) {
     if (!p.competenceIds?.includes(cId)) continue;
     const niv = p.niveaux?.[sid]?.[cId];
-    if (typeof niv === 'number' && niv >= 1 && niv <= 4) {
+    if (typeof niv === 'number' && niv >= 1 && niv <= _nb) {
       entries.push({ date: _passDateFor(p, _cls), niveau: niv });
     }
   }
@@ -38274,10 +38510,11 @@ function _evalNoteTipB(ev, sid) {
   if (!ev || ev.type !== 'B' || !ev.passations?.length) return 'Note /20 — pas de données';
   const pts = S.evalPrefs?.maitrisePoints || [5, 8, 15, 20];
   const noteMax = ev.noteMax || 20;
-  const ptsMax  = pts[3] || 20;
+  const _nb = S.evalPrefs?.nbLevels || 4;
+  const ptsMax  = pts[_nb - 1] || 20;
   const niveauToPts = (n) => {
     if (n <= 1) return pts[0];
-    if (n >= 4) return pts[3];
+    if (n >= _nb) return pts[_nb - 1];
     const lo = Math.floor(n);
     const t  = n - lo;
     return pts[lo - 1] + t * (pts[lo] - pts[lo - 1]);
@@ -38288,7 +38525,7 @@ function _evalNoteTipB(ev, sid) {
   const _cls = S.eleves?.[sid]?.classe_id; // date de tri per-classe (cf. _passDateFor)
   const lines = [];
   lines.push(`Note /20 — calcul pour ${(S.eleves?.[sid]?.prenom || '')} ${(S.eleves?.[sid]?.nom || '')}`.trim());
-  lines.push(`Règle : ${weighting === 'perCompetence' ? 'moyenne par compétence' : (weighting === 'coef' ? 'pondérée par coef de passation' : 'équitable')} · niveau→points : N1=${pts[0]} N2=${pts[1]} N3=${pts[2]} N4=${pts[3]} · sur ${ptsMax}, ramené à ${noteMax}/20`);
+  lines.push(`Règle : ${weighting === 'perCompetence' ? 'moyenne par compétence' : (weighting === 'coef' ? 'pondérée par coef de passation' : 'équitable')} · niveau→points : ${pts.slice(0, _nb).map((p, i) => `N${i + 1}=${p}`).join(' ')} · sur ${ptsMax}, ramené à ${noteMax}/20`);
   lines.push('');
 
   if (weighting === 'perCompetence') {
@@ -38303,7 +38540,7 @@ function _evalNoteTipB(ev, sid) {
       for (const p of ev.passations) {
         if (!(p.competenceIds || []).includes(cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
-        if (typeof v === 'number' && v >= 1 && v <= 4) entries.push({ niveau: v, date: _passDateFor(p, _cls), code: p.code || '?' });
+        if (typeof v === 'number' && v >= 1 && v <= _nb) entries.push({ niveau: v, date: _passDateFor(p, _cls), code: p.code || '?' });
       }
       if (entries.length === 0) { lines.push(`• ${c?.code || cid} : aucune saisie`); continue; }
       let compPts;
@@ -38347,7 +38584,7 @@ function _evalNoteTipB(ev, sid) {
     const compIds = p.competenceIds || [];
     for (const cid of compIds) {
       const v = p.niveaux?.[sid]?.[cid];
-      if (typeof v !== 'number' || v < 1 || v > 4) continue;
+      if (typeof v !== 'number' || v < 1 || v > _nb) continue;
       const c = S.competences?.[cid];
       const ptsN = niveauToPts(v);
       sumPts += w * ptsN; sumW += w;
@@ -38370,12 +38607,13 @@ function _computeStudentEvalNoteB(ev, sid) {
   if (!ev?.passations || ev.passations.length === 0) return null;
   const pts = S.evalPrefs?.maitrisePoints || [5, 8, 15, 20];
   const noteMax = ev.noteMax || 20;
-  const ptsMax  = pts[3] || 20;
+  const _nb = S.evalPrefs?.nbLevels || 4;
+  const ptsMax  = pts[_nb - 1] || 20;
 
-  // Convertit un niveau (1..4 possiblement non-entier) en points par interpolation
+  // Convertit un niveau (1..nb possiblement non-entier) en points par interpolation
   const niveauToPts = (n) => {
     if (n <= 1) return pts[0];
-    if (n >= 4) return pts[3];
+    if (n >= _nb) return pts[_nb - 1];
     const lo = Math.floor(n);
     const t  = n - lo;
     return pts[lo - 1] + t * (pts[lo] - pts[lo - 1]);
@@ -38398,7 +38636,7 @@ function _computeStudentEvalNoteB(ev, sid) {
       for (const p of ev.passations) {
         if (!(p.competenceIds || []).includes(cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
-        if (typeof v === 'number' && v >= 1 && v <= 4) entries.push({ niveau: v, date: _passDateFor(p, _cls) });
+        if (typeof v === 'number' && v >= 1 && v <= _nb) entries.push({ niveau: v, date: _passDateFor(p, _cls) });
       }
       if (entries.length === 0) continue;
       let compPts;
@@ -38430,7 +38668,7 @@ function _computeStudentEvalNoteB(ev, sid) {
     if (w <= 0) continue;
     for (const cid of (p.competenceIds || [])) {
       const niv = p.niveaux?.[sid]?.[cid];
-      if (typeof niv !== 'number' || niv < 1 || niv > 4) continue;
+      if (typeof niv !== 'number' || niv < 1 || niv > _nb) continue;
       sumPts += w * niveauToPts(niv);
       sumW   += w;
     }
@@ -39215,14 +39453,19 @@ function _computeStudentFacultativeCounted(classId, sid, periode, disciplineFilt
   // comptées" se calcule sur l'union des disciplines, ce qui contamine le
   // hachuré "non comptée" du Bilan multi-discipline.
   const cls = S.classes?.[classId];
-  let _did = disciplineFilter;
+  let _did = disciplineFilter; // peut contenir un disciplineId, 'primary'/'secondary' (legacy) ou undefined
   if (_did === undefined && cls) _did = _currentDiscipline(classId);
+  // Normalise 'primary'/'secondary' (anciens callsites) en disciplineId — comme la mean
+  if (_did === 'primary' && cls) _did = _clsDisciplineIds(cls)[0];
+  else if (_did === 'secondary' && cls) _did = _clsDisciplineIds(cls)[1] || _clsDisciplineIds(cls)[0];
   const counted = new Set();
+  // Même collecte+filtre que _computeStudentMeanForPeriod (orphelines incluses) —
+  // sinon le hachuré « non comptée » diverge de la moyenne réellement calculée.
   const evs = Object.values(S.evaluations || {})
-    .filter(e => _evalIncludesClass(e, classId))
+    .filter(e => _evalIncludesClass(e, classId) || _studentHasAnyDataInEval(e, sid))
     .filter(e => !periode || e.periode === periode)
     .filter(e => e.countsForMean !== false)
-    .filter(e => !_did || _did === 'all' || _evalMatchesDiscipline(e, _did));
+    .filter(e => !_did || _evalMatchesDiscipline(e, _did));
   const oblig = evs.filter(e => !e.facultative?.active);
   const facultatives = evs.filter(e => e.facultative?.active);
   let num = 0, den = 0;
@@ -39352,15 +39595,10 @@ function _computeStudentDomainLevel(classId, sid, domainId, periode) {
   if (compIds.length === 0) return null;
   const levels = [];
   for (const cid of compIds) {
-    for (const ev of Object.values(S.evaluations || {})) {
-      if (!_evalIncludesClass(ev, classId)) continue;
-      if (periode && ev.periode !== periode) continue;
-      if (ev.countsForMean === false) continue;
-      const agg = _aggregateStudentCompetence(classId, sid, cid, periode);
-      // On compte cette compétence si elle a un niveau (déjà filtré par classe/période dans _aggregateStudentCompetence)
-      if (agg.levelMean != null) levels.push(agg.levelMean);
-      break; // _aggregateStudentCompetence parcourt déjà toutes les évals → 1 itération suffit par cid
-    }
+    // _aggregateStudentCompetence filtre déjà classe/période/discipline ET exclut
+    // les évals diagnostiques (countsForMean === false) — pas de pré-filtre ici.
+    const agg = _aggregateStudentCompetence(classId, sid, cid, periode);
+    if (agg.levelMean != null) levels.push(agg.levelMean);
   }
   if (levels.length === 0) return null;
   return levels.reduce((s, l) => s + l, 0) / levels.length;
@@ -39564,9 +39802,23 @@ function renderBilanTab() {
       const m = _computeStudentMeanForPeriod(cls.id, sid, perCode, _bilanDid);
       if (m != null) studentMoy.set(sid, m);
     }
+    // Rang "min" avec ex æquo : deux moyennes identiques À L'AFFICHAGE (arrondies
+    // à la granulométrie meanGranularity) reçoivent le même rang.
+    const _mg = (S.evalPrefs?.meanGranularity ?? 0.01);
+    const _rnd = (v) => (_mg > 0) ? Math.round(v / _mg) * _mg : v;
     const ranking = [...studentMoy.entries()].sort((a, b) => b[1] - a[1]);
     const rankMap = new Map();
-    ranking.forEach(([sid], i) => rankMap.set(sid, i + 1));
+    let lastMoy = null, lastRank = 0;
+    ranking.forEach(([sid, m], i) => {
+      const mr = _rnd(m);
+      if (lastMoy != null && Math.abs(mr - lastMoy) < 0.001) {
+        rankMap.set(sid, lastRank);
+      } else {
+        rankMap.set(sid, i + 1);
+        lastRank = i + 1;
+        lastMoy = mr;
+      }
+    });
     return { perCode, studentMoy, rankMap, total: ranking.length };
   });
   // Référence "principale" pour les bandeaux d'info — quand periode est défini,
@@ -40370,12 +40622,13 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
     if (!_evalIncludesClass(ev, classId) && !_studentHasAnyDataInEval(ev, sid)) continue;
     if (periode && ev.periode !== periode) continue;
     if (_did && _did !== 'all' && !_evalMatchesDiscipline(ev, _did)) continue;
+    if (ev.countsForMean === false) continue; // éval diagnostique : hors bilan (niveaux comme moyenne)
     // Pour Type B : on prend toutes les passations sur cette compétence
     if (ev.type === 'B') {
       for (const p of (ev.passations || [])) {
         if (!p.competenceIds?.includes(cid)) continue;
         const niv = p.niveaux?.[sid]?.[cid];
-        if (typeof niv !== 'number' || niv < 1) continue;
+        if (typeof niv !== 'number' || niv < 1 || niv > (S.evalPrefs?.nbLevels || 4)) continue;
         entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: p.code, date: _passDateFor(p, classId) || ev.date, niveau: niv });
       }
     } else if (ev.type === 'A' || ev.type === 'C') {
@@ -40457,6 +40710,7 @@ function _getBulletinRemarque(classId, sid, periode, channel) {
   return S.bulletinRemarques?.[classId]?.[ch]?.[sid]?.[periode || ''] || '';
 }
 function _setBulletinRemarque(classId, sid, periode, text, channel) {
+  _evalArmUndo(); // saisie continue : 1 entrée d'undo par salve de frappe
   const ch = channel || _curCh(classId);
   if (!S.bulletinRemarques) S.bulletinRemarques = {};
   if (!S.bulletinRemarques[classId]) S.bulletinRemarques[classId] = {};
@@ -40764,6 +41018,7 @@ function _getBulletinClassRemarque(classId, periode, channel) {
   return S.bulletinClassRemarques?.[classId]?.[ch]?.[periode || ''] || '';
 }
 function _setBulletinClassRemarque(classId, periode, text, channel) {
+  _evalArmUndo(); // saisie continue : 1 entrée d'undo par salve de frappe
   const ch = channel || _curCh(classId);
   if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
   if (!S.bulletinClassRemarques[classId]) S.bulletinClassRemarques[classId] = {};
@@ -40832,6 +41087,7 @@ function _bilanWorkedAdd(classId, periode) {
 function _bilanWorkedUpdate(classId, periode, idx, value) {
   const items = _getBulletinWorkedItems(classId, periode);
   if (idx < 0 || idx >= items.length) return;
+  _evalArmUndo(); // saisie continue : 1 entrée d'undo par salve de frappe
   items[idx] = value;
   _setBulletinWorkedItems(classId, periode, items);
 }
@@ -41060,6 +41316,7 @@ function renderCompetencesTab() {
     if (!_evalIncludesClass(ev, cls.id)) continue;
     if (periode && ev.periode !== periode) continue;
     if (!_compChannelFilter(ev)) continue;
+    if (ev.countsForMean === false) continue; // diagnostique : hors bilan (cohérent avec _aggregateStudentCompetence)
     if (ev.type === 'B') {
       for (const p of (ev.passations || [])) for (const c of (p.competenceIds || [])) { compIds.add(c); ownCompIds.add(c); }
     } else {
@@ -41074,6 +41331,7 @@ function renderCompetencesTab() {
       if (_evalIncludesClass(ev, cls.id)) continue;
       if (periode && ev.periode !== periode) continue;
       if (!_compChannelFilter(ev)) continue;
+      if (ev.countsForMean === false) continue; // diagnostique : hors bilan
       if (!sidsForOrphan.some(sid => _studentHasAnyDataInEval(ev, sid))) continue;
       hasOrphanComps = true;
       if (ev.type === 'B') {
@@ -41495,8 +41753,15 @@ function _bilanCompBuildRows(sep) {
   const { cls, periode, comps, sids, compMeans } = _bilanCompState;
   const roundInt = _compBilanGetRoundInt();
   const fmt = v => v == null ? '' : (roundInt ? String(Math.round(v)) : _fmtNote(v).replace('.', ','));
+  // Garde anti-injection formule (_csvCellGuard) + quoting adapté au séparateur :
+  // CSV (;) → quoting standard ; TSV (\t) → pas de quoting, on neutralise tabs/retours-ligne.
+  const csvEsc = s => {
+    const str = _csvCellGuard(String(s ?? ''));
+    if (sep === '\t') return str.replace(/[\t\r\n]+/g, ' ');
+    return /[";\n\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+  };
   const header = ['Élève', ...comps.map(c => c.code), 'Moyenne'];
-  const lines = [header.join(sep)];
+  const lines = [header.map(csvEsc).join(sep)];
   for (const sid of sids) {
     const stu = S.eleves[sid];
     if (!stu) continue;
@@ -41508,18 +41773,18 @@ function _bilanCompBuildRows(sep) {
       else { row.push(fmt(agg.levelMean)); sumM += agg.levelMean; nM++; }
     }
     row.push(nM > 0 ? fmt(sumM / nM) : '');
-    lines.push(row.join(sep));
+    lines.push(row.map(csvEsc).join(sep));
   }
   // Pied : moyennes classe
   const footMean = ['μ classe'];
   for (const m of compMeans) footMean.push(m.mean == null ? '' : fmt(m.mean));
   footMean.push('');
-  lines.push(footMean.join(sep));
+  lines.push(footMean.map(csvEsc).join(sep));
   // Pied : nb évaluations
   const footN = ['Nb évals'];
   for (const c of comps) footN.push(String(_countCompEvaluations(cls.id, c.id, periode)));
   footN.push('');
-  lines.push(footN.join(sep));
+  lines.push(footN.map(csvEsc).join(sep));
   return lines.join('\n');
 }
 
@@ -41562,8 +41827,10 @@ function _bilanCompExportEnt() {
     const sa = S.eleves[a], sb = S.eleves[b];
     return ((sa?.nom || '') + (sa?.prenom || '')).localeCompare((sb?.nom || '') + (sb?.prenom || ''), 'fr');
   });
+  // Garde anti-injection formule + neutralisation des tabs/retours-ligne (TSV)
+  const tsvEsc = s => _csvCellGuard(String(s ?? '')).replace(/[\t\r\n]+/g, ' ');
   const header = ['Élève', ...comps.map(c => c.code)];
-  const lines = [header.join('\t')];
+  const lines = [header.map(tsvEsc).join('\t')];
   for (const sid of sortedSids) {
     const stu = S.eleves[sid];
     if (!stu) continue;
@@ -41572,7 +41839,7 @@ function _bilanCompExportEnt() {
       const agg = _aggregateStudentCompetence(cls.id, sid, c.id, periode);
       row.push(fmt(agg.levelMean));
     }
-    lines.push(row.join('\t'));
+    lines.push(row.map(tsvEsc).join('\t'));
   }
   const text = lines.join('\n');
   navigator.clipboard.writeText(text).then(

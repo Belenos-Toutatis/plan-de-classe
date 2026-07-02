@@ -564,6 +564,34 @@ test('versionRelation : fallback legacy (un côté sans horloge → savedAt + co
   assert.equal(ev('_versionRelation({classes:{c1:{}},eleves:{},salles:{},savedAt:1})'), 'behind');
 });
 
+test('versionRelation : poste vierge (mémoire sans horloge) vs disque avec horloge → ahead', () => {
+  // Un 2ᵉ poste fraîchement ouvert (démo/vierge, savedAt frais, aucun pushUndo) ne doit
+  // JAMAIS écraser un fichier de sync réel : le disque porte une horloge, pas la mémoire.
+  setState({ classes: {}, eleves: {}, salles: {}, clock: {}, savedAt: 9999999999999 });
+  assert.equal(ev('_versionRelation({classes:{c1:{}},eleves:{},salles:{},savedAt:1,clock:{A:7}})'), 'ahead');
+});
+
+test('periodeForDate : bornes alignées sur _periodEndDate (S1→31/01, T1→30/11, T2→fin fév.)', () => {
+  assert.equal(ev("_periodeForDate('2026-09-15','semestre')"), 'S1');
+  assert.equal(ev("_periodeForDate('2026-01-31','semestre')"), 'S1');
+  assert.equal(ev("_periodeForDate('2026-02-01','semestre')"), 'S2');
+  assert.equal(ev("_periodeForDate('2026-11-30','trimestre')"), 'T1');
+  assert.equal(ev("_periodeForDate('2026-12-01','trimestre')"), 'T2');
+  assert.equal(ev("_periodeForDate('2026-01-15','trimestre')"), 'T2', 'janvier est en T2, pas T1');
+  assert.equal(ev("_periodeForDate('2026-03-01','trimestre')"), 'T3');
+  assert.equal(ev("_periodeForDate('','trimestre')"), null);
+});
+
+test('clock : valeurs string (JSON forgé/corrompu) normalisées, pas de concaténation', () => {
+  const me = ev('_DEVICE_ID');
+  const k = JSON.stringify(me);
+  setState({ classes: {}, eleves: {}, salles: {}, clock: { [me]: '5', autreposte: 'x' } });
+  ev('_clockBumpSelf()');
+  assert.equal(get(`S.clock[${k}]`), 6, '"5"+1 doit donner 6, pas "51"');
+  ev('_clockOnLoad()');
+  assert.equal(get('S.clock.autreposte'), 0, 'valeur non numérique → 0 au chargement');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Dédup des backups + robustesse conflit (étape 3a).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -626,4 +654,59 @@ test('fileKind : distingue NOS archives conflit des copies Nextcloud', () => {
   assert.equal(get(`_fileKind('plan-classe-conflit-autre-2026-06-17-14h30m15s.json').label`), 'Archive conflit');
   assert.equal(get(`_fileKind('plan-classe-auto (conflicted copy 2026-06-17).json').label`), 'Conflit Nextcloud');
   assert.equal(get(`_fileKind('plan-classe-auto (copie en conflit 2026-06-17).json').label`), 'Conflit Nextcloud');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Niveaux configurables (nbLevels 2..6) — _noteToLevel généralisé.
+// ─────────────────────────────────────────────────────────────────────────────
+test('_noteToLevel : comportement inchangé pour nb=4 (défauts)', () => {
+  setState({ evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], thresholdMode: 'midpoint' } });
+  // Seuils midpoint : 6,5 / 11,5 / 17,5 (sur 20)
+  assert.equal(ev('_noteToLevel(5, 20)'), 1);
+  assert.equal(ev('_noteToLevel(7, 20)'), 2);
+  assert.equal(ev('_noteToLevel(12, 20)'), 3);
+  assert.equal(ev('_noteToLevel(18, 20)'), 4);
+  setState({ evalPrefs: { nbLevels: 4, thresholdMode: 'percent', thresholdPercents: [40, 60, 85] } });
+  assert.equal(ev('_noteToLevel(7, 20)'), 1);   // 35 %
+  assert.equal(ev('_noteToLevel(10, 20)'), 2);  // 50 %
+  assert.equal(ev('_noteToLevel(14, 20)'), 3);  // 70 %
+  assert.equal(ev('_noteToLevel(18, 20)'), 4);  // 90 %
+});
+
+test('_noteToLevel : nb=2, nb=3 et nb=6 (percent et midpoint)', () => {
+  // nb=2, percent : 1 seul seuil
+  setState({ evalPrefs: { nbLevels: 2, thresholdMode: 'percent', thresholdPercents: [50] } });
+  assert.equal(ev('_noteToLevel(9, 20)'), 1);
+  assert.equal(ev('_noteToLevel(11, 20)'), 2);
+  // nb=3, midpoint : pts [5, 12, 20] → seuils 8,5 / 16
+  setState({ evalPrefs: { nbLevels: 3, thresholdMode: 'midpoint', maitrisePoints: [5, 12, 20] } });
+  assert.equal(ev('_noteToLevel(8, 20)'), 1);
+  assert.equal(ev('_noteToLevel(10, 20)'), 2);
+  assert.equal(ev('_noteToLevel(17, 20)'), 3);
+  // nb=6, percent : 5 seuils
+  setState({ evalPrefs: { nbLevels: 6, thresholdMode: 'percent', thresholdPercents: [20, 40, 60, 80, 90] } });
+  assert.equal(ev('_noteToLevel(2, 20)'), 1);   // 10 %
+  assert.equal(ev('_noteToLevel(10, 20)'), 3);  // 50 %
+  assert.equal(ev('_noteToLevel(17, 20)'), 5);  // 85 %
+  assert.equal(ev('_noteToLevel(19, 20)'), 6);  // 95 %
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// deleteTag : purge complète (élèves + posTagId des places).
+// ─────────────────────────────────────────────────────────────────────────────
+test('deleteTag : purge stu.tags ET room.posTagId', () => {
+  setState({
+    tags: { t1: { id: 't1', abbr: 'DF' }, t2: { id: 't2', abbr: 'DNL' } },
+    eleves: { s1: { id: 's1', tags: ['t1', 't2'] } },
+    classes: {
+      c1: {
+        id: 'c1', eleves: ['s1'],
+        rooms: { r1: { seating: {}, groupes: {}, posTagId: { '0,0': 't1', '0,1': 't2' } } },
+      },
+    },
+  });
+  ev("deleteTag('t1')");
+  assert.equal(get('S.tags.t1'), null);
+  assert.deepEqual(get('S.eleves.s1.tags'), ['t2']);
+  assert.deepEqual(get("S.classes.c1.rooms.r1.posTagId"), { '0,1': 't2' });
 });
