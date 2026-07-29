@@ -2018,6 +2018,14 @@ _uiConfirm({
 
 **Clavier** : `_uiConfirm` pose le focus sur le bouton principal (`#mconfirm2-ok`) 60 ms après ouverture → **Entrée confirme** (parité avec `confirm()` natif), Échap annule, et le focus trap de la modale devient effectif (il exige un focus initial à l'intérieur de la modale pour intercepter Tab).
 
+**Auto-focus générique des modales** : `openMod(id)` focalise le premier élément portant l'attribut **`data-autofocus`** dans la modale (60 ms après ouverture, sans voler un focus déjà posé par l'appelant). Posé sur : `nc-id` (mc), `ns-nom` (ms), `es-nom` (me), `nsl-nom` (msalle), `msaveatt-label` (msaveatt). Ces mêmes modales valident à **Entrée** (handlers inline `onkeydown` sur leurs inputs texte/number/date → bouton principal). Pour toute nouvelle modale à formulaire : poser `data-autofocus` sur le premier champ utile + Entrée = action principale.
+
+**Échap hors modale** : le handler clavier global ignore les sorties de mode (appel, contraintes, sélection) quand le focus est dans un champ HORS modale — cas particulier : Échap dans `#unpl-search` (filtre 🔍 des non-placés) vide le champ et rafraîchit la liste. Échap dans un champ DANS une modale ferme la modale (comportement historique conservé).
+
+**Modale ⏰ Retard (`mlate`)** : remplace le `prompt()` natif du clic droit en mode appel — `promptLateForStudent(sid)` ouvre une modale avec `<input type="time">` pré-rempli à l'heure courante (ou l'heure du retard existant), Entrée = enregistrer, bouton « ↺ Retirer le retard » visible seulement si l'élève est déjà marqué en retard. Helpers `_lateConfirm()` / `_lateRemove()`, sid courant dans `_lateSid`.
+
+**Année scolaire par défaut** : `_defaultSchoolYear()` (bascule au 1er août — août-décembre → année civile courante, janvier-juillet → année précédente). Utilisée par `openMod('mc')` pour pré-remplir `#nc-yr` (plus de `2025` codé en dur) et comme fallback de `createClass`.
+
 **Patterns de conversion** :
 - Cas simple `if (!confirm(msg)) return; <body>` → mettre `<body>` dans `onOk: () => { ... }`.
 - Confirmation au milieu d'une fonction avec du code commun après → extraire le code commun dans un worker (`const _finish = () => {...}` / `_commit` / `_proceed`), brancher : `if (cond) { _uiConfirm({..., onOk: _commit}); return; } _commit();`.
