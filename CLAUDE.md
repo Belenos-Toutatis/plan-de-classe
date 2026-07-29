@@ -20,6 +20,10 @@ L'app utilise un design system "papier d'enseignant" cohérent — paramétré v
 ### Mode sombre "veillée du dimanche soir"
 Activé via `html[data-theme="dark"]` — texte ambre chaud (`#e8d9b8`) sur fond bleu nuit (`#13181f`), filets désaturés. Toggle dans le header (bouton `◐` / `☾`, id `#btn-theme`, fonction `toggleAppTheme()`), persisté dans `localStorage.planClasse_theme` et restauré au chargement via un IIFE en pied de script.
 
+⚠️ **Deux pièges du design system « papier » à connaître pour toute nouvelle couleur de cellule/input** :
+1. La règle globale `.cell { background: var(--paper) !important }` (~l. 1615) écrase toute règle de fond **sans `!important`** — les fonds des modes Config Salle (`callow`/`cforbid`/`cilot`/`ctag`) portent un `!important` pour cette raison. De même, la règle globale inputs `input[...] { background: var(--paper) !important }` (~l. 1594) porte un `:not(.counter-input)` pour laisser vivre l'échelle de couleurs inline (`oubliColor`) des compteurs 📦/📝 de l'onglet Élèves.
+2. Toute couleur de fond claire posée pour le mode clair doit avoir sa **variante sombre** (sinon texte ambre sur pastel = illisible) : les variables `--g1/g2/g3-light/-em` sont redéfinies dans le bloc `html[data-theme="dark"]`, et des surcharges dédiées existent pour `cgen-m/f` (genre), `.cell.absent/.late` (appel, miroir des `.mp-cell`), `.svcell.oc.absent/.late`, `callow`/`cforbid`/`cilot` et `#tg .cstr-allow/forbid`.
+
 ### Polices embarquées (base64 woff2, sous-set Latin)
 Encodées en `data:font/woff2;base64,...` via 3 blocs `@font-face` en tête du `<style>` (~180 Ko pour les 3 fontes, assumé pour préserver le mono-fichier hors-ligne) :
 - **Fraunces** (serif variable, opsz 9–144) — `--font-serif` : titres, noms de famille dans le tableau Élèves, h2 de sections
@@ -1153,6 +1157,8 @@ XLSX testé avec openpyxl + LibreOffice headless conversion PDF — aucune erreu
 | `Ctrl+Y` ou `Ctrl+Maj+Z` | Refaire |
 | `Ctrl+P` | Imprimer selon l'onglet actif (Plan, Vue Élève, Tablettes, Config, Élèves, Classes) ou ouvrir la modale "🎯 Marqueurs ArUco" sur l'onglet QCMCam |
 | `+` / `-` / `=` | Zoom in / out / reset |
+
+Le zoom du Plan Prof et de la Vue Élève est **persisté** (`localStorage.planClasse_tgZoom` / `planClasse_svZoom`, restauré au chargement via `svApplyZoom()`/`tgApplyZoom()` appelés en fin de définition du module zoom) — un F5 en classe ne remet plus le plan à 100 %.
 | `0` / `1` / `2` / `3` | Filtre groupe : Tous / G1 / G2 / G3 |
 | `A` | Toggle mode appel (en Plan Prof) |
 
@@ -2009,6 +2015,8 @@ _uiConfirm({
 ```
 
 **Pourquoi** : un `confirm()` natif bloqué par l'anti-popup du navigateur (case « empêcher cette page d'ouvrir des boîtes de dialogue ») renvoie `false` silencieusement → l'action ne se déclenche jamais, le bouton paraît cassé. La modale interne n'est jamais bloquée.
+
+**Clavier** : `_uiConfirm` pose le focus sur le bouton principal (`#mconfirm2-ok`) 60 ms après ouverture → **Entrée confirme** (parité avec `confirm()` natif), Échap annule, et le focus trap de la modale devient effectif (il exige un focus initial à l'intérieur de la modale pour intercepter Tab).
 
 **Patterns de conversion** :
 - Cas simple `if (!confirm(msg)) return; <body>` → mettre `<body>` dans `onOk: () => { ... }`.
