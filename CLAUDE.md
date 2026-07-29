@@ -1972,7 +1972,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - Toute action mutante doit appeler `pushUndo()` AVANT la mutation, sinon l'undo capture le mauvais état
 - Pour les développements longs : travailler sur une copie `plan de classe new.html`, puis remplacer une fois validé (convention demandée par l'utilisateur)
 - Modals empilés (par ex. mhist par-dessus moverview) : utiliser `_modalReturnTo[id]` pour enregistrer un callback à la fermeture, ou bien laisser le modal parent ouvert et bumper le `z-index` du modal enfant à 1010+
-- **Jamais de `confirm()` natif** : toujours utiliser le helper `_uiConfirm(...)` (cf. section dédiée). Le navigateur peut bloquer les dialogues natifs → boutons muets. Les `alert()`/`prompt()` natifs subsistent par endroits (à convertir au besoin via `appAlert` / un champ dans une modale).
+- **Jamais de `confirm()` ni `prompt()` natifs** : toujours utiliser les helpers `_uiConfirm(...)` et `_uiPrompt(...)` (cf. sections dédiées). Le navigateur peut bloquer les dialogues natifs → boutons muets. Plus AUCUN `prompt()` dans l'app (tous convertis : retard → `mlate`, renommages → `_uiPrompt`, classe mobile → `mpool-new`, édition de lien → formulaire `mlinks`). Les `alert()` natifs subsistent par endroits (à convertir au besoin via `appAlert` / toast).
 - **Tests (`test/`, `npm test`)** : harnais Node (`test/harness.js`) qui extrait le gros `<script>` inline, le charge dans un contexte `vm` avec un DOM stubé, neutralise `init()` et expose un pont `__TESTEVAL(code)` exécutant du code dans la portée lexicale du script (accès à `S` + toutes les fonctions hoistées). `test/run.test.js` (`node:test`) couvre la logique pure à risque : suppression en cascade (`_purgeStudentRefs`/`_deleteStudentInternal`/`deleteClass`), audit d'intégrité (`_auditState`), dates/périodes, parseurs (`_evalArithExpr`, `parseUnavailableInput`), validation d'import. **Aucune dépendance** (Node ≥ 18) ; le harnais n'est PAS livré avec l'app. Lancer `npm test` avant chaque push touchant cette logique.
 
 ## Fiabilité & sécurité — invariants à respecter
@@ -2025,6 +2025,19 @@ _uiConfirm({
 **Modale ⏰ Retard (`mlate`)** : remplace le `prompt()` natif du clic droit en mode appel — `promptLateForStudent(sid)` ouvre une modale avec `<input type="time">` pré-rempli à l'heure courante (ou l'heure du retard existant), Entrée = enregistrer, bouton « ↺ Retirer le retard » visible seulement si l'élève est déjà marqué en retard. Helpers `_lateConfirm()` / `_lateRemove()`, sid courant dans `_lateSid`.
 
 **Année scolaire par défaut** : `_defaultSchoolYear()` (bascule au 1er août — août-décembre → année civile courante, janvier-juillet → année précédente). Utilisée par `openMod('mc')` pour pré-remplir `#nc-yr` (plus de `2025` codé en dur) et comme fallback de `createClass`.
+
+## Saisie in-app (`_uiPrompt` / modale `mprompt2`)
+
+Pendant « saisie de texte » de `_uiConfirm` — remplace les `prompt()` natifs (même risque anti-popup). `_uiPrompt({ title, label, value, placeholder, maxlength, okLabel, required, onOk, onCancel })` → `onOk(valeurTrimée)`. `required` (défaut true) : un champ vide ne valide pas (toast + focus). Entrée = valider, champ pré-sélectionné à l'ouverture, s'empile au-dessus de la modale appelante. Utilisée par : renommage d'appel (`renameAttendance`), renommage de snapshot (`snapshotRename`).
+
+Conversions apparentées (plus AUCUN `prompt()` dans l'app) :
+- **Nouvelle classe mobile** : modale `mpool-new` (`addTabletPool` → `confirmNewTabletPool`) — `<select>` « Partir de » (vierge ou duplication d'un pool) + nom avec suggestion auto « X (copie) » (`_mpoolNewDupChange`, ne remplace jamais une saisie manuelle via `dataset.suggested`).
+- **Édition d'un lien perso** : le formulaire d'ajout de la modale `mlinks` bascule en mode édition (`editUserLinkPrompt` pré-remplit les 3 champs, `_mlinksEditIdx` non-null, bouton « ✓ Modifier » + « ✕ Annuler ») ; `addUserLinkFromInputs` met à jour en place si `_mlinksEditIdx != null`. `_resetMlinksAddForm` sort du mode édition ; suppression/réordonnancement d'un lien pendant une édition la réinitialise (index non fiable).
+
+## Garde-fous destructifs
+
+- **`setCfgDimensions`** (Config Salle, champs Rangées/Colonnes) : une RÉDUCTION qui détruirait des places occupées (élèves ou AESH, toutes classes de la salle confondues) affiche un `_uiConfirm` chiffré par classe AVANT d'appliquer ; Annuler restaure les valeurs des champs. Zone vide → application directe sans friction. `pushUndo` déplacé dans le worker `_apply` (plus de pushUndo sur no-op).
+- **« ↺ Tout présent »** (`clearAbsences`) : l'état d'appel étant transient (hors undoStack), l'effacement sauvegarde d'abord dans `_appelUndoBackup` (mémoire seule, non persisté) → bouton **« ↩ Rétablir l'appel effacé »** dans le bandeau du mode appel (`restoreClearedAppel`). Invalidé à : sortie/entrée du mode appel, changement de classe, annulation d'édition, minuit/fin de créneau (`_absencesAutoReset`). La confirmation mentionne explicitement la non-annulabilité par Ctrl+Z.
 
 **Patterns de conversion** :
 - Cas simple `if (!confirm(msg)) return; <body>` → mettre `<body>` dans `onOk: () => { ... }`.

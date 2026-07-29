@@ -3532,7 +3532,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </p>
     <div id="mlinks-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
     <div style="border-top:1px solid #eee;padding-top:12px;margin-top:8px">
-      <div style="font-weight:600;font-size:.95em;margin-bottom:8px">+ Ajouter un lien</div>
+      <div style="font-weight:600;font-size:.95em;margin-bottom:8px" id="mlinks-form-title">+ Ajouter un lien</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
         <label style="display:flex;align-items:center;gap:5px;font-size:.88em">
           <span>Icône</span>
@@ -3549,7 +3549,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <span>URL</span>
           <input type="url" id="mlinks-add-url" placeholder="https://..." style="flex:1;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.9em" onkeydown="if(event.key==='Enter'){event.preventDefault();addUserLinkFromInputs()}">
         </label>
-        <button class="btn btn-p btn-sm" onclick="addUserLinkFromInputs()">+ Ajouter</button>
+        <button class="btn btn-p btn-sm" id="mlinks-add-btn" onclick="addUserLinkFromInputs()">+ Ajouter</button>
+        <button class="btn btn-g btn-sm" id="mlinks-edit-cancel" onclick="_resetMlinksAddForm()" style="display:none">✕ Annuler</button>
       </div>
       <div style="font-size:.78em;color:#888">L'URL doit commencer par <code>http://</code> ou <code>https://</code>. Les liens s'ouvrent dans un nouvel onglet.</div>
     </div>
@@ -5035,6 +5036,44 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   </div>
 </div>
 
+<!-- ✏️ Saisie générique — pendant « saisie de texte » de mconfirm2 (helper _uiPrompt).
+     Remplace les prompt() natifs (blocables par l'anti-popup du navigateur). -->
+<div id="mprompt2" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:460px;width:100%">
+    <h2 id="mprompt2-title">Saisie</h2>
+    <div class="fg" style="margin:10px 0 14px">
+      <label id="mprompt2-label" for="mprompt2-input" style="font-size:.9em"></label>
+      <input id="mprompt2-input" type="text" style="width:100%;box-sizing:border-box"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('mprompt2-ok').click()}">
+    </div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('mprompt2')">Annuler</button>
+      <button class="btn btn-p" id="mprompt2-ok">✓ Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- 📱 Nouvelle classe mobile — remplace les 2 prompt() en cascade (« tapez le nom exact ») -->
+<div id="mpool-new" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:420px;width:100%">
+    <h2>📱 Nouvelle classe mobile</h2>
+    <div class="fg"><label>Partir de</label>
+      <select id="mpool-new-dup" onchange="_mpoolNewDupChange()">
+        <option value="">— Classe mobile vierge —</option>
+      </select>
+      <span style="font-size:.78em;color:#888;display:block;margin-top:3px">Dupliquer reprend le préfixe d'étiquette, le nombre de tablettes et les lots.</span>
+    </div>
+    <div class="fg"><label>Nom</label>
+      <input id="mpool-new-nom" maxlength="30" placeholder="ex : CM3" data-autofocus
+             onkeydown="if(event.key==='Enter'){event.preventDefault();confirmNewTabletPool()}">
+    </div>
+    <div class="ma">
+      <button class="btn btn-g" onclick="closeMod2('mpool-new')">Annuler</button>
+      <button class="btn btn-p" onclick="confirmNewTabletPool()">✓ Créer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL Stratégie de sauvegarde automatique ── -->
 <!-- ── MODAL ⚙ Réglages (méta-menu : récap de tous les réglages possibles) ── -->
 <!-- Chaque rubrique délègue à sa modale existante. Les accès contextuels en
@@ -5936,11 +5975,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.20.2';
+const APP_VERSION    = '2.20.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-29T22:05:03Z';
+const APP_BUILD_DATE = '2026-07-29T22:56:03Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9118,6 +9157,14 @@ function _resetMlinksAddForm() {
   if (ico) ico.value = _DEFAULT_LINK_ICON;
   if (lbl) lbl.value = '';
   if (url) url.value = '';
+  // Sort du mode édition (le formulaire redevient un formulaire d'ajout)
+  _mlinksEditIdx = null;
+  const title = document.getElementById('mlinks-form-title');
+  const btn = document.getElementById('mlinks-add-btn');
+  const cancel = document.getElementById('mlinks-edit-cancel');
+  if (title) title.textContent = '+ Ajouter un lien';
+  if (btn) btn.textContent = '+ Ajouter';
+  if (cancel) cancel.style.display = 'none';
 }
 
 // ─── Modale "🏷 Tags" : gestion globale (créer/éditer/supprimer) ───
@@ -10138,24 +10185,35 @@ function renderMlinksList() {
   }).join('');
 }
 
+// Index du lien en cours d'édition dans le formulaire de la modale 🔗 (null = mode ajout)
+let _mlinksEditIdx = null;
 function addUserLinkFromInputs() {
   const icon  = (document.getElementById('mlinks-add-icon')?.value || '').trim();
   const label = (document.getElementById('mlinks-add-label')?.value || '').trim();
   let url     = (document.getElementById('mlinks-add-url')?.value || '').trim();
-  if (!label) return alert('Donnez un libellé au lien.');
-  if (!url)   return alert('Indiquez une URL.');
+  if (!label) { toast('⚠️ Donnez un libellé au lien.', 'warn'); document.getElementById('mlinks-add-label')?.focus(); return; }
+  if (!url)   { toast('⚠️ Indiquez une URL.', 'warn'); document.getElementById('mlinks-add-url')?.focus(); return; }
   // Auto-préfixe https:// si l'utilisateur a juste tapé un domaine
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   if (!Array.isArray(S.userLinks)) S.userLinks = [];
   pushUndo();
-  S.userLinks.push({ id: 'lnk_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), icon: icon || _DEFAULT_LINK_ICON, label, url });
+  if (_mlinksEditIdx != null && S.userLinks[_mlinksEditIdx]) {
+    // Mode édition : met à jour le lien en place (le formulaire a été pré-rempli par editUserLinkPrompt)
+    const l = S.userLinks[_mlinksEditIdx];
+    l.icon  = (icon || _DEFAULT_LINK_ICON).slice(0, 3);
+    l.label = label.slice(0, 30);
+    l.url   = url;
+    toast('🔗 Lien mis à jour');
+  } else {
+    S.userLinks.push({ id: 'lnk_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), icon: icon || _DEFAULT_LINK_ICON, label, url });
+    toast('🔗 Lien ajouté');
+  }
   save();
   renderUserLinks();
   renderMlinksList();
-  // Reset le formulaire avec l'emoji par défaut pré-rempli pour ajouter un autre lien rapidement
+  // Reset le formulaire (sort aussi du mode édition) avec l'emoji par défaut pré-rempli
   _resetMlinksAddForm();
   document.getElementById('mlinks-add-label')?.focus();
-  toast('🔗 Lien ajouté');
 }
 
 function deleteUserLink(idx) {
@@ -10168,6 +10226,7 @@ function deleteUserLink(idx) {
     onOk: () => {
       pushUndo();
       links.splice(idx, 1);
+      if (_mlinksEditIdx != null) _resetMlinksAddForm(); // l'index d'édition ne serait plus fiable
       save();
       renderUserLinks();
       renderMlinksList();
@@ -10183,33 +10242,33 @@ function moveUserLink(idx, delta) {
   pushUndo();
   const [item] = links.splice(idx, 1);
   links.splice(newIdx, 0, item);
+  if (_mlinksEditIdx != null) _resetMlinksAddForm(); // l'index d'édition ne serait plus fiable
   save();
   renderUserLinks();
   renderMlinksList();
 }
 
+// Édition d'un lien : bascule le formulaire d'ajout de la modale 🔗 en mode édition
+// (pré-rempli avec les 3 valeurs du lien) — remplace les 3 prompt() en cascade où
+// annuler au 3ᵉ perdait les 2 premières saisies.
 function editUserLinkPrompt(idx) {
   const links = S.userLinks || [];
   if (idx < 0 || idx >= links.length) return;
   const l = links[idx];
-  const newIcon = prompt(`Icône (emoji court, max 3 caractères) :`, l.icon || '🔗');
-  if (newIcon === null) return;
-  const newLabel = prompt(`Libellé court :`, l.label || '');
-  if (newLabel === null) return;
-  if (!newLabel.trim()) return alert('Le libellé ne peut pas être vide.');
-  let newUrl = prompt(`URL complète (avec https://) :`, l.url || '');
-  if (newUrl === null) return;
-  newUrl = newUrl.trim();
-  if (!newUrl) return alert('L\'URL ne peut pas être vide.');
-  if (!/^https?:\/\//i.test(newUrl)) newUrl = 'https://' + newUrl;
-  pushUndo();
-  l.icon  = (newIcon.trim() || '🔗').slice(0, 3);
-  l.label = newLabel.trim().slice(0, 30);
-  l.url   = newUrl;
-  save();
-  renderUserLinks();
-  renderMlinksList();
-  toast('🔗 Lien mis à jour');
+  _mlinksEditIdx = idx;
+  const ico = document.getElementById('mlinks-add-icon');
+  const lbl = document.getElementById('mlinks-add-label');
+  const url = document.getElementById('mlinks-add-url');
+  if (ico) ico.value = l.icon || '🔗';
+  if (lbl) lbl.value = l.label || '';
+  if (url) url.value = l.url || '';
+  const title = document.getElementById('mlinks-form-title');
+  const btn = document.getElementById('mlinks-add-btn');
+  const cancel = document.getElementById('mlinks-edit-cancel');
+  if (title) title.textContent = `✏️ Modifier le lien « ${l.label || ''} »`;
+  if (btn) btn.textContent = '✓ Modifier';
+  if (cancel) cancel.style.display = '';
+  lbl?.focus();
 }
 
 // fetch avec timeout (AbortController). Sur un réseau d'établissement qui blackhole
@@ -12689,6 +12748,7 @@ function switchClass(id) {
     if (_oldId) { const _p = _oldId + '|'; for (const k of [..._aeshAbsentToday]) if (k.startsWith(_p)) _aeshAbsentToday.delete(k); }
     _appelMode = false;
     _appelSavedSlot = null;
+    _appelUndoBackup = null;
     const _b = document.getElementById('btn-appel-mode');
     if (_b) { _b.style.background = ''; _b.style.color = ''; _b.style.borderColor = ''; }
     _saveAttTransient();
@@ -16826,6 +16886,46 @@ function _uiConfirm(opts) {
   if (ok) setTimeout(() => { try { ok.focus(); } catch (_) {} }, 60);
 }
 
+// ─── Saisie de texte in-app (remplace prompt() natif — même raison que _uiConfirm) ───
+// _uiPrompt({ title, label, value, placeholder, maxlength, okLabel, required, onOk, onCancel })
+// → onOk(valeurTrimée). Si required (défaut true), un champ vide ne valide pas (toast).
+// Entrée = valider, Échap / Annuler / clic fond = onCancel. Champ pré-sélectionné.
+function _uiPrompt(opts) {
+  opts = opts || {};
+  const t   = document.getElementById('mprompt2-title');
+  const lbl = document.getElementById('mprompt2-label');
+  const inp = document.getElementById('mprompt2-input');
+  const ok  = document.getElementById('mprompt2-ok');
+  if (t)   t.textContent = opts.title || 'Saisie';
+  if (lbl) { lbl.textContent = opts.label || ''; lbl.style.display = opts.label ? '' : 'none'; }
+  if (inp) {
+    inp.value = opts.value || '';
+    inp.placeholder = opts.placeholder || '';
+    inp.maxLength = opts.maxlength || 200;
+  }
+  const required = opts.required !== false;
+  let _okPressed = false;
+  if (ok) {
+    ok.textContent = opts.okLabel || '✓ Valider';
+    ok.onclick = () => {
+      const v = inp ? inp.value.trim() : '';
+      if (required && !v) { toast('⚠️ Le champ ne peut pas être vide.', 'warn'); try { inp.focus(); } catch (_) {} return; }
+      _okPressed = true;
+      closeMod2('mprompt2');
+      try { opts.onOk && opts.onOk(v); } catch (e) { console.warn('Saisie : action échouée', e); }
+    };
+  }
+  if (typeof _modalReturnTo !== 'undefined') {
+    if (opts.onCancel) {
+      _modalReturnTo['mprompt2'] = () => { if (!_okPressed) { try { opts.onCancel(); } catch (_) {} } };
+    } else {
+      delete _modalReturnTo['mprompt2'];
+    }
+  }
+  openMod('mprompt2');
+  if (inp) setTimeout(() => { try { inp.focus(); inp.select(); } catch (_) {} }, 60);
+}
+
 function resetKeepingRooms() {
   _uiConfirm({
     title: '🏫 Réinitialiser en conservant les salles',
@@ -19492,29 +19592,69 @@ function _truncateSalleRows(salleId, newRows) {
 function setCfgDimensions() {
   const salle = selectedSalle();
   if (!salle) return;
-  pushUndo();
   const rows = Math.min(15, Math.max(1, parseInt(document.getElementById('cfg-rows').value) || 4));
   const cols = Math.min(15, Math.max(1, parseInt(document.getElementById('cfg-cols').value) || 10));
   const oldRows = salle.rows || 4;
   const oldCols = salle.cols || 10;
-  // Colonnes : Plan Prof affiche col 0 à droite. Donc ajouter/supprimer une colonne
-  // doit se faire À DROITE → on décale toutes les keys par delta = (cols - oldCols).
-  // - Augmenter cols : delta > 0 → toutes les keys glissent vers le haut, les nouvelles
-  //   colonnes vides (data col 0..delta-1) apparaissent à droite visuellement.
-  // - Réduire cols : delta < 0 → keys avec col + delta < 0 sont supprimées (data col 0..|delta|-1
-  //   = colonnes les plus à droite visuellement). Les autres glissent vers le bas.
-  if (cols !== oldCols) {
-    salle.cols = cols;
-    _shiftSalleColumns(cfgSelectedSalle, cols - oldCols, cols);
+  if (rows === oldRows && cols === oldCols) return;
+  const _apply = () => {
+    pushUndo();
+    // Colonnes : Plan Prof affiche col 0 à droite. Donc ajouter/supprimer une colonne
+    // doit se faire À DROITE → on décale toutes les keys par delta = (cols - oldCols).
+    // - Augmenter cols : delta > 0 → toutes les keys glissent vers le haut, les nouvelles
+    //   colonnes vides (data col 0..delta-1) apparaissent à droite visuellement.
+    // - Réduire cols : delta < 0 → keys avec col + delta < 0 sont supprimées (data col 0..|delta|-1
+    //   = colonnes les plus à droite visuellement). Les autres glissent vers le bas.
+    if (cols !== oldCols) {
+      salle.cols = cols;
+      _shiftSalleColumns(cfgSelectedSalle, cols - oldCols, cols);
+    }
+    // Rangées : on garde le comportement historique (truncate par le bas) — l'utilisateur
+    // n'a pas demandé de changement sur les rangées.
+    if (rows !== oldRows) {
+      salle.rows = rows;
+      if (rows < oldRows) _truncateSalleRows(cfgSelectedSalle, rows);
+    }
+    save();
+    renderConfigGrid();
+  };
+  // Garde-fou : une RÉDUCTION détruit les places de la zone supprimée dans TOUTES
+  // les classes qui utilisent la salle. Si des élèves (ou AESH) y sont assis, on
+  // confirme avec le décompte par classe AVANT d'appliquer ; Annuler restaure les champs.
+  const deltaC = cols - oldCols;
+  const _doomed = (k) => {
+    const [r, c] = String(k).split(',').map(Number);
+    return (rows < oldRows && r >= rows) || (deltaC < 0 && c < -deltaC);
+  };
+  let total = 0, aeshTotal = 0;
+  const perClass = [];
+  if (rows < oldRows || deltaC < 0) {
+    Object.values(S.classes || {}).forEach(cls => {
+      const room = cls.rooms?.[cfgSelectedSalle];
+      if (!room) return;
+      const n = Object.keys(room.seating || {}).filter(k => room.seating[k] && _doomed(k)).length;
+      const a = Object.values(room.aeshSeating || {}).filter(k => k && _doomed(k)).length;
+      if (n > 0 || a > 0) {
+        perClass.push(`• ${cls.nom} : ${n} élève${n > 1 ? 's' : ''}${a ? ` + ${a} AESH` : ''}`);
+        total += n; aeshTotal += a;
+      }
+    });
   }
-  // Rangées : on garde le comportement historique (truncate par le bas) — l'utilisateur
-  // n'a pas demandé de changement sur les rangées.
-  if (rows !== oldRows) {
-    salle.rows = rows;
-    if (rows < oldRows) _truncateSalleRows(cfgSelectedSalle, rows);
-  }
-  save();
-  renderConfigGrid();
+  if (total === 0 && aeshTotal === 0) { _apply(); return; }
+  const parts = [];
+  if (rows < oldRows) parts.push(`${oldRows - rows} rangée${oldRows - rows > 1 ? 's' : ''}`);
+  if (deltaC < 0) parts.push(`${-deltaC} colonne${-deltaC > 1 ? 's' : ''}`);
+  _uiConfirm({
+    title: '⚠️ Réduire la salle',
+    message: `Supprimer ${parts.join(' et ')} de « ${salle.nom} » libérera les occupants de la zone supprimée :\n\n${perClass.join('\n')}\n\nIls repasseront en « non placés ». Annulable via Ctrl+Z.`,
+    okLabel: 'Réduire quand même', okClass: 'btn-w',
+    onOk: _apply,
+    onCancel: () => {
+      const ri = document.getElementById('cfg-rows'), ci = document.getElementById('cfg-cols');
+      if (ri) ri.value = oldRows;
+      if (ci) ci.value = oldCols;
+    },
+  });
 }
 
 // Bascule une cellule sans pushUndo / save / render — utilisé par le drag pour
@@ -21326,42 +21466,58 @@ function renderPoolCard(p) {
 }
 
 // ─── Création d'une classe mobile ───
+// Ouvre la modale « Nouvelle classe mobile » (remplace les 2 prompt() en cascade :
+// le choix de duplication se fait dans un <select> au lieu de « tapez le nom exact »).
 function addTabletPool() {
-  // Si une classe mobile existe déjà, propose de la dupliquer
-  const existing = Object.values(S.tabletPools || {});
-  let dupeFromId = null;
-  if (existing.length) {
-    const choice = prompt(
-      `Dupliquer depuis une classe mobile existante ? Tapez le nom exact, ou laissez vide pour créer vierge.\n\nClasses existantes : ${existing.map(p => p.nom).join(', ')}`,
-      ''
-    );
-    if (choice == null) return;
-    if (choice.trim()) {
-      const found = existing.find(p => p.nom === choice.trim());
-      if (!found) return alert('Classe mobile introuvable.');
-      dupeFromId = found.id;
-    }
+  const sel = document.getElementById('mpool-new-dup');
+  if (sel) {
+    let html = '<option value="">— Classe mobile vierge —</option>';
+    Object.values(S.tabletPools || {}).forEach(p => {
+      html += `<option value="${_escAttr(p.id)}">Dupliquer « ${_escAttr(p.nom)} » (${p.count || 0} tablettes)</option>`;
+    });
+    sel.innerHTML = html;
   }
-  const nom = prompt('Nom de la nouvelle classe mobile :', dupeFromId ? S.tabletPools[dupeFromId].nom + ' (copie)' : '');
-  if (!nom?.trim()) return;
+  const nom = document.getElementById('mpool-new-nom');
+  if (nom) nom.value = '';
+  openMod('mpool-new');
+}
+// Suggestion de nom à la sélection d'une source (seulement si le champ est vide ou
+// contient encore la suggestion précédente — ne remplace jamais une saisie manuelle).
+function _mpoolNewDupChange() {
+  const sel = document.getElementById('mpool-new-dup');
+  const nom = document.getElementById('mpool-new-nom');
+  if (!sel || !nom) return;
+  const src = S.tabletPools?.[sel.value];
+  const suggestion = src ? `${src.nom} (copie)` : '';
+  if (!nom.value.trim() || nom.dataset.suggested === nom.value) {
+    nom.value = suggestion;
+    nom.dataset.suggested = suggestion;
+  }
+}
+function confirmNewTabletPool() {
+  const nomInp = document.getElementById('mpool-new-nom');
+  const nom = (nomInp?.value || '').trim();
+  if (!nom) { toast('⚠️ Donnez un nom à la classe mobile.', 'warn'); try { nomInp.focus(); } catch (_) {} return; }
+  const dupeFromId = document.getElementById('mpool-new-dup')?.value || null;
   pushUndo();
   const id = newTabletPoolId();
   const src = dupeFromId ? S.tabletPools[dupeFromId] : null;
   S.tabletPools[id] = src ? {
-    id, nom: nom.trim(),
-    prefix: src.prefix || `${nom.trim()} - ELV`,
+    id, nom,
+    prefix: src.prefix || `${nom} - ELV`,
     digits: src.digits || 2,
     count:  src.count  || 31,
     lots:   JSON.parse(JSON.stringify(src.lots || []))
   } : {
-    id, nom: nom.trim(),
-    prefix: `${nom.trim()} - ELV`,
+    id, nom,
+    prefix: `${nom} - ELV`,
     digits: 2, count: 31,
     lots: [{ nom: '1', from: 1, to: 31 }]
   };
   save();
+  closeMod2('mpool-new');
   renderPoolList();
-  toast(`📱 Classe mobile « ${nom.trim()} » créée.`);
+  toast(`📱 Classe mobile « ${nom} » créée.`);
 }
 
 function deleteTabletPool(id) {
@@ -22113,6 +22269,7 @@ function _absencesAutoReset() {
     _aeshAbsentToday.clear();
     _absentDate = k;
     _appelSavedSlot = null;
+    _appelUndoBackup = null; // le filet « ↺ Tout présent » de la veille n'a plus de sens
     _saveAttTransient();
     return;
   }
@@ -22121,6 +22278,7 @@ function _absencesAutoReset() {
     _lateToday.clear();
     _aeshAbsentToday.clear();
     _appelSavedSlot = null;
+    _appelUndoBackup = null;
     _saveAttTransient();
   }
 }
@@ -22229,6 +22387,7 @@ function toggleAppelMode() {
     return;
   }
   _absencesAutoReset();
+  _appelUndoBackup = null; // le filet « ↺ Tout présent » ne survit pas à un changement de mode
   const wasOff = !_appelMode;
   _appelMode = !_appelMode;
   const btn = document.getElementById('btn-appel-mode');
@@ -22310,6 +22469,11 @@ function toggleAbsence(sid) {
   renderTeacherGrid();
 }
 
+// Filet de sécurité « ↺ Tout présent » : l'état d'appel est transient (hors undoStack,
+// Ctrl+Z inopérant). Avant d'effacer, on sauvegarde en mémoire → un bouton « Rétablir »
+// apparaît dans le bandeau du mode appel. Invalidé à la sortie du mode, au changement
+// de classe et à minuit (non persisté : ne survit pas à un F5).
+let _appelUndoBackup = null;
 function clearAbsences() {
   // Compte aussi les AESH absentes pour la classe active dans le total et le confirm
   const cls = getCls();
@@ -22318,8 +22482,15 @@ function clearAbsences() {
   if (!total) return;
   _uiConfirm({
     title: '↺ Tout présent', okLabel: '↺ Tout présent', okClass: 'btn-w',
-    message: `Marquer les ${total} (élèves + AESH) comme présents ?`,
+    message: `Marquer les ${total} (élèves + AESH) comme présents ?\n\n⚠️ Non annulable par Ctrl+Z — mais un bouton « ↩ Rétablir » restera disponible dans le bandeau tant que vous êtes en mode appel.`,
     onOk: () => {
+      _appelUndoBackup = {
+        classId: cls ? cls.id : null,
+        absents: [..._absentToday],
+        late: [..._lateToday.entries()],
+        aesh: cls ? [..._aeshAbsentToday].filter(k => k.startsWith(cls.id + '|')) : [],
+        savedSlot: _appelSavedSlot,
+      };
       _absentToday.clear();
       _lateToday.clear();
       // On clear UNIQUEMENT les AESH de la classe active (les autres classes peuvent avoir leur propre appel en cours)
@@ -22331,9 +22502,24 @@ function clearAbsences() {
       _appelSavedSlot = null; // l'utilisateur efface explicitement → on ne garde pas le post-appel
       _saveAttTransient();
       renderTeacherGrid();
-      toast('Tous les élèves et AESH marqués présents.');
+      toast('Tous les élèves et AESH marqués présents. (↩ Rétablir disponible dans le bandeau)');
     },
   });
+}
+
+// Restaure les marquages effacés par « ↺ Tout présent » (filet one-shot en mémoire).
+function restoreClearedAppel() {
+  const b = _appelUndoBackup;
+  const cls = getCls();
+  if (!b || !cls || b.classId !== cls.id) { _appelUndoBackup = null; renderTeacherGrid(); return; }
+  b.absents.forEach(sid => _absentToday.add(sid));
+  b.late.forEach(([sid, t]) => _lateToday.set(sid, t));
+  b.aesh.forEach(k => _aeshAbsentToday.add(k));
+  _appelSavedSlot = b.savedSlot || null;
+  _appelUndoBackup = null;
+  _saveAttTransient();
+  renderTeacherGrid();
+  toast(`↩ Appel rétabli (${b.absents.length} absent(s), ${b.late.length} retard(s)).`);
 }
 
 // Toggle d'absence pour une AESH (en mode appel). Persiste l'état transient.
@@ -22751,6 +22937,7 @@ function updateAppelBanner() {
       <span style="flex:1"><strong>Mode appel</strong> — clic = absent/présent · clic droit = retard (heure d'arrivée). <strong>${summary0}</strong>.</span>
       <button class="btn btn-p btn-sm" onclick="openSaveAttendanceModal()" title="${n ? 'Enregistrer cet appel' : 'Enregistrer un appel sans absent ni retard (tout le monde présent)'}">📌 Enregistrer cet appel</button>
       <button class="btn btn-w btn-sm" onclick="clearAbsences()" ${n ? '' : 'disabled style="opacity:.5;cursor:not-allowed"'}>↺ Tout présent</button>
+      ${(_appelUndoBackup && _appelUndoBackup.classId === getCls()?.id) ? '<button class="btn btn-g btn-sm" onclick="restoreClearedAppel()" title="Restaure les marquages effacés par ↺ Tout présent">↩ Rétablir l\'appel effacé</button>' : ''}
       <button class="btn btn-g btn-sm" onclick="toggleAppelMode()">↩ Quitter le mode appel</button>
     `;
   }
@@ -22768,6 +22955,7 @@ function cancelEditAttendance() {
     for (const k of [..._aeshAbsentToday]) if (k.startsWith(_prefix)) _aeshAbsentToday.delete(k);
   }
   _appelSavedSlot = null;
+  _appelUndoBackup = null;
   _saveAttTransient();
   _appelMode = false;
   const btn = document.getElementById('btn-appel-mode');
@@ -23725,15 +23913,17 @@ function renameAttendance(id, classId) {
   const cid = classId || getCls()?.id;
   const r = S.attendance?.[cid]?.[id];
   if (!r) return;
-  const nv = prompt('Nouveau libellé :', r.label);
-  if (nv == null) return;
-  const trimmed = nv.trim();
-  if (!trimmed) return alert('Le libellé ne peut pas être vide.');
-  pushUndo();
-  r.label = trimmed;
-  save();
-  renderAttendanceList();
-  toast('✏️ Appel renommé.');
+  _uiPrompt({
+    title: '📝 Renommer l\'appel', label: 'Nouveau libellé', value: r.label, maxlength: 80,
+    okLabel: '✓ Renommer',
+    onOk: (trimmed) => {
+      pushUndo();
+      r.label = trimmed;
+      save();
+      renderAttendanceList();
+      toast('✏️ Appel renommé.');
+    },
+  });
 }
 
 function deleteAttendance(id, classId) {
@@ -23983,15 +24173,17 @@ function snapshotDelete(id) {
 function snapshotRename(id) {
   const k = S.snapshots?.[id];
   if (!k) return;
-  const nv = prompt('Nouveau nom :', k.nom);
-  if (nv == null) return;
-  const trimmed = nv.trim();
-  if (!trimmed) return alert('Le nom ne peut pas être vide.');
-  pushUndo();
-  k.nom = trimmed;
-  save();
-  renderSnapshotsList();
-  toast('✏️ Snapshot renommé.');
+  _uiPrompt({
+    title: '✏️ Renommer le snapshot', label: 'Nouveau nom', value: k.nom, maxlength: 60,
+    okLabel: '✓ Renommer',
+    onOk: (trimmed) => {
+      pushUndo();
+      k.nom = trimmed;
+      save();
+      renderSnapshotsList();
+      toast('✏️ Snapshot renommé.');
+    },
+  });
 }
 
 // ─── Restauration (positions uniquement) ───
