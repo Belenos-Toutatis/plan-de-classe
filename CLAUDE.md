@@ -2034,6 +2034,24 @@ Conversions apparentées (plus AUCUN `prompt()` dans l'app) :
 - **Nouvelle classe mobile** : modale `mpool-new` (`addTabletPool` → `confirmNewTabletPool`) — `<select>` « Partir de » (vierge ou duplication d'un pool) + nom avec suggestion auto « X (copie) » (`_mpoolNewDupChange`, ne remplace jamais une saisie manuelle via `dataset.suggested`).
 - **Édition d'un lien perso** : le formulaire d'ajout de la modale `mlinks` bascule en mode édition (`editUserLinkPrompt` pré-remplit les 3 champs, `_mlinksEditIdx` non-null, bouton « ✓ Modifier » + « ✕ Annuler ») ; `addUserLinkFromInputs` met à jour en place si `_mlinksEditIdx != null`. `_resetMlinksAddForm` sort du mode édition ; suppression/réordonnancement d'un lien pendant une édition la réinitialise (index non fiable).
 
+## États vides actionnables
+
+Helper **`_emptyStateHTML(icon, title, hintHTML)`** (classe CSS `.empty-state` — patron du bandeau îlots : fond paper-warm, bordure dashed, centré) : tout état vide doit dire QUOI faire, pas juste « c'est vide ». Variante **`_needClassHTML(pour)`** (« Aucune classe sélectionnée » + pointeur vers le sélecteur du bandeau), partagée par les onglets Élèves / Plan / Vue Élève / Tablettes / QCMCam / Export / Devoirs / Bilans. Cas notables : « Aucun élève » pointe vers ⬆ Importer / + Ajouter ; le Bilan des notes gère « classe sans évaluation » (early return avant construction du tableau) ; les listes vides des modales (disciplines, compétences, commentaires, patterns) nomment leur action de création.
+
+## Zéro dialogue natif
+
+Plus AUCUN `alert()` / `confirm()` / `prompt()` natif dans l'app (blocables par l'anti-popup). Conventions :
+- **Préconditions & résultats vides** (« Sélectionnez une classe », « Aucun élève à imprimer »…) → `toast('⚠️ …', 'warn')` non bloquant.
+- **Validations de formulaire** → `toast(…, 'warn')` + `focus()` sur le champ fautif.
+- **Erreurs de fichier** (lecture/parse/corruption JSON) → `appAlert(titre, message, 'error')` (modale stylée, multi-ligne).
+- Confirmations → `_uiConfirm` · saisies → `_uiPrompt` · retard → modale `mlate`.
+
+## Tactile (`@media (pointer: coarse)`)
+
+Bloc en **fin de `<style>`** (doit battre le bloc COMPACTION à spécificité égale) : n'affecte QUE les écrans tactiles (Surface/iPad/Android), rien ne change à la souris. Agrandit : header/nav (annule la compaction), `.btn-sm`/`.gchip`/`.tagchip` des toolbars, contrôles internes des cellules du plan (`.cctr`, `.cell-unplace`, `.isel`, `.cipad`), inputs du tableur d'éval, `.counter-input`, cases à cocher/radios. ⚠️ Ressenti réel à valider sur l'appareil.
+
+**Retard en mode appel — appui long maison** : les cellules du mode appel (buildCell, branche appel) portent un timer `touchstart` 550 ms → `promptLateForStudent` (iOS/iPadOS n'émet JAMAIS `contextmenu` au doigt, contrairement à Windows/Android qui le synthétisent). Garde anti-double-ouverture dans `promptLateForStudent` (modale `mlate` déjà ouverte → no-op) car sur Surface/Android l'appui long déclenche l'OS ET le timer. `touchend` avale le click synthétique après déclenchement (sinon toggle absent par-dessus).
+
 ## Garde-fous destructifs
 
 - **`setCfgDimensions`** (Config Salle, champs Rangées/Colonnes) : une RÉDUCTION qui détruirait des places occupées (élèves ou AESH, toutes classes de la salle confondues) affiche un `_uiConfirm` chiffré par classe AVANT d'appliquer ; Annuler restaure les valeurs des champs. Zone vide → application directe sans friction. `pushUndo` déplacé dans le worker `_apply` (plus de pushUndo sur no-op).

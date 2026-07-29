@@ -536,6 +536,11 @@ body.noise-widget-on #toast{bottom:112px}
 .tb{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
 .tb-hint{font-size:.8em;color:#888}
 
+/* ─── État vide actionnable (message + geste à faire — patron du bandeau îlots) ─── */
+.empty-state{background:var(--paper-warm);border:1px dashed var(--rule-line);border-radius:var(--radius-md);padding:18px 22px;margin:12px 0;text-align:center;color:var(--pencil);font-size:.92em;line-height:1.65;max-width:560px}
+.empty-state .es-icon{font-size:1.7em;display:block;margin-bottom:6px;opacity:.8}
+.empty-state strong{color:var(--ink-blue)}
+
 /* ─── GROUPES ─── */
 /* Couleurs */
 :root{--g1:#2980b9;--g1-light:#d6eaf8;--g1-em:#eaf4fc;--g2:#d35400;--g2-light:#fde8d8;--g2-em:#fef5ee;--g3:#8e44ad;--g3-light:#e8d5ee;--g3-em:#f4e6f8}
@@ -2211,6 +2216,36 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 #tg .cell.cstr-pair-src{opacity:.5}
 #tg .cell.cstr-pair-target{outline:3px dashed #e74c3c !important;outline-offset:-3px;z-index:11}
 @media print{#cstr-svg{display:none !important}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TACTILE (pointer: coarse) — cibles agrandies sur écran tactile
+   (Surface, iPad, Android). Ne change RIEN à la souris. Placé en fin
+   de feuille pour battre le bloc COMPACTION à spécificité égale.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  /* Header + nav : annule la compaction (boutons ~19 px → ≥ 38 px effectifs) */
+  .hdr-btn { padding: 9px 12px !important; font-size: 14px !important; }
+  .nb { padding: 11px 14px !important; font-size: 14px !important; }
+  #cls-sel { font-size: 15px !important; padding: 9px 10px !important; }
+  .theme-toggle { width: 40px !important; height: 40px !important; font-size: 17px !important; }
+  .tab-group .group-label { font-size: 10px !important; }
+  /* Toolbars d'onglet : boutons et chips plus hauts */
+  .btn-sm { padding: 9px 13px !important; font-size: .95em !important; }
+  .gchip { padding: 9px 16px !important; font-size: .92em !important; }
+  .tagchip { padding: 8px 14px !important; }
+  /* Cellules du plan : contrôles internes tapables (compteurs 📦/📝, croix
+     de retrait, pastille tablette) — mesurés à 31×15 px avant cette règle */
+  .cctr { padding: 6px 9px !important; font-size: .88em !important; }
+  .cell-unplace { padding: 4px 9px !important; font-size: 1.1em !important; }
+  .isel, .cipad { font-size: .88em !important; padding: 4px 8px !important; }
+  /* Tableur d'évaluation : cellules de saisie plus hautes */
+  #meval-tableur tbody input, #meval-tableur tbody select,
+  #meval-tableur tfoot input { min-height: 40px !important; font-size: 1.05em !important; }
+  /* Compteurs 📦/📝 de l'onglet Élèves */
+  input.counter-input { width: 62px !important; padding: 9px 6px !important; }
+  /* Cases à cocher / radios (Réglages, modales…) */
+  input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; }
+}
 
 </style>
 </head>
@@ -5975,11 +6010,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.20.3';
+const APP_VERSION    = '2.21.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-29T22:56:03Z';
+const APP_BUILD_DATE = '2026-07-29T23:54:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9209,9 +9244,10 @@ function mtagsAdd() {
   const abbr = document.getElementById('mtags-abbr').value.trim().toUpperCase();
   const name = document.getElementById('mtags-name').value.trim();
   const color = document.getElementById('mtags-color').value;
-  if (!abbr) return alert('L\'abréviation est obligatoire (ex. DF, DNL).');
-  if (!/^[A-Z0-9]{1,6}$/.test(abbr)) return alert('Abréviation invalide : 1 à 6 lettres ou chiffres majuscules (ex. DF, DNL, LV2).');
-  if (tagByAbbr(abbr)) return alert(`Le tag "${abbr}" existe déjà.`);
+  const _abbrKo = (msg) => { toast(msg, 'warn'); document.getElementById('mtags-abbr')?.focus(); };
+  if (!abbr) return _abbrKo('⚠️ L\'abréviation est obligatoire (ex. DF, DNL).');
+  if (!/^[A-Z0-9]{1,6}$/.test(abbr)) return _abbrKo('⚠️ Abréviation invalide : 1 à 6 lettres ou chiffres majuscules (ex. DF, DNL, LV2).');
+  if (tagByAbbr(abbr)) return _abbrKo(`⚠️ Le tag "${abbr}" existe déjà.`);
   pushUndo();
   createTag(abbr, name || abbr, color);
   save();
@@ -9422,7 +9458,7 @@ function _mvcRenderDisciplineChecks(cls) {
   if (!wrap) return;
   const allDiscs = Object.values(S.disciplines || {});
   if (allDiscs.length === 0) {
-    wrap.innerHTML = '<p style="font-size:.84em;color:var(--pencil);font-style:italic;margin:0">Aucune discipline.</p>';
+    wrap.innerHTML = '<p style="font-size:.84em;color:var(--pencil);font-style:italic;margin:0">Aucune discipline au catalogue — gérez-les via l\'onglet Classes → bouton <strong>🎓 Disciplines</strong>.</p>';
     return;
   }
   const checked = cls ? new Set(_clsDisciplineIds(cls)) : new Set([_disciplinePrimaryId()]);
@@ -9527,7 +9563,7 @@ function _mvcUpdateIdStatus() {
 
 function openVirtualClassModal(id, opts) {
   if (!Object.keys(S.classes).filter(cid => !S.classes[cid].virtual).length) {
-    return alert('Créez au moins une classe réelle avant de créer une classe recomposée.');
+    return toast('⚠️ Créez au moins une classe réelle avant de créer une classe recomposée.', 'warn');
   }
   _mvcEditingId = id || null;
   _mvcSelected = new Set();
@@ -9966,13 +10002,13 @@ function mvcSave() {
   const oldId  = document.getElementById('mvc-id').value;       // ID actuel (vide en création)
   const newId  = (document.getElementById('mvc-id-input').value || '').trim().toUpperCase();
   const fromTag= document.getElementById('mvc-from-tag').value || null;
-  if (!nom) return alert('Le nom est obligatoire.');
-  if (!salleId || !S.salles[salleId]) return alert('Choisissez une salle.');
+  if (!nom) { toast('⚠️ Le nom est obligatoire.', 'warn'); document.getElementById('mvc-nom')?.focus(); return; }
+  if (!salleId || !S.salles[salleId]) return toast('⚠️ Choisissez une salle.', 'warn');
   // Validation ID
-  if (!newId) return alert('L\'identifiant est obligatoire.');
-  if (!/^[A-Z0-9_]{1,20}$/.test(newId)) return alert('Identifiant invalide : 1-20 caractères, lettres / chiffres / _ uniquement.');
+  if (!newId) return toast('⚠️ L\'identifiant est obligatoire.', 'warn');
+  if (!/^[A-Z0-9_]{1,20}$/.test(newId)) return toast('⚠️ Identifiant invalide : 1-20 caractères, lettres / chiffres / _ uniquement.', 'warn');
   if (S.classes[newId] && newId !== oldId) {
-    return alert(`L'identifiant "${newId}" est déjà utilisé par la classe "${S.classes[newId].nom}".`);
+    return toast(`⚠️ L'identifiant "${newId}" est déjà utilisé par la classe "${S.classes[newId].nom}".`, 'warn');
   }
   const _mvcCommit = () => {
   pushUndo();
@@ -9988,7 +10024,7 @@ function mvcSave() {
   } else {
     mvcDiscIds = Array.from(document.querySelectorAll('#mvc-disc-checks input.mvc-disc-cb:checked'))
       .map(cb => cb.getAttribute('data-disc-id')).filter(id => S.disciplines?.[id]);
-    if (mvcDiscIds.length === 0) return alert('Au moins une discipline doit être cochée.');
+    if (mvcDiscIds.length === 0) return toast('⚠️ Au moins une discipline doit être cochée.', 'warn');
   }
 
   if (oldId && S.classes[oldId]) {
@@ -10526,7 +10562,7 @@ function shuffle(arr) {
 // configurées (action plus légère, pas de modale).
 function randomPlacement(reshuffle) {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   if (reshuffle) {
     openShuffleDialog();
     return;
@@ -10795,8 +10831,8 @@ function _spacingPreview(N, strategy) {
 
 function openShuffleDialog() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
-  if (!cls.activeRoom) return alert('Cette classe n\'a pas de salle active.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  if (!cls.activeRoom) return toast('⚠️ Cette classe n\'a pas de salle active.', 'warn');
   _shuffleOptions = _defaultShuffleOptions(cls);
   _renderShuffleDialog();
   openMod('mshuffle');
@@ -11600,7 +11636,7 @@ function seatLabelToKey(label, cls) {
 
 function startSeatingEntry() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   const placed = new Set(Object.values(cls.seating));
   const unplaced = cls.eleves
     .filter(sid => S.eleves[sid] && !placed.has(sid))
@@ -12526,9 +12562,10 @@ function _afterModalClose(id) {
 // ─── Modale générique appAlert / appConfirm ──────────────────────
 // Remplace les alert()/confirm() natifs pour les messages où la mise en forme
 // (gras, listes, icônes) ou la cohérence visuelle apporte un vrai gain.
-// Pour les confirmations simples, voir aussi _uiConfirm (modale mconfirm2) qui a
-// remplacé TOUS les confirm() natifs du code (ceux-ci pouvaient être bloqués par
-// l'anti-popup du navigateur). Quelques alert()/prompt() restent natifs.
+// Pour les confirmations simples, voir aussi _uiConfirm (modale mconfirm2) et
+// _uiPrompt (mprompt2). Plus AUCUN alert()/confirm()/prompt() natif dans le code
+// (ils pouvaient être bloqués par l'anti-popup du navigateur) : préconditions et
+// validations → toast(msg,'warn') (+ focus champ), erreurs fichier → appAlert.
 let _appDialogResolve = null;
 
 function _appDialogShow({ title, message, type = 'info', buttons }) {
@@ -12591,8 +12628,8 @@ function createClass() {
   const id  = document.getElementById('nc-id').value.trim().toUpperCase();
   const nom = document.getElementById('nc-nom').value.trim();
   const yr  = parseInt(document.getElementById('nc-yr').value) || _defaultSchoolYear();
-  if (!id || !nom) return alert('Remplissez tous les champs.');
-  if (S.classes[id]) return alert('Cette classe existe déjà.');
+  if (!id || !nom) { toast('⚠️ Remplissez tous les champs.', 'warn'); document.getElementById(!id ? 'nc-id' : 'nc-nom')?.focus(); return; }
+  if (S.classes[id]) { toast('⚠️ Cette classe existe déjà.', 'warn'); document.getElementById('nc-id')?.focus(); return; }
   pushUndo();
 
   const choix = document.getElementById('nc-copy').value;
@@ -13142,7 +13179,7 @@ function saveClassEdit() {
   if (!cls) return;
   const nom = document.getElementById('ec-nom').value.trim();
   const yr  = parseInt(document.getElementById('ec-yr').value) || cls.année;
-  if (!nom) return alert('Le nom ne peut pas être vide.');
+  if (!nom) { toast('⚠️ Le nom ne peut pas être vide.', 'warn'); document.getElementById('ec-nom')?.focus(); return; }
   // Lit les disciplines cochées
   const allDiscs = Object.values(S.disciplines || {});
   let checkedIds;
@@ -13150,7 +13187,7 @@ function saveClassEdit() {
     checkedIds = [allDiscs[0].id];
   } else {
     checkedIds = Array.from(document.querySelectorAll('#ec-disc-checks input.ec-disc-cb:checked')).map(cb => cb.getAttribute('data-disc-id')).filter(id => S.disciplines?.[id]);
-    if (checkedIds.length === 0) return alert('Au moins une discipline doit être cochée.');
+    if (checkedIds.length === 0) return toast('⚠️ Au moins une discipline doit être cochée.', 'warn');
   }
   // Warning si on retire une discipline qui a des évals attachées dans cette classe
   const oldIds = new Set(_clsDisciplineIds(cls));
@@ -13203,10 +13240,10 @@ function saveClassEdit() {
 // ═══════════════════════════════════════════════════════════
 function addStudent() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   const nom = document.getElementById('ns-nom').value.trim().toUpperCase();
   const prn = document.getElementById('ns-prn').value.trim();
-  if (!nom || !prn) return alert('Remplissez nom et prénom.');
+  if (!nom || !prn) { toast('⚠️ Remplissez nom et prénom.', 'warn'); document.getElementById(!nom ? 'ns-nom' : 'ns-prn')?.focus(); return; }
   const grp = parseInt(document.getElementById('ns-grp').value) || null;
   const civ = document.getElementById('ns-civ').value || null;
   const arr = (document.getElementById('ns-arrival')?.value || '').trim() || null;
@@ -13279,7 +13316,7 @@ function parseStudentLine(line) {
 
 function importStudents() {
   const defaultCls = getCls();
-  if (!defaultCls) return alert('Sélectionnez une classe.');
+  if (!defaultCls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   const text = document.getElementById('imp-txt').value.trim();
   if (!text) return;
 
@@ -15049,8 +15086,8 @@ function renderStudents() {
   // Bande de salles avec ajout / retrait (clic droit)
   renderClassSalleRow('el-salle-buttons', true);
 
-  if (!cls) { el.innerHTML = '<p style="color:#888">Sélectionnez une classe.</p>'; updateEleveBulkBar(); return; }
-  if (!cls.eleves.length) { el.innerHTML = '<p style="color:#888">Aucun élève.</p>'; updateEleveBulkBar(); return; }
+  if (!cls) { el.innerHTML = _needClassHTML('afficher ses élèves'); updateEleveBulkBar(); return; }
+  if (!cls.eleves.length) { el.innerHTML = _emptyStateHTML('👥', 'Aucun élève dans cette classe', 'Cliquez sur <strong>⬆ Importer</strong> (barre ci-dessus) pour coller la liste depuis Pronote ou un tableur, ou sur <strong>+ Ajouter</strong> pour saisir un élève.'); updateEleveBulkBar(); return; }
 
   // Nettoie les sélections d'élèves disparus
   for (const sid of [...selectedEleves]) {
@@ -15309,7 +15346,7 @@ function openHistFromSnapshot(sid) {
   if (w) {
     w.document.write(`<title>Historique — ${_escAttr(stuLabel)}</title><style>body{font-family:Arial,sans-serif;padding:16px}h2{margin-top:0}ul{padding-left:20px;list-style:none}</style><h2>🕓 ${_escAttr(stuLabel)}</h2><p style="color:#666;font-size:.9em">Snapshot « ${_escAttr(k.nom)} » — ${_escAttr(_snapDateTimeFr(k.ts))}</p><ul>${lines}</ul>`);
   } else {
-    alert(stuLabel + '\n\n' + (hist.length ? hist.map(h => fmt(h.ts) + ' — ' + (h.type === 'oubli' ? 'matériel' : 'travail')).join('\n') : 'Aucun incident.'));
+    appAlert('🕓 Historique', stuLabel + '\n\n' + (hist.length ? hist.map(h => fmt(h.ts) + ' — ' + (h.type === 'oubli' ? 'matériel' : 'travail')).join('\n') : 'Aucun incident.'));
   }
 }
 
@@ -15711,7 +15748,7 @@ function renderTeacherGrid() {
   // Rangée des classes mobiles (mêmes boutons que dans l'onglet Tablettes, à côté du sélecteur de salle)
   renderClassPoolRow();
 
-  if (!cls) { g.innerHTML = '<p style="color:#888">Sélectionnez une classe.</p>'; return; }
+  if (!cls) { g.innerHTML = _needClassHTML('afficher son plan'); return; }
 
   // Si la classe n'a pas de salle active valide
   if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) {
@@ -16584,8 +16621,28 @@ function buildCell(cls, row, col) {
         e.preventDefault();
         promptLateForStudent(stu.id);
       });
+      // Appui long tactile = retard. Windows synthétise déjà un contextmenu sur
+      // appui long (Surface), Android aussi — mais PAS iOS/iPadOS (Safari ne
+      // l'émet jamais au doigt). Ce timer maison couvre tous les cas ; le
+      // garde anti-double-ouverture est dans promptLateForStudent (modale déjà
+      // ouverte → no-op si le contextmenu natif a déjà déclenché).
+      {
+        let _lpTimer = null, _lpFired = false;
+        cell.addEventListener('touchstart', () => {
+          _lpFired = false;
+          _lpTimer = setTimeout(() => { _lpFired = true; promptLateForStudent(stu.id); }, 550);
+        }, { passive: true });
+        cell.addEventListener('touchmove', () => clearTimeout(_lpTimer), { passive: true });
+        cell.addEventListener('touchcancel', () => clearTimeout(_lpTimer), { passive: true });
+        cell.addEventListener('touchend', e => {
+          clearTimeout(_lpTimer);
+          // Si l'appui long a ouvert la modale, on avale le click synthétique
+          // qui suivrait (il togglerait absent/présent par-dessus).
+          if (_lpFired) e.preventDefault();
+        }, { passive: false });
+      }
       const stateLbl = isAbsent ? 'absent' : lateTime ? `en retard (${lateTime})` : 'présent';
-      cell.title = `${stu.prenom} ${stu.nom} — ${stateLbl}\nClic gauche = absent/présent · Clic droit = retard (heure d'arrivée)`;
+      cell.title = `${stu.prenom} ${stu.nom} — ${stateLbl}\nClic gauche = absent/présent · Clic droit ou appui long = retard (heure d'arrivée)`;
       cell.innerHTML = `
         <span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>
         ${stu.groupe ? `<span class="gbadge g${stu.groupe}">G${stu.groupe}</span>` : ''}
@@ -16853,6 +16910,16 @@ function openResetModal() {
 // l'anti-popup du navigateur — cf. incident sur resetKeepingRooms / loadDemoOnDemand).
 // opts : { title, message, okLabel, okClass ('btn-p'|'btn-d'|…), onOk, onCancel, closeFirst }
 // onCancel est appelé si l'utilisateur ferme la modale sans valider (Annuler / Échap / clic fond).
+// ─── État vide actionnable : dit QUOI faire, pas juste « c'est vide » ───
+function _emptyStateHTML(icon, title, hintHTML) {
+  return `<div class="empty-state"><span class="es-icon">${icon}</span><strong>${title}</strong>${hintHTML ? '<br>' + hintHTML : ''}</div>`;
+}
+// Variante « aucune classe sélectionnée », partagée par tous les onglets
+function _needClassHTML(pour) {
+  return _emptyStateHTML('🏫', 'Aucune classe sélectionnée',
+    `Choisissez une classe dans le <strong>sélecteur du bandeau du haut</strong> (à côté du titre)${pour ? ' pour ' + pour : ''}.`);
+}
+
 function _uiConfirm(opts) {
   opts = opts || {};
   if (opts.closeFirst) { try { closeMod2(opts.closeFirst); } catch (_) {} }
@@ -17180,7 +17247,7 @@ function renderUnplaced() {
   const cls = getCls();
   const el     = document.getElementById('unpl-body');
   const search = document.getElementById('unpl-search');
-  if (!cls) { el.innerHTML = ''; if (search) search.style.display = 'none'; return; }
+  if (!cls) { el.innerHTML = '<p style="color:var(--pencil);font-style:italic;font-size:.85em;margin:6px 4px">Aucune classe sélectionnée.</p>'; if (search) search.style.display = 'none'; return; }
 
   // Un sid dans seating mais dont l'élève est inactif (pas encore arrivé /
   // déjà parti) ne compte PAS comme "placé" — son siège est traité comme vide
@@ -17535,7 +17602,7 @@ function renderStudentView() {
   // Rangée de salles (lecture seule)
   renderClassSalleRow('sv-salle-buttons', false);
 
-  if (!cls) { g.innerHTML = '<p>Sélectionnez une classe.</p>'; return; }
+  if (!cls) { g.innerHTML = _needClassHTML('afficher le plan'); return; }
   if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) {
     g.innerHTML = '<p style="color:#888;padding:20px;text-align:center">Aucune salle active. Configurez une salle depuis l\'onglet <strong>Plan Prof</strong>.</p>';
     return;
@@ -17787,7 +17854,7 @@ function cfgApplyToSelection(kind, value) {
   const cls = getCls();
   if (!cls) return;
   const room = selectedRoomFor(cls);
-  if (!room) { alert('Cette salle n\'est pas utilisée par la classe sélectionnée — activez-la d\'abord depuis l\'onglet Plan Prof.'); return; }
+  if (!room) { toast('⚠️ Salle non utilisée par cette classe — activez-la d\'abord depuis Plan Prof.', 'warn'); return; }
   if (!_cfgSelected.size) return;
   pushUndo();
   for (const key of _cfgSelected) {
@@ -17828,7 +17895,7 @@ function cfgAeshSetCount(delta) {
   const cls = getCls();
   if (!cls) return;
   const room = selectedRoomFor(cls);
-  if (!room) { alert('Cette salle n\'est pas utilisée par la classe sélectionnée — activez-la d\'abord depuis l\'onglet Plan Prof.'); return; }
+  if (!room) { toast('⚠️ Salle non utilisée par cette classe — activez-la d\'abord depuis Plan Prof.', 'warn'); return; }
   const cur = room.aeshCount || 0;
   const next = Math.max(0, Math.min(6, cur + (delta > 0 ? 1 : -1)));
   if (next === cur) return;
@@ -17874,13 +17941,13 @@ function cfgAeshPlaceSelection(idx) {
   const room = selectedRoomFor(cls);
   if (!room) return;
   if (_cfgSelected.size !== 1) {
-    alert('Sélectionnez UNE seule case pour y placer l\'AESH.');
+    toast('⚠️ Sélectionnez UNE seule case pour y placer l\'AESH.', 'warn');
     return;
   }
   const key = [..._cfgSelected][0];
   const salle = selectedSalle();
   if (salle && (salle.positions_vides || []).includes(key)) {
-    alert('Une AESH doit être placée sur une case avec table.');
+    toast('⚠️ Une AESH doit être placée sur une case avec table.', 'warn');
     return;
   }
   pushUndo();
@@ -18569,7 +18636,7 @@ function _groupSpansMultipleRows(cells) {
 // ≥ 2 rangées. Remplace les îlots existants après confirmation.
 async function cfgIlotsAuto() {
   const salle = _cfgGetSalleForIlots();
-  if (!salle) return alert('Aucune salle sélectionnée.');
+  if (!salle) return toast('⚠️ Aucune salle sélectionnée.', 'warn');
   const groups = _findConnectedTableGroups(salle);
   const ilotGroups = groups.filter(_groupSpansMultipleRows);
   if (!ilotGroups.length) {
@@ -18872,7 +18939,7 @@ function cycleActivePool() {
 
 function openAddSalleToClass() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   const list = document.getElementById('madds-list');
   const used = cls.rooms || {};
   const available = Object.entries(S.salles || {}).filter(([id]) => !used[id]);
@@ -18919,7 +18986,7 @@ function confirmRemoveSalleFromClass(salleId) {
   const s = S.salles?.[salleId];
   const ids = Object.keys(cls.rooms);
   if (ids.length === 1) {
-    return alert(`Impossible de retirer "${s?.nom || salleId}" : ${cls.nom} doit conserver au moins une salle.`);
+    return toast(`⚠️ Impossible de retirer "${s?.nom || salleId}" : ${cls.nom} doit conserver au moins une salle.`, 'warn');
   }
   const room = cls.rooms[salleId];
   const placedCount = Object.keys(room.seating || {}).length;
@@ -18988,7 +19055,7 @@ function confirmNewSalle() {
   const nom  = document.getElementById('nsl-nom').value.trim();
   const rows = Math.min(15, Math.max(1, parseInt(document.getElementById('nsl-rows').value) || 4));
   const cols = Math.min(15, Math.max(1, parseInt(document.getElementById('nsl-cols').value) || 10));
-  if (!nom) return alert('Donnez un nom à la salle.');
+  if (!nom) { toast('⚠️ Donnez un nom à la salle.', 'warn'); document.getElementById('nsl-nom')?.focus(); return; }
   const addToClass = document.getElementById('msalle')._addToClass;
   const dupId = document.getElementById('nsl-dup').value;
   const src = dupId ? S.salles?.[dupId] : null;
@@ -19038,7 +19105,7 @@ function deleteSelectedSalle() {
   if (!salle) return;
   const users = classesUsingSalle(cfgSelectedSalle);
   if (users.length) {
-    return alert(`Impossible de supprimer "${salle.nom}" : ${users.length} classe(s) l'utilisent (${users.map(c => c.nom).join(', ')}).\nRetirez-la d'abord depuis Plan Prof.`);
+    return appAlert('🏫 Salle encore utilisée', `Impossible de supprimer "${salle.nom}" : ${users.length} classe(s) l'utilisent (${users.map(c => c.nom).join(', ')}).\nRetirez-la d'abord depuis Plan Prof.`, 'warn');
   }
   _uiConfirm({
     title: '🗑 Supprimer la salle', okLabel: '🗑 Supprimer', okClass: 'btn-d',
@@ -19429,7 +19496,7 @@ function copyMondayToWeekdays() {
   const salle = selectedSalle();
   if (!salle?.schedule) return;
   const monday = salle.schedule.mon || [];
-  if (!monday.length) return alert('Le lundi n\'a aucun créneau à copier.');
+  if (!monday.length) return toast('⚠️ Le lundi n\'a aucun créneau à copier.', 'warn');
   _uiConfirm({
     title: '📋 Recopier le lundi', okLabel: '📋 Recopier', okClass: 'btn-w',
     message: `Recopier les ${monday.length} créneaux du lundi sur mardi, mercredi, jeudi et vendredi ?\nLes plannings actuels de ces jours seront écrasés.`,
@@ -19834,9 +19901,9 @@ function autoGroupConfig() {
 // ═══════════════════════════════════════════════════════════
 function openAutoIpads() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   const pools = Object.values(S.tabletPools || {});
-  if (!pools.length) return alert('Aucune classe mobile configurée. Allez dans l\'onglet Tablettes pour en créer une.');
+  if (!pools.length) return toast('⚠️ Aucune classe mobile configurée — créez-en une dans l\'onglet Tablettes.', 'warn');
 
   const gf = groupFilter;
   const infoEl = document.getElementById('ipm-mode-info');
@@ -19941,7 +20008,7 @@ function _countAssign(a) {
 
 function openClearIpadsModal() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   const pool = S.tabletPools?.[cls.activePool];
   const salle = S.salles?.[cls.activeRoom];
 
@@ -20020,7 +20087,7 @@ function autoIpads(scope) {
 
   const poolId = document.getElementById('ipm-pool').value;
   const pool = S.tabletPools?.[poolId];
-  if (!pool) return alert('Sélectionnez une classe mobile.');
+  if (!pool) return toast('⚠️ Sélectionnez une classe mobile.', 'warn');
 
   const exclRaw = document.getElementById('ipm-excl').value;
   const exclSet = new Set(exclRaw.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean));
@@ -20031,8 +20098,8 @@ function autoIpads(scope) {
   const poolIds = allPools ? Object.keys(S.tabletPools || {}) : [poolId];
   const roomIds = allRooms ? Object.keys(cls.rooms || {}) : [cls.activeRoom].filter(Boolean);
 
-  if (!poolIds.length) return alert('Aucune classe mobile.');
-  if (!roomIds.length) return alert('Aucune salle active.');
+  if (!poolIds.length) return toast('⚠️ Aucune classe mobile.', 'warn');
+  if (!roomIds.length) return toast('⚠️ Aucune salle active.', 'warn');
 
   // Construit la file des combinaisons à traiter
   const combinations = [];
@@ -20046,7 +20113,7 @@ function autoIpads(scope) {
       combinations.push({ rId, pId, available: localAvail });
     }
   }
-  if (!combinations.length) return alert('Aucune combinaison salle × classe mobile valide.');
+  if (!combinations.length) return toast('⚠️ Aucune combinaison salle × classe mobile valide.', 'warn');
 
   // Sauvegarde l'état avant le batch (pour annulation totale)
   pushUndo();
@@ -20324,9 +20391,9 @@ function ipovfConfirm() {
   const state = _ipovfState;
   const checked = state.checkedKeys.size;
   if (checked > state.available.length) {
-    return alert(`Vous avez coché ${checked} tables mais il n'y a que ${state.available.length} tablettes disponibles. Décochez ${checked - state.available.length} table(s).`);
+    return toast(`⚠️ ${checked} tables cochées pour ${state.available.length} tablettes disponibles — décochez ${checked - state.available.length} table(s).`, 'warn');
   }
-  if (!checked) return alert('Cochez au moins une table.');
+  if (!checked) return toast('⚠️ Cochez au moins une table.', 'warn');
 
   const keepKeys = new Set(state.checkedKeys);
 
@@ -20359,7 +20426,7 @@ function renderQcmcam() {
   // Bande de salles
   renderClassSalleRow('qcm-salle-buttons', false);
 
-  if (!cls) { el.innerHTML = '<p>Sélectionnez une classe.</p>'; return; }
+  if (!cls) { el.innerHTML = _needClassHTML(); return; }
   if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) {
     el.innerHTML = '<p style="color:#888">Aucune salle active pour cette classe.</p>'; return;
   }
@@ -20966,7 +21033,7 @@ function renderExportPositions() {
   // Bande de salles
   renderClassSalleRow('notes-salle-buttons', false);
 
-  if (!cls) { el.innerHTML = '<p>Sélectionnez une classe.</p>'; return; }
+  if (!cls) { el.innerHTML = _needClassHTML(); return; }
 
   const cc = cls.configuration?.cols || 10;
   const hasActiveRoom = !!(cls.activeRoom && S.salles?.[cls.activeRoom]);
@@ -21205,7 +21272,7 @@ function renderIpads() {
   // Bande des classes mobiles : la sélection bascule cls.activePool
   renderClassPoolRow();
 
-  if (!cls) { el.innerHTML = '<p>Sélectionnez une classe.</p>'; return; }
+  if (!cls) { el.innerHTML = _needClassHTML(); return; }
   if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) {
     el.innerHTML = '<p style="color:#888">Aucune salle active pour cette classe.</p>'; return;
   }
@@ -21675,9 +21742,9 @@ function setIprintGroupe(g) {
 }
 
 function openIpadPrint() {
-  if (!Object.keys(S.classes).length) return alert('Aucune classe définie.');
+  if (!Object.keys(S.classes).length) return toast('⚠️ Aucune classe définie.', 'warn');
   if (!Object.keys(S.tabletPools || {}).length) {
-    return alert('Aucune classe mobile configurée. Allez dans l\'onglet Tablettes pour en créer une.');
+    return toast('⚠️ Aucune classe mobile configurée — créez-en une dans l\'onglet Tablettes.', 'warn');
   }
   document.getElementById('iprint-date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('iprint-prof').value  = localStorage.getItem('iprint-prof') || '';
@@ -21788,7 +21855,7 @@ function setIprintHoraire(h) {
 function printSuiviPret() {
   const poolId = iprintState.type;
   const pool = S.tabletPools?.[poolId];
-  if (!pool) return alert('Aucune classe mobile sélectionnée.');
+  if (!pool) return toast('⚠️ Aucune classe mobile sélectionnée.', 'warn');
   const dateVal = document.getElementById('iprint-date').value;
   const horaire = iprintState.horaire;
   const salleId = document.getElementById('iprint-salle').value.trim();
@@ -22233,7 +22300,7 @@ function viewAttRecordOnPlan(id, classId) {
   const cid = classId || _mattCurrentClassId || getCls()?.id;
   if (!cid) return;
   const r = S.attendance?.[cid]?.[id];
-  if (!r) return alert('Appel introuvable.');
+  if (!r) return toast('⚠️ Appel introuvable.', 'warn');
   _viewingAttRecord = {
     classId: cid,
     recordId: id,
@@ -22859,6 +22926,9 @@ let _lateSid = null;
 function promptLateForStudent(sid) {
   const stu = S.eleves[sid];
   if (!stu) return;
+  // Garde anti-double : sur Surface/Android, un appui long déclenche À LA FOIS
+  // le contextmenu synthétisé par l'OS ET notre timer d'appui long maison.
+  if (document.getElementById('mlate')?.classList.contains('on')) return;
   _lateSid = sid;
   const cur = _lateToday.get(sid);
   const now = new Date();
@@ -22994,7 +23064,7 @@ function openSaveAttendanceModal() {
   if (_editingAttendanceId) {
     // Mode édition : pré-remplir depuis le record existant
     const r = S.attendance?.[cls.id]?.[_editingAttendanceId];
-    if (!r) { _editingAttendanceId = null; return alert('Appel introuvable.'); }
+    if (!r) { _editingAttendanceId = null; return toast('⚠️ Appel introuvable.', 'warn'); }
     dateInp.value = r.date || todayKey();
     document.getElementById('msaveatt-info').textContent =
       `Modification de « ${r.label} » — ${summary} — Groupe : ${grpLabel(r.groupe ?? 0)}`;
@@ -23121,7 +23191,7 @@ function saveAttendanceConfirm() {
   // En mode "sans créneau" (slotId null), on récupère l'heure de fin saisie pour piloter
   // la durée du visuel post-appel.
   const endTime = !slotId ? (document.getElementById('msaveatt-endtime')?.value || null) : null;
-  if (!label) return alert('Donnez un libellé à cet appel.');
+  if (!label) { toast('⚠️ Donnez un libellé à cet appel.', 'warn'); document.getElementById('msaveatt-label')?.focus(); return; }
 
   // Détection de conflits (uniquement en CRÉATION, pas en édition explicite via ✏️ Éditer)
   if (!_editingAttendanceId) {
@@ -23334,7 +23404,7 @@ function _doSaveAttendance({ dateStr, slotId, groupe, label, endTime, overwriteI
   if (_editingAttendanceId) {
     // UPDATE d'un record existant
     const r = S.attendance[cls.id][_editingAttendanceId];
-    if (!r) { _editingAttendanceId = null; return alert('Appel introuvable.'); }
+    if (!r) { _editingAttendanceId = null; return toast('⚠️ Appel introuvable.', 'warn'); }
     r.date    = dateStr;
     r.slotId  = slotId;
     r.groupe  = groupe;
@@ -23950,7 +24020,7 @@ function editAttendance(id, classId) {
   const r = S.attendance?.[cid]?.[id];
   if (!r) return;
   if (_viewingSnapshot) {
-    return alert('Quittez la consultation du snapshot pour éditer un appel.');
+    return toast('⚠️ Quittez la consultation du snapshot pour éditer un appel.', 'warn');
   }
   // Recharge l'état du record dans le mode appel et bascule sur Plan Prof
   const _proceed = () => {
@@ -23979,7 +24049,7 @@ function editAttendance(id, classId) {
   // Si la classe du record n'est pas la classe active, basculer (avec confirmation)
   if (S.cur !== cid) {
     const targetCls = S.classes[cid];
-    if (!targetCls) return alert('Classe introuvable.');
+    if (!targetCls) return toast('⚠️ Classe introuvable.', 'warn');
     _uiConfirm({
       title: '🔁 Changer de classe', okLabel: '🔁 Basculer',
       message: `Basculer vers la classe "${targetCls.nom}" pour modifier cet appel ?`,
@@ -24043,9 +24113,9 @@ function _snapVisibleList() {
 
 function openSnapshotsModal(type) {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   if (type === 'positions' && (!cls.activeRoom || !S.salles?.[cls.activeRoom])) {
-    return alert('Aucune salle active. Sélectionnez d\'abord une salle dans cette classe.');
+    return toast('⚠️ Aucune salle active — sélectionnez d\'abord une salle dans cette classe.', 'warn');
   }
   _snapModalType = type;
   document.getElementById('msnap-title').textContent =
@@ -24100,7 +24170,7 @@ function snapshotCreateConfirm() {
   const cls = getCls();
   if (!cls) return;
   const nom = document.getElementById('msnapNew-name').value.trim();
-  if (!nom) return alert('Donnez un nom au snapshot.');
+  if (!nom) { toast('⚠️ Donnez un nom au snapshot.', 'warn'); document.getElementById('msnapNew-name')?.focus(); return; }
 
   const ts   = Date.now();
   const id   = _snapId();
@@ -24191,8 +24261,8 @@ function snapshotRestore(id) {
   const k = S.snapshots?.[id];
   if (!k || k.type !== 'positions') return;
   const cls = S.classes[k.classId];
-  if (!cls) return alert('La classe de ce snapshot n\'existe plus.');
-  if (!cls.rooms?.[k.salleId]) return alert('La salle de ce snapshot n\'existe plus dans cette classe.');
+  if (!cls) return toast('⚠️ La classe de ce snapshot n\'existe plus.', 'warn');
+  if (!cls.rooms?.[k.salleId]) return toast('⚠️ La salle de ce snapshot n\'existe plus dans cette classe.', 'warn');
 
   _uiConfirm({
     title: '↻ Restaurer la disposition', okLabel: '↻ Restaurer', okClass: 'btn-w',
@@ -24531,7 +24601,7 @@ function printElevesList() {
     });
   } else {
     const cls = getCls();
-    if (!cls) return alert('Sélectionnez une classe.');
+    if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
     classIdForStats = cls.id;
     title = `${cls.nom} — Élèves`;
     dateLabel = today;
@@ -24552,7 +24622,7 @@ function printElevesList() {
     }));
   }
 
-  if (!list.length) return alert('Aucun élève à imprimer.');
+  if (!list.length) return toast('⚠️ Aucun élève à imprimer.', 'warn');
 
   // Tri en suivant le tri courant de l'onglet Élèves
   const cmp = (a, b) => {
@@ -24662,7 +24732,7 @@ function printElevesList() {
 // Format portrait, adapté à un document de gestion (rentrée scolaire, photocopies, etc.).
 function printClassesBilan() {
   const arr = realClasses();   // bilan = classes réelles uniquement (les recomposées double-compteraient les élèves)
-  if (!arr.length) return alert('Aucune classe à imprimer.');
+  if (!arr.length) return toast('⚠️ Aucune classe à imprimer.', 'warn');
 
   const date = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
 
@@ -24814,7 +24884,7 @@ function printClassesBilan() {
 function doPrintEmptyConfigSalle() {
   const sid = cfgSelectedSalle;
   const salle = sid ? S.salles?.[sid] : null;
-  if (!salle) return alert('Aucune salle sélectionnée dans Config Salle.');
+  if (!salle) return toast('⚠️ Aucune salle sélectionnée dans Config Salle.', 'warn');
 
   const date  = new Date().toLocaleDateString('fr-FR');
   const prows = salle.rows || 4;
@@ -24865,8 +24935,8 @@ function doPrintEmptyConfigSalle() {
 
 function doPrintEmpty() {
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
-  if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) return alert('Aucune salle active.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) return toast('⚠️ Aucune salle active.', 'warn');
 
   const date  = new Date().toLocaleDateString('fr-FR');
   const prows = cls.configuration.rows || 4;
@@ -24912,7 +24982,7 @@ function doPrintEmpty() {
 
 function doPrint(mode) {  // 't'=teacher, 's'=student
   const cls = getCls();
-  if (!cls) return alert('Sélectionnez une classe.');
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
 
   const date  = new Date().toLocaleDateString('fr-FR');
   const title = mode==='t' ? 'Plan — Professeur' : 'Plan — Élèves';
@@ -25193,7 +25263,7 @@ function buildIpadTable(cls, cc) {
 
 function openPrintAllClasses() {
   const classes = Object.values(S.classes);
-  if (!classes.length) return alert('Aucune classe à imprimer.');
+  if (!classes.length) return toast('⚠️ Aucune classe à imprimer.', 'warn');
 
   const items = [];
   for (const cls of classes) {
@@ -25203,7 +25273,7 @@ function openPrintAllClasses() {
       items.push({ cid: cls.id, sid, label: `${cls.nom} — ${salleNom}` });
     }
   }
-  if (!items.length) return alert('Aucune salle configurée.');
+  if (!items.length) return toast('⚠️ Aucune salle configurée.', 'warn');
 
   const list = document.getElementById('pac-list');
   list.innerHTML = items.map((it, i) =>
@@ -25222,7 +25292,7 @@ function pacToggleAll(checked) {
 function printAllClassesConfirm() {
   const selected = [...document.querySelectorAll('#pac-list .pac-cb:checked')]
     .map(cb => ({ cid: cb.dataset.cid, sid: cb.dataset.sid }));
-  if (!selected.length) return alert('Sélectionnez au moins un plan.');
+  if (!selected.length) return toast('⚠️ Sélectionnez au moins un plan.', 'warn');
   closeMod2('mpac');
   printAllClasses(selected);
 }
@@ -25235,7 +25305,7 @@ function printAllClasses(selection) {
       for (const sid of Object.keys(cls.rooms || {})) selection.push({ cid: cls.id, sid });
     }
   }
-  if (!selection.length) return alert('Aucun plan à imprimer.');
+  if (!selection.length) return toast('⚠️ Aucun plan à imprimer.', 'warn');
 
   const pa = document.getElementById('pa');
 
@@ -25254,7 +25324,7 @@ function printAllClasses(selection) {
   // Restaurer les activeRoom d'origine
   for (const [cid, room] of originalRooms) S.classes[cid].activeRoom = room;
 
-  if (!pages.length) return alert('Aucun plan valide à imprimer.');
+  if (!pages.length) return toast('⚠️ Aucun plan valide à imprimer.', 'warn');
 
   pa.innerHTML = pages.map((html, i) =>
     `<div style="${i > 0 ? 'page-break-before:always;break-before:page' : ''}">${html}</div>`
@@ -25437,7 +25507,7 @@ function _autoSaveErrLabel(e) {
 async function toggleAutoSync() {
   if (!autoSyncEnabled) {
     if (!dirHandle) {
-      alert('Choisis d\'abord un dossier via "📂 Ouvrir" — c\'est dans ce dossier que la sync auto écrira.');
+      appAlert('📂 Dossier requis', 'Choisis d\'abord un dossier via "📂 Ouvrir" — c\'est dans ce dossier que la sync auto écrira.', 'warn');
       return;
     }
     autoSyncEnabled = true;
@@ -26352,7 +26422,7 @@ async function loadFromHandle(idx) {
     const data = JSON.parse(text);
     // Validation des IDs (sécurité — empêche l'injection JS via clés malveillantes)
     if (!data || typeof data !== 'object' || !data.classes || !data.eleves) {
-      return alert('Fichier invalide : structure attendue {classes:{}, eleves:{}, ...} non trouvée.');
+      return appAlert('📄 Fichier invalide', 'Structure attendue {classes:{}, eleves:{}, ...} non trouvée.', 'error');
     }
     const validationErr = _validateImport(data);
     if (validationErr) {
@@ -26396,7 +26466,7 @@ async function loadFromHandle(idx) {
       },
     });
   } catch(e) {
-    alert('Erreur de lecture : ' + e.message);
+    appAlert('📄 Erreur de lecture', e.message, 'error');
   }
 }
 
@@ -26465,7 +26535,7 @@ function loadLastFile() {
             S.cur = Object.keys(S.classes)[0];
         } catch(e) {
           S = _backup;
-          return alert('Erreur de chargement : ' + e.message + '\n\nLes données précédentes ont été restaurées.');
+          return appAlert('📄 Erreur de chargement', e.message + '\n\nLes données précédentes ont été restaurées.', 'error');
         }
         save();
         refreshSelector();
@@ -26479,7 +26549,7 @@ function loadLastFile() {
         toast(`✅ "${label}" rechargé.`);
       },
     });
-  } catch(err) { alert('Erreur : ' + err.message); }
+  } catch(err) { appAlert('⚠️ Erreur', err.message, 'error'); }
 }
 
 async function exportJSON() {
@@ -26621,13 +26691,13 @@ function importJSON(e) {
     try {
       d = JSON.parse(ev.target.result);
     } catch(err) {
-      alert('Fichier JSON invalide (parse échoué) : ' + err.message);
+      appAlert('📄 Fichier JSON invalide', 'Parse échoué : ' + err.message, 'error');
       return;
     }
     // Validation structurelle minimale (objets indexés)
     if (!d || typeof d !== 'object' || !d.classes || typeof d.classes !== 'object'
         || !d.eleves || typeof d.eleves !== 'object') {
-      return alert('Fichier invalide : structure attendue {classes:{}, eleves:{}, ...} non trouvée.');
+      return appAlert('📄 Fichier invalide', 'Structure attendue {classes:{}, eleves:{}, ...} non trouvée.', 'error');
     }
     // Validation des IDs (sécurité — empêche l'injection JS via des clés malveillantes)
     const validationErr = _validateImport(d);
@@ -26653,7 +26723,7 @@ function importJSON(e) {
             S.cur = Object.keys(S.classes)[0];
         } catch(err) {
           S = _backup;
-          return alert('Le fichier semble corrompu : ' + err.message + '\n\nLes données précédentes ont été restaurées.');
+          return appAlert('📄 Fichier corrompu', err.message + '\n\nLes données précédentes ont été restaurées.', 'error');
         }
         save();
         saveLastFile(file.name, JSON.parse(JSON.stringify(S)));
@@ -26670,7 +26740,7 @@ function importJSON(e) {
     });
   };
   reader.onerror = () => {
-    alert('Impossible de lire le fichier (' + (reader.error?.name || 'erreur inconnue') + ').\nVérifiez les permissions et réessayez.');
+    appAlert('📄 Lecture impossible', 'Impossible de lire le fichier (' + (reader.error?.name || 'erreur inconnue') + ').\nVérifiez les permissions et réessayez.', 'error');
   };
   reader.readAsText(file);
   e.target.value = '';
@@ -31625,7 +31695,7 @@ function renderEvalNotes() {
   const periode = sel?.value || '';
 
   if (!cls) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir ses évaluations.</p>';
+    wrap.innerHTML = _needClassHTML('voir ses évaluations');
     return;
   }
   let allEvs = _evalsForClass(cls.id, periode || null);
@@ -32980,7 +33050,7 @@ function _competencePickerRender() {
   const sortMode = document.querySelector('input[name="meval-pick-comp-sort"]:checked')?.value || 'code';
   const allComps = Object.values(S.competences || {});
   if (allComps.length === 0) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic">Aucune compétence définie.</p>';
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic">Aucune compétence définie — créez votre référentiel via <strong>⚙ Paramètres</strong> (onglet Devoirs) → section Compétences.</p>';
     return;
   }
   let html = '';
@@ -33203,7 +33273,7 @@ function _renderDisciplinesList() {
   if (_ass && _ass.style.display !== 'none') _renderDiscClassAssign(true);
   const discs = Object.values(S.disciplines || {});
   if (discs.length === 0) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px">Aucune discipline.</p>';
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px">Aucune discipline pour l\'instant — utilisez <strong>+ Ajouter une discipline</strong> ci-dessous.</p>';
     return;
   }
   // Compteurs : nb de classes par discipline, nb d'évals par discipline
@@ -39294,7 +39364,7 @@ function _evalPassNewRenderComps() {
   if (!wrap) return;
   const sortMode = document.querySelector('input[name="meval-pass-new-sort"]:checked')?.value || 'code';
   const all = Object.values(S.competences || {});
-  if (all.length === 0) { wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic">Aucune compétence disponible.</p>'; return; }
+  if (all.length === 0) { wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic">Aucune compétence disponible — créez votre référentiel via <strong>⚙ Paramètres</strong> (onglet Devoirs) → section Compétences.</p>'; return; }
   const chip = c => {
     const sel = _passNewSelected.has(c.id);
     return `<label class="comp-chip${sel ? ' on' : ''}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:12px;cursor:pointer;font-size:.85em;margin:2px" title="${_esc(c.name || '')}">
@@ -39957,7 +40027,7 @@ function renderBilanTab() {
     }
   }
   if (!cls) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir le bilan.</p>';
+    wrap.innerHTML = _needClassHTML('voir le bilan des notes');
     return;
   }
 
@@ -40072,6 +40142,13 @@ function renderBilanTab() {
   }
   const orphanIds = new Set(orphanEvs.map(e => e.id));
   let evs = ownEvs.concat(orphanEvs).sort(_cmpB);
+  // État vide : classe sélectionnée mais aucune évaluation pour cette période/discipline
+  // (aligné sur les onglets Devoirs et Bilan des compétences qui gèrent déjà ce cas).
+  if (evs.length === 0) {
+    wrap.innerHTML = _emptyStateHTML('📜', 'Aucune évaluation' + (periode ? ` pour la période ${periode}` : ''),
+      'Créez ou complétez une évaluation dans l\'onglet <strong>📊 Devoirs</strong> — le bilan se remplira automatiquement.');
+    return;
+  }
   const _bilanGrouped = (sortMode === 'type-date' || sortMode === 'type-name');
   // En mode Toutes + toggle "Grouper par période" : re-tri avec la période en clé primaire
   // (ordre canonique S1/S2 ou T1/T2/T3), tri sélectionné conservé à l'intérieur.
@@ -41591,7 +41668,7 @@ function renderCompetencesTab() {
   }
   const periode = sel?.value ?? '';
   if (!cls) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:14px">Sélectionnez une classe pour voir le bilan compétences.</p>';
+    wrap.innerHTML = _needClassHTML('voir le bilan par compétences');
     return;
   }
 
@@ -43511,7 +43588,7 @@ function _evalCommentsRender() {
   if (!ctx) return;
   const wrap = document.getElementById('meval-comments-list');
   if (ctx.list.length === 0) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun commentaire pour l\'instant.</p>';
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun commentaire pour l\'instant — ajoutez-en un ci-dessous (champ libre ou bibliothèque).</p>';
   } else {
     let html = '';
     ctx.list.forEach((c, i) => {
@@ -43600,7 +43677,7 @@ function _comLibRender() {
   for (const kind of ['positive', 'negative']) {
     const wrap = document.getElementById(kind === 'positive' ? 'mcomlib-pos' : 'mcomlib-neg');
     if (lib[kind].length === 0) {
-      wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Vide.</p>';
+      wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Aucun commentaire type — ajoutez-en un avec le bouton <strong>+</strong> ci-dessus.</p>';
       continue;
     }
     let html = '';
@@ -43666,7 +43743,7 @@ function _collectRenderList() {
   const wrap = document.getElementById('mcollect-list');
   salle.collectPatterns = salle.collectPatterns || [];
   if (salle.collectPatterns.length === 0) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:6px 0">Aucun pattern défini pour cette salle.</p>';
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:6px 0">Aucun pattern défini pour cette salle — créez-en un avec le bouton d\'ajout ci-dessous.</p>';
     return;
   }
   const totalTables = (salle.rows * salle.cols) - (salle.positions_vides?.length || 0);
