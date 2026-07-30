@@ -994,17 +994,25 @@ Crédit licence CC BY-NC-SA des marqueurs Sébastien COGEZ — **hors zone à d�
 - 2/page : `left:61.5mm` au verso (décalé à droite)
 - 4/page : swap des colonnes (pos-1 ↔ pos-2, pos-3 ↔ pos-4)
 
-**Verso** : numéro géant centré dans la zone marqueur, **souligné** (`<span class="am-back-num">`, `border-bottom: .07em`).
+**Verso** : numéro géant centré dans la zone marqueur, **souligné pour les seuls huit numéros retournables** (`<span class="am-back-num">`, `border-bottom: .07em`).
 
-⚠️ **Le souligné est un repère de SENS DE LECTURE, pas une décoration.** Sans lui, un carré découpé portant un `6` se lit `9` selon le sens où on le prend, et le cas est fréquent dans 1–125 : **6/9, 10/01, 16/91, 18/81, 19/61, 60/09, 66/99, 68/89, 80/08, 86/98, 90/06, 110/011**. Conséquence concrète : marqueur collé sur la mauvaise table, donc réponses QCMCam attribuées au mauvais élève. Le **recto** n'a pas ce problème (préfixe `n°` + lettre A/B/C/D sur les 4 côtés lèvent déjà l'ambiguïté) — inutile de l'y ajouter.
+⚠️ **Le souligné est un repère de SENS DE LECTURE, pas une décoration.** Sans lui, un carré découpé portant un `6` se lit `9` selon le sens où on le prend — marqueur collé sur la mauvaise table, donc réponses QCMCam attribuées au mauvais élève.
 
-**Font-size calculée dynamiquement** en JS pour que le chiffre tienne dans le carré quel que soit le nombre de chiffres (1, 2 ou 3). Les termes ajoutés au dénominateur réservent la place du souligné (+0,16 em en largeur pour les paddings, +0,13 em en hauteur pour padding + trait) :
+**`_ARUCO_ROT_AMBIGU = {6, 9, 66, 68, 86, 89, 98, 99}`.** Dérivation, **à rejouer si la plage (1–125), la police du verso (Arial) ou la convention d'écriture changent** :
+- Chiffres qui restent des chiffres après rotation à 180° : `0→0`, `6→9`, `8→8`, `9→6`.
+- Le `1` se retourne en `1` mais **l'Arial le trahit** (empattement en haut à gauche, base plate) : sa présence révèle l'orientation, donc tout numéro contenant un `1` s'oriente seul. Inutile de le souligner.
+- Les marqueurs s'écrivent **sans zéro de tête** : `60`/`80`/`90` deviennent `09`/`08`/`06`, qui n'existent pas → le sens se déduit là aussi.
+- Restent les nombres faits de `{0,6,8,9}` : `8`, `88`, `69`, `96` sont **identiques** après rotation (rien à signaler) ; les huit autres sont ambigus deux à deux (`6↔9`, `66↔99`, `68↔89`, `86↔98`).
+
+Les 117 numéros restants gardent un chiffre **plus grand** (124 mm contre 105 mm en 4/page pour un chiffre unique), puisque la place du trait n'est réservée que quand il est présent. Le **recto** n'a jamais eu ce problème : préfixe `n°` + lettre A/B/C/D sur les 4 côtés lèvent déjà l'ambiguïté.
+
+**Font-size calculée dynamiquement** en JS pour que le chiffre tienne dans le carré quel que soit le nombre de chiffres (1, 2 ou 3), le dénominateur réservant la place du trait seulement s'il y en a un :
 ```js
-const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits + 0.16);
-const maxByHeight = (zoneSizeMm * 0.85) / 0.85;
+const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits + (ambigu ? 0.16 : 0));
+const maxByHeight = (zoneSizeMm * 0.85) / (ambigu ? 0.85 : 0.72);
 const fs = Math.min(maxByWidth, maxByHeight); // appliqué via style.fontSize = fs + 'mm'
 ```
-Occupation mesurée après ajout du trait (4/page) : 1 chiffre 83 % × 98 %, 2 chiffres 93 % × 61 %, 3 chiffres 94 % × 42 % — aucun débordement.
+Occupation mesurée (4/page) : `6` souligné 98 % de hauteur, `8` nu 100 %, `66` souligné 61 %, `118` nu 100 % — aucun débordement.
 
 **Réimpression de numéros perdus** : sous-section "🔁 Réimprimer des n° précis" avec champ texte qui accepte un format flexible (`5, 12-15, 23`). Parsé par `_parseArucoNumberList(text, max)` (gère virgules/espaces/point-virgules, plages avec tiret). Passé à `printSalleArucoMarkers(perPage, { customNums: [...] })`.
 

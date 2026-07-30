@@ -157,12 +157,12 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
   .am-marker-zone canvas{display:block;image-rendering:pixelated;image-rendering:-moz-crisp-edges}
   /* Verso : numéro géant centré, gras noir, prend quasi toute la place */
   .am-marker-zone.am-back{font-weight:900;color:#000;font-family:Arial,sans-serif;line-height:.85}
-  /* ⚠️ Souligné sous le numéro du verso — repère de SENS DE LECTURE. Sans lui, un 6 découpé
-     devient un 9 selon le sens où on prend le carré, et le cas est fréquent dans 1–125 :
-     6/9, 10/01, 16/91, 18/81, 19/61, 60/09, 66/99, 68/89, 80/08, 86/98, 90/06, 110/011.
-     Conséquence concrète : marqueur collé sur la mauvaise table, donc réponses QCMCam
-     attribuées au mauvais élève. Le recto n'a pas ce problème (préfixe « n° » + lettre
-     A/B/C/D sur les 4 côtés). Trait en `em` : il suit la taille calculée du chiffre. */
+  /* ⚠️ Souligné sous le numéro du verso — repère de SENS DE LECTURE, appliqué aux SEULS huit
+     numéros retournables : 6/9, 66/99, 68/89, 86/98 (cf. _ARUCO_ROT_AMBIGU pour la dérivation).
+     Sans lui, un carré portant un 6 se lit 9 selon le sens où on le prend : marqueur collé sur
+     la mauvaise table, donc réponses QCMCam attribuées au mauvais élève. Le recto n'a pas ce
+     problème (préfixe « n° » + lettre A/B/C/D sur les 4 côtés lèvent déjà l'ambiguïté).
+     Trait en `em` : il suit la taille calculée du chiffre. */
   .am-marker-zone.am-back .am-back-num{display:inline-block;padding:0 .08em .06em;border-bottom:.07em solid #000}
 
   /* ─── 1 marqueur par feuille (carré 210×210mm en haut, crédit en pied) ─── */
@@ -6150,11 +6150,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.25.3';
+const APP_VERSION    = '2.25.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T09:50:34Z';
+const APP_BUILD_DATE = '2026-07-30T10:03:26Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21000,6 +21000,18 @@ function printArucoMarkersByList(perPage) {
   printSalleArucoMarkers(perPage, { customNums: nums });
 }
 
+// Numéros dont la rotation à 180° donne un AUTRE numéro valide : eux seuls ont besoin d'un
+// repère de sens de lecture au verso (souligné, cf. .am-back-num). Dérivation, à rejouer si
+// la plage (1–125), la police du verso (Arial) ou la convention d'écriture changent :
+//   · Chiffres qui restent des chiffres après rotation : 0→0, 6→9, 8→8, 9→6.
+//   · Le 1 se retourne en 1 mais l'Arial le TRAHIT (empattement en haut à gauche, base plate) :
+//     sa présence révèle l'orientation, donc tout numéro contenant un 1 s'oriente seul.
+//   · Les marqueurs s'écrivent SANS zéro de tête : 60/80/90 deviennent 09/08/06, qui n'existent
+//     pas — le sens se déduit là aussi.
+//   · Restent les nombres faits de {0,6,8,9} : 8, 88, 69, 96 sont identiques après rotation
+//     (rien à signaler), et il reste ces huit-là, ambigus deux à deux.
+const _ARUCO_ROT_AMBIGU = new Set([6, 9, 66, 68, 86, 89, 98, 99]);
+
 // Lance l'impression recto-verso des marqueurs ArUco de la salle active.
 // perPage : 1, 2 ou 4 marqueurs par page A4 portrait.
 // opts.customNums : si fourni, on imprime CETTE liste de numéros (réimpression)
@@ -21075,17 +21087,22 @@ function printSalleArucoMarkers(perPage, opts) {
   const buildVersoZone = (num, pos) => {
     const mz = document.createElement('div');
     mz.className = 'am-marker-zone am-back am-pos-' + pos;
-    // Le chiffre est enrobé dans un span souligné (cf. .am-back-num) : le trait indique le bas,
-    // sans quoi un 6 et un 9 découpés sont indiscernables.
-    const inner = document.createElement('span');
-    inner.className = 'am-back-num';
-    inner.textContent = String(num);
-    mz.appendChild(inner);
     const digits = String(num).length;
-    // Le souligné consomme de la place : +0,16 em en largeur (padding gauche + droit) et
-    // +0,13 em en hauteur (padding bas + trait) — pris en compte pour rester dans le carré.
-    const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits + 0.16);
-    const maxByHeight = (zoneSizeMm * 0.85) / 0.85;
+    // Souligné UNIQUEMENT sur les huit numéros réellement retournables (cf. _ARUCO_ROT_AMBIGU) :
+    // les 117 autres s'orientent d'eux-mêmes et gardent ainsi un chiffre plus grand.
+    const ambigu = _ARUCO_ROT_AMBIGU.has(num);
+    if (ambigu) {
+      const inner = document.createElement('span');
+      inner.className = 'am-back-num';
+      inner.textContent = String(num);
+      mz.appendChild(inner);
+    } else {
+      mz.textContent = String(num);
+    }
+    // Le souligné consomme de la place : +0,16 em en largeur (paddings gauche + droit) et
+    // +0,13 em en hauteur (padding bas + trait). On ne la réserve que s'il est présent.
+    const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits + (ambigu ? 0.16 : 0));
+    const maxByHeight = (zoneSizeMm * 0.85) / (ambigu ? 0.85 : 0.72);
     const fs = Math.min(maxByWidth, maxByHeight);
     mz.style.fontSize = fs.toFixed(1) + 'mm';
     return mz;
