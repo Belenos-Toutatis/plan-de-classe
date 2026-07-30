@@ -3061,10 +3061,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <option value="code">🧩 Codes compétences</option>
           <option value="domain">🏛 Domaines du socle</option>
         </select>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85em;color:var(--pencil);cursor:pointer" title="Arrondit tous les niveaux affichés à l'entier le plus proche — utile avant l'export vers l'ENT qui n'accepte que des valeurs entières">
-          <input type="checkbox" id="comp-round-int" onchange="_compBilanSetRoundInt(this.checked)">
-          🎯 Arrondir aux entiers
-        </label>
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
         <button class="btn btn-g btn-sm" onclick="openCompetencesManager()" title="Gérer les compétences : codes courts, noms complets, domaines du socle">⚙ Gérer les compétences</button>
         <button class="btn btn-g btn-sm" id="evhelp-btn-comp" onclick="_evhelpToggle('comp')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
@@ -3075,7 +3071,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <p class="al al-i evhelp" id="evhelp-comp" style="margin-bottom:8px;position:relative;padding-right:28px">
       <button onclick="_evhelpToggle('comp')" title="Masquer ce mode d'emploi (réaffichable via le ? à gauche de Période)" style="position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1">✕</button>
-      Vue transverse <strong>élèves × compétences</strong> (ou <strong>domaines du socle</strong> selon l'affichage choisi) sur toutes les évaluations de la classe et de la période. Chaque cellule = <strong>niveau (1–4)</strong> calculé selon la règle de moyenne (configurable dans <em>⚙ Paramètres</em>). En mode <em>domaines</em>, le niveau d'un domaine = moyenne des compétences évaluées qu'il regroupe. La colonne <strong>Moyenne</strong> agrège les niveaux de la ligne (1–4), et la colonne <strong>📝 Remarque</strong> est synchronisée avec celle de l'onglet <em>Bilan des notes</em>. Le toggle <em>🎯 Arrondir aux entiers</em> arrondit l'affichage et les exports CSV / ENT (l'ENT n'accepte que des valeurs entières). Survole une cellule pour voir le détail.
+      Vue transverse <strong>élèves × compétences</strong> (ou <strong>domaines du socle</strong> selon l'affichage choisi) sur toutes les évaluations de la classe et de la période. Chaque cellule = <strong>niveau entier (1–4)</strong> : chaque évaluation produit un niveau entier pour la compétence, et la période fait la moyenne de ces niveaux <strong>pondérée par le coefficient</strong> de chaque évaluation, arrondie à l'entier. En mode <em>domaines</em>, le niveau d'un domaine = moyenne des compétences évaluées qu'il regroupe, entière elle aussi. La colonne <strong>Moyenne</strong> agrège les niveaux de la ligne (1–4), et la colonne <strong>📝 Remarque</strong> est synchronisée avec celle de l'onglet <em>Bilan des notes</em>. Tous les niveaux étant entiers, les exports CSV / ENT le sont aussi. Survole une cellule pour voir le détail des saisies.
     </p>
     <div id="comp-wrap"></div>
   </div>
@@ -6150,11 +6146,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.25.5';
+const APP_VERSION    = '2.26.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T10:34:11Z';
+const APP_BUILD_DATE = '2026-07-30T18:47:02Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -40668,7 +40664,9 @@ function _computeStudentDomainLevel(classId, sid, domainId, periode) {
     if (agg.levelMean != null) levels.push(agg.levelMean);
   }
   if (levels.length === 0) return null;
-  return levels.reduce((s, l) => s + l, 0) / levels.length;
+  // Entier, comme les compétences qui le composent : plus aucune décimale côté compétences.
+  // C'est ce qui a rendu l'interrupteur « 🎯 Arrondir aux entiers » sans objet — il a été retiré.
+  return Math.round(levels.reduce((s, l) => s + l, 0) / levels.length);
 }
 
 function renderBilanTab() {
@@ -41683,13 +41681,51 @@ function _bilanExportConfirm() {
 // Pour un élève + une compétence sur la classe active + période, agrège tous
 // les niveaux atteints (toutes évals confondues). Retourne :
 // { entries: [{evalId, evalNomCourt, date, niveau}], levelMean: number|null }
+// Niveau ENTIER atteint pour une compétence dans UNE évaluation.
+// ⚠️ Règle arrêtée avec l'utilisateur (2026-07-30) : chaque évaluation produit UN niveau entier
+// par compétence, et c'est cet entier — jamais les saisies individuelles — qui alimente le bilan
+// de période. Auparavant `_aggregateStudentCompetence` empilait toutes les saisies de toutes les
+// évaluations avant d'en faire la moyenne : une évaluation pesait donc proportionnellement au
+// NOMBRE de fois où elle avait évalué la compétence. Exemple du changement — éval 1 : niveaux
+// 1, 1, 1 ; éval 2 : niveau 4. Avant (1+1+1+4)/4 = 1,75 ; désormais (1+4)/2 = 2,5 → 3.
+// La combinaison INTRA-évaluation dépend du type :
+//   · B : règle de moyenne (ev.meanRule || prefs.meanRule) entre passations — inchangé
+//   · A/C : moyenne arithmétique des niveaux déduits des questions ('last'/'weightedRecency'
+//     n'ont pas de sens ici, les questions ne sont pas ordonnées dans le temps)
+function _evalCompetenceLevel(ev, sid, cid) {
+  if (!ev) return null;
+  if (ev.type === 'B') {
+    const lv = _computeStudentCompetenceLevel(ev, sid, cid);
+    return (lv > 0) ? Math.round(lv) : null;
+  }
+  if (ev.type === 'A' || ev.type === 'C') {
+    const values   = ev.notes?.[sid]?.values   || {};
+    const comments = ev.notes?.[sid]?.comments || {};
+    const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+    let sum = 0, n = 0;
+    for (const mn of (ev.miniNotes || [])) {
+      if (!mn.competenceIds?.includes(cid)) continue;
+      if (excluded.has(mn.id)) continue;
+      const v = values[mn.id];
+      if (v === 'NN' || v === 'A' || v == null || v === '') continue;
+      const num = parseFloat(v);
+      if (!Number.isFinite(num)) continue;
+      const niv = _noteToLevel(_applyCommentsToValue(num, comments[mn.id] || [], mn.max), mn.max);
+      if (niv > 0) { sum += niv; n++; }
+    }
+    return n ? Math.round(sum / n) : null;
+  }
+  return null;
+}
+
 function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilter) {
   // Filtre par discipline : si non précisé, prend la discipline courante de la classe
   // (cohérent avec le filtre actif des bilans). Passer 'all' pour ignorer le filtre.
   const cls = S.classes?.[classId];
   let _did = disciplineFilter;
   if (_did === undefined && cls) _did = _currentDiscipline(classId);
-  const entries = [];
+  const entries = [];   // saisies détaillées — infobulle uniquement
+  const perEval = [];   // un niveau ENTIER par évaluation + son coefficient — sert au calcul
   for (const ev of Object.values(S.evaluations || {})) {
     // Inclut aussi les évals orphelines (cf. _computeStudentMeanForPeriod) :
     // un élève transféré garde ses niveaux de compétences acquis dans sa classe précédente.
@@ -41723,25 +41759,25 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
         if (niv > 0) entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: mn.label, date: _evalDateFor(ev, classId) || ev.date, niveau: niv });
       }
     }
+    // Niveau ENTIER de cette évaluation, pondéré ensuite par son coefficient. `entries` reste
+    // la liste détaillée des saisies, conservée pour l'infobulle qui montre d'où vient le niveau.
+    const evLv = _evalCompetenceLevel(ev, sid, cid);
+    if (evLv != null) {
+      const c = (Number.isFinite(+ev.coef) && +ev.coef > 0) ? +ev.coef : 1;
+      perEval.push({ lv: evLv, coef: c });
+    }
   }
   if (entries.length === 0) return { entries: [], levelMean: null };
-  // Application de la règle de moyenne pour la moyenne agrégée
-  const rule = S.evalPrefs?.meanRule || 'arithmetic';
-  let mean = 0;
-  if (rule === 'last') {
-    const sorted = entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    mean = sorted[sorted.length - 1].niveau;
-  } else if (rule === 'best') {
-    mean = entries.reduce((m, e) => Math.max(m, e.niveau), 0);
-  } else if (rule === 'weightedRecency') {
-    const sorted = entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    let num = 0, den = 0;
-    sorted.forEach((e, i) => { const w = i + 1; num += w * e.niveau; den += w; });
-    mean = den > 0 ? num / den : 0;
-  } else {
-    mean = entries.reduce((s, e) => s + e.niveau, 0) / entries.length;
-  }
-  return { entries, levelMean: mean };
+  // ⚠️ Moyenne arithmétique des niveaux d'évaluation, pondérée par leur COEFFICIENT, puis
+  // arrondie à l'entier. La règle de moyenne (last / best / weightedRecency) ne s'applique plus
+  // ICI : elle est confinée à l'intérieur d'une évaluation (cf. _evalCompetenceLevel). Raison —
+  // pondérer par le coefficient est incompatible avec « dernière » ou « meilleure », qui
+  // retiennent une seule valeur et ignorent tout poids. Le niveau de période est un ENTIER :
+  // c'est lui qui part au bulletin, aucune décimale ne subsiste côté compétences.
+  if (perEval.length === 0) return { entries, levelMean: null };
+  let num = 0, den = 0;
+  for (const e of perEval) { num += e.lv * e.coef; den += e.coef; }
+  return { entries, levelMean: den > 0 ? Math.round(num / den) : null };
 }
 
 // Rendu de l'onglet Compétences
@@ -42320,13 +42356,11 @@ function _compBilanSetDisplayMode(mode) {
   try { localStorage.setItem('planClasse_compBilanDisplay', mode); } catch (e) {}
   renderCompetencesTab();
 }
-function _compBilanGetRoundInt() {
-  try { return localStorage.getItem('planClasse_compBilanRoundInt') === '1'; } catch (e) { return false; }
-}
-function _compBilanSetRoundInt(on) {
-  try { localStorage.setItem('planClasse_compBilanRoundInt', on ? '1' : '0'); } catch (e) {}
-  renderCompetencesTab();
-}
+// ⚠️ `_compBilanGetRoundInt` / `_compBilanSetRoundInt` et l'interrupteur « 🎯 Arrondir aux
+// entiers » ont été RETIRÉS : tous les niveaux de compétence et de domaine sont désormais des
+// entiers par construction (cf. _aggregateStudentCompetence et _computeStudentDomainLevel),
+// l'interrupteur n'avait plus rien à arrondir. La clé localStorage `planClasse_compBilanRoundInt`
+// devient orpheline — inoffensive, quelques octets, purgée par le bouton de nettoyage de ⓘ.
 
 function renderCompetencesTab() {
   _evhelpApply('comp');
@@ -42337,8 +42371,6 @@ function renderCompetencesTab() {
   // Restaure l'état UI des contrôles
   const dispSel = document.getElementById('comp-display-mode');
   if (dispSel) dispSel.value = _compBilanGetDisplayMode();
-  const roundChk = document.getElementById('comp-round-int');
-  if (roundChk) roundChk.checked = _compBilanGetRoundInt();
   const sel = document.getElementById('comp-period-filter');
   if (sel) {
     // Restaure la période persistée (synchronisée avec l'autre onglet bilan).
@@ -42444,7 +42476,6 @@ function renderCompetencesTab() {
   // chaque colonne représente le domaine. Le niveau d'un élève sur un domaine =
   // moyenne (arithmétique) de ses niveaux sur les compétences du domaine.
   const displayMode = _compBilanGetDisplayMode();
-  const roundInt = _compBilanGetRoundInt();
   // `cols` est la liste abstraite des colonnes affichées. Chaque entrée a :
   //   { key, code, name, tip, compIds: [cid…] }
   let cols;
@@ -42585,8 +42616,8 @@ function renderCompetencesTab() {
         html += '<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
         continue;
       }
-      let lvl = levels.reduce((s, v) => s + v, 0) / levels.length;
-      if (roundInt) lvl = Math.round(lvl);
+      // Domaine = moyenne des compétences qu'il regroupe, arrondie à l'entier comme elles.
+      const lvl = Math.round(levels.reduce((s, v) => s + v, 0) / levels.length);
       sumMean += lvl; nbMean++;
       const lvlIdx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
       // Détail dans le tooltip : si plusieurs compétences (mode domaine), on liste les sous-moyennes
@@ -42601,7 +42632,7 @@ function renderCompetencesTab() {
         const a = aggs[0];
         tipDetail = a.entries.map(e => `• ${e.evalNomCourt}${e.code ? '/' + e.code : ''} (${_fmtDateFr(e.date || '')}) : N${e.niveau}`).join('\n');
       }
-      const dispLvl = roundInt ? String(lvl) : _fmtNote(lvl);
+      const dispLvl = String(lvl);
       const headerLine = col.compIds.length > 1
         ? `${dispLvl} / 4 — moyenne sur ${col.compIds.length} compétences du domaine`
         : `${dispLvl} / 4 — moyenne sur ${aggs[0].entries.length} évaluation${aggs[0].entries.length > 1 ? 's' : ''}`;
@@ -42819,14 +42850,24 @@ function _listEvaluationsForComp(classId, cid, periode) {
 }
 
 // État du dernier rendu du bilan compétences (pour les exports)
-let _bilanCompState = null;
+// ⚠️ `var` et NON `let` : cette déclaration est située APRÈS l'appel `init()` (~l. 31025), alors
+// que `renderCompetencesTab` l'ASSIGNE (~l. 42824) dès le premier rendu. Avec `let`, la variable
+// est en zone morte temporelle pendant tout `init()` : si l'app démarre sur l'onglet Bilan des
+// compétences ET que la période contient des compétences évaluées, l'assignation lève, `init()`
+// est interrompu, et TOUT le haut niveau situé après `init()` n'est jamais exécuté — soit une
+// quarantaine de déclarations laissées non initialisées. Bug latent reproduit le 2026-07-30.
+// `var` est hoistée (valeur `undefined`), l'assignation précoce devient donc sans danger.
+// Même remède que `var _CUR_ABBR_MAP`, pour la même raison.
+var _bilanCompState = null;
 
 // Construit le tableau TSV/CSV : header + lignes + moyenne classe + nb évals
 function _bilanCompBuildRows(sep) {
   if (!_bilanCompState) return '';
   const { cls, periode, comps, sids, compMeans } = _bilanCompState;
-  const roundInt = _compBilanGetRoundInt();
-  const fmt = v => v == null ? '' : (roundInt ? String(Math.round(v)) : _fmtNote(v).replace('.', ','));
+  // Les NIVEAUX sont entiers par construction — plus d'arrondi conditionnel ici. Mais la colonne
+  // « Moyenne » de la ligne reste décimale : elle garde donc la virgule française, sans quoi un
+  // tableur FR lirait « 2.25 » comme du texte (ou comme 225).
+  const fmt = v => v == null ? '' : (Number.isInteger(v) ? String(v) : _fmtNote(v).replace('.', ','));
   // Garde anti-injection formule (_csvCellGuard) + quoting adapté au séparateur :
   // CSV (;) → quoting standard ; TSV (\t) → pas de quoting, on neutralise tabs/retours-ligne.
   const csvEsc = s => {
@@ -42892,10 +42933,10 @@ function _bilanCompCsv() {
 function _bilanCompExportEnt() {
   if (!_bilanCompState) { toast('⚠ Pas de bilan à exporter', 'warn'); return; }
   const { cls, periode, comps, sids } = _bilanCompState;
-  // Si l'arrondi entier est activé (ex. pour l'ENT qui n'accepte que des valeurs
-  // entières), on arrondit avant formatage.
-  const roundInt = _compBilanGetRoundInt();
-  const fmt = v => v == null ? '—' : (roundInt ? String(Math.round(v)) : _fmtNote(v).replace('.', ','));
+  // L'ENT n'accepte que des valeurs entières — c'est désormais garanti par construction, tous les
+  // niveaux de compétence et de domaine étant des entiers. La forme défensive (virgule si jamais
+  // une décimale arrivait) évite d'écrire un point décimal dans un export français.
+  const fmt = v => v == null ? '—' : (Number.isInteger(v) ? String(v) : _fmtNote(v).replace('.', ','));
   // Tri Nom Prénom (défaut ENT)
   const sortedSids = sids.slice().sort((a, b) => {
     const sa = S.eleves[a], sb = S.eleves[b];
