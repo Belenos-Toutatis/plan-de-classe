@@ -358,10 +358,14 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 /* ─── CLASSES ─── */
 .cc{background:#fff;border:1px solid #ddd;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:box-shadow .15s}
 .cc:hover{box-shadow:0 2px 8px rgba(0,0,0,.1)}
-.cc.on{border-color:#3498db;background:#ebf5fb}
+/* Anneau (et non border-color) : le fond ET la bordure gauche de niveau sont posés en
+   inline par renderClasses et gagneraient sur la bordure. L'anneau reste visible par-dessus. */
+.cc.on{border-color:#3498db;background:#ebf5fb;box-shadow:0 0 0 2px #3498db}
 .cc-info{flex:1}
 .cc-name{font-size:1.05em;font-weight:700}
-.cc-meta{font-size:.82em;color:var(--pencil);margin-top:3px}
+/* --cc-fg : posée en inline par renderClasses sur les cartes à fond de niveau (dérivée de
+   ce fond). Repli sur --pencil pour les cartes sans fond coloré (classes recomposées). */
+.cc-meta{font-size:.82em;color:var(--cc-fg,var(--pencil));margin-top:3px}
 
 /* ─── MODAL ─── */
 .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
@@ -893,7 +897,9 @@ html[data-theme="dark"] .stbl td       { background: transparent !important; bor
 html[data-theme="dark"] .stbl tr:hover td { background: var(--paper-deep) !important; }
 /* .cc : on ne force PAS le background en dark — il vient de levelBgColor()
    inline et est déjà thème-aware (HSL adapté à la saturation/lightness sombre). */
-html[data-theme="dark"] .cc            { border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
+/* Les 3 côtés seulement : `border-color` en bloc écrasait la bordure GAUCHE de niveau,
+   posée en inline par renderClasses (levelAccentColor) — elle repassait en gris. */
+html[data-theme="dark"] .cc            { border-top-color: var(--rule-line) !important; border-right-color: var(--rule-line) !important; border-bottom-color: var(--rule-line) !important; color: var(--cc-fg, var(--ink-deep)) !important; }
 html[data-theme="dark"] .isum          { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; }
 html[data-theme="dark"] .madds-item    { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
 html[data-theme="dark"] .dd-menu       { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
@@ -967,7 +973,7 @@ html[data-theme="dark"] .qcm-usage-note { background: #3a2f1a !important; border
 .cc-virtual { background: #f4ecf7; border: 1px solid #b39ddb; }
 html[data-theme="dark"] .cc-virtual { background: #2a2236 !important; border-color: #6f4a8c !important; color: var(--ink-deep) !important; }
 /* .cc-meta : couleur #777 par défaut, à monter en dark pour lisibilité */
-html[data-theme="dark"] .cc .cc-meta { color: var(--ink-blue-soft) !important; opacity: 0.85; }
+html[data-theme="dark"] .cc .cc-meta { color: var(--cc-fg, var(--ink-blue-soft)) !important; }
 /* Barres "📍 Salle :" en tête d'onglet (#el-salle-row, #tg-salle-row, #sv-salle-row, #ipad-pool-row, #qcm-salle-row, #notes-salle-row) */
 html[data-theme="dark"] #el-salle-row,
 html[data-theme="dark"] #tg-salle-row,
@@ -6059,11 +6065,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.22.0';
+const APP_VERSION    = '2.22.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T00:38:00Z';
+const APP_BUILD_DATE = '2026-07-30T00:52:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12912,17 +12918,25 @@ const LEVEL_HSL = {
   120: [16,   50, 79], // Terminale — terracotta
   999: [0,     0, 91], // Inconnu   — gris
 };
-// Fond d'une carte de classe : teinte TRÈS pâle (clair) ou très sombre (sombre) du niveau.
-// Avant, le fond était un aplat pastel saturé (l 70–78 %) ou un ton moyen (l 18–32 %) sur
-// lequel AUCUN texte secondaire ne tenait 4,5:1 — au mieux 5,4 en clair et 3,8 en sombre,
-// et 1,4–2,6 pour les compteurs ♂/♀ et « 📄 agrandissements ». L'identité du niveau est
-// désormais portée par la bordure gauche saturée (cf. levelAccentColor), plus repérable
-// qu'un aplat et sans coût de lisibilité.
+// Fond d'une carte de classe : aplat SATURÉ, une teinte par niveau + une variation de
+// luminosité par classe au sein du niveau. C'est la fonction première de cette couleur —
+// repérer le niveau d'un coup d'œil — donc on ne la dilue pas.
+// ⚠️ Aucune couleur de texte FIXE ne tient 4,5:1 sur toute cette gamme (au mieux 5,4:1 en
+// clair, 3,8:1 en sombre, et 1,4–2,6:1 pour des accents comme ♂/♀). La lisibilité est
+// donc assurée en dérivant la couleur du texte du fond de chaque carte, via
+// `_contrastTextColor(bg)` exposé aux enfants en variable CSS `--cc-fg` (pire cas mesuré :
+// 5,4:1 en clair, 5,3:1 en sombre). Ne PAS remettre de couleur littérale sur ces cartes.
 function levelBgColor(order, sectionIdx) {
-  const [h, s] = LEVEL_HSL[order] ?? LEVEL_HSL[999];
+  const [h, s, l] = LEVEL_HSL[order] ?? LEVEL_HSL[999];
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  if (isDark) return `hsl(${h},${Math.max(12, s * 0.30)}%,${Math.max(13, 17 - sectionIdx * 1.5)}%)`;
-  return `hsl(${h},${Math.max(20, s * 0.50)}%,${Math.max(93, 96 - sectionIdx * 1.2)}%)`;
+  if (isDark) {
+    // Mode sombre : on baisse la luminosité (couleurs profondes) et la saturation
+    // (moins criardes) tout en gardant la teinte qui identifie le niveau.
+    const lDark = Math.max(18, 32 - sectionIdx * 3);
+    const sDark = Math.max(20, s * 0.55);
+    return `hsl(${h},${sDark}%,${lDark}%)`;
+  }
+  return `hsl(${h},${s}%,${Math.max(70, l - sectionIdx * 4)}%)`;
 }
 
 // Couleur saturée du niveau — sert de bordure gauche épaisse sur la carte de classe.
@@ -13040,23 +13054,20 @@ function renderClasses() {
     const nonAm = c.present - c.amenagement;
     const presentLbl = c.outClass > 0 ? `${c.present} normalement présents` : `${c.present} normalement présent${c.present>1?'s':''}`;
     // Détail civilité : "♂ 14 ♀ 14" (ou "♂ 14 ♀ 13 + 1 ?" si certains sans civilité)
-    // Teintes déclinées par thème : les valeurs vives (#3498db / #e91e63 / #00838f) ne
-    // tenaient que 1,4–2,6:1 sur le fond coloré de la carte.
-    const _ccDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const _cM   = _ccDark ? '#7ec3f0' : '#1c6ea4';
-    const _cF   = _ccDark ? '#f296b6' : '#b3123f';
-    const _cAgr = _ccDark ? '#63c9d4' : '#00707d';
+    // Sur une carte de niveau, TOUT le texte prend --cc-fg (dérivée du fond de la carte) :
+    // aucune teinte fixe ne reste lisible sur la gamme complète des niveaux. Les compteurs
+    // restent distingués par leur glyphe ♂/♀ et leur graisse.
     const civDetail = (c.m + c.f + c.civUnk) > 0
-      ? ` <span style="color:${_cM};font-weight:600">♂ ${c.m}</span> <span style="color:${_cF};font-weight:600">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="color:var(--pencil)" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
+      ? ` <span style="font-weight:700">♂ ${c.m}</span> <span style="font-weight:700">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="opacity:.75" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
       : '';
-    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span style="color:${_cAgr};font-weight:600" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
+    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span style="font-weight:700" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
     const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
     const _discIds = _clsDisciplineIds(cls);
     const _discLine = _discIds.length >= 2
-      ? `<div class="cc-meta" style="font-size:.8em;color:var(--disc-accent);margin-top:2px">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
-      : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;color:var(--disc-accent);margin-top:2px">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
+      ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
+      : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
     return `
-      <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg};border-left:6px solid ${levelAccentColor(order)}" onclick="switchClass('${cls.id}');renderClasses()">
+      <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg};border-left:6px solid ${levelAccentColor(order)};--cc-fg:${_contrastTextColor(bg)};color:${_contrastTextColor(bg)}" onclick="switchClass('${cls.id}');renderClasses()">
         <div class="cc-info">
           <div class="cc-name">${_escAttr(cls.nom)}</div>
           <div class="cc-meta">${cls.année}–${cls.année+1} &nbsp;·&nbsp; ${detail}</div>
