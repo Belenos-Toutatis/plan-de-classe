@@ -6102,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.24.0';
+const APP_VERSION    = '2.24.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T02:45:00Z';
+const APP_BUILD_DATE = '2026-07-30T02:51:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31140,11 +31140,17 @@ async function _renderStorageGauge(force) {
   const autres = Math.max(0, lsBytes - mainBytes);
   let compo = '';
   if (autres > 50 * 1024) {
-    const gros = keys.filter(r => r.key !== LS_KEY && r.bytes > 20 * 1024)
-      .map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`);
+    // « X Mo ailleurs » sans dire OÙ est inutile — on nomme systématiquement les clés,
+    // quelle que soit leur taille, et on regroupe la queue. (Un ancien seuil à 20 Ko
+    // pouvait afficher « 1,1 Mo ailleurs (préférences d'affichage) », ce qui est absurde.)
+    const rest = keys.filter(r => r.key !== LS_KEY).sort((a, b) => b.bytes - a.bytes);
+    const top = rest.slice(0, 4);
+    const queue = rest.slice(4);
+    const queueBytes = queue.reduce((n, r) => n + r.bytes, 0);
+    const liste = top.map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`);
+    if (queue.length) liste.push(`${queue.length} autre${queue.length > 1 ? 's' : ''} clé${queue.length > 1 ? 's' : ''} (${_fmtBytes(queueBytes)})`);
     compo = `<br>Dont ${_fmtBytes(mainBytes)} pour tes données actives (<span class="sto-k">${_escName(LS_KEY)}</span>)`
-      + ` et ${_fmtBytes(autres)} ailleurs`
-      + (gros.length ? ` — ${gros.join(', ')}` : ` (préférences d'affichage)`) + `.`;
+      + ` et ${_fmtBytes(autres)} dans d'autres clés du même site : ${liste.join(', ')}.`;
   }
   // Poids mort d'anciennes versions du stockage : signalé avec l'action pour le libérer.
   const legacy = _lsLegacyFound();
