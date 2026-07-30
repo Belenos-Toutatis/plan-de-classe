@@ -6102,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.24.1';
+const APP_VERSION    = '2.25.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T02:51:00Z';
+const APP_BUILD_DATE = '2026-07-30T08:03:24Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -8237,7 +8237,20 @@ function classesUsingSalle(salleId) {
 }
 
 const LS_KEY      = 'planClasse_v3';
-const LS_LAST_KEY = 'planClasse_last';
+const LS_LAST_KEY = 'planClasse_last';   // héritage — migré vers IndexedDB au 1er lancement (cf. _migrateLastFileToIdb)
+// ⚠️ La copie du « dernier fichier chargé » est une copie INTÉGRALE de S (≈ 1 Mo aujourd'hui,
+// ≈ 2,3 Mo en fin d'année). La garder dans localStorage DOUBLAIT l'occupation et menait droit
+// à la saturation sur les navigateurs qui plafonnent localStorage (~4,6 Mo mesurés chez
+// l'utilisateur : 2,3 de données + 2,3 de copie = le mur, atteint en juin). Elle vit donc
+// dans IndexedDB, qui puise dans le quota général. Ne pas la remettre ici.
+const LAST_FILE_IDB_KEY = 'lastfile';
+// Métadonnées de cette copie (étiquette, date, taille) — minuscules, gardées en mémoire locale.
+// Deux raisons : afficher l'étiquette du header sans extraire le mégaoctet d'IndexedDB à chaque
+// démarrage, et donner à la jauge la taille EXACTE de la copie. ⚠️ Ne pas se fier à
+// `estimate().usageDetails.indexedDB` pour ça : mesuré à 14 Ko juste après l'écriture d'une copie
+// de 900 Ko (le compteur de quota ne se met pas à jour tout de suite) — c'est la même erreur que
+// de prendre `estimate().usage` pour le volume de localStorage.
+const LS_LAST_META_KEY = 'planClasse_lastFileMeta';
 
 // ─── Tris persistés ────────────────────────────────────────────────
 // Permet de garder l'ordre de tri choisi par l'utilisateur entre les sessions
@@ -26240,6 +26253,23 @@ async function idbLoadHandleKey(key) {
     });
   } catch(e) { return null; }
 }
+// Écriture IndexedDB qui ATTEND la fin de la transaction et PROPAGE l'erreur — contrairement à
+// idbSaveHandleKey ci-dessus, best-effort et silencieuse (suffisant pour un handle de dossier :
+// au pire l'utilisateur re-choisit son dossier). Indispensable pour la copie du dernier fichier :
+// on ne supprime l'ancienne clé localStorage qu'après une écriture CONFIRMÉE, et un échec doit
+// remonter jusqu'à l'utilisateur au lieu d'être avalé.
+function _idbPut(key, val) {
+  return new Promise((res, rej) => {
+    idbOpen().then(db => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete = () => res(true);
+      tx.onerror    = () => rej(tx.error || new Error('écriture refusée'));
+      tx.onabort    = () => rej(tx.error || new Error('transaction annulée'));
+    }).catch(rej);
+  });
+}
+function _idbGet(key) { return idbLoadHandleKey(key); }
 async function tryRestoreQcmDirHandle() {
   if (!window.showDirectoryPicker) return;
   const h = await idbLoadHandleKey('qcm-dir');
@@ -26606,15 +26636,69 @@ async function loadFromHandle(idx) {
 // ═══════════════════════════════════════════════════════════
 // EXPORT / IMPORT JSON
 // ═══════════════════════════════════════════════════════════
-function saveLastFile(label, data) {
+// Stockée dans IndexedDB (cf. LAST_FILE_IDB_KEY). L'asynchrone est sans risque ici : les quatre
+// sites d'appel sont des gestes explicites de l'utilisateur (2 exports, 1 import, 1 restauration
+// de version), jamais `beforeunload` — la contrainte qui interdit l'async à save().
+async function saveLastFile(label, data) {
   try {
-    localStorage.setItem(LS_LAST_KEY, JSON.stringify({
-      label,
-      date: new Date().toISOString(),
-      data
-    }));
-  } catch(e) {}
+    const date = new Date().toISOString();
+    await _idbPut(LAST_FILE_IDB_KEY, { label, date, data });
+    // Métadonnées écrites APRÈS l'écriture confirmée : si IndexedDB refuse, l'étiquette continue
+    // de décrire la copie réellement présente (l'ancienne) au lieu de mentir sur la nouvelle.
+    _setLastFileMeta({ label, date, bytes: _byteLen(JSON.stringify(data)) });
+  } catch (e) {
+    // Anciennement un `catch(e){}` muet : la copie cessait de se mettre à jour sans un mot, et
+    // « Recharger le dernier fichier » proposait ensuite une version périmée en se croyant à jour.
+    console.warn('Copie du dernier fichier échouée :', e);
+    toast('⚠️ Copie du dernier fichier non enregistrée — « Recharger » proposerait une version antérieure.', 'warn');
+  }
   refreshLastFileUI();
+}
+
+function _setLastFileMeta(meta) {
+  try { localStorage.setItem(LS_LAST_META_KEY, JSON.stringify(meta)); } catch (_) {}
+}
+function _getLastFileMeta() {
+  try {
+    const raw = localStorage.getItem(LS_LAST_META_KEY);
+    const m = raw ? JSON.parse(raw) : null;
+    return (m && m.label) ? m : null;
+  } catch (_) { return null; }
+}
+
+// Lecture de la copie : IndexedDB d'abord, REPLI sur l'ancienne clé localStorage si la migration
+// n'a pas pu aboutir (navigateur où IndexedDB est indisponible ou refusé). Sans ce repli, une
+// migration échouée rendrait inaccessible une copie pourtant toujours présente — perte de filet
+// silencieuse, exactement ce qu'on cherche à éviter ici.
+async function _getLastFileRecord() {
+  let rec = null;
+  try { rec = await _idbGet(LAST_FILE_IDB_KEY); } catch (_) { rec = null; }
+  if (rec && (rec.label || rec.data)) return rec;
+  try {
+    const raw = localStorage.getItem(LS_LAST_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return null;
+}
+
+// Migration unique localStorage → IndexedDB de la copie du dernier fichier.
+// L'ancienne clé n'est supprimée QU'APRÈS une écriture confirmée : si IndexedDB refuse,
+// on ne perd rien et on retentera au prochain lancement. Idempotente.
+async function _migrateLastFileToIdb() {
+  let raw = null;
+  try { raw = localStorage.getItem(LS_LAST_KEY); } catch (_) { return; }
+  if (!raw) return;
+  const freed = _byteLen(LS_LAST_KEY) + _byteLen(raw);
+  try {
+    const rec = JSON.parse(raw);
+    await _idbPut(LAST_FILE_IDB_KEY, rec);
+    _setLastFileMeta({ label: rec.label, date: rec.date, bytes: _byteLen(JSON.stringify(rec.data || null)) });
+    localStorage.removeItem(LS_LAST_KEY);
+    // Sans ce message, la place occupée chute d'un coup sans explication à la réouverture de ⓘ.
+    if (freed > 100 * 1024) toast(`💾 ${_fmtBytes(freed)} libérés en mémoire locale (copie du dernier fichier déplacée).`);
+  } catch (e) {
+    console.warn('Migration de la copie du dernier fichier échouée :', e);
+  }
 }
 
 // Tronque un nom de fichier pour l'affichage compact dans le header.
@@ -26629,11 +26713,13 @@ function _truncateFilename(name, max) {
   return s.slice(0, headLen) + '…' + ext;
 }
 
-function refreshLastFileUI() {
+async function refreshLastFileUI() {
   try {
-    const raw = localStorage.getItem(LS_LAST_KEY);
-    if (!raw) return;
-    const { label, date } = JSON.parse(raw);
+    // Chemin rapide : les métadonnées suffisent à l'étiquette — inutile de sortir la copie
+    // entière d'IndexedDB à chaque démarrage pour afficher un nom et une date.
+    const meta = _getLastFileMeta() || await _getLastFileRecord();
+    if (!meta || !meta.label) return;
+    const { label, date } = meta;
     const d = new Date(date);
     const dateShort = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' });
     const timeShort = d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
@@ -26647,11 +26733,11 @@ function refreshLastFileUI() {
   } catch(e) {}
 }
 
-function loadLastFile() {
+async function loadLastFile() {
   try {
-    const raw = localStorage.getItem(LS_LAST_KEY);
-    if (!raw) return toast('Aucun fichier en mémoire.');
-    const { label, date, data } = JSON.parse(raw);
+    const rec = await _getLastFileRecord();
+    if (!rec || !rec.data) return toast('Aucun fichier en mémoire.');
+    const { label, date, data } = rec;
     const d = new Date(date);
     const fmt = d.toLocaleDateString('fr-FR') + ' ' +
                 d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
@@ -30700,7 +30786,9 @@ function init() {
   // via le tableur de l'éval Type B + son overlay "Plan de classe")
   const demoJustInstalled = createDemo();
   refreshSelector();
-  refreshLastFileUI();
+  // Migration d'abord (sort la copie du dernier fichier de localStorage), puis l'étiquette du
+  // header. Non bloquant : ne met à jour qu'un libellé, rien dont le 1er render dépende.
+  _migrateLastFileToIdb().then(refreshLastFileUI);
   renderUserLinks(); // Liens externes (ENT, Pronote, etc.) dans le header
 
   if (S.cur && S.classes[S.cur]) {
@@ -31027,6 +31115,23 @@ function _lsKeyBreakdown() {
   return out.sort((a, b) => b.bytes - a.bytes);
 }
 
+// Une clé est « de l'application » si elle porte l'un de ses préfixes. Tout le reste vient d'un
+// AUTRE projet servi depuis la même origine (la mémoire locale est partagée par origine, pas par
+// page). La distinction est ce qui manquait : sans elle, une clé de l'app était présentée comme
+// appartenant à un outil voisin, et on cherchait au mauvais endroit.
+function _isAppLsKey(k) { return /^planClasse/.test(String(k)) || /^iprint-/.test(String(k)); }
+
+// Liste lisible d'un lot de clés : les 4 plus lourdes nommées, la queue regroupée et comptée.
+function _lsKeyList(rows) {
+  const top = rows.slice(0, 4), queue = rows.slice(4);
+  const out = top.map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`);
+  if (queue.length) {
+    const qb = queue.reduce((n, r) => n + r.bytes, 0);
+    out.push(`${queue.length} autre${queue.length > 1 ? 's' : ''} clé${queue.length > 1 ? 's' : ''} (${_fmtBytes(qb)})`);
+  }
+  return out.join(', ');
+}
+
 function _lsLegacyFound() {
   return _lsKeyBreakdown().filter(r => LS_LEGACY_KEYS.includes(r.key) && r.bytes > 1024);
 }
@@ -31090,7 +31195,7 @@ async function _renderStorageGauge(force) {
   // service worker était vide sur cette machine. La seule mesure fiable de localStorage
   // est la nôtre (`lsBytes`). On ne lit dans `estimate()` que le quota et le poids du
   // cache de la page, présentés pour ce qu'ils sont.
-  let quota = null, cacheBytes = null, otherUsage = 0;
+  let quota = null, cacheBytes = null, idbBytes = null, otherUsage = 0;
   try {
     if (navigator.storage && typeof navigator.storage.estimate === 'function') {
       const est = await navigator.storage.estimate();
@@ -31143,14 +31248,16 @@ async function _renderStorageGauge(force) {
     // « X Mo ailleurs » sans dire OÙ est inutile — on nomme systématiquement les clés,
     // quelle que soit leur taille, et on regroupe la queue. (Un ancien seuil à 20 Ko
     // pouvait afficher « 1,1 Mo ailleurs (préférences d'affichage) », ce qui est absurde.)
+    // ⚠️ Et on distingue les clés DE L'APP de celles d'un autre outil du même site. Les ranger
+    // ensemble sous « d'autres clés du même site » a fait chercher un outil voisin pendant trois
+    // échanges, alors que le mégaoctet venait de l'app elle-même (l'ancienne clé planClasse_last).
     const rest = keys.filter(r => r.key !== LS_KEY).sort((a, b) => b.bytes - a.bytes);
-    const top = rest.slice(0, 4);
-    const queue = rest.slice(4);
-    const queueBytes = queue.reduce((n, r) => n + r.bytes, 0);
-    const liste = top.map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`);
-    if (queue.length) liste.push(`${queue.length} autre${queue.length > 1 ? 's' : ''} clé${queue.length > 1 ? 's' : ''} (${_fmtBytes(queueBytes)})`);
-    compo = `<br>Dont ${_fmtBytes(mainBytes)} pour tes données actives (<span class="sto-k">${_escName(LS_KEY)}</span>)`
-      + ` et ${_fmtBytes(autres)} dans d'autres clés du même site : ${liste.join(', ')}.`;
+    const mine  = rest.filter(r => _isAppLsKey(r.key));
+    const other = rest.filter(r => !_isAppLsKey(r.key));
+    const tot   = arr => arr.reduce((n, r) => n + r.bytes, 0);
+    compo = `<br>Dont ${_fmtBytes(mainBytes)} pour tes données actives (<span class="sto-k">${_escName(LS_KEY)}</span>)`;
+    if (mine.length)  compo += ` et ${_fmtBytes(tot(mine))} dans d'autres clés de l'application : ${_lsKeyList(mine)}.`;
+    if (other.length) compo += ` ${_fmtBytes(tot(other))} appartiennent à un autre outil servi depuis la même adresse — la mémoire locale est partagée par origine, pas par page : ${_lsKeyList(other)}.`;
   }
   // Poids mort d'anciennes versions du stockage : signalé avec l'action pour le libérer.
   const legacy = _lsLegacyFound();
@@ -31163,13 +31270,20 @@ async function _renderStorageGauge(force) {
   const occupe = `<strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale sur <strong>${_fmtBytes(total)}</strong> réellement disponibles ici (${pctTxt} %).${compo}`;
   // D'où vient le chiffre : mesuré, pas supposé. Sans cette phrase l'utilisateur ne peut
   // pas savoir si on lui donne une valeur réelle ou une convention.
-  const prov = cap.source === 'quota'
+  let prov = cap.source === 'quota'
     ? ` Mesuré sur ce navigateur : la mémoire locale est adossée au quota de stockage de la page`
       + (cacheBytes != null ? `, dont ${_fmtBytes(cacheBytes)} sont déjà pris par le cache de l'application` : '')
       + `.`
     : cap.source === 'saturé'
       ? ` Plus aucune écriture ne passe : l'espace est saturé.`
       : ` Plafond mesuré par écriture de test sur ce navigateur (il applique une limite propre à la mémoire locale, indépendante du quota global).`;
+  // La copie du dernier fichier chargé a quitté la mémoire locale (cf. LAST_FILE_IDB_KEY).
+  // Sans cette phrase, la chute d'occupation après la mise à jour serait inexplicable — et
+  // l'utilisateur pourrait croire que sa copie de secours a disparu.
+  const lastMeta = _getLastFileMeta();
+  if (lastMeta && lastMeta.bytes > 100 * 1024) {
+    prov += ` La copie du dernier fichier chargé (${_fmtBytes(lastMeta.bytes)}) est rangée à part, hors mémoire locale : elle ne pèse pas sur le plafond ci-dessus.`;
+  }
 
   let note;
   if (pct >= 85) {
