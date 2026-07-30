@@ -6150,11 +6150,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.25.4';
+const APP_VERSION    = '2.25.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T10:03:26Z';
+const APP_BUILD_DATE = '2026-07-30T10:34:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -17485,18 +17485,23 @@ function renderUnplaced() {
     const otherClsBdg = otherClass
       ? `<span style="background:#34495e;color:${_contrastTextColor('#34495e')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:3px" title="Élève de la classe ${_escAttr(otherClass.nom)}">${_escAttr(otherClass.nom)}</span>`
       : '';
-    // Badges aménagements (ULIS, UPE2A, PPS/Gevasco, PPRE) — version compacte
-    // pour rester lisible dans le panneau étroit. Tooltip explicite.
+    // Badges aménagements — MÊMES classes .spec-* que les cellules du plan (cf. buildCell).
+    // ⚠️ Ces pastilles portaient auparavant des couleurs en style inline, qui avaient dérivé :
+    // ULIS et ULIS+ y étaient tous deux violets, UPE2A et UPE2A+ tous deux rouges — donc
+    // indistinguables entre eux, alors qu'ils le sont sur la cellule. Passer par les classes
+    // supprime la duplication (donc la dérive) et rend ces pastilles sensibles au thème.
+    // Seule la marge reste en inline : .spec-badge n'en pose pas, et le panneau est étroit.
+    const _sb = (cls, title, txt) => `<span class="spec-badge ${cls}" style="margin-right:2px" title="${_escAttr(title)}">${txt}</span>`;
     const specBdgs = [];
-    if (s.ulis)       specBdgs.push(`<span style="background:#8e44ad;color:${_contrastTextColor('#8e44ad')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="ULIS hors inclusion">ULIS${_agrSuffix(s,'ulis')}</span>`);
-    if (s.ulis_incl)  specBdgs.push(`<span style="background:#8e44ad;color:${_contrastTextColor('#8e44ad')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="ULIS inclusion">ULIS+${_agrSuffix(s,'ulis_incl')}</span>`);
-    if (s.upe2a)      specBdgs.push(`<span style="background:#c0392b;color:${_contrastTextColor('#c0392b')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="UPE2A hors inclusion (allophone)">UPE2A${_agrSuffix(s,'upe2a')}</span>`);
-    if (s.upe2a_incl) specBdgs.push(`<span style="background:#c0392b;color:${_contrastTextColor('#c0392b')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="UPE2A inclusion (allophone)">UPE2A+${_agrSuffix(s,'upe2a_incl')}</span>`);
-    if (s.gevasco)    specBdgs.push(`<span style="background:#23689a;color:${_contrastTextColor('#23689a')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPS / Gevasco">PPS${_agrSuffix(s,'gevasco')}</span>`);
-    if (s.ppre)       specBdgs.push(`<span style="background:#e67e22;color:${_contrastTextColor('#e67e22')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PPRE">PPRE${_agrSuffix(s,'ppre')}</span>`);
-    if (s.pap)        specBdgs.push(`<span style="background:#3f51b5;color:${_contrastTextColor('#3f51b5')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PAP (Plan d'Accompagnement Personnalisé)">PAP${_agrSuffix(s,'pap')}</span>`);
-    if (s.pai)        specBdgs.push(`<span style="background:#ec4899;color:${_contrastTextColor('#ec4899')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="PAI (médical)">PAI${_agrSuffix(s,'pai')}</span>`);
-    if (_agrStandalone(s)) specBdgs.push(`<span style="background:#00838f;color:${_contrastTextColor('#00838f')};font-size:.62em;padding:1px 4px;border-radius:3px;margin-right:2px" title="Agrandissement (photocopies agrandies)">-A</span>`);
+    if (s.ulis)       specBdgs.push(_sb('spec-ulis',       'ULIS hors inclusion',                     'ULIS'  + _agrSuffix(s,'ulis')));
+    if (s.ulis_incl)  specBdgs.push(_sb('spec-ulis-incl',  'ULIS inclusion',                          'ULIS+' + _agrSuffix(s,'ulis_incl')));
+    if (s.upe2a)      specBdgs.push(_sb('spec-upe2a',      'UPE2A hors inclusion (allophone)',        'UPE2A' + _agrSuffix(s,'upe2a')));
+    if (s.upe2a_incl) specBdgs.push(_sb('spec-upe2a-incl', 'UPE2A inclusion (allophone)',             'UPE2A+'+ _agrSuffix(s,'upe2a_incl')));
+    if (s.gevasco)    specBdgs.push(_sb('spec-gev',        'PPS / Gevasco',                           'PPS'   + _agrSuffix(s,'gevasco')));
+    if (s.ppre)       specBdgs.push(_sb('spec-ppre',       'PPRE',                                    'PPRE'  + _agrSuffix(s,'ppre')));
+    if (s.pap)        specBdgs.push(_sb('spec-pap',        "PAP (Plan d'Accompagnement Personnalisé)", 'PAP'   + _agrSuffix(s,'pap')));
+    if (s.pai)        specBdgs.push(_sb('spec-pai',        'PAI (médical)',                           'PAI'   + _agrSuffix(s,'pai')));
+    if (_agrStandalone(s)) specBdgs.push(_sb('spec-agr',   'Agrandissement (photocopies agrandies)',  '-A'));
     return `<div class="us" draggable="true"
       data-sid="${_escAttr(s.id)}"
       ondragstart="startDragUnplaced(event,'${_escAttr(s.id)}')"
@@ -21008,8 +21013,11 @@ function printArucoMarkersByList(perPage) {
 //     sa présence révèle l'orientation, donc tout numéro contenant un 1 s'oriente seul.
 //   · Les marqueurs s'écrivent SANS zéro de tête : 60/80/90 deviennent 09/08/06, qui n'existent
 //     pas — le sens se déduit là aussi.
-//   · Restent les nombres faits de {0,6,8,9} : 8, 88, 69, 96 sont identiques après rotation
-//     (rien à signaler), et il reste ces huit-là, ambigus deux à deux.
+//   · Restent les nombres faits de {0,6,8,9}. Parmi eux, 8, 88, 69 et 96 sont INVARIANTS par
+//     rotation : 69 retourné donne 69, 96 donne 96 — la rotation inverse l'ordre des chiffres ET
+//     échange 6↔9, les deux effets s'annulent. La lecture est donc juste dans les deux sens.
+//     ⚠️ Vérifié deux fois, dont une sur signalement en usage réel : NE PAS les rajouter.
+//   · Il ne reste donc que ces huit-là, ambigus deux à deux : 6/9, 66/99, 68/89, 86/98.
 const _ARUCO_ROT_AMBIGU = new Set([6, 9, 66, 68, 86, 89, 98, 99]);
 
 // Lance l'impression recto-verso des marqueurs ArUco de la salle active.
@@ -24869,17 +24877,26 @@ function printElevesList() {
   const _useColor = _printColors !== false;
   const _amBadges = s => {
     const badges = [];
-    if (s.ppre)       badges.push({ txt: 'PPRE'  + _agrSuffix(s,'ppre'),       bg: '#f39c12' });
+    // ⚠️ MIROIR LITTÉRAL des classes .spec-* de l'écran, valeurs du thème CLAIR (le papier est
+    // blanc). Un constructeur d'impression ne peut pas utiliser les tokens — ils suivent le thème
+    // de l'écran — d'où la duplication, assumée mais À TENIR SYNCHRONISÉE : toute retouche d'une
+    // pastille .spec-* doit être reportée ici, et réciproquement. C'est la dérive de ces valeurs
+    // qui avait donné trois palettes différentes pour les mêmes statuts (cellule du plan, liste
+    // des non placés, liste imprimée).
+    if (s.ppre)       badges.push({ txt: 'PPRE'  + _agrSuffix(s,'ppre'),       bg: '#e67e22' });  // --maitrise-2
     if (s.pap)        badges.push({ txt: 'PAP'   + _agrSuffix(s,'pap'),        bg: '#3f51b5' });
-    // ⚠️ PPS et PAI : fonds assombris (#2980b9 → #23698a-like, #ec4899 → #d81b60) parce
-    // qu'AUCUNE couleur de texte n'y atteignait 4,5:1 — ni le blanc (4,30 / 3,53) ni l'encre
-    // (3,62 / 4,41). Seul le fond pouvait bouger. Les autres pastilles gardent leur teinte.
-    if (s.gevasco)    badges.push({ txt: 'PPS'   + _agrSuffix(s,'gevasco'),    bg: '#23689a' });
-    if (s.ulis)       badges.push({ txt: 'ULIS'  + _agrSuffix(s,'ulis'),       bg: '#27ae60' });
-    if (s.ulis_incl)  badges.push({ txt: 'ULIS+' + _agrSuffix(s,'ulis_incl'),  bg: '#8e44ad' });
-    if (s.upe2a)      badges.push({ txt: 'UPE2A' + _agrSuffix(s,'upe2a'),      bg: '#16a085' });
-    if (s.upe2a_incl) badges.push({ txt: 'UPE2A+'+ _agrSuffix(s,'upe2a_incl'), bg: '#c0392b' });
-    if (s.pai)        badges.push({ txt: 'PAI'   + _agrSuffix(s,'pai'),        bg: '#d81b60' });
+    if (s.gevasco)    badges.push({ txt: 'PPS'   + _agrSuffix(s,'gevasco'),    bg: '#1e6091' });  // --maitrise-4
+    // ULIS et UPE2A partagent volontairement le gris --pencil, comme à l'écran : elles ne se
+    // distinguent que par leur libellé. Ne pas « rétablir » un vert et un sarcelle ici sans
+    // changer aussi les .spec-* — c'est exactement comme les palettes ont divergé.
+    if (s.ulis)       badges.push({ txt: 'ULIS'  + _agrSuffix(s,'ulis'),       bg: '#56697f' });  // --pencil
+    if (s.ulis_incl)  badges.push({ txt: 'ULIS+' + _agrSuffix(s,'ulis_incl'),  bg: '#6f4a8c' });
+    if (s.upe2a)      badges.push({ txt: 'UPE2A' + _agrSuffix(s,'upe2a'),      bg: '#56697f' });  // --pencil
+    if (s.upe2a_incl) badges.push({ txt: 'UPE2A+'+ _agrSuffix(s,'upe2a_incl'), bg: '#6f4a8c' });
+    // PAI : seule pastille sous 4,5:1 sur papier (4,41:1 avec l'encre, choisie par
+    // _contrastTextColor). Conservée telle quelle par fidélité à l'écran, où elle est déjà
+    // acceptée à 3,53:1 — le papier est donc MEILLEUR que l'écran sur ce point.
+    if (s.pai)        badges.push({ txt: 'PAI'   + _agrSuffix(s,'pai'),        bg: '#ec4899' });
     if (_agrStandalone(s)) badges.push({ txt: '-A', bg: '#00838f' });
     if (!badges.length) return '<span style="color:#606f86">—</span>';
     const baseStyle = 'display:inline-block;border-radius:3px;padding:0 4px;font-size:.75em;font-weight:700;margin:1px 1px 1px 0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
