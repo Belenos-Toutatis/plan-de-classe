@@ -6102,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.23.2';
+const APP_VERSION    = '2.23.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T02:34:00Z';
+const APP_BUILD_DATE = '2026-07-30T02:38:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30987,6 +30987,26 @@ function _remeasureStorage() {
   _renderStorageGauge(true);
 }
 
+// Libellés lisibles des sections de S. Les clés du modèle sont en anglais (et le restent
+// pour la compatibilité des anciens fichiers JSON), mais elles n'ont rien à faire sous les
+// yeux de l'utilisateur : « attendance » ne veut rien dire pour un enseignant.
+// Repli sur la clé brute si une section n'est pas encore traduite ici.
+const S_SECTION_LABELS = {
+  classes: 'classes', eleves: 'élèves', salles: 'salles',
+  evaluations: 'évaluations', competences: 'compétences', competenceDomains: 'domaines du socle',
+  evalPrefs: 'réglages d\'évaluation', evalCommentLibrary: 'bibliothèque de commentaires',
+  attendance: 'appels', snapshots: 'snapshots', seatingSnapshots: 'placements archivés',
+  bulletinRemarques: 'remarques bulletin', bulletinClassRemarques: 'remarques de classe',
+  bulletinWorkedItems: 'éléments travaillés',
+  conseilClasse: 'conseil de classe', conseilMentions: 'mentions de conseil',
+  conseilIncompat: 'incompatibilités de mentions',
+  disciplines: 'disciplines', tags: 'tags', tabletPools: 'classes mobiles',
+  movedHighlights: 'places modifiées', violationsAccepted: 'contraintes acceptées',
+  userLinks: 'liens personnels', reminderPresets: 'motifs de rappel',
+  featureFlags: 'fonctions activées', clock: 'horloge de synchronisation',
+};
+function _sectionLabel(k) { return S_SECTION_LABELS[k] || k; }
+
 // Répartition du poids de S par section, la plus lourde d'abord.
 function _storageBreakdown() {
   const out = [];
@@ -31034,7 +31054,7 @@ async function _renderStorageGauge(force) {
   const rows = _storageBreakdown().filter(r => r.bytes >= 1024).slice(0, 6);
   const detail = rows.length
     ? `<div class="sto-detail">Répartition : ` +
-      rows.map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`).join(' &nbsp;·&nbsp; ') +
+      rows.map(r => `<span class="sto-k" title="${_escAttr('clé interne : ' + r.key)}">${_escName(_sectionLabel(r.key))}</span> ${_fmtBytes(r.bytes)}`).join(' &nbsp;·&nbsp; ') +
       `</div>`
     : '';
 
