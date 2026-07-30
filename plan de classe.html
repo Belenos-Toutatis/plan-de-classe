@@ -528,7 +528,9 @@ body.noise-widget-on #toast{bottom:112px}
   .pcell.sv .pn{font-size:14pt}
   .pcell .pgb{display:inline-block;padding:0 4px;border-radius:3px;font-size:7pt;font-weight:700;color:#fff;margin-bottom:1px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pcell .pgb.g1{background:#23689a}
-  .pcell .pgb.g2{background:#d35400}
+  /* #bf4d00 et non #d35400 : le blanc ne tenait que 4,17:1 sur l'ancien orange. Valeur alignée
+     sur le token d'écran --g2, déjà corrigé lors de la passe contraste (4,91:1). */
+  .pcell .pgb.g2{background:#bf4d00}
   .pcell .pgb.g3{background:#8e44ad}
   .pinc{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
@@ -6102,11 +6104,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.25.0';
+const APP_VERSION    = '2.25.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T08:03:24Z';
+const APP_BUILD_DATE = '2026-07-30T08:46:12Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12219,7 +12221,7 @@ function printQcmPlans(salleIds) {
 
   // Construit le HTML de toutes les pages (sans prénoms, sans rattachement à une classe)
   const pagesHTML = validIds.map(salleId =>
-    _buildQcmPlanHTML(null, salleId, { hideNames: true })
+    _buildQcmPlanHTML(null, salleId, { hideNames: true, print: true })
   ).join('');
 
   const area = document.getElementById('qcm-plan-print-area');
@@ -12310,6 +12312,12 @@ function toggleQcmExclusion(salleId, key) {
 // Utilisé dans l'onglet QCMCam et dans l'impression multi-salles.
 function _buildQcmPlanHTML(cls, salleId, opts) {
   opts = opts || {};
+  // ⚠️ Ce constructeur sert l'onglet QCMCam à l'ÉCRAN *et* l'impression multi-salles. À l'écran il
+  // faut les tokens (le thème sombre inverse le fond) ; sur papier blanc il faut des littéraux,
+  // sinon un thème sombre actif imprime du gris clair sur blanc — mesuré 2,87:1 pour --pencil et
+  // 3,87:1 pour --margin-red. D'où ce couple, choisi par opts.print (posé par printQcmPlans).
+  const _cGrey = opts.print ? '#56697f' : 'var(--pencil)';
+  const _cRed  = opts.print ? '#b03d2e' : 'var(--margin-red)';
   const salle = S.salles?.[salleId];
   if (!salle) return '';
   const rows = salle.rows || 4;
@@ -12334,9 +12342,9 @@ function _buildQcmPlanHTML(cls, salleId, opts) {
     const strat = qcm.strategy === 'lisible-10' ? 'Lisible (pas 10)'
                 : qcm.strategy === 'lisible-20' ? 'Lisible (pas 20)'
                 : 'Séquentielle';
-    strategyBadge = ` · <span style="font:600 10px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pencil)">Stratégie : ${strat}</span>`;
+    strategyBadge = ` · <span style="font:600 10px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:${_cGrey}">Stratégie : ${strat}</span>`;
     if (qcm.overflowCount > 0) {
-      strategyBadge += ` · <span style="color:var(--margin-red);font-weight:600">⚠ ${qcm.overflowCount} place${qcm.overflowCount>1?'s':''} sans n°</span>`;
+      strategyBadge += ` · <span style="color:${_cRed};font-weight:600">⚠ ${qcm.overflowCount} place${qcm.overflowCount>1?'s':''} sans n°</span>`;
     }
   }
 
@@ -12395,7 +12403,7 @@ function _buildQcmPlanHTML(cls, salleId, opts) {
     ? `Vue prof — numéros QCMCam pour les marqueurs ArUco${strategyBadge}`
     : `Vue prof — numéros QCMCam tels qu'ils apparaîtront sur les marqueurs ArUco${strategyBadge}`;
   return `<div class="qcm-plan-wrap">
-    <div class="qcm-plan-title">📷 ${titlePrefix}${_escAttr(salle.nom)} <span style="font-weight:400;color:var(--pencil);font-size:.85em">(${rows}×${cols})</span></div>
+    <div class="qcm-plan-title">📷 ${titlePrefix}${_escAttr(salle.nom)} <span style="font-weight:400;color:${_cGrey};font-size:.85em">(${rows}×${cols})</span></div>
     <div class="qcm-plan-sub">${sub}</div>
     <div class="qcm-plan" style="grid-template-columns:repeat(${cols},minmax(40px,1fr))">${cellsHTML}</div>
     <div class="qcm-plan-prof">Bureau du professeur</div>
@@ -14804,7 +14812,7 @@ function _renduPrint() {
   document.getElementById(oldAreaId)?.remove();
   const printArea = document.createElement('div');
   printArea.id = oldAreaId;
-  printArea.innerHTML = `<h2 style="margin:0 0 4px;font-family:Georgia,serif">${_esc(title)}</h2><p style="margin:0 0 12px;color:var(--pencil);font-size:.85em">${_esc(sub)}</p>${body.innerHTML}`;
+  printArea.innerHTML = `<h2 style="margin:0 0 4px;font-family:Georgia,serif">${_esc(title)}</h2><p style="margin:0 0 12px;color:#56697f;font-size:.85em">${_esc(sub)}</p>${body.innerHTML}`;
   // Insère une ligne de rappel de titre tout en haut du <thead> de la table.
   // Les <thead> sont automatiquement répétés sur chaque page imprimée → le titre
   // suivra la table à chaque saut de page sans configuration supplémentaire.
@@ -14830,7 +14838,7 @@ function _renduPrint() {
   const style = document.createElement('style');
   style.id = '__renduPrintStyle__';
   // @bottom-right pour le numéro de page — supporté Chromium/Edge/Safari/Firefox récents.
-  style.textContent = `@page { size: A4 landscape; margin: 12mm 12mm 16mm 12mm; @bottom-right { content: "Page " counter(page) " / " counter(pages); font-family: Georgia, serif; font-size: 9pt; color:var(--pencil); } }
+  style.textContent = `@page { size: A4 landscape; margin: 12mm 12mm 16mm 12mm; @bottom-right { content: "Page " counter(page) " / " counter(pages); font-family: Georgia, serif; font-size: 9pt; color:#56697f; } }
     @media print {
       body > * { display: none !important; }
       body > #${oldAreaId} { display: block !important; }
@@ -24793,18 +24801,23 @@ function printElevesList() {
     const badges = [];
     if (s.ppre)       badges.push({ txt: 'PPRE'  + _agrSuffix(s,'ppre'),       bg: '#f39c12' });
     if (s.pap)        badges.push({ txt: 'PAP'   + _agrSuffix(s,'pap'),        bg: '#3f51b5' });
-    if (s.gevasco)    badges.push({ txt: 'PPS'   + _agrSuffix(s,'gevasco'),    bg: '#2980b9' });
+    // ⚠️ PPS et PAI : fonds assombris (#2980b9 → #23698a-like, #ec4899 → #d81b60) parce
+    // qu'AUCUNE couleur de texte n'y atteignait 4,5:1 — ni le blanc (4,30 / 3,53) ni l'encre
+    // (3,62 / 4,41). Seul le fond pouvait bouger. Les autres pastilles gardent leur teinte.
+    if (s.gevasco)    badges.push({ txt: 'PPS'   + _agrSuffix(s,'gevasco'),    bg: '#23689a' });
     if (s.ulis)       badges.push({ txt: 'ULIS'  + _agrSuffix(s,'ulis'),       bg: '#27ae60' });
     if (s.ulis_incl)  badges.push({ txt: 'ULIS+' + _agrSuffix(s,'ulis_incl'),  bg: '#8e44ad' });
     if (s.upe2a)      badges.push({ txt: 'UPE2A' + _agrSuffix(s,'upe2a'),      bg: '#16a085' });
     if (s.upe2a_incl) badges.push({ txt: 'UPE2A+'+ _agrSuffix(s,'upe2a_incl'), bg: '#c0392b' });
-    if (s.pai)        badges.push({ txt: 'PAI'   + _agrSuffix(s,'pai'),        bg: '#ec4899' });
+    if (s.pai)        badges.push({ txt: 'PAI'   + _agrSuffix(s,'pai'),        bg: '#d81b60' });
     if (_agrStandalone(s)) badges.push({ txt: '-A', bg: '#00838f' });
-    if (!badges.length) return '<span style="color:var(--pencil-soft)">—</span>';
+    if (!badges.length) return '<span style="color:#606f86">—</span>';
     const baseStyle = 'display:inline-block;border-radius:3px;padding:0 4px;font-size:.75em;font-weight:700;margin:1px 1px 1px 0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
     return badges.map(b => {
       const style = _useColor
-        ? `background:${b.bg};color:#fff;${baseStyle}`
+        // Texte dérivé du fond, jamais #fff en dur : le blanc tombait à 2,19:1 sur l'orange PPRE,
+        // 2,87:1 sur le vert ULIS et 3,28:1 sur le sarcelle UPE2A. Cf. règle du design system.
+        ? `background:${b.bg};color:${_contrastTextColor(b.bg)};${baseStyle}`
         : `background:#fff;color:#222;border:1px solid #555;${baseStyle}`;
       return `<span style="${style}">${b.txt}</span>`;
     }).join('');
@@ -24823,9 +24836,9 @@ function printElevesList() {
     const _grpBd = s.groupe === 1 ? '#2980b9' : s.groupe === 2 ? '#d35400' : s.groupe === 3 ? '#8e44ad' : '';
     const grpHTML = s.groupe
       ? `<span class="pinc" style="display:inline-block;background:${_grpBg};border:1px solid ${_grpBd};border-radius:3px;padding:0 5px;font-weight:600;font-size:.9em">G${s.groupe}</span>`
-      : '<span style="color:var(--pencil-soft)">—</span>';
+      : '<span style="color:#606f86">—</span>';
     const archStyle = s._archived ? 'font-style:italic;opacity:.7' : '';
-    const archMark  = s._archived ? ' <span style="font-size:.78em;color:var(--pencil)">(supprimé)</span>' : '';
+    const archMark  = s._archived ? ' <span style="font-size:.78em;color:#56697f">(supprimé)</span>' : '';
     return `<tr style="${archStyle}">
       <td style="${TD}"><strong>${_escName(s.nom)}</strong> ${_escName(s.prenom)}${archMark}</td>
       <td style="${TDC}">${grpHTML}</td>
@@ -24842,7 +24855,7 @@ function printElevesList() {
     <div style="font-family:Arial,sans-serif;padding:8mm">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
         <h1 style="font-size:14pt;margin:0">${_escName(title)}</h1>
-        <span style="font-size:10pt;color:var(--pencil)">${_escName(dateLabel)}</span>
+        <span style="font-size:10pt;color:#56697f">${_escName(dateLabel)}</span>
       </div>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
@@ -24856,7 +24869,7 @@ function printElevesList() {
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p style="font-size:9pt;color:var(--pencil);margin-top:10px">
+      <p style="font-size:9pt;color:#56697f;margin-top:10px">
         ${list.length} élève${list.length > 1 ? 's' : ''}
         &nbsp;·&nbsp; <strong>Aménagements</strong> = PPRE / PPS / ULIS / ULIS+ / UPE2A / UPE2A+
         ${_showAppel ? '&nbsp;·&nbsp; <strong>🚫 ⏰</strong> = cumul sur tous les appels enregistrés' : ''}
@@ -24889,8 +24902,8 @@ function printClassesBilan() {
 
   // Cellule "♂ X ♀ Y" pour le bilan imprimé
   const _civCellPrint = (m, f, unk) => {
-    if (m + f + unk === 0) return '<span style="color:var(--pencil-soft)">—</span>';
-    const unkPart = unk > 0 ? ` <span style="color:var(--pencil);font-size:.9em">+${unk}?</span>` : '';
+    if (m + f + unk === 0) return '<span style="color:#606f86">—</span>';
+    const unkPart = unk > 0 ? ` <span style="color:#56697f;font-size:.9em">+${unk}?</span>` : '';
     return `♂ ${m} &nbsp;/&nbsp; ♀ ${f}${unkPart}`;
   };
 
@@ -24916,10 +24929,10 @@ function printClassesBilan() {
     totM       += c.m;       totF  += c.f;            totCivUnk += c.civUnk;
 
     const nonAm = c.present - c.amenagement;
-    const outHint = c.outClass > 0 ? ` <span style="color:var(--pencil);font-size:.85em">(${c.outClass} hors)</span>` : '';
+    const outHint = c.outClass > 0 ? ` <span style="color:#56697f;font-size:.85em">(${c.outClass} hors)</span>` : '';
     return `<tr>
       <td style="${tdC}"><strong>${_escAttr(cls.nom)}</strong></td>
-      <td style="${tdC};color:var(--pencil)">${cls.année}–${cls.année+1}</td>
+      <td style="${tdC};color:#56697f">${cls.année}–${cls.année+1}</td>
       <td style="${tdN}">${c.total}</td>
       <td style="${tdN};white-space:nowrap">${_civCellPrint(c.m, c.f, c.civUnk)}</td>
       <td style="${tdN}">${np}</td>
@@ -24935,13 +24948,13 @@ function printClassesBilan() {
   const _outHint = (ulisN, upe2aN) => {
     const tot = ulisN + upe2aN;
     if (tot === 0) return '';
-    return ` <span style="color:var(--pencil);font-size:.85em">(${tot} hors)</span>`;
+    return ` <span style="color:#56697f;font-size:.85em">(${tot} hors)</span>`;
   };
   const recapRows = orders.map(o => {
     const r = byLevel[o];
     const nonAm = r.present - r.amenagement;
     return `<tr>
-      <td style="${tdC}"><strong>${_levelLabel(o)}</strong> <span style="color:var(--pencil);font-size:.85em">(${r.classes.length} classe${r.classes.length>1?'s':''})</span></td>
+      <td style="${tdC}"><strong>${_levelLabel(o)}</strong> <span style="color:#56697f;font-size:.85em">(${r.classes.length} classe${r.classes.length>1?'s':''})</span></td>
       <td style="${tdN}">${r.total}</td>
       <td style="${tdN};white-space:nowrap">${_civCellPrint(r.m, r.f, r.civUnk)}</td>
       <td style="${tdN}">${r.present}${_outHint(r.ulisOut, r.upe2aOut)}</td>
@@ -24958,7 +24971,7 @@ function printClassesBilan() {
     <div style="font-family:Arial,sans-serif">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
         <h1 style="font-size:14pt;margin:0">Bilan des classes</h1>
-        <span style="font-size:9pt;color:var(--pencil)">${date}</span>
+        <span style="font-size:9pt;color:#56697f">${date}</span>
       </div>
 
       <h2 style="font-size:11pt;margin:14px 0 6px;color:#333">📚 Détail par classe</h2>
@@ -25001,7 +25014,7 @@ function printClassesBilan() {
         <tbody>${recapRows}</tbody>
       </table>
 
-      <div style="font-size:8pt;color:var(--pencil);margin-top:14px;line-height:1.6;border-top:1px solid #eee;padding-top:8px">
+      <div style="font-size:8pt;color:#56697f;margin-top:14px;line-height:1.6;border-top:1px solid #eee;padding-top:8px">
         <strong>Légende :</strong>
         <strong>Inscrits</strong> = total des élèves dans la classe.
         <strong>Placés</strong> = élèves placés dans le plan.
@@ -25058,7 +25071,7 @@ function doPrintEmptyConfigSalle() {
       <div class="plan-page">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
           <h1 style="font-size:14pt;margin:0">${_escAttr(salle.nom || 'Salle')} — Plan vide</h1>
-          <span style="font-size:9pt;color:var(--pencil)">${date}</span>
+          <span style="font-size:9pt;color:#56697f">${date}</span>
         </div>
         <div class="pgrid" style="grid-template-columns:repeat(${pcols},1fr);grid-template-rows:${rowsTpl}">${cells}</div>
         <div style="text-align:center;background:#333;color:#fff;padding:3px 0;font-size:9pt;margin-top:5px">🖥 TABLEAU</div>
@@ -25105,7 +25118,7 @@ function doPrintEmpty() {
       <div class="plan-page">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
           <h1 style="font-size:14pt;margin:0">${_escAttr(cls.nom)}${cls.configuration.salle ? ' · ' + _escAttr(cls.configuration.salle) : ''} — Plan vide</h1>
-          <span style="font-size:9pt;color:var(--pencil)">${date}</span>
+          <span style="font-size:9pt;color:#56697f">${date}</span>
         </div>
         <div style="text-align:center;background:#333;color:#fff;padding:3px 0;font-size:9pt;margin-bottom:5px">🖥 TABLEAU</div>
         <div class="pgrid" style="grid-template-columns:repeat(${pcols},1fr);grid-template-rows:${rowsTpl}">${cells}</div>
@@ -25237,7 +25250,7 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
       <div class="plan-page">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
           <h1 style="font-size:14pt;margin:0">${_escAttr(cls.nom)}${cls.configuration.salle ? ' · ' + _escAttr(cls.configuration.salle) : ''} — ${title}</h1>
-          <span style="font-size:9pt;color:var(--pencil)">${date}</span>
+          <span style="font-size:9pt;color:#56697f">${date}</span>
         </div>
         ${boardTop}
         <div class="pgrid" style="grid-template-columns:repeat(${pcols},1fr);grid-template-rows:${rowsTpl}">${cells}</div>
@@ -25326,7 +25339,7 @@ function buildTeacherPageHTML(cls) {
       <div class="plan-page">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
           <h1 style="font-size:14pt;margin:0">${_escAttr(cls.nom)}${cls.configuration.salle ? ' · ' + _escAttr(cls.configuration.salle) : ''} — Plan Professeur</h1>
-          <span style="font-size:9pt;color:var(--pencil)">${date}</span>
+          <span style="font-size:9pt;color:#56697f">${date}</span>
         </div>
         <div class="pgrid" style="grid-template-columns:repeat(${pcols},1fr);grid-template-rows:${rowsTpl}">${cells}</div>
         <div style="text-align:center;background:#333;color:#fff;padding:3px 0;font-size:9pt;margin-top:5px">🖥 TABLEAU</div>
