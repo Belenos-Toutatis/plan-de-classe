@@ -710,3 +710,103 @@ test('deleteTag : purge stu.tags ET room.posTagId', () => {
   assert.deepEqual(get('S.eleves.s1.tags'), ['t2']);
   assert.deepEqual(get("S.classes.c1.rooms.r1.posTagId"), { '0,1': 't2' });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Type D — sommative par compétences. Cas CANONIQUE arrêté avec l'utilisateur
+// (2026-07-30) : Ex1(Q1: RAI×1=N3 ; Q2: RAI×2=N4 + COM×1=N2), Ex2(Q3: COM×1=N3),
+// barème 1→0/2→1/3→2/4→3 → Ex1 9/12, Ex2 2/3, note 14,67/20, RAI→4, COM→3.
+// Ces chiffres FONT FOI : un écart ici est une régression du moteur, pas du test.
+// ─────────────────────────────────────────────────────────────────────────────
+function seedTypeD() {
+  setState({
+    // Palette et seuils complets (tailles = nbLevels) : sans eux, migrateEvalDefaults
+    // régénérerait les couleurs via _defaultColorsForNb, qui lit le thème du DOM —
+    // absent du harnais vm. Artefact de test, pas un besoin du moteur D.
+    evalPrefs: { nbLevels: 4, typeDPoints: [0, 1, 2, 3],
+                 maitriseColors: ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'],
+                 maitrisePoints: [5, 8, 15, 20], thresholdPercents: [40, 60, 85],
+                 maitriseColorsAuto: false, noteThresholdsAuto: false,
+                 noteThresholds: [{ max: null, color: '#2563eb' }] },
+    competences: { cmp_rai: { id: 'cmp_rai', code: 'RAI' }, cmp_com: { id: 'cmp_com', code: 'COM' } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' } },
+    classes: { c1: { id: 'c1', nom: '6e T', eleves: ['s1'] } },
+    evaluations: {
+      evd: {
+        id: 'evd', type: 'D', nomCourt: 'TD', classIds: ['c1'], classId: 'c1',
+        periode: 'S1', coef: 1, noteMax: 20, countsForMean: true,
+        pointsParNiveau: [0, 1, 2, 3],
+        exercices: [{ id: 'ex1', label: 'Ex1' }, { id: 'ex2', label: 'Ex2' }],
+        miniNotes: [
+          { id: 'q1', label: 'Q1', exerciceId: 'ex1', competenceIds: ['cmp_rai'], compWeights: {} },
+          { id: 'q2', label: 'Q2', exerciceId: 'ex1', competenceIds: ['cmp_rai', 'cmp_com'], compWeights: { cmp_rai: 2 } },
+          { id: 'q3', label: 'Q3', exerciceId: 'ex2', competenceIds: ['cmp_com'], compWeights: {} },
+        ],
+        notes: { s1: { levels: { q1: { cmp_rai: 3 }, q2: { cmp_rai: 4, cmp_com: 2 }, q3: { cmp_com: 3 } } } },
+      },
+    },
+  });
+}
+
+test('Type D : cas canonique — note, sous-totaux par exercice, niveaux entiers', () => {
+  seedTypeD();
+  const info = get("_computeStudentEvalNoteDInfo(S.evaluations.evd, 's1')");
+  assert.equal(info.perExo.ex1.brut, 9);
+  assert.equal(info.perExo.ex1.max, 12);
+  assert.equal(info.perExo.ex2.brut, 2);
+  assert.equal(info.perExo.ex2.max, 3);
+  // 11/15 × 20 = 14,666… (granulométrie par défaut : aucune)
+  assert.ok(Math.abs(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')") - 14.6667) < 0.001);
+  // Niveaux ENTIERS : RAI (3×1+4×2)/3 = 3,67 → 4 ; COM (2+3)/2 = 2,5 → 3 (arrondi au demi vers le haut)
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"), 4);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com')"), 3);
+  // Par exercice (informatif) : COM restreint à Ex1 = 2, à Ex2 = 3
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com', 'ex1')"), 2);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com', 'ex2')"), 3);
+});
+
+test('Type D : A/NN sortent du barème — l\'exercice non noté disparaît', () => {
+  seedTypeD();
+  ev("S.evaluations.evd.notes.s1.levels.q3.cmp_com = 'NN'");
+  const info = get("_computeStudentEvalNoteDInfo(S.evaluations.evd, 's1')");
+  assert.equal(info.perExo.ex2, undefined);       // plus dans le barème
+  assert.equal(info.brut, 9); assert.equal(info.max, 12);
+  assert.ok(Math.abs(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')") - 15) < 0.001);
+  // COM ne repose plus que sur Q2 (niveau 2)
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com')"), 2);
+  // Tout en A → aucune note (élève non évalué), mais _studentHasAnyDataInEval le voit
+  ev("S.evaluations.evd.notes.s1.levels = { q1: { cmp_rai: 'A' } }");
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), null);
+  assert.equal(ev("_studentHasAnyDataInEval(S.evaluations.evd, 's1')"), true);
+});
+
+test('Type D : agrégation de période — niveau entier par éval, pondéré par coef', () => {
+  seedTypeD();
+  // 2e éval D, coef 3, RAI = niveau 1 → période RAI = (4×1 + 1×3) / 4 = 1,75 → 2
+  ev(`S.evaluations.evd2 = { id:'evd2', type:'D', nomCourt:'TD2', classIds:['c1'], classId:'c1',
+      periode:'S1', coef:3, noteMax:20, countsForMean:true, pointsParNiveau:[0,1,2,3],
+      exercices:[{id:'x',label:'X'}],
+      miniNotes:[{ id:'qa', label:'QA', exerciceId:'x', competenceIds:['cmp_rai'], compWeights:{} }],
+      notes:{ s1:{ levels:{ qa:{ cmp_rai:1 } } } } }`);
+  const agg = get("_aggregateStudentCompetence('c1', 's1', 'cmp_rai', 'S1', 'all')");
+  assert.equal(agg.levelMean, 2);
+  assert.equal(agg.entries.length, 3);   // 2 saisies evd + 1 saisie evd2 (détail infobulle)
+});
+
+test('Type D : la garde de migration conserve le type et reconstruit le barème', () => {
+  seedTypeD();
+  ev('delete S.evaluations.evd.pointsParNiveau; S.evaluations.evd.miniNotes[0].compWeights = null;');
+  ev('migrateEvalDefaults()');
+  assert.equal(get('S.evaluations.evd.type'), 'D');            // pas converti en A
+  assert.deepEqual(get('S.evaluations.evd.pointsParNiveau'), [0, 1, 2, 3]);
+  assert.deepEqual(get('S.evaluations.evd.miniNotes[0].compWeights'), {});
+  // Le calcul survit à la migration
+  assert.ok(Math.abs(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')") - 14.6667) < 0.001);
+});
+
+test('Type D : question sans compétence ne compte nulle part', () => {
+  seedTypeD();
+  ev(`S.evaluations.evd.miniNotes.push({ id:'q4', label:'Q4', exerciceId:'ex2', competenceIds:[], compWeights:{} })`);
+  // Aucun changement sur la note ni les niveaux
+  assert.ok(Math.abs(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')") - 14.6667) < 0.001);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com')"), 3);
+});
