@@ -95,7 +95,7 @@ De même, `.pcell .pgb.g2` était resté sur `#d35400` (4,17:1) alors que le tok
 4. ⚠️ **Ne pas se fier au libellé du chemin** : certaines fonctions appellent `print()` deux fois, ou via un minuteur qui retombe sous le chemin suivant. Utiliser le `document.title` que chaque fonction pose (= nom du PDF) comme identifiant intrinsèque, et vider les conteneurs entre deux chemins.
 5. **Mettre `getComputedStyle` en cache** et restreindre la racine auditée : sur « Plusieurs plans » (13 pages, 4 745 éléments) l'auditeur non optimisé dépasse 30 s. Le balisage étant identique d'une page à l'autre, auditer la première suffit.
 
-Score de référence après la passe du 2026-07-30 : **0 écart sur les 10 chemins, dans les deux thèmes** (contre 244 en sombre et 9 en clair avant).
+Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemins, dans les deux thèmes** — la pastille **PAI à 4,41:1**, seul reliquat, conservée sciemment par fidélité à l'écran (cf. ci-dessus). Contre **244 en sombre et 9 en clair** avant la passe. Un audit qui renvoie autre chose que ce seul écart signale une régression.
 
 ## Fichiers
 - `plan de classe.html` — application complète (HTML + CSS + JS dans un seul fichier)
