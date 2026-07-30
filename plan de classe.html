@@ -2135,6 +2135,20 @@ body.ff-no-eval      .ff-eval { display: none !important; }
 .about-section a:hover { color: var(--margin-red); }
 .about-section code { font-family: var(--font-mono); font-size: .9em; }
 
+/* ─── Jauge d'occupation de la mémoire locale (modale ⓘ → Vie privée) ───
+   Objectif : voir venir la saturation LARGEMENT avant la bannière rouge de save(),
+   qui n'apparaît qu'une fois la sauvegarde déjà impossible. */
+.sto-box { background: var(--paper); border: 1px solid var(--rule-line); border-radius: var(--radius-md); padding: 10px 12px; }
+.sto-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .92em; margin-bottom: 7px; }
+.sto-sum { color: var(--pencil); font-family: var(--font-mono); font-size: .92em; }
+.sto-bar { height: 9px; background: var(--paper-deep); border-radius: 5px; overflow: hidden; }
+.sto-fill { height: 100%; border-radius: 5px; background: #1a7442; transition: width .35s ease; min-width: 2px; }
+.sto-fill.warn { background: #a85312; }
+.sto-fill.crit { background: var(--margin-red); }
+.sto-detail { margin-top: 8px; font-size: .82em; color: var(--pencil); line-height: 1.7; }
+.sto-detail .sto-k { font-family: var(--font-mono); color: var(--ink-blue); }
+.sto-note { margin-top: 7px; font-size: .82em; line-height: 1.55; }
+
 /* ─── Sonomètre (surveillance du niveau sonore de la classe) ─── */
 /* Petit widget flottant côté prof (z sous les modales 1000, au-dessus du contenu) */
 .noise-widget{position:fixed;right:14px;bottom:14px;z-index:985;width:232px;
@@ -3801,7 +3815,13 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55">Toutes les données restent <strong>dans ton navigateur</strong> (<code>localStorage</code>) et dans les fichiers JSON que tu sauvegardes sur ton ordinateur. Aucun serveur tiers, aucun tracking — la seule requête sortante est optionnelle vers <code>api.github.com</code> pour la vérification des mises à jour.</p>
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55"><strong>Recommandation pour les enseignants français</strong> : sauvegarde le fichier JSON dans ton <strong>Nextcloud académique professionnel</strong> — <a href="https://nuage03.apps.education.fr/" target="_blank" rel="noopener">nuage03.apps.education.fr</a> (Apps Education de l'Éducation nationale). C'est l'environnement institutionnel adapté pour héberger des données personnelles d'élèves (hébergement souverain, conforme RGPD). Active alors la <strong>🔄 Sync auto</strong> en pointant vers le dossier synchronisé localement par le client Nextcloud : tu retrouves tes données sur toutes tes machines (poste prof / portable / domicile) sans transmission à un service tiers.</p>
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55">⚠️ Si tu stockes des données pédagogiques sensibles (PPRE, PPS, PAI, ULIS, absences récurrentes), pense à <strong>déclarer cet outil à ton DPO d'établissement</strong> (un mail à <code>dpo@ac-&lt;ton-académie&gt;.fr</code> suffit en général). Détails complets : <a href="https://github.com/Belenos-Toutatis/plan-de-classe#-vie-privée--rgpd" target="_blank" rel="noopener">README → Vie privée &amp; RGPD</a>.</p>
-      <p style="margin:0;font-size:.92em;line-height:1.55">🎙 <strong>Sonomètre</strong> : si tu actives la surveillance du niveau sonore (bouton 🎙 du bandeau), le micro est analysé <strong>en temps réel et en local</strong> — aucun son n'est enregistré ni transmis. L'accès micro exige un contexte sécurisé (HTTPS ou <code>localhost</code>).</p>
+      <p style="margin:0 0 10px;font-size:.92em;line-height:1.55">🎙 <strong>Sonomètre</strong> : si tu actives la surveillance du niveau sonore (bouton 🎙 du bandeau), le micro est analysé <strong>en temps réel et en local</strong> — aucun son n'est enregistré ni transmis. L'accès micro exige un contexte sécurisé (HTTPS ou <code>localhost</code>).</p>
+      <!-- Jauge d'occupation — peuplée par _renderStorageGauge() à l'ouverture de la modale.
+           Le quota affiché vient de navigator.storage.estimate(), pas d'une estimation en dur. -->
+      <div id="about-storage" class="sto-box">
+        <div class="sto-head"><strong>💾 Mémoire locale</strong> <span class="sto-sum">mesure en cours…</span></div>
+        <div class="sto-bar"><div class="sto-fill" style="width:0"></div></div>
+      </div>
     </div>
 
     <div class="about-section">
@@ -6082,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.22.4';
+const APP_VERSION    = '2.23.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T01:26:00Z';
+const APP_BUILD_DATE = '2026-07-30T01:53:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -26324,7 +26344,10 @@ function _fmtBytes(n) {
   n = +n || 0;
   if (n < 1024) return n + ' o';
   if (n < 1024 * 1024) return Math.round(n / 1024) + ' Ko';
-  return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' Mo';
+  // Palier Go : les quotas remontés par navigator.storage.estimate() se comptent en
+  // gigaoctets, « 3077,6 Mo » serait illisible.
+  if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' Mo';
+  return (n / (1024 * 1024 * 1024)).toFixed(1).replace('.', ',') + ' Go';
 }
 // Catégorise un fichier par son nom → icône + libellé lisible (le label d'un
 // checkpoint nommé est extrait du nom).
@@ -30846,6 +30869,112 @@ function openAbout() {
     if (typeof APP_BUILD_DATE === 'string') el.title = `Build : ${APP_BUILD_DATE}`;
   }
   openMod('mabout');
+  _renderStorageGauge();   // asynchrone (navigator.storage.estimate) → remplit après ouverture
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Jauge d'occupation de la mémoire locale.
+//
+// Pourquoi : le seul signal existant est la bannière rouge de save(), qui ne se
+// déclenche qu'une fois la sauvegarde DÉJÀ impossible. Cette jauge donne la
+// tendance bien avant, avec la répartition par section pour savoir quoi alléger.
+//
+// ⚠️ Le quota affiché vient de `navigator.storage.estimate()` — la valeur RÉELLE
+// annoncée par le navigateur pour cette origine, pas une estimation en dur. Elle
+// varie fortement selon le navigateur et l'espace disque libre (les 5 Mo
+// historiques de localStorage ne valent plus pour les Chromium récents, qui
+// l'adossent au quota de stockage général). `estimate()` couvre TOUTE l'origine
+// (localStorage + IndexedDB + caches du service worker), donc `usage` dépasse
+// normalement la seule taille de nos données — c'est bien la place réellement
+// consommée qu'on veut comparer au quota.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Taille en OCTETS d'une chaîne (UTF-8) — et non en caractères : un « é » compte double.
+function _byteLen(str) {
+  try { return new TextEncoder().encode(str).length; }
+  catch (_) { return (str || '').length; }   // repli très ancien navigateur
+}
+
+// Répartition du poids de S par section, la plus lourde d'abord.
+function _storageBreakdown() {
+  const out = [];
+  for (const k of Object.keys(S)) {
+    const v = S[k];
+    if (!v || typeof v !== 'object') continue;
+    try { out.push({ key: k, bytes: _byteLen(JSON.stringify(v)) }); } catch (_) {}
+  }
+  return out.sort((a, b) => b.bytes - a.bytes);
+}
+
+async function _renderStorageGauge() {
+  const box = document.getElementById('about-storage');
+  if (!box) return;
+  const sum  = box.querySelector('.sto-sum');
+  const fill = box.querySelector('.sto-fill');
+
+  let dataBytes = 0, lsBytes = 0;
+  try { dataBytes = _byteLen(JSON.stringify(S)); } catch (_) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      lsBytes += _byteLen(k) + _byteLen(localStorage.getItem(k) || '');
+    }
+  } catch (_) {}
+
+  // Valeurs réelles du navigateur. Indisponible en contexte non sécurisé ou sur
+  // navigateur ancien → on le dit au lieu d'inventer un chiffre.
+  let usage = null, quota = null;
+  try {
+    if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+      const est = await navigator.storage.estimate();
+      if (est && Number.isFinite(est.quota) && est.quota > 0) {
+        quota = est.quota;
+        usage = Number.isFinite(est.usage) ? est.usage : null;
+      }
+    }
+  } catch (_) {}
+
+  const rows = _storageBreakdown().filter(r => r.bytes >= 1024).slice(0, 6);
+  const detail = rows.length
+    ? `<div class="sto-detail">Répartition : ` +
+      rows.map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`).join(' &nbsp;·&nbsp; ') +
+      `</div>`
+    : '';
+
+  if (quota == null) {
+    // Pas de quota fiable : on affiche ce qu'on sait mesurer, sans pourcentage inventé.
+    sum.textContent = `tes données : ${_fmtBytes(dataBytes)} (${_fmtBytes(lsBytes)} en mémoire locale)`;
+    fill.style.width = '0';
+    box.querySelector('.sto-note')?.remove();
+    box.insertAdjacentHTML('beforeend', detail +
+      `<div class="sto-note" style="color:var(--pencil)">Ce navigateur n'expose pas son quota de stockage : impossible d'afficher un pourcentage fiable. La sauvegarde reste protégée — en cas de saturation, un bandeau rouge s'affiche avec un export immédiat.</div>`);
+    return;
+  }
+
+  const used = usage != null ? usage : lsBytes;
+  const pct  = Math.min(100, (used / quota) * 100);
+  fill.style.width = pct.toFixed(1) + '%';
+  fill.classList.toggle('warn', pct >= 60 && pct < 85);
+  fill.classList.toggle('crit', pct >= 85);
+  // On met en avant le poids de TES données — c'est le chiffre qui répond à « est-ce que
+  // ça va tenir ? ». Le total de l'origine (qui inclut le cache de la page par le service
+  // worker, soit le fichier de l'app lui-même) est donné en dessous comme contexte.
+  const pctTxt = pct < 0.1 ? '< 0,1' : pct.toFixed(1).replace('.', ',');
+  sum.textContent = `tes données : ${_fmtBytes(dataBytes)}`;
+
+  let note = '';
+  const contexte = `Espace navigateur : ${_fmtBytes(used)} sur ${_fmtBytes(quota)} (${pctTxt} %) — inclut le cache de la page, pas seulement tes classes.`;
+  if (pct >= 85) {
+    note = `<div class="sto-note" style="color:var(--margin-red);font-weight:600">⚠️ Espace presque saturé. Exporte tes données, puis allège : supprime des snapshots, ou réinitialise en conservant les salles (onglet Classes → 🗑 Réinitialiser).<br><span style="font-weight:400">${contexte}</span></div>`;
+  } else if (pct >= 60) {
+    // --warn-fg (et non un orange littéral) : décliné par thème, cf. section Contraste.
+    note = `<div class="sto-note" style="color:var(--warn-fg);font-weight:600">Occupation notable — à surveiller en fin d'année. Un export régulier reste la meilleure sécurité.<br><span style="color:var(--pencil);font-weight:400">${contexte}</span></div>`;
+  } else {
+    note = `<div class="sto-note" style="color:var(--pencil)">Marge confortable. ${contexte}</div>`;
+  }
+  box.querySelector('.sto-detail')?.remove();
+  box.querySelector('.sto-note')?.remove();
+  box.insertAdjacentHTML('beforeend', detail + note);
 }
 // Au premier lancement : on ferme la modale de bienvenue ET on enchaîne sur mabout,
 // pour que l'utilisateur découvre les crédits / la licence / la vie privée dès le

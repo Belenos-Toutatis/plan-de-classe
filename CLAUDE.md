@@ -102,10 +102,24 @@ Modale centralisée accessible **à tout moment** via le bouton **ⓘ** dans le 
 1. **📦 Version & mises à jour** : `APP_VERSION` affiché dans `<code id="about-version-disp">`, bouton **🆕 Vérifier les MAJ** (appelle `checkForUpdate()` après avoir fermé `mabout`), liens GitHub repo + issues
 2. **🙏 Crédits & remerciements** : Sébastien COGEZ (QCMcam) avec lien et licence CC BY-NC-SA 4.0, mention communauté enseignante, renvoi vers `CREDITS.md`
 3. **⚖️ Licence** : MIT pour l'app + section CC BY-NC-SA 4.0 pour les composants ArUco (algorithme + mapping + layout d'impression), lien vers `LICENSE`
-4. **🔒 Vie privée (RGPD)** : explique localStorage + fichiers JSON, recommandation **Nextcloud académique nuage03.apps.education.fr** (Apps Education de l'Éducation nationale, hébergement souverain conforme RGPD) avec **🔄 Sync auto**, mention des données sensibles à déclarer au DPO (PPRE/PPS/PAI/ULIS/UPE2A/absences récurrentes)
+4. **🔒 Vie privée (RGPD)** : explique localStorage + fichiers JSON, recommandation **Nextcloud académique nuage03.apps.education.fr** (Apps Education de l'Éducation nationale, hébergement souverain conforme RGPD) avec **🔄 Sync auto**, mention des données sensibles à déclarer au DPO (PPRE/PPS/PAI/ULIS/UPE2A/absences récurrentes), et **jauge d'occupation de la mémoire locale** (cf. ci-dessous)
 5. **⌨️ Raccourcis clavier** : table avec `<kbd>` stylé (font-mono, ombre)
 
 À cause de cette consolidation, le bouton **🆕 Maj** du header a été **retiré** (la vérif MAJ est désormais accessible depuis `mabout`, plus de doublon).
+
+### Jauge d'occupation de la mémoire locale (`_renderStorageGauge`)
+
+Encart `#about-storage` en pied de la section Vie privée, rempli à chaque `openAbout()` (la fonction est **asynchrone** — la modale s'ouvre d'abord, l'encart se remplit ensuite). Raison d'être : le seul signal existant était la bannière rouge de `save()`, qui n'apparaît qu'une fois la sauvegarde **déjà impossible** ; la jauge donne la tendance très en amont.
+
+- **Le quota vient de `navigator.storage.estimate()`** — la valeur RÉELLE annoncée par le navigateur pour l'origine, jamais une estimation en dur. Les « 5 Mo de localStorage » ne valent plus pour les Chromium récents, qui l'adossent au quota de stockage général (mesuré : **3,0 Go**). Si l'API est absente ou ne renvoie pas de quota exploitable, on affiche les tailles connues **sans pourcentage** plutôt qu'un chiffre inventé.
+- `estimate()` couvre **toute l'origine** (localStorage + IndexedDB + cache du service worker, donc le fichier de l'app lui-même). C'est pourquoi le libellé principal met en avant le poids de `JSON.stringify(S)` (« tes données : X ») et renvoie le total d'origine en contexte — sinon le chiffre serait dominé par le cache de la page et ne répondrait pas à la question « est-ce que ça va tenir ? ».
+- Paliers de la barre : vert < 60 %, `.warn` orange 60–85 %, `.crit` rouge ≥ 85 %, avec un conseil d'action adapté (exporter puis alléger). Répartition par section via `_storageBreakdown()` (les 6 plus lourdes, ≥ 1 Ko).
+- `_byteLen(str)` mesure en **octets UTF-8** (`TextEncoder`), pas en caractères — un « é » compte double. `_fmtBytes` a un palier **Go** pour cette raison.
+- Re-render idempotent : `.sto-detail` et `.sto-note` sont retirés avant réinsertion (la fonction peut être rappelée sans empiler les panneaux).
+
+**Volumétrie de référence** (mesurée le 2026-07-30, 13 classes × 30 élèves, 1 année complète : 156 évaluations, 864 appels, bulletins remplis) : **2,3 Mo** — évaluations 59 %, appels 14 %, bulletins 13 %, élèves 9 %. Le stockage n'est donc pas un facteur limitant. La contrainte réelle à ce volume est le **coût par mutation** (≈ 50 ms de `JSON.stringify` dans `pushUndo` + autant dans `save` + 35 ms d'écriture) et le brassage Nextcloud (fichier de sync réécrit en entier à chaque save).
+
+⚠️ **Compression écartée sciemment.** Gain réel mesuré sur données à entropie réaliste : gzip 7,9×, brotli 13,8× — inutile à 0,1 % de quota. Deux raisons dirimantes : (1) `beforeunload` appelle `save()` de façon **synchrone** pour persister les dernières frappes, alors que `CompressionStream` est asynchrone — la rendre async ferait **perdre des données** à la fermeture de l'onglet ; (2) **un seul octet altéré détruit tout un fichier gzip** (`Z_DATA_ERROR`), là où un JSON en clair reste lisible, diffable et réparable à la main — or les fichiers de sync et les backups sont précisément le filet de sécurité.
 
 ## Onglets de navigation (à 2 niveaux)
 
