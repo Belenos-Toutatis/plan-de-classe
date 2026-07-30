@@ -6102,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.23.3';
+const APP_VERSION    = '2.24.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T02:38:00Z';
+const APP_BUILD_DATE = '2026-07-30T02:45:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31007,6 +31007,56 @@ const S_SECTION_LABELS = {
 };
 function _sectionLabel(k) { return S_SECTION_LABELS[k] || k; }
 
+// Anciennes clés de stockage de l'app. Le nom a changé au fil des versions du modèle
+// (`planClasse` → `_v1` → `_v2` → `_v3`) et RIEN ne supprimait les précédentes : elles
+// gardent une copie complète des données d'alors, invisible et jamais relue. Sur un
+// navigateur qui applique le plafond ~5 Mo, ce poids mort peut représenter la moitié de
+// l'espace disponible.
+const LS_LEGACY_KEYS = ['planClasse', 'planClasse_v1', 'planClasse_v2'];
+
+// Poids par CLÉ de localStorage (et non par section de S) : c'est ce qui explique un écart
+// entre « tes données » et « en mémoire locale ».
+function _lsKeyBreakdown() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      out.push({ key: k, bytes: _byteLen(k) + _byteLen(localStorage.getItem(k) || '') });
+    }
+  } catch (_) {}
+  return out.sort((a, b) => b.bytes - a.bytes);
+}
+
+function _lsLegacyFound() {
+  return _lsKeyBreakdown().filter(r => LS_LEGACY_KEYS.includes(r.key) && r.bytes > 1024);
+}
+
+// Suppression des anciennes clés — destructif, donc confirmation explicite + rappel
+// d'export. On ne touche JAMAIS à la clé active.
+function _purgeLegacyStorage() {
+  const found = _lsLegacyFound();
+  if (!found.length) { toast('Aucune ancienne version à supprimer.', 'warn'); return; }
+  const total = found.reduce((n, r) => n + r.bytes, 0);
+  _uiConfirm({
+    title: '🗑 Supprimer les anciennes versions du stockage',
+    okLabel: '🗑 Supprimer', okClass: 'btn-d',
+    message: `${found.map(r => '• ' + r.key + ' — ' + _fmtBytes(r.bytes)).join('\n')}\n\n`
+      + `Ces clés sont des copies laissées par d'anciennes versions de l'application. `
+      + `Elles ne sont plus jamais relues : tes données actives sont dans « ${LS_KEY} » et ne seront pas touchées.\n\n`
+      + `Cela libérera ${_fmtBytes(total)}. Si tu veux garder une trace de ces anciennes données, `
+      + `exporte d'abord tes données via 💾 Données → Exporter.\n\n`
+      + `⚠️ Non annulable par Ctrl+Z (hors état de l'application).`,
+    onOk: () => {
+      let freed = 0;
+      for (const r of found) {
+        try { localStorage.removeItem(r.key); freed += r.bytes; } catch (_) {}
+      }
+      toast(`🗑 ${_fmtBytes(freed)} libérés`);
+      _renderStorageGauge(true);
+    },
+  });
+}
+
 // Répartition du poids de S par section, la plus lourde d'abord.
 function _storageBreakdown() {
   const out = [];
@@ -31082,7 +31132,29 @@ async function _renderStorageGauge(force) {
   sum.textContent = `tes données : ${_fmtBytes(dataBytes)}`;
 
   const pctTxt = pct < 0.1 ? '< 0,1' : pct < 1 ? pct.toFixed(2).replace('.', ',') : Math.round(pct);
-  const occupe = `<strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale sur <strong>${_fmtBytes(total)}</strong> réellement disponibles ici (${pctTxt} %).`;
+  // Décomposition « tes données » vs « le reste ». Sans elle, voir « 1,1 Mo » en haut et
+  // « 2,1 Mo » en bas est incompréhensible — c'était le cas signalé.
+  const keys = _lsKeyBreakdown();
+  const mainKey = keys.find(r => r.key === LS_KEY);
+  const mainBytes = mainKey ? mainKey.bytes : 0;
+  const autres = Math.max(0, lsBytes - mainBytes);
+  let compo = '';
+  if (autres > 50 * 1024) {
+    const gros = keys.filter(r => r.key !== LS_KEY && r.bytes > 20 * 1024)
+      .map(r => `<span class="sto-k">${_escName(r.key)}</span> ${_fmtBytes(r.bytes)}`);
+    compo = `<br>Dont ${_fmtBytes(mainBytes)} pour tes données actives (<span class="sto-k">${_escName(LS_KEY)}</span>)`
+      + ` et ${_fmtBytes(autres)} ailleurs`
+      + (gros.length ? ` — ${gros.join(', ')}` : ` (préférences d'affichage)`) + `.`;
+  }
+  // Poids mort d'anciennes versions du stockage : signalé avec l'action pour le libérer.
+  const legacy = _lsLegacyFound();
+  if (legacy.length) {
+    const lt = legacy.reduce((n, r) => n + r.bytes, 0);
+    compo += `<br><span style="color:var(--warn-fg);font-weight:600">⚠️ ${_fmtBytes(lt)} sont occupés par d'anciennes versions du stockage`
+      + ` (${legacy.map(r => _escName(r.key)).join(', ')}), plus jamais relues.</span>`
+      + ` <button class="btn btn-d btn-sm" onclick="_purgeLegacyStorage()" style="padding:2px 8px;font-size:.9em">🗑 Libérer ${_fmtBytes(lt)}</button>`;
+  }
+  const occupe = `<strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale sur <strong>${_fmtBytes(total)}</strong> réellement disponibles ici (${pctTxt} %).${compo}`;
   // D'où vient le chiffre : mesuré, pas supposé. Sans cette phrase l'utilisateur ne peut
   // pas savoir si on lui donne une valeur réelle ou une convention.
   const prov = cap.source === 'quota'
