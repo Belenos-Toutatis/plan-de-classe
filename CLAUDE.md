@@ -498,7 +498,7 @@ Pour éviter le doublon historique « `<span class="cipad">Tab. N</span>` ET `<s
   - ◉ tablette actuelle de l'élève
   - 🟦 utilisée par un autre élève (clic = échange)
   - 🚫 indisponible (HS, marquée dans `pool.unavailable`)
-- **Swap automatique** via `changeIpadAssign` existant. **Confirmation native (`confirm()`) demandée seulement si la tablette est occupée par un autre élève** ; si le siège est vide (assignation orpheline d'un élève supprimé), on prend la tablette sans demander.
+- **Swap automatique** via `changeIpadAssign` existant. **Confirmation (`_uiConfirm`) demandée seulement si la tablette est occupée par un autre élève** ; si le siège est vide (assignation orpheline d'un élève supprimé), on prend la tablette sans demander.
 - **Bouton "🗑 Retirer la tablette de cet élève"** affiché en bas de la modale si une tablette est actuellement affectée.
 - Variable globale `_ipickCtx` (cls, key, gf, sid, currentN) — réinitialisée à chaque ouverture.
 
@@ -542,7 +542,7 @@ pool = {
 - `pool_cm2` : "CM2" / préfixe `"CM2 - ELV"` / 31 / lots `{1: 1-15, 2: 16-31}`
 
 ### UI de configuration
-Sous le récap dans l'onglet **Tablettes**, section **"⚙️ Configuration des classes mobiles"** : édition par pool (nom, préfixe, nb chiffres, nb tablettes, lots avec plages). Bouton **"+ Nouvelle classe mobile"** propose une duplication d'une classe existante via prompt. Aperçu d'étiquette en direct (`<code>` à côté des champs).
+Sous le récap dans l'onglet **Tablettes**, section **"⚙️ Configuration des classes mobiles"** : édition par pool (nom, préfixe, nb chiffres, nb tablettes, lots avec plages). Bouton **"+ Nouvelle classe mobile"** ouvre la modale `mpool-new` (sélecteur « Partir de » : vierge ou duplication d'un pool existant + nom suggéré automatiquement). Aperçu d'étiquette en direct (`<code>` à côté des champs).
 
 ### Fonctions clés
 - `poolLabel(pool, n)` → `prefix + padded(n)` — étiquette d'une tablette
@@ -564,7 +564,7 @@ Bouton **🗑 Réinitialiser…** dans le header de l'onglet **Classes** (en dan
 - **🏫 Réinitialiser en conservant les salles** (`resetKeepingRooms()`) :
   - Vide : `S.classes`, `S.eleves`, `S.snapshots`, `S.attendance`, `S.cur`
   - Conserve : `S.salles` (dimensions, places vides, horaires), `S.tabletPools` (config des classes mobiles)
-  - Confirmation par `confirm()` simple, `pushUndo()` avant
+  - Confirmation par `_uiConfirm`, `pushUndo()` avant
 - **🔥 Tout effacer (fin d'année définitive)** (`resetEverything()`) :
   - Vide tout : classes, élèves, salles, classes mobiles, snapshots, attendance
   - **Confirmation par saisie obligatoire** : l'utilisateur doit taper exactement `EFFACER TOUT`
@@ -698,7 +698,7 @@ snap = {
   - **Esc en mode appel** quitte le mode (équivalent du bouton ↩ Quitter). Si en édition d'appel passé → `cancelEditAttendance`.
   - Désactivé si `_viewingSnapshot` actif
 - **Bandeau bleu** (jaune en mode édition) au-dessus de la grille via `updateAppelBanner()` : compteur, boutons **📌 Enregistrer** / **↺ Tout présent** / **↩ Quitter**
-- **Cellule en mode appel** : clic gauche = toggle absent (`toggleAbsence`), clic droit = prompt heure d'arrivée pour retard (`promptLateForStudent`). Drag&drop, +/-, isel désactivés. CSS `.cell.absent` (gris hachuré + 🚫 + nom barré), `.cell.late` (jaune + ⏰ HH:MM).
+- **Cellule en mode appel** : clic gauche = toggle absent (`toggleAbsence`), clic droit **ou appui long tactile 550 ms** = modale ⏰ retard (`promptLateForStudent` → `mlate`, input `type="time"` pré-rempli). Drag&drop, +/-, isel désactivés. CSS `.cell.absent` (gris hachuré + 🚫 + nom barré), `.cell.late` (jaune + ⏰ HH:MM).
 
 ### Enregistrement (`S.attendance[classId][recordId]`)
 - Bouton **📌 Enregistrer cet appel** dans le bandeau → modal `msaveatt` :
@@ -1467,7 +1467,7 @@ Helper **`_contrastTextColor(bg)`** (formule YIQ, threshold 150) renvoie `'var(-
 `openMod` installe automatiquement `role="dialog"`, `aria-modal="true"` et un focus trap (Tab/Shift+Tab boucle sur les éléments focusables visibles de la modale). `closeMod`/`closeMod2` démontent le trap. Les inputs de saisie (tableur Type A/C/B), badges 💬, boutons icônes de la toolbar tableur ont un `aria-label` explicite.
 
 ### Hors barème (commit f3e1371)
-Plus de `confirm()` bloquant : une note hors `[0, max]` est conservée d'office avec fond rose persistant + toast non-bloquant. Ctrl+Z l'annule grâce au système d'undo armé. `_evalTableurConfirmIfOutOfRange` est désormais un no-op (gardé pour compat HTML rendu).
+Plus de `confirm()` natif : une note hors `[0, max]` déclenche `_evalTableurConfirmIfOutOfRange` (au blur) → `_uiConfirm` « ⚠️ Note hors barème » avec **Conserver** (garde la valeur, déjà persistée) / **Annuler** (restaure la valeur d'avant focus, capturée dans `dataset.prevValue`). Ctrl+Z reste possible grâce au système d'undo armé.
 
 ### Auto-fill « A » sur les absents quand on change la date/le créneau d'un devoir
 
@@ -1614,7 +1614,7 @@ La date d'une mini-note (Type A) ou d'une passation (Type B) **peut rester vide*
 - **Frontière entre exercices** (Type C) : la 1re colonne de chaque nouvel exo (header + cellule de saisie + footer stats) reçoit un `border-left:2px solid var(--ink-blue-soft)`. Set d'indices via `exoBoundarySet` calculé à partir de `exoGroups.colStart`.
 - **Type C en-tête vertical** : code / barème / pastille compétence empilés sur 3 lignes (au lieu de code + max côte à côte) → colonnes peuvent rester serrées à 70px.
 - **Saisie en temps réel** : `_evalTableurUpdate` met à jour la couleur de fond de la cellule + la couleur du texte à chaque frappe (plus besoin de refresh). Helpers `_evalTableurRefreshFooterStats`, `_evalTableurRefreshRowDerived`, `_evalTableurRefreshFooterStatsB` recalculent toutes les stats footer + colonnes dérivées (Σ exo, brut, comps inline) en place sans toucher au focus.
-- **Confirmation hors barème** : `_evalTableurConfirmIfOutOfRange` (au blur) → confirm() bloquant si la note finale est hors `[0, mn.max]`. Refus = restaure la valeur d'avant focus (capturée dans `dataset.prevValue` à l'`onfocus`).
+- **Confirmation hors barème** : `_evalTableurConfirmIfOutOfRange` (au blur) → `_uiConfirm` si la note finale est hors `[0, mn.max]`. Annuler = restaure la valeur d'avant focus (capturée dans `dataset.prevValue` à l'`onfocus`).
 - **Code/barème serrés** Type A : `maxlength="5"` sur le code, `max=99` + largeur réduite (54px / 40px) pour le barème. Type C garde les dimensions historiques (60px / 40px, max=100).
 
 ### Affectation de compétences en lot (Type C)
@@ -1972,7 +1972,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - Toute action mutante doit appeler `pushUndo()` AVANT la mutation, sinon l'undo capture le mauvais état
 - Pour les développements longs : travailler sur une copie `plan de classe new.html`, puis remplacer une fois validé (convention demandée par l'utilisateur)
 - Modals empilés (par ex. mhist par-dessus moverview) : utiliser `_modalReturnTo[id]` pour enregistrer un callback à la fermeture, ou bien laisser le modal parent ouvert et bumper le `z-index` du modal enfant à 1010+
-- **Jamais de `confirm()` ni `prompt()` natifs** : toujours utiliser les helpers `_uiConfirm(...)` et `_uiPrompt(...)` (cf. sections dédiées). Le navigateur peut bloquer les dialogues natifs → boutons muets. Plus AUCUN `prompt()` dans l'app (tous convertis : retard → `mlate`, renommages → `_uiPrompt`, classe mobile → `mpool-new`, édition de lien → formulaire `mlinks`). Les `alert()` natifs subsistent par endroits (à convertir au besoin via `appAlert` / toast).
+- **Jamais de dialogue natif (`alert` / `confirm` / `prompt`)** : utiliser `_uiConfirm(...)`, `_uiPrompt(...)`, `appAlert(...)` ou `toast(msg, 'warn')` (cf. sections dédiées « Zéro dialogue natif »). Le navigateur peut bloquer les dialogues natifs → boutons muets. Il n'en reste AUCUN dans l'app — toute nouvelle fonctionnalité doit respecter cette règle.
 - **Tests (`test/`, `npm test`)** : harnais Node (`test/harness.js`) qui extrait le gros `<script>` inline, le charge dans un contexte `vm` avec un DOM stubé, neutralise `init()` et expose un pont `__TESTEVAL(code)` exécutant du code dans la portée lexicale du script (accès à `S` + toutes les fonctions hoistées). `test/run.test.js` (`node:test`) couvre la logique pure à risque : suppression en cascade (`_purgeStudentRefs`/`_deleteStudentInternal`/`deleteClass`), audit d'intégrité (`_auditState`), dates/périodes, parseurs (`_evalArithExpr`, `parseUnavailableInput`), validation d'import. **Aucune dépendance** (Node ≥ 18) ; le harnais n'est PAS livré avec l'app. Lancer `npm test` avant chaque push touchant cette logique.
 
 ## Fiabilité & sécurité — invariants à respecter
