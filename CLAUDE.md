@@ -994,12 +994,17 @@ Crédit licence CC BY-NC-SA des marqueurs Sébastien COGEZ — **hors zone à d�
 - 2/page : `left:61.5mm` au verso (décalé à droite)
 - 4/page : swap des colonnes (pos-1 ↔ pos-2, pos-3 ↔ pos-4)
 
-**Verso** : numéro géant centré dans la zone marqueur. **Font-size calculée dynamiquement** en JS pour que le chiffre tienne dans le carré quel que soit le nombre de chiffres (1, 2 ou 3) :
+**Verso** : numéro géant centré dans la zone marqueur, **souligné** (`<span class="am-back-num">`, `border-bottom: .07em`).
+
+⚠️ **Le souligné est un repère de SENS DE LECTURE, pas une décoration.** Sans lui, un carré découpé portant un `6` se lit `9` selon le sens où on le prend, et le cas est fréquent dans 1–125 : **6/9, 10/01, 16/91, 18/81, 19/61, 60/09, 66/99, 68/89, 80/08, 86/98, 90/06, 110/011**. Conséquence concrète : marqueur collé sur la mauvaise table, donc réponses QCMCam attribuées au mauvais élève. Le **recto** n'a pas ce problème (préfixe `n°` + lettre A/B/C/D sur les 4 côtés lèvent déjà l'ambiguïté) — inutile de l'y ajouter.
+
+**Font-size calculée dynamiquement** en JS pour que le chiffre tienne dans le carré quel que soit le nombre de chiffres (1, 2 ou 3). Les termes ajoutés au dénominateur réservent la place du souligné (+0,16 em en largeur pour les paddings, +0,13 em en hauteur pour padding + trait) :
 ```js
-const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits);
-const maxByHeight = (zoneSizeMm * 0.85) / 0.72;
+const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits + 0.16);
+const maxByHeight = (zoneSizeMm * 0.85) / 0.85;
 const fs = Math.min(maxByWidth, maxByHeight); // appliqué via style.fontSize = fs + 'mm'
 ```
+Occupation mesurée après ajout du trait (4/page) : 1 chiffre 83 % × 98 %, 2 chiffres 93 % × 61 %, 3 chiffres 94 % × 42 % — aucun débordement.
 
 **Réimpression de numéros perdus** : sous-section "🔁 Réimprimer des n° précis" avec champ texte qui accepte un format flexible (`5, 12-15, 23`). Parsé par `_parseArucoNumberList(text, max)` (gère virgules/espaces/point-virgules, plages avec tiret). Passé à `printSalleArucoMarkers(perPage, { customNums: [...] })`.
 

@@ -157,6 +157,13 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
   .am-marker-zone canvas{display:block;image-rendering:pixelated;image-rendering:-moz-crisp-edges}
   /* Verso : numéro géant centré, gras noir, prend quasi toute la place */
   .am-marker-zone.am-back{font-weight:900;color:#000;font-family:Arial,sans-serif;line-height:.85}
+  /* ⚠️ Souligné sous le numéro du verso — repère de SENS DE LECTURE. Sans lui, un 6 découpé
+     devient un 9 selon le sens où on prend le carré, et le cas est fréquent dans 1–125 :
+     6/9, 10/01, 16/91, 18/81, 19/61, 60/09, 66/99, 68/89, 80/08, 86/98, 90/06, 110/011.
+     Conséquence concrète : marqueur collé sur la mauvaise table, donc réponses QCMCam
+     attribuées au mauvais élève. Le recto n'a pas ce problème (préfixe « n° » + lettre
+     A/B/C/D sur les 4 côtés). Trait en `em` : il suit la taille calculée du chiffre. */
+  .am-marker-zone.am-back .am-back-num{display:inline-block;padding:0 .08em .06em;border-bottom:.07em solid #000}
 
   /* ─── 1 marqueur par feuille (carré 210×210mm en haut, crédit en pied) ─── */
   .am-page.am-1 .am-marker-zone{top:0;left:0;width:210mm;height:210mm;border-bottom:1.5px dashed #888}
@@ -6143,11 +6150,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.25.2';
+const APP_VERSION    = '2.25.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T08:58:40Z';
+const APP_BUILD_DATE = '2026-07-30T09:50:34Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21068,10 +21075,17 @@ function printSalleArucoMarkers(perPage, opts) {
   const buildVersoZone = (num, pos) => {
     const mz = document.createElement('div');
     mz.className = 'am-marker-zone am-back am-pos-' + pos;
-    mz.textContent = String(num);
+    // Le chiffre est enrobé dans un span souligné (cf. .am-back-num) : le trait indique le bas,
+    // sans quoi un 6 et un 9 découpés sont indiscernables.
+    const inner = document.createElement('span');
+    inner.className = 'am-back-num';
+    inner.textContent = String(num);
+    mz.appendChild(inner);
     const digits = String(num).length;
-    const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits);
-    const maxByHeight = (zoneSizeMm * 0.85) / 0.72;
+    // Le souligné consomme de la place : +0,16 em en largeur (padding gauche + droit) et
+    // +0,13 em en hauteur (padding bas + trait) — pris en compte pour rester dans le carré.
+    const maxByWidth  = (zoneSizeMm * 0.85) / (0.6 * digits + 0.16);
+    const maxByHeight = (zoneSizeMm * 0.85) / 0.85;
     const fs = Math.min(maxByWidth, maxByHeight);
     mz.style.fontSize = fs.toFixed(1) + 'mm';
     return mz;
