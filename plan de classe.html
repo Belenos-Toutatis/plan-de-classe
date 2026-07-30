@@ -6102,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.23.0';
+const APP_VERSION    = '2.23.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T01:53:00Z';
+const APP_BUILD_DATE = '2026-07-30T02:25:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30921,16 +30921,20 @@ async function _renderStorageGauge() {
     }
   } catch (_) {}
 
-  // Valeurs réelles du navigateur. Indisponible en contexte non sécurisé ou sur
-  // navigateur ancien → on le dit au lieu d'inventer un chiffre.
-  let usage = null, quota = null;
+  // ⚠️ NE PAS se servir de `estimate().usage` comme volume occupé : cette API ne compte
+  // PAS localStorage. Son `usageDetails` ne liste que `caches`, `indexedDB` et
+  // `serviceWorkerRegistrations` — vérifié. Résultat observé avant correction :
+  // « 2 Ko utilisés » affiché à côté de 1,1 Mo de données réelles, parce que le cache du
+  // service worker était vide sur cette machine. La seule mesure fiable de localStorage
+  // est la nôtre (`lsBytes`). On ne lit dans `estimate()` que le quota et le poids du
+  // cache de la page, présentés pour ce qu'ils sont.
+  let quota = null, cacheBytes = null;
   try {
     if (navigator.storage && typeof navigator.storage.estimate === 'function') {
       const est = await navigator.storage.estimate();
-      if (est && Number.isFinite(est.quota) && est.quota > 0) {
-        quota = est.quota;
-        usage = Number.isFinite(est.usage) ? est.usage : null;
-      }
+      if (est && Number.isFinite(est.quota) && est.quota > 0) quota = est.quota;
+      const d = est && est.usageDetails;
+      if (d && Number.isFinite(d.caches)) cacheBytes = d.caches;
     }
   } catch (_) {}
 
@@ -30941,36 +30945,36 @@ async function _renderStorageGauge() {
       `</div>`
     : '';
 
-  if (quota == null) {
-    // Pas de quota fiable : on affiche ce qu'on sait mesurer, sans pourcentage inventé.
-    sum.textContent = `tes données : ${_fmtBytes(dataBytes)} (${_fmtBytes(lsBytes)} en mémoire locale)`;
-    fill.style.width = '0';
-    box.querySelector('.sto-note')?.remove();
-    box.insertAdjacentHTML('beforeend', detail +
-      `<div class="sto-note" style="color:var(--pencil)">Ce navigateur n'expose pas son quota de stockage : impossible d'afficher un pourcentage fiable. La sauvegarde reste protégée — en cas de saturation, un bandeau rouge s'affiche avec un export immédiat.</div>`);
-    return;
-  }
-
-  const used = usage != null ? usage : lsBytes;
-  const pct  = Math.min(100, (used / quota) * 100);
-  fill.style.width = pct.toFixed(1) + '%';
+  // Référence de la jauge : le plafond historique de localStorage (~5 Mo par origine).
+  // Les Chromium récents l'adossent au quota général (plusieurs Go), mais d'autres
+  // navigateurs l'appliquent encore. Se fier au quota global afficherait « 0,04 % » et
+  // endormirait la vigilance ; on garde donc la référence PRUDENTE, qui est aussi la
+  // seule à produire une barre lisible.
+  const LS_REF = 5 * 1024 * 1024;
+  const pct = Math.min(100, (lsBytes / LS_REF) * 100);
+  fill.style.width = Math.max(1, pct).toFixed(1) + '%';
   fill.classList.toggle('warn', pct >= 60 && pct < 85);
   fill.classList.toggle('crit', pct >= 85);
-  // On met en avant le poids de TES données — c'est le chiffre qui répond à « est-ce que
-  // ça va tenir ? ». Le total de l'origine (qui inclut le cache de la page par le service
-  // worker, soit le fichier de l'app lui-même) est donné en dessous comme contexte.
-  const pctTxt = pct < 0.1 ? '< 0,1' : pct.toFixed(1).replace('.', ',');
   sum.textContent = `tes données : ${_fmtBytes(dataBytes)}`;
 
-  let note = '';
-  const contexte = `Espace navigateur : ${_fmtBytes(used)} sur ${_fmtBytes(quota)} (${pctTxt} %) — inclut le cache de la page, pas seulement tes classes.`;
+  // Contexte : le quota réel annoncé par le navigateur, en disant explicitement que
+  // localStorage n'y est pas compté — sinon les deux chiffres semblent incohérents.
+  const ctx = quota != null
+    ? ` Le navigateur annonce par ailleurs ${_fmtBytes(quota)} de stockage pour cette page`
+      + (cacheBytes != null ? ` (dont ${_fmtBytes(cacheBytes)} de cache de l'application)` : '')
+      + `, une réserve distincte dans laquelle la mémoire locale n'est pas comptée.`
+    : ` Ce navigateur n'expose pas son quota de stockage global.`;
+
+  const occupe = `<strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale, soit ${pct < 1 ? '< 1' : Math.round(pct)} % du plafond prudent de ${_fmtBytes(LS_REF)} retenu pour localStorage.`;
+
+  let note;
   if (pct >= 85) {
-    note = `<div class="sto-note" style="color:var(--margin-red);font-weight:600">⚠️ Espace presque saturé. Exporte tes données, puis allège : supprime des snapshots, ou réinitialise en conservant les salles (onglet Classes → 🗑 Réinitialiser).<br><span style="font-weight:400">${contexte}</span></div>`;
+    note = `<div class="sto-note" style="color:var(--margin-red);font-weight:600">⚠️ ${occupe} Exporte tes données, puis allège : supprime des snapshots, ou réinitialise en conservant les salles (onglet Classes → 🗑 Réinitialiser).<br><span style="font-weight:400">${ctx}</span></div>`;
   } else if (pct >= 60) {
     // --warn-fg (et non un orange littéral) : décliné par thème, cf. section Contraste.
-    note = `<div class="sto-note" style="color:var(--warn-fg);font-weight:600">Occupation notable — à surveiller en fin d'année. Un export régulier reste la meilleure sécurité.<br><span style="color:var(--pencil);font-weight:400">${contexte}</span></div>`;
+    note = `<div class="sto-note" style="color:var(--warn-fg);font-weight:600">${occupe} À surveiller en fin d'année ; un export régulier reste la meilleure sécurité.<br><span style="color:var(--pencil);font-weight:400">${ctx}</span></div>`;
   } else {
-    note = `<div class="sto-note" style="color:var(--pencil)">Marge confortable. ${contexte}</div>`;
+    note = `<div class="sto-note" style="color:var(--pencil)">${occupe} Marge confortable.${ctx}</div>`;
   }
   box.querySelector('.sto-detail')?.remove();
   box.querySelector('.sto-note')?.remove();
