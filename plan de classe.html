@@ -6082,11 +6082,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.22.2';
+const APP_VERSION    = '2.22.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T01:07:00Z';
+const APP_BUILD_DATE = '2026-07-30T01:12:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27153,12 +27153,16 @@ const _NotesExport = (function () {
     return out;
   }
   // Texte lisible noir/blanc selon la luminance d'un fond hex 6 chiffres
+  // Choix par contraste WCAG réel, comme _contrastTextColor. L'ancien seuil « YIQ > 150 »
+  // mettait du blanc sur les accents saturés de luminance moyenne — soit exactement les
+  // couleurs de niveau et de barème utilisées ici (orange #e67e22 à 2,85:1, vert #27ae60
+  // à 2,87:1) : les classeurs exportés étaient illisibles sur ces cellules.
   function textOnHex(hex6) {
     const r = parseInt(hex6.slice(0, 2), 16);
     const g = parseInt(hex6.slice(2, 4), 16);
     const b = parseInt(hex6.slice(4, 6), 16);
-    const y = (0.299 * r + 0.587 * g + 0.114 * b);
-    return y > 150 ? '1A252F' : 'FFFFFF';
+    return _wcagContrast(r, g, b, 26, 37, 47) >= _wcagContrast(r, g, b, 255, 255, 255)
+      ? '1A252F' : 'FFFFFF';
   }
   // Format date DD/MM/YYYY à partir de 'YYYY-MM-DD'
   function fmtDateFr(iso) {

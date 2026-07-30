@@ -13,7 +13,7 @@ L'app utilise un design system "papier d'enseignant" cohérent — paramétré v
 - `--ink-deep` `#0e1a26` (texte) · `--ink-blue` `#1a252f` (titres, sélections) · `--ink-blue-soft` `#2a3540`
 - `--rule-line` `#c8d2e0` (filets) · `--rule-line-soft` `#dde4ee` (lignes Seyès en arrière-plan)
 - `--margin-red` `#b03d2e` (filet rouge de marge gauche + accents) · `--margin-red-soft` (rgba)
-- `--pencil` `#56697f` · `--pencil-soft` `#92a1b5`
+- `--pencil` `#56697f` (texte secondaire) · `--pencil-soft` `#606f86` (tertiaire — cf. *Contraste* ci-dessous)
 - `--maitrise-1..4` (réservés pour le futur volet Évaluation : rouge, orange, vert, bleu profond)
 - `--highlighter` `#f5d76e` (jaune surligneur, état post-appel)
 
@@ -1137,7 +1137,7 @@ Module IIFE `_NotesExport` situé juste avant `createDemo()` (~ligne 21663). 3 c
    ```js
    { sheets: [{ name, rows: [[ {v, t:'s'|'n', bg, color, bold, italic, align, border, merge}, ... ]], cols: [{width}, ...] }] }
    ```
-   Helpers de cellules pré-stylées : `T(v)` (titre), `H(v)` (header), `S0(v, opts)` (cellule normale), `N0(v, opts)` (numérique), `EMPTY()`. Helpers couleurs : `noteCellBg(score20)` (lit `S.evalPrefs.noteThresholds` + auto), `levelCellBg(level)` (lit `S.evalPrefs.maitriseColors`), `textOnHex(hex6)` (formule YIQ pour lisibilité).
+   Helpers de cellules pré-stylées : `T(v)` (titre), `H(v)` (header), `S0(v, opts)` (cellule normale), `N0(v, opts)` (numérique), `EMPTY()`. Helpers couleurs : `noteCellBg(score20)` (lit `S.evalPrefs.noteThresholds` + auto), `levelCellBg(level)` (lit `S.evalPrefs.maitriseColors`), `textOnHex(hex6)` (choix par contraste WCAG réel via `_wcagContrast` — miroir de `_contrastTextColor` pour le format tableur ; portait le même seuil YIQ mal calibré, donc du blanc sur les cellules orange/vertes des classeurs exportés).
 
 3. **Émetteurs format-spécifiques** :
    - **`emitXLSX(wb)`** : produit `[Content_Types].xml`, `_rels/.rels`, `xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/styles.xml` (fonts + fills + borders + cellXfs dédoublonnés via Map), `xl/sharedStrings.xml`, et 1 `xl/worksheets/sheet{N}.xml` par feuille. Cells numériques → `<c><v>n</v></c>`, strings → `<c t="s"><v>idx</v></c>` via SST.
@@ -1156,7 +1156,7 @@ Module IIFE `_NotesExport` situé juste avant `createDemo()` (~ligne 21663). 3 c
 `_computeStudentEvalNote`, `_computeStudentEvalNoteB`, `_computeStudentMeanForPeriod`, `_computeStudentCompetenceLevel`, `_noteToLevel`, `_evalIncludesClass`, `_evalDateFor`, `_evalPrimaryAliveClassId`, `_autoNoteThresholds` (si présent). Tri élèves : `localeCompare('fr')` sur nom puis prénom (indépendant de `evalPrefs.defaultSort`).
 
 ### Validation
-XLSX testé avec openpyxl + LibreOffice headless conversion PDF — aucune erreur. ODS idem. Cas limite "classe sans évaluation" produit un classeur minimal valide (Synthèse + Bilans vides + Compétences vide + aucune feuille Eval). Couleurs de fond appliquées via patternFill solid (XLSX) et table-cell-properties fo:background-color (ODS). Texte clair/foncé adapté au fond via formule YIQ.
+XLSX testé avec openpyxl + LibreOffice headless conversion PDF — aucune erreur. ODS idem. Cas limite "classe sans évaluation" produit un classeur minimal valide (Synthèse + Bilans vides + Compétences vide + aucune feuille Eval). Couleurs de fond appliquées via patternFill solid (XLSX) et table-cell-properties fo:background-color (ODS). Texte clair/foncé adapté au fond via `textOnHex` (contraste WCAG réel).
 
 ### Dimensions typiques (6e A démo, 30 élèves, 4 évals)
 - XLSX : ~140 Ko, 8 feuilles, 30 lignes × 11-17 colonnes par feuille.
@@ -1467,7 +1467,7 @@ Cf. les ~15 callsites dans `_evalTableurUpdate`, `_evalSaisieUpdateNote`, `_eval
 Helper `_autoNoteThresholds(prefs)` renvoie le tableau dérivé. En mode auto, les pickers UI sont désactivés et un encart `↳` explique la dérivation.
 
 ### Contraste texte / fond
-Helper **`_contrastTextColor(bg)`** (formule YIQ, threshold 150) renvoie `'var(--ink-deep)'` ou `'#fff'` selon la luminance. À utiliser dès qu'on pose un fond coloré (cellules tableur, badges, chips, total) pour rester lisible quel que soit la palette.
+Helper **`_contrastTextColor(bg)`** renvoie `'var(--ink-deep)'` (fonds `var(--paper*)`) ou, pour un fond littéral, la couleur **littérale** (`'#1a252f'` / `'#fff'`) qui donne le **meilleur contraste WCAG réel** — calculé par `_wcagContrast(r1,g1,b1,r2,g2,b2)`. Accepte `#hex`, `rgb()`, `hsl()`. À utiliser dès qu'on pose un fond coloré (cellules tableur, badges, chips, total, couleurs choisies par l'utilisateur) pour rester lisible quelle que soit la palette. ⚠️ Ne pas revenir à un seuil sur la luminance perçue : le `YIQ >= 150` d'avant mettait du blanc sur l'orange `#e67e22` (2,85:1) et le vert `#27ae60` (2,87:1).
 
 ### Sécurité (commit 8c881de)
 - `_validateImport` couvre désormais les sections `evaluations`, `competences`, `competenceDomains`, `evalCommentLibrary` + rejette explicitement `__proto__`, `constructor`, `prototype` (évite prototype pollution via JSON.parse).
