@@ -70,11 +70,20 @@ Un token suit le thème de l'écran. Les fonctions qui produisent du HTML imprim
 
 ⚠️ **`_buildQcmPlanHTML` est l'exception** : elle sert l'onglet QCMCam **à l'écran** *et* l'impression multi-salles. Elle reçoit un drapeau **`opts.print`** (posé par `printQcmPlans`) et choisit entre littéral et token. Tout constructeur à double usage doit faire de même — pas de littéral inconditionnel, il casserait l'écran en mode nuit.
 
-#### Pastilles d'aménagement de la liste imprimée
+#### Pastilles d'aménagement — UNE seule palette, celle de l'écran
 
-`printElevesList` → `_amBadges` : la couleur de texte est dérivée du fond par **`_contrastTextColor(b.bg)`**, jamais `#fff` en dur (le blanc tombait à 2,19:1 sur l'orange PPRE, 2,87:1 sur le vert ULIS, 3,28:1 sur le sarcelle UPE2A). Deux fonds ont dû être **assombris** faute de couleur de texte satisfaisante — ni le blanc ni l'encre n'atteignait 4,5:1 : **PPS `#2980b9` → `#23689a`** (5,97:1, aligné sur `--g1`) et **PAI `#ec4899` → `#d81b60`** (4,95:1). Les neuf pastilles tiennent maintenant de 4,52:1 à 7,09:1.
+⚠️ Les mêmes statuts (PPRE, PPS, ULIS, UPE2A…) s'affichaient avec **trois palettes différentes** selon la surface : cellule du plan (classes `.spec-*`), liste des non placés (couleurs en style *inline*), liste imprimée (littéraux dans `_amBadges`). Dérive classique de valeurs dupliquées — ULIS y était tantôt gris, tantôt vert, tantôt violet. **Arbitrage de l'utilisateur : la palette de référence est celle de l'écran** (les `.spec-*`).
 
-💡 Ces pastilles portaient encore `#f39c12` / `#27ae60` / `#16a085`, couleurs **disparues de l'écran** lors de la passe contraste (les `.spec-*` ont été refondues) : elles ne survivaient que dans le chemin d'impression. Une refonte de palette doit balayer les deux surfaces.
+Les trois surfaces sont désormais alignées, par deux mécanismes distincts :
+
+- **`renderUnplaced`** utilise les classes **`.spec-badge spec-*`**, plus aucune couleur inline. Une seule source pour les deux surfaces d'écran, et ces pastilles deviennent sensibles au thème (elles ne l'étaient pas). Seule la marge reste inline (`.spec-badge` n'en pose pas, le panneau est étroit).
+- **`_amBadges`** (impression) est un **miroir littéral** des `.spec-*` en valeurs du thème clair. Un constructeur d'impression ne peut pas utiliser les tokens — ils suivent le thème de l'écran — donc la duplication est inévitable **ici seulement**. ⚠️ **À tenir synchronisée : toute retouche d'une pastille `.spec-*` se reporte dans `_amBadges`, et réciproquement.**
+
+La couleur de **texte** reste dérivée du fond par **`_contrastTextColor(b.bg)`**, jamais `#fff` en dur (le blanc tombait à 2,19:1 sur l'ancien orange PPRE `#f39c12`).
+
+Contrastes mesurés sur papier avec la palette d'écran — meilleurs que ceux de l'ancienne palette d'impression : ULIS+/UPE2A+ 6,92:1 · PAP 6,87 · PPS 6,69 · ULIS/UPE2A 5,64 · PPRE 5,46 · -A 4,52 · **PAI 4,41** (seule sous la cible). PAI est conservée à `#ec4899` par fidélité à l'écran, où elle est jugée suffisamment visible par l'utilisateur malgré 3,53:1 — le papier est donc meilleur que l'écran sur ce point. Ne pas « corriger » l'une sans l'autre.
+
+💡 **ULIS et UPE2A partagent volontairement le gris `--pencil`** (idem ULIS+/UPE2A+ en violet `#6f4a8c`) : elles ne se distinguent que par leur libellé. Conséquence assumée du choix de palette, signalée avant décision. Ne pas y « rétablir » un vert et un sarcelle sans changer aussi les `.spec-*` — c'est exactement comme les palettes avaient divergé.
 
 De même, `.pcell .pgb.g2` était resté sur `#d35400` (4,17:1) alors que le token d'écran `--g2` valait déjà `#bf4d00` (4,91:1).
 
@@ -2062,6 +2071,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - ⚠️ Non testable en aperçu desktop sur le ressenti réel iPad — validation finale sur l'appareil. Les `TouchEvent` synthétiques permettent toutefois de vérifier la logique (saisie, échange, annulation, menu contextuel) automatiquement.
 
 ## Conventions de développement
+- ⚠️ **L'app n'est PAS prévue pour un usage 100 % clavier** — décision explicite de l'utilisateur. L'interaction centrale est **spatiale** (glisser un élève sur une table), à la souris, au doigt ou au stylet. Ne pas proposer de rendre focusables les ~150 éléments cliquables de la grille, et ne pas présenter cela comme une lacune. En revanche les **raccourcis existants** (`Échap`, `Ctrl+Z/Y/P`, `+`/`-`/`=`, `0`/`1`/`2`/`3`, `A`) et la validation à `Entrée` dans les modales sont des accélérateurs pour un enseignant en cours : **ne pas les casser**.
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
 - CSS dans le `<style>`, JS dans le `<script>` en fin de body
 - Pas de dépendances externes (pas de CDN, fonctionne hors-ligne)
