@@ -366,6 +366,23 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 /* --cc-fg : posée en inline par renderClasses sur les cartes à fond de niveau (dérivée de
    ce fond). Repli sur --pencil pour les cartes sans fond coloré (classes recomposées). */
 .cc-meta{font-size:.82em;color:var(--cc-fg,var(--pencil));margin-top:3px}
+/* Compteurs ♂/♀/📄 des cartes de classe. Le code couleur (bleu garçons, rose filles,
+   sarcelle agrandissements) est un repère voulu, mais aucune couleur fixe ne tient 4,5:1
+   sur toute la gamme des fonds de niveau (au mieux 3,3:1). On lui donne donc son propre
+   fond opaque, qui suit le thème — les tokens y passent alors largement (5,1–9,3:1). */
+.cc-chip{display:inline-flex;align-items:center;gap:3px;background:var(--paper);border-radius:9px;padding:0 6px;font-weight:700;line-height:1.55;white-space:nowrap}
+.cc-chip-m{color:var(--civ-m)}
+.cc-chip-f{color:var(--civ-f)}
+.cc-chip-a{color:var(--agr-fg)}
+/* À l'impression on part sur du papier blanc : si l'app est en thème sombre, les tokens
+   valent leurs variantes CLAIRES (bleu ciel, rose pâle) et seraient délavés. On repose
+   donc les valeurs du thème clair, quel que soit le thème actif à l'écran. */
+@media print{
+  .cc-chip{background:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cc-chip-m{color:#1c6ea4 !important}
+  .cc-chip-f{color:#b3123f !important}
+  .cc-chip-a{color:#00707d !important}
+}
 
 /* ─── MODAL ─── */
 .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
@@ -6065,11 +6082,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.22.1';
+const APP_VERSION    = '2.22.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T00:52:00Z';
+const APP_BUILD_DATE = '2026-07-30T01:07:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13058,9 +13075,9 @@ function renderClasses() {
     // aucune teinte fixe ne reste lisible sur la gamme complète des niveaux. Les compteurs
     // restent distingués par leur glyphe ♂/♀ et leur graisse.
     const civDetail = (c.m + c.f + c.civUnk) > 0
-      ? ` <span style="font-weight:700">♂ ${c.m}</span> <span style="font-weight:700">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="opacity:.75" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
+      ? ` <span class="cc-chip cc-chip-m">♂ ${c.m}</span> <span class="cc-chip cc-chip-f">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="opacity:.75" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
       : '';
-    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span style="font-weight:700" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
+    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
     const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
     const _discIds = _clsDisciplineIds(cls);
     const _discLine = _discIds.length >= 2
