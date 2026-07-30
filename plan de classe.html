@@ -865,6 +865,45 @@ html[data-theme="dark"] {
   --g3-light: #5b3378;  --g3-em: #3d2352;
 }
 
+/* ═══ NEUTRALISATION DU THÈME SOMBRE À L'IMPRESSION ═══════════════════════════════════
+   ⚠️ Défaut mesuré le 2026-07-30 : `body { color: var(--ink-deep) }` valait #e8d9b8 (ambre)
+   en thème sombre, `#pa` en HÉRITAIT, et le bloc @media print ne remettait la couleur à zéro
+   NULLE PART — il ne forçait que `background:#fff`. Conséquence : imprimer en mode nuit posait
+   de l'ambre sur papier blanc à **1,40:1** sur TOUT le texte sans couleur explicite — noms
+   d'élèves, cellules de tableau, titres. 244 écarts relevés sur 4 chemins d'impression.
+   Le papier est toujours blanc : on rétablit donc les valeurs du thème CLAIR pour le média
+   print. Agir sur les tokens plutôt que sur des sélecteurs couvre d'un coup tout ce qui passe
+   par var(--…), y compris les règles qu'on n'aurait pas songé à énumérer.
+   Ce bloc ne peut rien dégrader : il ne s'applique QUE lorsque le thème sombre est actif,
+   configuration où l'impression était illisible. Ne pas le supprimer sans remettre une remise
+   à zéro équivalente. */
+@media print {
+  html[data-theme="dark"] {
+    --paper:            #f4f6fa;  --paper-warm:   #e6ebf2;  --paper-deep: #d6dde6;
+    --ink-deep:         #0e1a26;  --ink-blue:     #1a252f;  --ink-blue-soft: #2a3540;
+    --pencil:           #56697f;  --pencil-soft:  #606f86;
+    --rule-line:        #c8d2e0;  --rule-line-soft: #dde4ee;
+    --margin-red:       #b03d2e;  --margin-red-soft: rgba(176, 61, 46, 0.14);
+    --highlighter:      #f5d76e;  --chip-on-bg:   #263545;
+    --civ-m:            #1c6ea4;  --civ-f:        #b3123f;
+    --agr-fg:           #00707d;  --warn-fg:      #92400e;
+    --disc-accent:      #5b21b6;  --disc-accent-soft: #ede9fe;  --disc-accent-mid: #c4b5fd;
+    --maitrise-1:       #b03d2e;  --maitrise-2:   #e67e22;
+    --maitrise-3:       #27ae60;  --maitrise-4:   #1e6091;
+    --g1-light: #d6eaf8;  --g1-em: #eaf4fc;
+    --g2-light: #fde8d8;  --g2-em: #fef5ee;
+    --g3-light: #e8d5ee;  --g3-em: #f4e6f8;
+    --shadow-card: 0 1px 0 rgba(11, 22, 32, 0.04), 0 2px 8px rgba(11, 22, 32, 0.05);
+    --shadow-pop:  0 4px 16px rgba(11, 22, 32, 0.12), 0 1px 2px rgba(11, 22, 32, 0.06);
+    /* Ces six-là n'existent QUE dans le bloc sombre : en clair, les règles qui les utilisent
+       reposent sur le repli de var(--x, littéral). `initial` rend le token invalide, donc le
+       repli reprend la main — exactement le comportement du thème clair. */
+    --cell-occupied: initial;  --cell-occupied-bd: initial;  --cell-occupied-hover: initial;
+    --cell-drop-ok:  initial;  --cell-drop-ok-bd:  initial;
+    --warn-bg: initial;        --warn-bd: initial;
+  }
+}
+
 /* ─── Surcharges thème sombre : éléments aux fonds codés en dur ─── */
 html[data-theme="dark"] .cell.em       { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; }
 html[data-theme="dark"] .cell.oc       { background: var(--cell-occupied) !important; border-color: var(--cell-occupied-bd) !important; color: var(--ink-deep) !important; }
@@ -6104,11 +6143,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.25.1';
+const APP_VERSION    = '2.25.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T08:46:12Z';
+const APP_BUILD_DATE = '2026-07-30T08:58:40Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »

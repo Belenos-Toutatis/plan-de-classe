@@ -58,6 +58,36 @@ Les anciens textes d'astuce `<span class="tb-hint">…</span>` sont visuellement
 ### Impressions
 Le filet rouge et les lignes Seyès sont **cachés à l'impression** via `@media print` (`body::before { display:none }`, `background-image: none`). Les couleurs des cellules sont gérées par `_applyPrintColorMode` (existant) pour le mode N&B.
 
+#### ⚠️ Le thème sombre doit être neutralisé pour le papier
+
+**Le papier est toujours blanc — le thème sombre n'a donc rien à y faire.** Défaut mesuré le 2026-07-30 : `body { color: var(--ink-deep) }` valait `#e8d9b8` (ambre) en thème sombre, `#pa` en **héritait**, et le bloc `@media print` ne remettait la couleur à zéro nulle part (il ne forçait que `background:#fff`). Imprimer en mode nuit posait donc de l'ambre sur blanc à **1,40:1** sur tout le texte sans couleur explicite — noms d'élèves, cellules de tableau, titres. **244 écarts** relevés sur 4 chemins.
+
+Corrigé par un bloc **`@media print { html[data-theme="dark"] { … } }`** (juste après la définition du thème sombre) qui rétablit les valeurs du thème clair pour les **40 tokens** que le mode nuit redéfinit. Agir sur les tokens plutôt que sur des sélecteurs couvre d'un coup tout ce qui passe par `var(--…)`, y compris les règles qu'on n'aurait pas songé à énumérer. Les 7 tokens qui n'existent QUE dans le bloc sombre (`--cell-occupied*`, `--cell-drop-ok*`, `--warn-bg/-bd`) sont remis à `initial` : le custom property devient invalide, donc le repli `var(--x, littéral)` reprend la main — exactement le comportement du thème clair. **Si un token est ajouté au thème sombre, l'ajouter aussi à ce bloc.**
+
+#### Convention : les constructeurs d'impression écrivent des couleurs LITTÉRALES
+
+Un token suit le thème de l'écran. Les fonctions qui produisent du HTML imprimé posent donc des valeurs littérales (`#56697f` pour `--pencil`, `#606f86` pour `--pencil-soft`, `#b03d2e` pour `--margin-red`). Le bloc de neutralisation ci-dessus rend cette convention redondante, mais elle est conservée : explicite, auto-documentée, et indépendante de l'existence du bloc global.
+
+⚠️ **`_buildQcmPlanHTML` est l'exception** : elle sert l'onglet QCMCam **à l'écran** *et* l'impression multi-salles. Elle reçoit un drapeau **`opts.print`** (posé par `printQcmPlans`) et choisit entre littéral et token. Tout constructeur à double usage doit faire de même — pas de littéral inconditionnel, il casserait l'écran en mode nuit.
+
+#### Pastilles d'aménagement de la liste imprimée
+
+`printElevesList` → `_amBadges` : la couleur de texte est dérivée du fond par **`_contrastTextColor(b.bg)`**, jamais `#fff` en dur (le blanc tombait à 2,19:1 sur l'orange PPRE, 2,87:1 sur le vert ULIS, 3,28:1 sur le sarcelle UPE2A). Deux fonds ont dû être **assombris** faute de couleur de texte satisfaisante — ni le blanc ni l'encre n'atteignait 4,5:1 : **PPS `#2980b9` → `#23689a`** (5,97:1, aligné sur `--g1`) et **PAI `#ec4899` → `#d81b60`** (4,95:1). Les neuf pastilles tiennent maintenant de 4,52:1 à 7,09:1.
+
+💡 Ces pastilles portaient encore `#f39c12` / `#27ae60` / `#16a085`, couleurs **disparues de l'écran** lors de la passe contraste (les `.spec-*` ont été refondues) : elles ne survivaient que dans le chemin d'impression. Une refonte de palette doit balayer les deux surfaces.
+
+De même, `.pcell .pgb.g2` était resté sur `#d35400` (4,17:1) alors que le token d'écran `--g2` valait déjà `#bf4d00` (4,91:1).
+
+#### Méthode d'audit des impressions (à rejouer)
+
+1. **Découverte automatique** des chemins : toute fonction de premier niveau qui écrit dans `#pa` / `#qcm-plan-print-area` / `#am-print` ou appelle `window.print()`, **plus les constructeurs auxiliaires qu'elles appellent** (`buildTeacherPageHTML`, `_buildQcmPlanHTML` ne touchent aucun conteneur — une liste écrite à la main en avait raté trois : `printClassesBilan`, `doPrintEmptyConfigSalle`, `_renduPrint`). Compte de référence : **13 chemins**.
+2. **Émulation du média print** : réinjecter les règles `@media print` comme règles d'écran (dernier `<style>` du `<head>`), sinon `getComputedStyle` renvoie le rendu écran.
+3. **Auditer à l'intérieur du `window.print()` stubé** — c'est le seul instant où le DOM est en état d'impression ; plusieurs fonctions vident leur conteneur juste après.
+4. ⚠️ **Ne pas se fier au libellé du chemin** : certaines fonctions appellent `print()` deux fois, ou via un minuteur qui retombe sous le chemin suivant. Utiliser le `document.title` que chaque fonction pose (= nom du PDF) comme identifiant intrinsèque, et vider les conteneurs entre deux chemins.
+5. **Mettre `getComputedStyle` en cache** et restreindre la racine auditée : sur « Plusieurs plans » (13 pages, 4 745 éléments) l'auditeur non optimisé dépasse 30 s. Le balisage étant identique d'une page à l'autre, auditer la première suffit.
+
+Score de référence après la passe du 2026-07-30 : **0 écart sur les 10 chemins, dans les deux thèmes** (contre 244 en sombre et 9 en clair avant).
+
 ## Fichiers
 - `plan de classe.html` — application complète (HTML + CSS + JS dans un seul fichier)
 - `plan de classe.html.bak` — copie de sécurité locale de l'app avant modifications lourdes (créée manuellement par l'utilisateur). Gitignoré via `*.bak`, non publié sur GitHub Pages.
