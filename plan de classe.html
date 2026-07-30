@@ -6102,11 +6102,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.23.1';
+const APP_VERSION    = '2.23.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T02:25:00Z';
+const APP_BUILD_DATE = '2026-07-30T02:34:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30895,6 +30895,98 @@ function _byteLen(str) {
   catch (_) { return (str || '').length; }   // repli très ancien navigateur
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Capacité RÉELLE de localStorage sur ce navigateur.
+//
+// Aucune API ne l'expose : `estimate().quota` décrit la réserve globale de l'origine
+// (plusieurs Go) sans dire si localStorage y a droit, et le plafond historique de 5 Mo
+// n'est plus appliqué par les Chromium récents. On mesure donc : on tente d'écrire un
+// bloc de taille décroissante sous une clé temporaire jusqu'à ce que ça passe.
+//
+// Coût maîtrisé : dans le cas courant (localStorage adossé au quota général) la PREMIÈRE
+// tentative réussit → une seule écriture, immédiatement effacée. Le résultat est mis en
+// cache : on ne re-sonde que si le quota annoncé a bougé d'un quart ou après 60 jours.
+// Bouton « ↻ re-mesurer » pour forcer.
+//
+// Unité : la sonde écrit de l'ASCII et se compte en octets UTF-8, comme `_byteLen`. Si le
+// navigateur facture en UTF-16 (2 octets/caractère), on SOUS-estime la capacité — erreur
+// dans le sens prudent, ce qui est le bon sens pour une jauge d'alerte.
+// ─────────────────────────────────────────────────────────────────────────────
+const LS_CAP_CACHE_KEY = 'planClasse_lsCapacity';
+const LS_PROBE_KEY     = '__planClasse_probe__';
+// Plafond à 16 Mo : il suffit à trancher entre « limite propre à localStorage » (~5 Mo,
+// navigateurs qui l'appliquent encore) et « adossé au quota général » (plusieurs Go).
+// Monter plus haut n'apporterait rien et ferait une allocation JS de 2 × la taille.
+const LS_PROBE_STEPS   = [16, 12, 8, 6, 4, 3, 2, 1.5, 1, 0.5, 0.25];
+const LS_CAP_MAX_AGE   = 60 * 24 * 3600 * 1000;
+
+// Marge encore écrivable, en octets. `null` si même 256 Ko échouent (déjà saturé).
+// `atCeiling` à true si on a atteint le plafond de la sonde sans échouer : la capacité
+// réelle est alors PLUS GRANDE, et c'est le quota global qui fait loi.
+function _probeLsHeadroom() {
+  const tryWrite = (bytes) => {
+    let ok = false;
+    try { localStorage.setItem(LS_PROBE_KEY, 'x'.repeat(bytes)); ok = true; }
+    catch (_) { ok = false; }
+    finally { try { localStorage.removeItem(LS_PROBE_KEY); } catch (_) {} }
+    return ok;
+  };
+  let lastFail = null;
+  for (let i = 0; i < LS_PROBE_STEPS.length; i++) {
+    const bytes = Math.floor(LS_PROBE_STEPS[i] * 1024 * 1024);
+    if (!tryWrite(bytes)) { lastFail = bytes; continue; }
+    // Les paliers sont grossiers : sur un navigateur plafonné à 5 Mo, le premier
+    // palier qui passe est 4 Mo → on annoncerait 4 Mo au lieu de 5. Un seul pas de
+    // dichotomie entre le succès et l'échec précédent ramène l'erreur sous 10 %.
+    let best = bytes;
+    if (lastFail != null) {
+      const mid = Math.floor((best + lastFail) / 2);
+      if (mid > best && tryWrite(mid)) best = mid;
+    }
+    return { headroom: best, atCeiling: i === 0 };
+  }
+  return { headroom: null, atCeiling: false };
+}
+
+// Capacité totale utilisable pour localStorage, mesurée puis mise en cache.
+// Renvoie { total, source, measuredAt } — `total` en octets, `null` si indéterminable.
+function _lsCapacity(lsBytes, quota, otherUsage, force) {
+  if (!force) {
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_CAP_CACHE_KEY) || 'null');
+      if (c && Number.isFinite(c.total) && c.total > 0) {
+        const fresh = Date.now() - (c.ts || 0) < LS_CAP_MAX_AGE;
+        const sameQuota = !quota || !c.quota || Math.abs(quota - c.quota) / c.quota < 0.25;
+        if (fresh && sameQuota) return { total: c.total, source: c.source, measuredAt: c.ts };
+      }
+    } catch (_) {}
+  }
+  const { headroom, atCeiling } = _probeLsHeadroom();
+  let total = null, source = 'sonde';
+  if (headroom == null) {
+    total = lsBytes;                       // plus rien n'entre : on est au plafond
+    source = 'saturé';
+  } else if (atCeiling && quota != null) {
+    // On a écrit le maximum sondé sans échouer → localStorage est adossé au quota
+    // général. La place utilisable est le quota moins ce que les AUTRES stockages
+    // (cache de la page, IndexedDB) consomment déjà.
+    total = Math.max(lsBytes + headroom, quota - (otherUsage || 0));
+    source = 'quota';
+  } else {
+    total = lsBytes + headroom;
+    source = 'sonde';
+  }
+  try {
+    localStorage.setItem(LS_CAP_CACHE_KEY, JSON.stringify({ total, source, quota: quota || 0, ts: Date.now() }));
+  } catch (_) {}
+  return { total, source, measuredAt: Date.now() };
+}
+
+function _remeasureStorage() {
+  try { localStorage.removeItem(LS_CAP_CACHE_KEY); } catch (_) {}
+  _renderStorageGauge(true);
+}
+
 // Répartition du poids de S par section, la plus lourde d'abord.
 function _storageBreakdown() {
   const out = [];
@@ -30906,7 +30998,7 @@ function _storageBreakdown() {
   return out.sort((a, b) => b.bytes - a.bytes);
 }
 
-async function _renderStorageGauge() {
+async function _renderStorageGauge(force) {
   const box = document.getElementById('about-storage');
   if (!box) return;
   const sum  = box.querySelector('.sto-sum');
@@ -30928,11 +31020,12 @@ async function _renderStorageGauge() {
   // service worker était vide sur cette machine. La seule mesure fiable de localStorage
   // est la nôtre (`lsBytes`). On ne lit dans `estimate()` que le quota et le poids du
   // cache de la page, présentés pour ce qu'ils sont.
-  let quota = null, cacheBytes = null;
+  let quota = null, cacheBytes = null, otherUsage = 0;
   try {
     if (navigator.storage && typeof navigator.storage.estimate === 'function') {
       const est = await navigator.storage.estimate();
       if (est && Number.isFinite(est.quota) && est.quota > 0) quota = est.quota;
+      if (est && Number.isFinite(est.usage)) otherUsage = est.usage;   // caches + IDB + SW, hors localStorage
       const d = est && est.usageDetails;
       if (d && Number.isFinite(d.caches)) cacheBytes = d.caches;
     }
@@ -30945,36 +31038,49 @@ async function _renderStorageGauge() {
       `</div>`
     : '';
 
-  // Référence de la jauge : le plafond historique de localStorage (~5 Mo par origine).
-  // Les Chromium récents l'adossent au quota général (plusieurs Go), mais d'autres
-  // navigateurs l'appliquent encore. Se fier au quota global afficherait « 0,04 % » et
-  // endormirait la vigilance ; on garde donc la référence PRUDENTE, qui est aussi la
-  // seule à produire une barre lisible.
-  const LS_REF = 5 * 1024 * 1024;
-  const pct = Math.min(100, (lsBytes / LS_REF) * 100);
-  fill.style.width = Math.max(1, pct).toFixed(1) + '%';
+  // Capacité RÉELLEMENT utilisable, mesurée sur CE navigateur (sonde + cache).
+  const cap = _lsCapacity(lsBytes, quota, otherUsage, force);
+  const total = cap.total;
+
+  const bouton = `<button class="btn btn-g btn-sm" onclick="_remeasureStorage()" style="padding:2px 8px;font-size:.9em" title="Réécrit un bloc de test pour vérifier la place réellement disponible">↻ re-mesurer</button>`;
+
+  if (!total || total <= 0) {
+    sum.textContent = `tes données : ${_fmtBytes(dataBytes)}`;
+    fill.style.width = '0';
+    fill.classList.remove('warn', 'crit');
+    box.querySelector('.sto-detail')?.remove();
+    box.querySelector('.sto-note')?.remove();
+    box.insertAdjacentHTML('beforeend', detail +
+      `<div class="sto-note" style="color:var(--pencil)"><strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale. Impossible de mesurer la place disponible sur ce navigateur. La sauvegarde reste protégée : en cas de saturation, un bandeau rouge s'affiche avec un export immédiat. ${bouton}</div>`);
+    return;
+  }
+
+  const pct = Math.min(100, (lsBytes / total) * 100);
+  fill.style.width = Math.max(0.6, pct).toFixed(2) + '%';
   fill.classList.toggle('warn', pct >= 60 && pct < 85);
   fill.classList.toggle('crit', pct >= 85);
   sum.textContent = `tes données : ${_fmtBytes(dataBytes)}`;
 
-  // Contexte : le quota réel annoncé par le navigateur, en disant explicitement que
-  // localStorage n'y est pas compté — sinon les deux chiffres semblent incohérents.
-  const ctx = quota != null
-    ? ` Le navigateur annonce par ailleurs ${_fmtBytes(quota)} de stockage pour cette page`
-      + (cacheBytes != null ? ` (dont ${_fmtBytes(cacheBytes)} de cache de l'application)` : '')
-      + `, une réserve distincte dans laquelle la mémoire locale n'est pas comptée.`
-    : ` Ce navigateur n'expose pas son quota de stockage global.`;
-
-  const occupe = `<strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale, soit ${pct < 1 ? '< 1' : Math.round(pct)} % du plafond prudent de ${_fmtBytes(LS_REF)} retenu pour localStorage.`;
+  const pctTxt = pct < 0.1 ? '< 0,1' : pct < 1 ? pct.toFixed(2).replace('.', ',') : Math.round(pct);
+  const occupe = `<strong>${_fmtBytes(lsBytes)}</strong> en mémoire locale sur <strong>${_fmtBytes(total)}</strong> réellement disponibles ici (${pctTxt} %).`;
+  // D'où vient le chiffre : mesuré, pas supposé. Sans cette phrase l'utilisateur ne peut
+  // pas savoir si on lui donne une valeur réelle ou une convention.
+  const prov = cap.source === 'quota'
+    ? ` Mesuré sur ce navigateur : la mémoire locale est adossée au quota de stockage de la page`
+      + (cacheBytes != null ? `, dont ${_fmtBytes(cacheBytes)} sont déjà pris par le cache de l'application` : '')
+      + `.`
+    : cap.source === 'saturé'
+      ? ` Plus aucune écriture ne passe : l'espace est saturé.`
+      : ` Plafond mesuré par écriture de test sur ce navigateur (il applique une limite propre à la mémoire locale, indépendante du quota global).`;
 
   let note;
   if (pct >= 85) {
-    note = `<div class="sto-note" style="color:var(--margin-red);font-weight:600">⚠️ ${occupe} Exporte tes données, puis allège : supprime des snapshots, ou réinitialise en conservant les salles (onglet Classes → 🗑 Réinitialiser).<br><span style="font-weight:400">${ctx}</span></div>`;
+    note = `<div class="sto-note" style="color:var(--margin-red);font-weight:600">⚠️ ${occupe} Exporte tes données, puis allège : supprime des snapshots, ou réinitialise en conservant les salles (onglet Classes → 🗑 Réinitialiser).<br><span style="font-weight:400">${prov} ${bouton}</span></div>`;
   } else if (pct >= 60) {
     // --warn-fg (et non un orange littéral) : décliné par thème, cf. section Contraste.
-    note = `<div class="sto-note" style="color:var(--warn-fg);font-weight:600">${occupe} À surveiller en fin d'année ; un export régulier reste la meilleure sécurité.<br><span style="color:var(--pencil);font-weight:400">${ctx}</span></div>`;
+    note = `<div class="sto-note" style="color:var(--warn-fg);font-weight:600">${occupe} À surveiller en fin d'année ; un export régulier reste la meilleure sécurité.<br><span style="color:var(--pencil);font-weight:400">${prov} ${bouton}</span></div>`;
   } else {
-    note = `<div class="sto-note" style="color:var(--pencil)">${occupe} Marge confortable.${ctx}</div>`;
+    note = `<div class="sto-note" style="color:var(--pencil)">${occupe} Marge confortable.${prov} ${bouton}</div>`;
   }
   box.querySelector('.sto-detail')?.remove();
   box.querySelector('.sto-note')?.remove();
