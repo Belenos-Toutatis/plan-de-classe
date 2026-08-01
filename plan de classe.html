@@ -4136,6 +4136,17 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
 
     <div class="about-section">
+      <h3>🟣 Type D — barème niveau → points</h3>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Valeurs <strong>par défaut</strong> des évaluations de Type D (sommative par compétences) : combien de points rapporte chaque niveau, additionnés pour former la note. Chaque évaluation peut ensuite avoir son propre barème.<br>
+      ⚠️ À ne pas confondre avec « Points par niveau » ci-dessus, qui projette des niveaux sur une note /20 pour le Type B — ce sont deux tables distinctes.</p>
+      <div id="evalprefs-typedpoints" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"></div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer;font-size:.9em" title="Affiche dans le tableur, pour chaque exercice, le niveau moyen atteint sur chaque compétence de cet exercice — purement informatif, sans effet sur les bilans">
+        <input type="checkbox" id="evalprefs-typedbilanexo">
+        <strong>Bilan par exercice</strong> <span style="color:var(--pencil);font-size:.92em">— coché par défaut à la création d'une évaluation D</span>
+      </label>
+    </div>
+
+    <div class="about-section">
       <h3>📐 Conversion note → niveau</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Quand on convertit une note d'exercice en niveau de maîtrise (Type C / B-bis).</p>
       <label style="display:block;margin:4px 0;cursor:pointer">
@@ -4441,6 +4452,15 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <label style="display:block;cursor:pointer;font-size:.88em" title="Chaque saisie compte pour 1 — une compétence évaluée 3 fois pèse 3 fois plus qu'une évaluée 1 fois">
           <input type="radio" name="meval-edit-weighting" value="equal" onchange="_evalEditMarkDirty()">
           <strong>Compétences pondérées</strong> <span style="color:var(--pencil)">— pondération par nombre de saisies (une compétence vue 3 fois pèse 3×)</span>
+        </label>
+      </div>
+
+      <div id="meval-edit-typed-wrap" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-line-soft);display:none">
+        <div style="font-size:.92em;margin-bottom:4px"><strong>Barème niveau → points</strong> <span style="color:var(--pencil);font-size:.88em">(Type D — remplace le défaut général pour cette éval)</span></div>
+        <div id="meval-edit-typed-points" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"></div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.88em;cursor:pointer" title="Affiche dans le tableur, pour chaque exercice, le niveau moyen atteint sur chaque compétence de l'exercice — informatif, sans effet sur les bilans">
+          <input type="checkbox" id="meval-edit-typed-bilanexo" onchange="_evalEditMarkDirty()">
+          Afficher le niveau par compétence <strong>par exercice</strong>
         </label>
       </div>
 
@@ -6161,11 +6181,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.0';
+const APP_VERSION    = '2.27.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-07-30T19:35:47Z';
+const APP_BUILD_DATE = '2026-08-01T07:20:01Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31606,6 +31626,24 @@ function _evalPrefsRenderAll(prefs) {
       wp.appendChild(wrap);
     }
   }
+  // ── Type D : barème niveau → points (défaut des nouvelles évals D) ──
+  const wdp = document.getElementById('evalprefs-typedpoints');
+  if (wdp) {
+    wdp.innerHTML = '';
+    const dPts = (Array.isArray(prefs.typeDPoints) && prefs.typeDPoints.length === nb)
+      ? prefs.typeDPoints : _typeDDefaultPoints(nb);
+    for (let i = 0; i < nb; i++) {
+      const wrap = document.createElement('label');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:.85em';
+      wrap.innerHTML = `
+        <span><strong>${_esc(prefs.niveauLabels?.[i] || String(i + 1))}</strong></span>
+        <input type="number" data-idx="${i}" value="${dPts[i]}" min="0" max="999" step="0.5"
+               style="width:80px;padding:4px 6px;font-family:var(--font-mono)">`;
+      wdp.appendChild(wrap);
+    }
+  }
+  const wdb = document.getElementById('evalprefs-typedbilanexo');
+  if (wdb) wdb.checked = !!prefs.typeDBilanParExercice;
   // ── Mode des seuils ──
   for (const r of document.querySelectorAll('input[name="evalprefs-thresholdMode"]')) {
     r.checked = (r.value === prefs.thresholdMode);
@@ -31788,6 +31826,7 @@ function _evalPrefsRebuildLabels() {
   const curColors = Array.from(document.querySelectorAll('#evalprefs-colors input[data-idx]')).map(i => i.value);
   const curPoints = Array.from(document.querySelectorAll('#evalprefs-points input[data-idx]')).map(i => parseFloat(i.value));
   const curPercents = Array.from(document.querySelectorAll('#evalprefs-percents input[data-idx]')).map(i => parseFloat(i.value));
+  const curDPoints = Array.from(document.querySelectorAll('#evalprefs-typedpoints input[data-idx]')).map(i => parseFloat(i.value));
   const defLabels = []; for (let i = 0; i < nb; i++) defLabels.push(String(i + 1));
   const defColors = _defaultColorsForNb(nb);
   const defPoints = _defaultPointsForNb(nb);
@@ -31820,6 +31859,14 @@ function _evalPrefsRebuildLabels() {
     maitriseColorsAuto: colorsAuto,
     noteThresholdsAuto: thresholdsAuto,
     noteThresholds: S.evalPrefs?.noteThresholds,
+    // Barème Type D : on conserve les valeurs déjà saisies et on complète avec le défaut
+    // 0..n−1 pour les niveaux qui apparaissent (même logique que maitrisePoints ci-dessus).
+    typeDPoints: (() => {
+      const def = _typeDDefaultPoints(nb), out = [];
+      for (let i = 0; i < nb; i++) out.push(Number.isFinite(curDPoints[i]) ? curDPoints[i] : def[i]);
+      return out;
+    })(),
+    typeDBilanParExercice: !!document.getElementById('evalprefs-typedbilanexo')?.checked,
   });
 }
 
@@ -32013,6 +32060,19 @@ function _evalPrefsSave() {
   S.evalPrefs.zeroLabel = (document.getElementById('evalprefs-zeroLabel')?.value || '0').trim() || '0';
   S.evalPrefs.codeAbsent = (document.getElementById('evalprefs-codeAbsent')?.value || 'A').trim() || 'A';
   S.evalPrefs.codeNonNote = (document.getElementById('evalprefs-codeNonNote')?.value || 'NN').trim() || 'NN';
+  // Type D : barème niveau → points par défaut + bilan par exercice. Lu sur `nb` (le
+  // nombre de niveaux VENANT D'ÊTRE enregistré) : si l'utilisateur change nbLevels dans
+  // la même validation, les inputs affichés correspondent encore à l'ancien nombre, et
+  // migrateEvalDefaults régénérera la table à la bonne taille au prochain chargement.
+  const dPtsInputs = Array.from(document.querySelectorAll('#evalprefs-typedpoints input[data-idx]'));
+  const typeDPoints = [];
+  for (let i = 0; i < nb; i++) {
+    const inp = dPtsInputs.find(e => parseInt(e.getAttribute('data-idx'), 10) === i);
+    const v = parseFloat(inp?.value);
+    typeDPoints.push((Number.isFinite(v) && v >= 0) ? v : i);
+  }
+  S.evalPrefs.typeDPoints = typeDPoints;
+  S.evalPrefs.typeDBilanParExercice = !!document.getElementById('evalprefs-typedbilanexo')?.checked;
   // Défauts éval
   const dCoef = parseFloat(document.getElementById('evalprefs-defaultCoef')?.value);
   S.evalPrefs.defaultCoef = (Number.isFinite(dCoef) && dCoef >= 0) ? dCoef : 1;
@@ -33255,8 +33315,31 @@ function _evalOpenEditor(evalId) {
     r.checked = (r.value === (ev.meanRule || ''));
   }
   // Règle d'agrégation des niveaux : sans objet pour Type A (pas de compétences saisies)
+  // ni pour Type D (un seul niveau par question — rien à départager dans le temps).
   const mrWrap = document.getElementById('meval-edit-meanRule-wrap');
-  if (mrWrap) mrWrap.style.display = (ev.type === 'A') ? 'none' : '';
+  if (mrWrap) mrWrap.style.display = (ev.type === 'A' || ev.type === 'D') ? 'none' : '';
+  // Type D : barème niveau → points propre à l'éval + bilan par exercice
+  const dWrap = document.getElementById('meval-edit-typed-wrap');
+  if (dWrap) {
+    dWrap.style.display = (ev.type === 'D') ? '' : 'none';
+    if (ev.type === 'D') {
+      const table = _typeDPointsTable(ev);
+      const host = document.getElementById('meval-edit-typed-points');
+      if (host) {
+        let h = '';
+        table.forEach((p, i) => {
+          const lbl = S.evalPrefs?.niveauLabels?.[i] || String(i + 1);
+          h += `<label style="display:flex;align-items:center;gap:4px;font-size:.88em">Niveau ${_esc(lbl)} →
+            <input type="number" class="meval-edit-typed-pt" data-lvl="${i}" min="0" max="999" step="0.5" value="${p}"
+                   onchange="_evalEditMarkDirty()"
+                   style="width:58px;padding:3px 5px;font-family:var(--font-mono);text-align:right"> pts</label>`;
+        });
+        host.innerHTML = h;
+      }
+      const bx = document.getElementById('meval-edit-typed-bilanexo');
+      if (bx) bx.checked = !!ev.bilanParExercice;
+    }
+  }
   // Pondération Type B (compétences à égalité vs pondérées par nb de saisies)
   const wWrap = document.getElementById('meval-edit-weighting-wrap');
   if (wWrap) {
@@ -34596,6 +34679,19 @@ function _evalEditSave() {
   if (ev.type === 'B') {
     const w = document.querySelector('input[name="meval-edit-weighting"]:checked')?.value;
     if (w === 'perCompetence' || w === 'equal') ev.weighting = w;
+  }
+  // Barème niveau → points (Type D). Une valeur invalide retombe sur la table courante
+  // plutôt que d'écraser le barème par du vide.
+  if (ev.type === 'D') {
+    const cur = _typeDPointsTable(ev);
+    const pts = cur.slice();
+    document.querySelectorAll('.meval-edit-typed-pt').forEach(inp => {
+      const i = parseInt(inp.dataset.lvl, 10);
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(i) && i >= 0 && i < pts.length && Number.isFinite(v) && v >= 0) pts[i] = v;
+    });
+    ev.pointsParNiveau = pts;
+    ev.bilanParExercice = !!document.getElementById('meval-edit-typed-bilanexo')?.checked;
   }
   ev.updatedAt = Date.now();
   _evalEditDirty = false;
