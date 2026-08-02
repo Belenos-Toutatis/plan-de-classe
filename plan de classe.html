@@ -4752,7 +4752,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="mcomlib" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:680px;width:100%;max-height:88vh;overflow-y:auto">
     <h2>📚 Bibliothèque de commentaires</h2>
-    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Commentaires pré-réglables réutilisables sur toutes tes évaluations. Tu peux y mettre un motif <code>[+-]N pt(s)</code> qui sera reconnu et appliqué automatiquement aux notes.</p>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Commentaires pré-réglables réutilisables sur toutes tes évaluations, pour annoter une <strong>cellule</strong> du tableur.
+      Un motif <code>[+-]N pt(s)</code> n'ajuste la note qu'en <strong>Type A</strong> — sur les autres types, un tel commentaire n'est pas proposé (il serait sans effet) ;
+      pour sanctionner ou bonifier, on y fait un <strong>clic droit sur la note</strong> (motifs réglables dans <em>⚙ Réglages → ⚖ Motifs d'ajustement</em>).</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div>
@@ -6303,11 +6305,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.33.0';
+const APP_VERSION    = '2.33.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T14:37:51Z';
+const APP_BUILD_DATE = '2026-08-02T14:55:09Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -46358,23 +46360,40 @@ function _evalCommentsRender() {
   // Lib chips
   const libWrap = document.getElementById('meval-comments-lib');
   const lib = S.evalCommentLibrary || { positive: [], negative: [] };
+  // ⚠️ Un commentaire de bibliothèque porteur d'un motif « [+-]N pt » n'ajuste la note
+  // QU'EN TYPE A. Le proposer ailleurs, c'est offrir un bonus/malus qui ne s'appliquera
+  // pas : l'enseignant colle « -1pt bavardage » et la note ne bouge pas. On les retire
+  // donc du choix — mais on DIT combien, plutôt que de les escamoter en silence (sinon
+  // la bibliothèque paraît incomplète, voire vide, sans qu'on sache pourquoi).
+  const _adjApplies = (ctx.ev?.type === 'A');
+  const _libKeep = arr => _adjApplies ? arr : arr.filter(c => !_parseCommentsAdjustment([c]).hasAdj);
+  const libPos = _libKeep(lib.positive || []);
+  const libNeg = _libKeep(lib.negative || []);
+  const nbHidden = ((lib.positive || []).length + (lib.negative || []).length)
+                 - (libPos.length + libNeg.length);
+  const hiddenNote = nbHidden > 0
+    ? `<p style="margin:6px 0 0;font-size:.8em;color:var(--pencil);font-style:italic">${nbHidden} commentaire${nbHidden > 1 ? 's' : ''} de ta bibliothèque ${nbHidden > 1 ? 'sont masqués' : 'est masqué'} ici : ${nbHidden > 1 ? 'ils ajustent' : 'il ajuste'} des points, ce qui est sans effet sur ce type d'évaluation. Pour sanctionner ou bonifier, fais un <strong>clic droit sur la note</strong>.</p>`
+    : '';
   let libHTML = '';
-  if (lib.positive.length === 0 && lib.negative.length === 0) {
-    libHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Bibliothèque vide. Clique sur <strong>⚙ Bibliothèque…</strong> pour en ajouter.</p>';
+  if (libPos.length === 0 && libNeg.length === 0) {
+    libHTML = nbHidden > 0
+      ? hiddenNote
+      : '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Bibliothèque vide. Clique sur <strong>⚙ Bibliothèque…</strong> pour en ajouter.</p>';
   } else {
     // S3 — délégation par data-text : plus robuste que JSON.stringify().replace()
     // pour les commentaires contenant des apostrophes, backslashes ou caractères
     // unicode spéciaux. Le handler lit this.dataset.text au moment du clic.
-    if (lib.positive.length > 0) {
+    if (libPos.length > 0) {
       libHTML += '<div style="margin-bottom:4px"><span style="color:#16a34a;font-family:var(--font-mono);font-size:.78em;margin-right:4px">+</span>';
-      libHTML += lib.positive.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += libPos.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
       libHTML += '</div>';
     }
-    if (lib.negative.length > 0) {
+    if (libNeg.length > 0) {
       libHTML += '<div><span style="color:#dc2626;font-family:var(--font-mono);font-size:.78em;margin-right:4px">−</span>';
-      libHTML += lib.negative.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += libNeg.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
       libHTML += '</div>';
     }
+    libHTML += hiddenNote;
   }
   libWrap.innerHTML = libHTML;
 }
