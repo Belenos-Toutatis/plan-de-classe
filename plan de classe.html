@@ -5124,8 +5124,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button onclick="_evalTableurToggleHelp()" title="Masquer le mode d'emploi" style="position:absolute;top:-2px;right:-2px;border:none;background:transparent;color:var(--pencil);font-size:1em;cursor:pointer;padding:2px 6px">✕</button>
         <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
         <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
-        <br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.
-        <br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).
+        <span id="meval-tableur-help-paste"><br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.</span>
+        <span id="meval-tableur-help-head"><br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).</span>
       </p>
     </div>
 
@@ -6186,11 +6186,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.7';
+const APP_VERSION    = '2.27.8';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T05:56:11Z';
+const APP_BUILD_DATE = '2026-08-02T06:46:26Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -35660,6 +35660,36 @@ function _evalTableurSobrRestore() {
   _evalTableurSobrApply();
 }
 
+// Le mode d'emploi du tableur était STATIQUE et décrivait le seul Type A/C. En Type D il
+// annonçait trois gestes inexistants — collage Ctrl+V, édition du « max » et de la date en
+// en-tête, clic droit sur en-tête et sur cellule — et en Type B deux d'entre eux. Signalé en
+// usage : « je n'ai pas constaté l'effet de ces clics droits ». Un mode d'emploi qui décrit
+// une autre version du logiciel fait perdre plus de temps qu'il n'en fait gagner.
+// ⚠️ À tenir à jour : tout geste ajouté ou retiré dans un rendu de tableur se reporte ici.
+// `var` : déclaration située après l'appel init(), cf. la convention du fichier.
+var _TABLEUR_HELP_KBD = 'background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em';
+var _tableurHelpOrig = null;
+function _evalTableurUpdateHelpForType(ev) {
+  const paste = document.getElementById('meval-tableur-help-paste');
+  const head  = document.getElementById('meval-tableur-help-head');
+  if (!paste || !head) return;
+  // Le texte statique du HTML décrit A/C : on le mémorise au premier passage pour pouvoir
+  // y revenir. Sans ça, ouvrir un Type D puis un Type A laisserait le texte du D en place.
+  if (_tableurHelpOrig == null) _tableurHelpOrig = { paste: paste.innerHTML, head: head.innerHTML };
+  const kbd = t => `<kbd style="${_TABLEUR_HELP_KBD}">${t}</kbd>`;
+  const t = ev?.type;
+  if (t === 'A' || t === 'C') {
+    paste.innerHTML = _tableurHelpOrig.paste;
+    head.innerHTML  = _tableurHelpOrig.head;
+    return;
+  }
+  // Ni A ni C : pas de collage multi-cellules, pas de commentaires par cellule.
+  paste.innerHTML = `<br><strong>Coller :</strong> non disponible sur ce type — la saisie se fait cellule par cellule.`;
+  head.innerHTML = (t === 'B')
+    ? `<br><strong>En-tête :</strong> édition directe de la date et du créneau · ${kbd('clic droit')} sur l'en-tête d'une passation = compétences, dates par groupe, suppression.`
+    : `<br><strong>En-tête :</strong> édition directe du libellé de question et du poids de chaque compétence · 🎯 = compétences évaluées par la question. La structure (exercices, questions) se règle dans <em>🏗 Structure</em>.`;
+}
+
 function _evalTableurRender() {
   if (typeof _rattrapClose === 'function') _rattrapClose(); // un re-render invalide les boutons-ancres
   const evalId = document.getElementById('meval-tableur-evalid').value;
@@ -35669,6 +35699,7 @@ function _evalTableurRender() {
   if (!cls) return;
   _evalTableurRenderClassPicker(ev, cls);
   _evalTableurSobrRestore();
+  _evalTableurUpdateHelpForType(ev);
   if (ev.type === 'B') { _evalTableurRenderB(ev, cls); return; }
   if (ev.type === 'D') { _evalTableurRenderD(ev, cls); return; }
 
