@@ -4641,8 +4641,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <input type="hidden" id="meval-adjust-sid">
     <p style="margin:0 0 10px;font-size:.85em;color:var(--pencil);line-height:1.5">
       Sanction ou bonification portant sur la <strong>note de l'évaluation</strong> : triche, rendu en retard,
-      bonus de présentation. Les <strong>niveaux de compétence ne sont pas touchés</strong> — ils décrivent ce que
-      l'élève a démontré. Le motif est conservé et apparaît en infobulle sur la note.
+      bonus de présentation. Les <strong>niveaux de compétence ne bougent pas</strong> — ils décrivent ce que
+      l'élève a démontré — <em>sauf</em> si tu coches « copie annulée ». Le motif est conservé et apparaît
+      en infobulle sur la note.
     </p>
 
     <div id="meval-adjust-summary" style="margin-bottom:12px"></div>
@@ -4670,6 +4671,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
              onkeydown="if(event.key==='Enter'){_evalAdjustAdd();}">
       <button class="btn btn-p btn-sm" onclick="_evalAdjustAdd()">+ Ajouter</button>
     </div>
+    <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.86em;cursor:pointer">
+      <input type="checkbox" id="meval-adjust-void">
+      <span>Copie <strong>annulée</strong> — mettre aussi les compétences au minimum
+        <span style="color:var(--pencil)">(triche, copie non rendue : la preuve n'est plus recevable)</span></span>
+    </label>
     <p style="margin:8px 0 0;font-size:.78em;color:var(--pencil-soft);line-height:1.45">
       Ordre d'application : remplacement, puis multiplication, puis ajout, puis plafond — la note reste bornée entre 0 et le barème.
     </p>
@@ -5172,7 +5178,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
         <span id="meval-tableur-help-paste"><br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.</span>
         <span id="meval-tableur-help-head"><br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires.</span>
-        <span id="meval-tableur-help-adjust"><br><strong>Note :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur la note d'un élève = ajustement de la note finale (triche ×0,5, retard, bonus…). Les niveaux de compétence ne sont pas touchés.</span>
+        <span id="meval-tableur-help-adjust"><br><strong>Note :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur la note d'un élève = ajustement de la note finale (triche ×0,5, retard, bonus…). Les niveaux de compétence ne bougent pas, sauf si tu coches « copie annulée ».</span>
       </p>
     </div>
 
@@ -6233,11 +6239,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.28.0';
+const APP_VERSION    = '2.28.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T07:13:07Z';
+const APP_BUILD_DATE = '2026-08-02T07:54:02Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7475,7 +7481,11 @@ function migrateEvalDefaults() {
       if (rec.adjust === undefined) continue;
       if (!Array.isArray(rec.adjust)) { delete rec.adjust; continue; }
       rec.adjust = rec.adjust.filter(a => a && ADJUST_OPS[a.op] && Number.isFinite(+a.v))
-                             .map(a => ({ id: a.id || uid(), op: a.op, v: +a.v, label: String(a.label || '') }));
+                             .map(a => {
+                               const o = { id: a.id || uid(), op: a.op, v: +a.v, label: String(a.label || '') };
+                               if (a.voidComps) o.voidComps = true;   // copie annulée → compétences au minimum
+                               return o;
+                             });
       if (rec.adjust.length === 0) delete rec.adjust;
     }
     // Le bonus/malus déduit du texte d'un commentaire ne vaut plus que pour le Type A.
@@ -32400,7 +32410,12 @@ function _typeDCompLevel(ev, sid, cid, exoKey) {
     const w = _typeDWeight(mn, cid);
     num += v * w; den += w;
   }
-  return den > 0 ? Math.round(num / den) : null;
+  if (den <= 0) return null;
+  // Copie annulée (triche) : la compétence tombe au minimum plutôt que de refléter des
+  // acquis dont la preuve n'est plus recevable. On ne renvoie PAS null : la compétence
+  // doit rester visible au bilan, sanctionnée, pas disparaître.
+  if (_evalCompsVoided(ev, sid)) return _voidedCompLevel();
+  return Math.round(num / den);
 }
 
 // ═══════════════ AJUSTEMENT DE LA NOTE FINALE (tous types) ═══════════════
@@ -32408,15 +32423,32 @@ function _typeDCompLevel(ev, sid, cid, exoKey) {
 // triche (÷2 ou 0), rendu en retard, bonus de présentation. Modèle :
 //   ev.notes[sid].adjust = [{ id, op:'set'|'mul'|'add'|'cap', v:number, label:string }]
 //
-// ⚠️ N'AGIT JAMAIS SUR LES NIVEAUX DE COMPÉTENCE. Un ÷2 pour triche sanctionne la note ;
-// les niveaux décrivent ce que l'élève a démontré, et c'est précisément ce que le Type D
-// sépare. Les bilans de compétences passent par _evalCompetenceLevel / _typeDCompLevel,
-// qui ne consultent pas cette liste — ne pas les y brancher.
+// ⚠️ PAR DÉFAUT, N'AGIT PAS SUR LES NIVEAUX DE COMPÉTENCE. Un ÷2 pour triche ou un −2
+// pour retard sanctionne la note ; les niveaux décrivent ce que l'élève a démontré, et
+// c'est précisément ce que le Type D sépare.
+// SEULE EXCEPTION, explicite : le drapeau `voidComps` (« copie annulée »), qui fait tomber
+// les compétences au minimum — annuler pour triche rend la preuve irrecevable, on ne peut
+// plus attester d'un acquis. Voir _evalCompsVoided.
 //
 // Remplace le bonus/malus PAR CELLULE, qui n'a jamais concerné que le Type A : il se
 // déduisait du TEXTE du commentaire (« -1 pt » dans une remarque décalait la note sans
 // que rien ne le signale) et n'avait pas de sens sur une évaluation par exercices.
 // (ADJUST_OPS est déclaré plus haut, AVANT init() — cf. le commentaire là-bas.)
+
+// Un ajustement peut porter `voidComps` : la copie est ANNULÉE, donc les compétences
+// tombent au niveau minimum (1). Distinction voulue par l'utilisateur, et pédagogiquement
+// juste : annuler pour triche rend la preuve nulle — on ne peut plus attester que l'élève
+// a démontré quoi que ce soit ; un −2 pour retard laisse la démonstration intacte, le
+// travail a bien été fait. C'est donc un DRAPEAU sur l'ajustement, pas une conséquence
+// automatique d'une note à 0 (un gros malus de retard ne doit pas effacer les acquis).
+function _evalCompsVoided(ev, sid) {
+  return _evalAdjustList(ev, sid).some(a => a && a.voidComps);
+}
+// Niveau plancher après annulation. Les niveaux vont de 1 à nbLevels : le minimum est 1,
+// pas 0 (qui signifie « non évalué » et ferait DISPARAÎTRE la compétence du bilan au lieu
+// de la sanctionner).
+function _voidedCompLevel() { return 1; }
+
 function _evalAdjustList(ev, sid) {
   const a = ev?.notes?.[sid]?.adjust;
   return Array.isArray(a) ? a : [];
@@ -37144,9 +37176,10 @@ function _evalStudentLevelForComp(ev, sid, cid) {
   if (!ev) return null;
   if (ev.type === 'B') {
     const niv = _computeStudentCompetenceLevel(ev, sid, cid);
-    return niv > 0 ? niv : null;
+    if (!(niv > 0)) return null;
+    return _evalCompsVoided(ev, sid) ? _voidedCompLevel() : niv;
   }
-  if (ev.type === 'D') return _typeDCompLevel(ev, sid, cid);
+  if (ev.type === 'D') return _typeDCompLevel(ev, sid, cid);   // annulation déjà appliquée
   if (ev.type === 'C') {
     let gotPts = 0, maxPts = 0, anySaisi = false;
     const values = ev.notes?.[sid]?.values || {};
@@ -37160,6 +37193,7 @@ function _evalStudentLevelForComp(ev, sid, cid) {
       anySaisi = true;
     }
     if (!anySaisi || maxPts === 0) return null;
+    if (_evalCompsVoided(ev, sid)) return _voidedCompLevel();   // copie annulée
     const ratio = Math.max(0, Math.min(1, gotPts / maxPts));
     // Conversion 0..1 → niveau 1..4 (seuils 25%, 50%, 75%)
     if (ratio < 0.25) return 1;
@@ -42807,10 +42841,12 @@ function _evalCompetenceLevel(ev, sid, cid) {
   if (!ev) return null;
   if (ev.type === 'B') {
     const lv = _computeStudentCompetenceLevel(ev, sid, cid);
-    return (lv > 0) ? Math.round(lv) : null;
+    if (!(lv > 0)) return null;
+    return _evalCompsVoided(ev, sid) ? _voidedCompLevel() : Math.round(lv);
   }
   if (ev.type === 'D') {
-    // Moyenne pondérée par les poids des saisies directes, arrondie (cf. _typeDCompLevel).
+    // Moyenne pondérée par les poids des saisies directes, arrondie (cf. _typeDCompLevel,
+    // qui applique déjà l'annulation pour copie annulée).
     return _typeDCompLevel(ev, sid, cid);
   }
   if (ev.type === 'A' || ev.type === 'C') {
@@ -42825,10 +42861,15 @@ function _evalCompetenceLevel(ev, sid, cid) {
       if (v === 'NN' || v === 'A' || v == null || v === '') continue;
       const num = parseFloat(v);
       if (!Number.isFinite(num)) continue;
-      const niv = _noteToLevel(_applyCommentsToValue(num, comments[mn.id] || [], mn.max), mn.max);
+      // Bonus/malus déduit du texte : Type A seulement (cf. _computeStudentEvalNoteRaw).
+      const eff = (ev.type === 'A')
+        ? _applyCommentsToValue(num, comments[mn.id] || [], mn.max)
+        : num;
+      const niv = _noteToLevel(eff, mn.max);
       if (niv > 0) { sum += niv; n++; }
     }
-    return n ? Math.round(sum / n) : null;
+    if (!n) return null;
+    return _evalCompsVoided(ev, sid) ? _voidedCompLevel() : Math.round(sum / n);
   }
   return null;
 }
@@ -45409,8 +45450,8 @@ const _commentsCtx = { evalId: null, sid: null, mnId: null };
 // le formulaire, il ne valide pas — l'enseignant complète (« Triche — DS du 12/03 »).
 var ADJUST_PRESETS = [
   { op: 'mul', v: 0.5, label: 'Triche' },
-  { op: 'set', v: 0,   label: 'Triche — note annulée' },
-  { op: 'set', v: 0,   label: 'Copie non rendue' },
+  { op: 'set', v: 0,   label: 'Triche — note annulée', voidComps: true },
+  { op: 'set', v: 0,   label: 'Copie non rendue',      voidComps: true },
   { op: 'add', v: -2,  label: 'Rendu en retard' },
   { op: 'add', v: 1,   label: 'Bonus présentation' },
   { op: 'cap', v: 10,  label: 'Note plafonnée' },
@@ -45428,6 +45469,9 @@ function _evalAdjustOpen(sid, evalId) {
   }
   _evalAdjustCtx = { evalId, sid };
   document.getElementById('meval-adjust-sid').value = sid;
+  document.getElementById('meval-adjust-void').checked = false;
+  document.getElementById('meval-adjust-val').value = '';
+  document.getElementById('meval-adjust-label').value = '';
   document.getElementById('meval-adjust-title').textContent =
     `⚖ Ajustement de la note — ${stu.prenom || ''} ${stu.nom || ''}`.trim();
   _evalAdjustRender();
@@ -45453,7 +45497,7 @@ function _evalAdjustRender() {
   list.innerHTML = info.list.length === 0
     ? _emptyStateHTML('⚖', 'Aucun ajustement', 'La note de l\'élève est celle calculée. Choisis un motif ci-dessous, ou compose le tien.')
     : info.list.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--margin-red);border-radius:var(--radius-sm)">
-          <span style="flex:1;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(a))}</strong>${a.label ? ' — ' + _esc(a.label) : ''}</span>
+          <span style="flex:1;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(a))}</strong>${a.label ? ' — ' + _esc(a.label) : ''}${a.voidComps ? `<br><span style="font-size:.85em;color:var(--margin-red)">⊘ compétences au minimum (copie annulée)</span>` : ''}</span>
           <button class="btn btn-r btn-sm" onclick="_evalAdjustRemove('${_escJsAttr(a.id)}')" title="Retirer cet ajustement" style="padding:2px 7px">✕</button>
         </div>`).join('');
 
@@ -45467,6 +45511,7 @@ function _evalAdjustFillPreset(i) {
   if (!p) return;
   document.getElementById('meval-adjust-op').value = p.op;
   document.getElementById('meval-adjust-val').value = p.v;
+  document.getElementById('meval-adjust-void').checked = !!p.voidComps;
   const lab = document.getElementById('meval-adjust-label');
   lab.value = p.label;
   lab.focus();
@@ -45481,6 +45526,7 @@ function _evalAdjustAdd() {
   const op = document.getElementById('meval-adjust-op').value;
   const valEl = document.getElementById('meval-adjust-val');
   const labEl = document.getElementById('meval-adjust-label');
+  const voidEl = document.getElementById('meval-adjust-void');
   const v = parseFloat(valEl.value);
   const label = labEl.value.trim();
   if (!ADJUST_OPS[op]) return;
@@ -45494,10 +45540,12 @@ function _evalAdjustAdd() {
   ev.notes[sid] = ev.notes[sid] || {};
   const rec = ev.notes[sid];
   if (!Array.isArray(rec.adjust)) rec.adjust = [];
-  rec.adjust.push({ id: uid(), op, v, label });
+  const entry = { id: uid(), op, v, label };
+  if (voidEl.checked) entry.voidComps = true;
+  rec.adjust.push(entry);
   ev.updatedAt = Date.now();
   save();
-  valEl.value = ''; labEl.value = '';
+  valEl.value = ''; labEl.value = ''; voidEl.checked = false;
   _evalAdjustRender();
   _evalTableurRender();
 }
@@ -45520,9 +45568,9 @@ function _evalAdjustRemove(aid) {
 
 // Infobulle d'une cellule Note ajustée — reprend la note calculée et chaque motif.
 function _evalAdjustTip(info) {
-  if (!info.changed) return '';
+  if (!info.changed && !info.list.some(a => a.voidComps)) return '';
   return `\nNote calculée : ${_fmtNote(info.base)}\n`
-       + info.list.map(a => '• ' + _adjustLabel(a)).join('\n')
+       + info.list.map(a => '• ' + _adjustLabel(a) + (a.voidComps ? ' (compétences au minimum)' : '')).join('\n')
        + `\n→ ${_fmtNote(info.final)}`;
 }
 

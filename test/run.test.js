@@ -881,3 +881,40 @@ test('Bonus/malus par commentaire : ne vaut plus que pour le Type A', () => {
   ev(`S.evaluations.evc.type = 'A'; delete S.evaluations.evc.exercices;`);
   assert.equal(ev("_computeStudentEvalNote(S.evaluations.evc, 's1')"), 18);
 });
+
+test('Copie annulée : les compétences tombent au minimum, pas la note seule', () => {
+  seedTypeD();
+  const nivAvant = ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')");
+  assert.ok(nivAvant > 1, 'le cas canonique part d\'un niveau > 1');
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'set', v:0, label:'Triche', voidComps:true }]`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), 0);
+  // ⚠️ minimum = 1, PAS null : la compétence reste visible au bilan, sanctionnée
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"), 1);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com')"), 1);
+  assert.equal(ev("_evalCompetenceLevel(S.evaluations.evd, 's1', 'cmp_rai')"), 1);
+  assert.equal(ev("_evalStudentLevelForComp(S.evaluations.evd, 's1', 'cmp_rai')"), 1);
+});
+
+test('Copie annulée : sans le drapeau, les niveaux ne bougent pas', () => {
+  seedTypeD();
+  const nivAvant = ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')");
+  // Un malus de retard qui met la note à 0 ne doit PAS effacer les acquis
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'add', v:-99, label:'Retard' }]`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), 0);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"), nivAvant);
+});
+
+test('Copie annulée : une compétence non évaluée reste absente', () => {
+  seedTypeD();
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'set', v:0, label:'Triche', voidComps:true }]`);
+  // cmp_zzz n'est évaluée par aucune question : rien à sanctionner
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_zzz')"), null);
+});
+
+test('Copie annulée : le drapeau survit à la migration', () => {
+  seedTypeD();
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ op:'set', v:0, label:'Triche', voidComps:true }]`);
+  ev(`migrateEvalDefaults()`);
+  assert.equal(ev("S.evaluations.evd.notes.s1.adjust[0].voidComps"), true);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"), 1);
+});
