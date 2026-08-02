@@ -2036,25 +2036,26 @@ L'algo normalise les prénoms via NFD + suppression des combining marks `/[̀-ͯ
 
 ## Disciplines (catalogue global)
 
-Permet d'enseigner **plusieurs disciplines** à une même classe (ex. SVT + SVT Bilingue). Refonte mai 2026 : au lieu de stocker 2 noms par classe (`discNamePrimary`/`discNameSecondary`), on a désormais un **catalogue global** `S.disciplines` et chaque classe coche les disciplines qui la concernent. Plus de limite à 2 — une classe peut être enseignée dans 3, 4, N disciplines.
+Permet d'enseigner **plusieurs disciplines** à une même classe (ex. Physique-chimie + Physique-chimie bilingue). Refonte mai 2026 : au lieu de stocker 2 noms par classe (`discNamePrimary`/`discNameSecondary`), on a désormais un **catalogue global** `S.disciplines` et chaque classe coche les disciplines qui la concernent. Plus de limite à 2 — une classe peut être enseignée dans 3, 4, N disciplines.
 
 Pour les **classes recomposées** (élèves d'une ou plusieurs classes regroupés autour d'une discipline particulière — ex. Bilingue 6ᵉ, Option DP3), on utilise toujours la feature **virtual classes** (`cls.virtual = true`) — créées via l'onglet Classes → ➕ Nouvelle classe recomposée. La virtual class porte ses propres `disciplineIds` + bilans, indépendamment des classes parentes.
 
 ### Modèle
 
 ```js
-// Catalogue global (au moins une discipline marquée isPrimary)
+// Catalogue global (au moins une discipline marquée isPrimary).
+// `disc_main` est créée par postLoadHook ; on la RENOMME plutôt que d'en créer une à côté
+// (c'est ce que fait la démo), sinon « Discipline principale » reste orpheline.
 S.disciplines = {
-  'disc_main':    { id: 'disc_main',    nom: 'Discipline principale', isPrimary: true },
-  'disc_svt':     { id: 'disc_svt',     nom: 'SVT',                   isPrimary: false },
-  'disc_svt_bil': { id: 'disc_svt_bil', nom: 'SVT Bilingue',          isPrimary: false },
+  'disc_main':   { id: 'disc_main',   nom: 'Physique-chimie',          isPrimary: true  },
+  'disc_pc_bil': { id: 'disc_pc_bil', nom: 'Physique-chimie bilingue', isPrimary: false },
 }
 
 // Par classe : 1 ou plusieurs disciplines (jamais vide)
-cls.disciplineIds = ['disc_svt', 'disc_svt_bil']
+cls.disciplineIds = ['disc_main', 'disc_pc_bil']
 
 // Par évaluation : la discipline d'appartenance (toujours set après migration)
-ev.disciplineId = 'disc_svt_bil'
+ev.disciplineId = 'disc_pc_bil'
 
 // Bulletins : clés = disciplineId
 S.bulletinRemarques[classId][disciplineId][sid][periode]      = "texte"
