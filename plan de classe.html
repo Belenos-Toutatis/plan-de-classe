@@ -6245,11 +6245,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.29.1';
+const APP_VERSION    = '2.29.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T08:52:04Z';
+const APP_BUILD_DATE = '2026-08-02T09:24:15Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32638,6 +32638,15 @@ function _applyCommentsToValue(baseVal, comments, mnMax) {
   return v;
 }
 
+// Codes d'absence / non-noté et nombre de niveaux, tels que l'enseignant les a réglés
+// (Réglages → Évaluations). ⚠️ TOUT texte visible qui les cite doit passer par là.
+// Les écrire en dur fait mentir l'aide dès que le réglage change — le code d'absence
+// accepte jusqu'à 6 caractères, et le nombre de niveaux va de 2 à 6. Le moteur (saisie,
+// affichage) les respectait déjà ; c'étaient les infobulles et les toasts qui mentaient.
+function _codeA()    { return S.evalPrefs?.codeAbsent  || 'A'; }
+function _codeNN()   { return S.evalPrefs?.codeNonNote || 'NN'; }
+function _nbLevels() { return S.evalPrefs?.nbLevels || 4; }
+
 // Parse une saisie utilisateur en valeur de mini-note.
 // Retourne 'NN', 'A', un nombre, ou null si vide / invalide.
 function _parseMiniNoteInput(raw) {
@@ -35570,11 +35579,8 @@ function _evalOpenTableur(forcedId) {
       }
     }
   } catch (e) {}
-  // Met à jour les codes A/NN dans le mode d'emploi (selon S.evalPrefs)
-  const codeA = S.evalPrefs?.codeAbsent || 'A';
-  const codeNN = S.evalPrefs?.codeNonNote || 'NN';
-  const a = document.getElementById('meval-tableur-help-a'); if (a) a.textContent = codeA;
-  const nn = document.getElementById('meval-tableur-help-nn'); if (nn) nn.textContent = codeNN;
+  // (Les codes A/NN du mode d'emploi sont posés par _evalTableurUpdateHelpForType, à
+  // chaque rendu — et non seulement ici, à l'ouverture.)
   // Restaure l'état affiché/masqué du mode d'emploi
   try {
     const hidden = localStorage.getItem('planClasse_evalTableurHelpHidden') === '1';
@@ -35896,6 +35902,11 @@ function _evalTableurSobrRestore() {
 var _TABLEUR_HELP_KBD = 'background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em';
 var _tableurHelpOrig = null;
 function _evalTableurUpdateHelpForType(ev) {
+  // Codes A / NN du mode d'emploi : ils suivent le réglage de l'enseignant. Posés ICI,
+  // à chaque rendu, et non à la seule ouverture du tableur — un aller-retour par les
+  // Réglages laissait sinon l'ancien code affiché.
+  const a  = document.getElementById('meval-tableur-help-a');  if (a)  a.textContent  = _codeA();
+  const nn = document.getElementById('meval-tableur-help-nn'); if (nn) nn.textContent = _codeNN();
   // Libellé du choix « ↩ Entrée » : la cellule suivante n'est une QUESTION qu'en Type A/C.
   // En B et D une colonne est un couple (passation|question × compétence) — l'annoncer
   // « Question suivante » décrivait un déplacement qui n'existe pas.
@@ -38339,7 +38350,7 @@ function _evalTableurRenderB(ev, cls) {
         const tdBg = bg ? `;background:${bg}` : '';
         const compForLbl = S.competences?.[cid];
         const ariaBLbl = `Niveau de ${stu.prenom || ''} ${stu.nom || ''} sur ${compForLbl?.code || cid} (passation ${_esc(p.code || '')})`;
-        html += `<td class="meval-cell-comp" style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-4 pour le niveau, 0 pour effacer, A pour absent" aria-label="${_escAttr(ariaBLbl)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${fw};font-size:.88em;text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
+        html += `<td class="meval-cell-comp" style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${borderLeft}${tdBg}"><input type="text" data-cid="${_esc(cid)}" data-passid="${_esc(p.id)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(dispVal)}" oninput="_evalTableurBUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-${_nbLevels()} pour le niveau, 0 pour effacer, ${_esc(_codeA())} pour absent" aria-label="${_escAttr(ariaBLbl)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${fw};font-size:.88em;text-align:center;color:${color};border:1px solid var(--rule-line);border-radius:3px"></td>`;
         ci++;
       });
     }
@@ -38689,7 +38700,7 @@ function _evalTableurBUpdate(inputEl) {
     if (td) td.style.background = '#fee';
     inputEl.style.color = '';
     inputEl.style.fontWeight = '700';
-    inputEl.title = `Valeur invalide. Tape 1–${nbMax}, 0 ou A (absent).`;
+    inputEl.title = `Valeur invalide. Tape 1–${nbMax}, 0 ou ${_codeA()} (absent).`;
     _toastNiveauInvalide(nbMax);
     return; // ne sauve pas
   }
@@ -38755,7 +38766,7 @@ function _toastNiveauInvalide(nbMax) {
   const now = Date.now();
   if (now - _lastNiveauToast < 1500) return;
   _lastNiveauToast = now;
-  toast(`⚠ Niveau invalide — tape 1–${nbMax}, 0 (non évalué) ou A (absent)`, 'warn');
+  toast(`⚠ Niveau invalide — tape 1–${nbMax}, 0 (non évalué) ou ${_codeA()} (absent)`, 'warn');
 }
 
 // Toast warning hors barème, throttle 1500ms pour ne pas spam pendant la frappe rapide
@@ -38801,7 +38812,7 @@ function _typeDCellBg(v) {
 // Infobulle de la cellule Note : détail par exercice + barème effectif de l'élève.
 function _evalNoteTipD(ev, sid) {
   const info = _computeStudentEvalNoteDInfo(ev, sid);
-  if (!info) return 'Aucune saisie comptée (vide, A ou NN partout)';
+  if (!info) return `Aucune saisie comptée (vide, ${_codeA()} ou ${_codeNN()} partout)`;
   const lines = [];
   const exos = (ev.exercices || []);
   for (const exo of exos) {
@@ -38815,7 +38826,7 @@ function _evalNoteTipD(ev, sid) {
   // Note CALCULÉE : un éventuel ajustement (triche, retard…) est détaillé juste après par
   // _evalAdjustTip. Mettre la note ajustée ici ferait mentir l'arithmétique affichée.
   lines.push(`Total : ${_fmtNote(info.brut)}/${_fmtNote(info.max)} pts → ${_fmtNote(_computeStudentEvalNoteRaw(ev, sid))}/${ev.noteMax || 20}`);
-  lines.push('Les cases A/NN sortent du barème : la note porte sur ce qui a été réellement passé.');
+  lines.push(`Les cases ${_codeA()}/${_codeNN()} sortent du barème : la note porte sur ce qui a été réellement passé.`);
   return lines.join('\n');
 }
 
@@ -38957,7 +38968,7 @@ function _evalTableurRenderD(ev, cls) {
           const lead = (qi === 0 && k === 0) ? SEPD : (k === 0 ? 'border-left:1px solid var(--rule-line);' : 'border-left:1px solid var(--rule-line-soft);');
           const comp = S.competences?.[cid];
           const aria = `Niveau de ${stu.prenom || ''} ${stu.nom || ''} sur ${comp?.code || cid} (${q.label || 'question'})`;
-          html += `<td class="meval-cell-comp" style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${lead}${bg ? 'background:' + bg : ''}"><input type="text" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(_typeDDisplayVal(cur))}" oninput="_evalTableurDUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-${nb} pour le niveau, 0 pour effacer, A (absent) ou NN (non noté — sort du barème)" aria-label="${_escAttr(aria)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${bg ? '700' : '400'};font-size:.88em;text-align:center;color:${bg ? _contrastTextColor(bg) : ''};border:1px solid var(--rule-line);border-radius:3px"></td>`;
+          html += `<td class="meval-cell-comp" style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${lead}${bg ? 'background:' + bg : ''}"><input type="text" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(_typeDDisplayVal(cur))}" oninput="_evalTableurDUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-${nb} pour le niveau, 0 pour effacer, ${_esc(_codeA())} (absent) ou ${_esc(_codeNN())} (non noté — sort du barème)" aria-label="${_escAttr(aria)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${bg ? '700' : '400'};font-size:.88em;text-align:center;color:${bg ? _contrastTextColor(bg) : ''};border:1px solid var(--rule-line);border-radius:3px"></td>`;
           ci++;
         });
       });
@@ -39038,7 +39049,7 @@ function _evalTableurDUpdate(inputEl) {
   const td = inputEl.closest('td');
   if (parsed === undefined) {
     if (td) td.style.background = '#fee';
-    inputEl.title = `Valeur invalide. Tape 1–${nb}, 0, A (absent) ou NN (non noté).`;
+    inputEl.title = `Valeur invalide. Tape 1–${nb}, 0, ${_codeA()} (absent) ou ${_codeNN()} (non noté).`;
     _toastNiveauInvalide(nb);
     return; // ne sauve pas
   }
@@ -40740,7 +40751,7 @@ function _evalAutoFillAbsentsForEvalClass(ev, classId) {
 
 function _evalToastAbsentsFilled(filled) {
   if (filled > 0) {
-    toast(`🚫 ${filled} cellule${filled > 1 ? 's' : ''} pré-remplie${filled > 1 ? 's' : ''} avec « A » (élève${filled > 1 ? 's' : ''} absent${filled > 1 ? 's' : ''} à l'appel)`);
+    toast(`🚫 ${filled} cellule${filled > 1 ? 's' : ''} pré-remplie${filled > 1 ? 's' : ''} avec « ${_codeA()} » (élève${filled > 1 ? 's' : ''} absent${filled > 1 ? 's' : ''} à l'appel)`);
   }
 }
 

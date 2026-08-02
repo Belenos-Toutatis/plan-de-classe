@@ -1737,6 +1737,14 @@ Il se déduisait du **TEXTE** du commentaire (`_parseCommentsAdjustment` : `-1 p
 
 ⚠️ Une éval **Type C** qui contenait un tel motif voit sa note changer au chargement : `migrateEvalDefaults` les détecte (`_cCommentAdjEvals`) et `_warnCCommentAdj` le signale par un toast, **une fois par session** — une moyenne qui bouge sans un mot est pire que le petit défaut qu'on corrige. Le texte d'aide de la modale Commentaires est adapté au type (`#meval-comments-help`).
 
+### Codes A / NN et nombre de niveaux — réglables, donc jamais en dur
+
+`S.evalPrefs.codeAbsent` (jusqu'à 6 caractères), `codeNonNote` et `nbLevels` (2 à 6) sont paramétrables dans Réglages → Évaluations. Le **moteur** les respectait déjà partout (`_parseMiniNoteInput`, `_parseNiveauInputD`, `_typeDDisplayVal`, affichage des cellules) — ce sont les **textes d'aide** qui mentaient : 7 infobulles et toasts écrivaient « A », « NN », voire « Tape 1-**4** » en dur, donc annonçaient autre chose que ce que la saisie acceptait.
+
+⚠️ **Tout texte visible citant ces valeurs passe par `_codeA()` / `_codeNN()` / `_nbLevels()`.** Concernés : cellules de saisie B et D, infobulles de valeur invalide, toast de niveau invalide, infobulle de la Note en D (« aucune saisie comptée », « les cases A/NN sortent du barème »), toast de pré-remplissage des absents.
+
+💡 Les codes de la ligne **Codes :** du mode d'emploi (`#meval-tableur-help-a` / `-nn`) sont posés par **`_evalTableurUpdateHelpForType`, à chaque rendu** — et non à la seule ouverture du tableur, sinon un aller-retour par les Réglages laissait l'ancien code affiché.
+
 ### Tableur — comportement de la touche Entrée (`#meval-tableur-enter`)
 
 Trois modes (`ENTER_BEHAVIORS`), gérés dans `_evalTableurKey`. `Tab` et les flèches ne changent jamais. Une **colonne** est une question en A/C, un couple (passation × compétence) en B, (question × compétence) en D.
