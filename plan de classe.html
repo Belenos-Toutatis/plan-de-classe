@@ -4715,6 +4715,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       Les boutons proposés dans <strong>⚖ Ajustement de la note</strong> (clic droit sur la note d'un élève).
       Un motif <strong>pré-remplit</strong> le formulaire — tu complètes avant de valider, rien n'est appliqué au clic.
       Ils valent pour <strong>toutes tes évaluations</strong>, tous types confondus.
+      L'ordre ci-dessous est celui des boutons : avec <strong>↑ ↓</strong>, mets en tête les plus courants.
     </p>
 
     <div id="madjlib-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px"></div>
@@ -4754,7 +4755,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <h2>📚 Bibliothèque de commentaires</h2>
     <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Commentaires pré-réglables réutilisables sur toutes tes évaluations, pour annoter une <strong>cellule</strong> du tableur.
       Un motif <code>[+-]N pt(s)</code> n'ajuste la note qu'en <strong>Type A</strong> — sur les autres types, un tel commentaire n'est pas proposé (il serait sans effet) ;
-      pour sanctionner ou bonifier, on y fait un <strong>clic droit sur la note</strong> (motifs réglables dans <em>⚙ Réglages → ⚖ Motifs d'ajustement</em>).</p>
+      pour sanctionner ou bonifier, on y fait un <strong>clic droit sur la note</strong> (motifs réglables dans <em>⚙ Réglages → ⚖ Motifs d'ajustement</em>).<br>
+      L'ordre ci-dessous est celui des puces proposées à l'annotation : avec <strong>↑ ↓</strong>, mets en tête ce que tu poses le plus souvent.</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div>
@@ -6308,11 +6310,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.34.1';
+const APP_VERSION    = '2.35.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T15:21:19Z';
+const APP_BUILD_DATE = '2026-08-02T15:35:16Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -8870,6 +8872,16 @@ function _refreshOpenEvalModals() {
   const qcm = document.getElementById('meval-qcmcam');
   if (qcm && qcm.classList.contains('on') && typeof _evalQcmcamRenderPreview === 'function') {
     try { _evalQcmcamRenderPreview(); } catch (_) {}
+  }
+  // Les deux catalogues réordonnables : sans ça, un Ctrl+Z annule bien l'ordre en mémoire
+  // mais la liste affichée reste figée sur l'ancien — l'enseignant croit l'undo sans effet.
+  const adj = document.getElementById('madjlib');
+  if (adj && adj.classList.contains('on') && typeof _adjLibRender === 'function') {
+    try { _adjLibRender(); } catch (_) {}
+  }
+  const cl = document.getElementById('mcomlib');
+  if (cl && cl.classList.contains('on') && typeof _comLibRender === 'function') {
+    try { _comLibRender(); } catch (_) {}
   }
 }
 
@@ -46475,14 +46487,17 @@ function _evalCommentsRender() {
     // S3 — délégation par data-text : plus robuste que JSON.stringify().replace()
     // pour les commentaires contenant des apostrophes, backslashes ou caractères
     // unicode spéciaux. Le handler lit this.dataset.text au moment du clic.
+    // Fonds littéraux clairs : la couleur du texte doit en être dérivée, sinon un bouton
+    // hérite de l'ambre du thème sombre et devient illisible sur ce vert / ce rose.
+    const fgPos = _contrastTextColor('#dcfce7'), fgNeg = _contrastTextColor('#fee2e2');
     if (libPos.length > 0) {
       libHTML += '<div style="margin-bottom:4px"><span style="color:#16a34a;font-family:var(--font-mono);font-size:.78em;margin-right:4px">+</span>';
-      libHTML += libPos.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += libPos.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;color:${fgPos};border:1px solid #16a34a;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
       libHTML += '</div>';
     }
     if (libNeg.length > 0) {
       libHTML += '<div><span style="color:#dc2626;font-family:var(--font-mono);font-size:.78em;margin-right:4px">−</span>';
-      libHTML += libNeg.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
+      libHTML += libNeg.map(c => `<button onclick="_evalCommentsAddFromLib(this.dataset.text)" data-text="${_escAttr(c)}" style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;color:${fgNeg};border:1px solid #dc2626;border-radius:10px;font-size:.85em;cursor:pointer">${_esc(c)}</button>`).join('');
       libHTML += '</div>';
     }
     libHTML += hiddenNote;
@@ -46553,10 +46568,26 @@ function _adjLibRender() {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun motif — la modale d\'ajustement proposera seulement la saisie directe. Ajoutes-en un ci-dessous, ou reprends les motifs par défaut.</p>';
     return;
   }
-  wrap.innerHTML = list.map((p, i) => `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
-      <span style="flex:1;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(p))}</strong>${p.label ? ' — ' + _esc(p.label) : ''}${p.voidComps ? `<br><span style="font-size:.85em;color:var(--margin-red)">⊘ compétences au minimum (copie annulée)</span>` : ''}</span>
-      <button class="btn btn-r btn-sm" onclick="_adjLibRemove(${i})" title="Supprimer ce motif" style="padding:2px 7px">✕</button>
+  wrap.innerHTML = list.map((p, i) => `<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+      <span style="flex:1;min-width:0;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(p))}</strong>${p.label ? ' — ' + _esc(p.label) : ''}${p.voidComps ? `<br><span style="font-size:.85em;color:var(--margin-red)">⊘ compétences au minimum (copie annulée)</span>` : ''}</span>
+      ${_reorderBtnsHTML(`_adjLibMove(${i}, -1)`, `_adjLibMove(${i}, 1)`, i === 0, i === list.length - 1, 'var(--pencil)')}
+      <button class="btn btn-r btn-sm" onclick="_adjLibRemove(${i})" title="Supprimer ce motif" style="padding:2px 7px;margin-left:4px">✕</button>
     </div>`).join('');
+}
+
+// L'ordre des motifs est celui des boutons de la modale d'ajustement — les plus courants en tête.
+function _adjLibMove(idx, delta) {
+  // Lecture directe : _adjustPresets() peut renvoyer la constante ADJUST_PRESETS_DEFAULT,
+  // qu'il ne faut jamais muter (elle sert aussi au « ↺ défauts »).
+  const list = S.evalPrefs?.adjustPresets;
+  if (!Array.isArray(list)) return;
+  const to = idx + delta;
+  if (to < 0 || to >= list.length) return;
+  pushUndo();
+  const [item] = list.splice(idx, 1);
+  list.splice(to, 0, item);
+  save();
+  _adjLibRender();
 }
 
 function _adjLibAdd() {
@@ -46623,6 +46654,16 @@ function openCommentLibrary() {
   openMod('mcomlib');
 }
 
+// Boutons ↑ / ↓ des listes de réglages réordonnables (bibliothèque de commentaires,
+// motifs d'ajustement). Même convention que la modale 🔗 Liens : un pas par clic,
+// extrémités désactivées. `fg` est passé par l'appelant car ces listes sont posées sur
+// des fonds LITTÉRAUX : un token de thème y serait faux (cf. CLAUDE.md, contraste).
+function _reorderBtnsHTML(onUp, onDown, isFirst, isLast, fg) {
+  const btn = (call, dis, glyph, label) =>
+    `<button ${dis ? 'disabled' : `onclick="${_escAttr(call)}"`} title="${label}" aria-label="${label}" style="background:transparent;border:none;color:${fg};cursor:${dis ? 'default' : 'pointer'};opacity:${dis ? '.2' : '.9'};padding:1px 3px;font-size:1em;line-height:1">${glyph}</button>`;
+  return btn(onUp, isFirst, '↑', 'Monter') + btn(onDown, isLast, '↓', 'Descendre');
+}
+
 function _comLibRender() {
   const lib = S.evalCommentLibrary || (S.evalCommentLibrary = { positive: [], negative: [] });
   for (const kind of ['positive', 'negative']) {
@@ -46631,15 +46672,34 @@ function _comLibRender() {
       wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.85em">Aucun commentaire type — ajoutez-en un avec le bouton <strong>+</strong> ci-dessus.</p>';
       continue;
     }
+    const bg = kind === 'positive' ? '#dcfce7' : '#fee2e2';
+    // Fond littéral clair : sans couleur explicite, le texte hérite de var(--ink-deep),
+    // qui vaut de l'ambre en thème sombre — illisible sur ce vert / ce rose.
+    const fg = _contrastTextColor(bg);
     let html = '';
     lib[kind].forEach((c, i) => {
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 8px;background:${kind === 'positive' ? '#dcfce7' : '#fee2e2'};border-left:3px solid ${kind === 'positive' ? '#16a34a' : '#dc2626'};border-radius:3px;font-size:.88em">
-        <span style="flex:1">${_esc(c)}</span>
-        <button onclick="_comLibRemove('${kind}', ${i})" title="Supprimer" style="background:transparent;border:none;color:var(--margin-red);cursor:pointer;padding:2px 6px">✕</button>
+      html += `<div style="display:flex;align-items:center;gap:2px;padding:4px 8px;background:${bg};color:${fg};border-left:3px solid ${kind === 'positive' ? '#16a34a' : '#dc2626'};border-radius:3px;font-size:.88em">
+        <span style="flex:1;min-width:0">${_esc(c)}</span>
+        ${_reorderBtnsHTML(`_comLibMove('${kind}', ${i}, -1)`, `_comLibMove('${kind}', ${i}, 1)`, i === 0, i === lib[kind].length - 1, fg)}
+        <button onclick="_comLibRemove('${kind}', ${i})" title="Supprimer" aria-label="Supprimer" style="background:transparent;border:none;color:#b03d2e;cursor:pointer;padding:2px 6px">✕</button>
       </div>`;
     });
     wrap.innerHTML = html;
   }
+}
+
+// L'ordre de la bibliothèque est celui des puces proposées à l'annotation d'une cellule :
+// l'enseignant met en tête ce qu'il pose le plus souvent.
+function _comLibMove(kind, idx, delta) {
+  const list = S.evalCommentLibrary?.[kind];
+  if (!Array.isArray(list)) return;
+  const to = idx + delta;
+  if (to < 0 || to >= list.length) return;
+  pushUndo();
+  const [item] = list.splice(idx, 1);
+  list.splice(to, 0, item);
+  save();
+  _comLibRender();
 }
 
 function _comLibAdd(kind) {

@@ -1122,3 +1122,35 @@ test('Bibliothèque : aucun commentaire type ne porte de motif de points', () =>
       .filter(c => _parseCommentsAdjustment([c]).hasAdj)`);
   assert.equal(avecPoints.length, 0, 'aucun commentaire type ne doit ajuster de points');
 });
+
+test('Bibliothèque : réordonnancement — un pas par appel, bornes inertes', () => {
+  seedTypeD();
+  ev(`S.evalCommentLibrary = { positive: ['a', 'b', 'c'], negative: [] };`);
+  ev(`_comLibMove('positive', 2, -1)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('')"), 'acb');
+  ev(`_comLibMove('positive', 0, 1)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('')"), 'cab');
+  // Aux extrémités, l'appel ne doit RIEN faire (les boutons sont désactivés, mais la
+  // fonction est publique — un appel hors bornes ne doit pas perdre d'élément).
+  ev(`_comLibMove('positive', 0, -1); _comLibMove('positive', 2, 1)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('')"), 'cab');
+  // Liste absente / index inexistant : pas d'exception, pas de mutation
+  ev(`_comLibMove('inconnu', 0, 1); _comLibMove('positive', 9, -1)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.length"), 3);
+});
+
+test('Motifs d\'ajustement : réordonnancement, et la constante par défaut reste intacte', () => {
+  seedTypeD();
+  ev(`S.evalPrefs.adjustPresets = [
+        { id: 'p1', op: 'add', v: -2, label: 'un' },
+        { id: 'p2', op: 'add', v: -1, label: 'deux' },
+        { id: 'p3', op: 'add', v: 1,  label: 'trois' }];`);
+  ev(`_adjLibMove(2, -1)`);
+  assert.equal(ev("S.evalPrefs.adjustPresets.map(p => p.id).join('')"), 'p1p3p2');
+  // ⚠️ Sans liste dans S, _adjustPresets() renvoie la CONSTANTE partagée : la déplacer
+  // corromprait les défauts pour toute la session (et le bouton « ↺ défauts »).
+  const avant = ev("ADJUST_PRESETS_DEFAULT.map(p => p.label).join('|')");
+  ev(`delete S.evalPrefs.adjustPresets; _adjLibMove(0, 1);`);
+  assert.equal(ev("ADJUST_PRESETS_DEFAULT.map(p => p.label).join('|')"), avant,
+    'ADJUST_PRESETS_DEFAULT ne doit jamais être muté');
+});
