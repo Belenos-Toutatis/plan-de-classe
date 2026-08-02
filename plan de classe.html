@@ -6186,11 +6186,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.5';
+const APP_VERSION    = '2.27.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T05:19:19Z';
+const APP_BUILD_DATE = '2026-08-02T05:37:42Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -33945,11 +33945,11 @@ function _renderCompetenceWeightsD(mn, globalIdx) {
     const w = _typeDWeight(mn, cid);
     const lourd = w !== 1;
     return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 4px 1px 6px;background:${lourd ? 'var(--paper-warm)' : 'var(--paper)'};border:1px solid ${lourd ? 'var(--ink-blue-soft)' : 'var(--rule-line)'};border-radius:8px;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue)" title="${_escAttr((c?.name || c?.code || '?') + '\nPoids dans cette question (1 = poids normal)')}">
-      ${_esc(c?.code || '?')}<span aria-hidden="true" style="color:var(--pencil);margin:0 1px">×</span><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="no-spinner"
+      ${_esc(c?.code || '?')}<span aria-hidden="true" style="color:var(--pencil);margin:0 1px">×</span><input type="number" min="0.5" max="20" step="0.5" value="${w}"
              oninput="_evalEditUpdateCompWeight(${globalIdx}, '${_escJsAttr(cid)}', this.value)"
              onblur="_evalEditCompWeightBlur(${globalIdx}, '${_escJsAttr(cid)}', this)"
              aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (mn.label || 'la question'))}"
-             style="width:38px;padding:2px 3px;font-family:var(--font-mono);text-align:center;font-size:.92em">
+             style="width:60px;padding:3px 6px;font-family:var(--font-mono);text-align:right;font-size:.92em">
     </span>`;
   }).join(' ');
   return `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:4px">${chips}</span>`;
@@ -38593,7 +38593,7 @@ function _evalTableurRenderD(ev, cls) {
         const w = _typeDWeight(q, cid);
         html += `<th style="padding:2px 3px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:52px;background:var(--paper-warm);${k === 0 ? '' : 'border-left:1px solid var(--rule-line-soft);'}">
           <div style="font-family:var(--font-mono);font-size:.78em;font-weight:700;color:var(--ink-blue)" title="${_escAttr((c?.code || '?') + (c?.name ? ' — ' + c.name : ''))}">${_esc(c?.code || '?')}</div>
-          <div style="display:flex;align-items:center;justify-content:center;gap:1px;line-height:1;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><span aria-hidden="true">×</span><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="no-spinner" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}" style="width:32px;padding:1px 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);text-align:center;font-size:1.1em;color:var(--ink-blue)"></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:1px;line-height:1;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><span aria-hidden="true">×</span><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="no-spinner" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}" style="padding:1px 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);text-align:center;font-size:1.1em;color:var(--ink-blue)"></div>
         </th>`;
       });
     }
@@ -38683,6 +38683,7 @@ function _evalTableurRenderD(ev, cls) {
   html += '</tr></tfoot></table>';
 
   wrap.innerHTML = html;
+  _wpoidsFitAll(wrap);
 }
 
 // Saisie d'un niveau dans une cellule (question × compétence) du tableur D.
@@ -38777,6 +38778,43 @@ function _evalTableurDEditQLabel(inputEl) {
   save();
 }
 
+// Largeur d'une case de poids dans l'en-tête du tableur. Elle SUIT le nombre de caractères :
+// une case taillée pour « 2 » tronquerait « 12.5 », et l'en-tête n'a pas la place d'être
+// dimensionné au pire cas en permanence. Le `<th>` n'ayant qu'un `min-width`, la colonne suit.
+// (Le champ « barème » du Type A/C est, lui, à largeur FIXE : rien à réutiliser ici.)
+//
+// ⚠️ Mesuré à l'exécution, et non calculé en `ch`. La règle globale des inputs (l. ~1748)
+// impose `padding: 6px 10px` ET `font-family: var(--font-sans)` en `!important` — un style
+// EN LIGNE ne peut pas la battre. Une case dimensionnée en supposant sa police mono et son
+// remplissage de 1 px se retrouvait donc 20 px trop étroite (débordement mesuré de 7 à 11 px,
+// chiffre tronqué). On lit le remplissage et les bordures réellement appliqués, et on mesure
+// la largeur d'un chiffre dans la police EFFECTIVE. Le résultat se corrige tout seul si la
+// règle globale change.
+var _wpoidsDigitCache = {};
+function _wpoidsDigitWidth(font) {
+  if (_wpoidsDigitCache[font]) return _wpoidsDigitCache[font];
+  const p = document.createElement('span');
+  p.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font}`;
+  p.textContent = '0';
+  document.body.appendChild(p);
+  const w = p.getBoundingClientRect().width || 7;
+  p.remove();
+  return (_wpoidsDigitCache[font] = w);
+}
+function _wpoidsFitWidth(inputEl) {
+  if (!inputEl || !inputEl.isConnected) return;
+  const cs = getComputedStyle(inputEl);
+  const chrome = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+               + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+  const n = Math.max(2, String(inputEl.value ?? '').length);
+  inputEl.style.width = Math.ceil(n * _wpoidsDigitWidth(cs.font) + chrome + 2) + 'px';
+}
+// Passe posée après injection du tableau : au rendu, les cases ne sont pas encore dans le
+// document, donc leur remplissage effectif n'est pas lisible.
+function _wpoidsFitAll(wrap) {
+  (wrap || document).querySelectorAll('thead input[data-cid]').forEach(_wpoidsFitWidth);
+}
+
 // Édition du poids d'une compétence dans une question, depuis l'en-tête du tableur.
 // ⚠️ NE PAS appeler _evalTableurRender() ici : il reconstruit le tableau par innerHTML, donc
 // DÉTRUIT le champ que l'utilisateur est en train de manipuler. Avec les flèches du champ
@@ -38792,6 +38830,9 @@ function _evalTableurDEditWeight(inputEl) {
   const mn = ev?.miniNotes?.find(m => m.id === inputEl.getAttribute('data-mnid'));
   const cid = inputEl.getAttribute('data-cid');
   if (!ev || !mn || !cid) return;
+  // AVANT les sorties anticipées : la case doit suivre la frappe même quand la valeur
+  // n'est pas encore exploitable (« 1. » en cours de saisie de « 1.5 »).
+  _wpoidsFitWidth(inputEl);
   // Champ vide ou en cours de frappe : on ne touche à rien, la validation vient au blur.
   if (inputEl.value === '' || !Number.isFinite(parseFloat(inputEl.value))) return;
   const w = _typeDClampWeight(inputEl.value);
@@ -38817,6 +38858,7 @@ function _evalTableurDWeightBlur(inputEl) {
   // [0.5, 20] à l'enregistrement, une saisie invalide n'a rien changé du tout. Dans les
   // deux cas le champ afficherait autre chose que le modèle si on ne le recalait pas.
   inputEl.value = _typeDWeight(mn, cid);
+  _wpoidsFitWidth(inputEl);   // la valeur recalée peut être plus courte que ce qui était tapé
 }
 
 let _lastPoidsToast = 0;
