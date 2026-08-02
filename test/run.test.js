@@ -810,3 +810,74 @@ test('Type D : question sans compétence ne compte nulle part', () => {
   assert.ok(Math.abs(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')") - 14.6667) < 0.001);
   assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_com')"), 3);
 });
+
+// ── Ajustement de la note finale (sanction / bonification, tous types) ──
+// Remplace le bonus/malus par cellule, qui ne vaut plus que pour le Type A.
+
+test('Ajustement : ×0,5 pour triche divise la note, sans toucher aux niveaux', () => {
+  seedTypeD();
+  const base = ev("_computeStudentEvalNoteRaw(S.evaluations.evd, 's1')");
+  assert.ok(Math.abs(base - 14.6667) < 0.001, 'note calculée inchangée');
+  const nivAvant = ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')");
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'mul', v:0.5, label:'Triche' }]`);
+  assert.ok(Math.abs(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')") - 7.3333) < 0.001);
+  // ⚠️ invariant central : la sanction porte sur la note, jamais sur les compétences
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"), nivAvant);
+});
+
+test('Ajustement : ordre fixe set → mul → add → cap, puis bornage', () => {
+  seedTypeD();
+  // set 10, puis ×2 = 20, puis −3 = 17, plafonné à 12
+  ev(`S.evaluations.evd.notes.s1.adjust = [
+    { id:'a1', op:'add', v:-3, label:'Retard' },
+    { id:'a2', op:'cap', v:12, label:'Plafond' },
+    { id:'a3', op:'set', v:10, label:'Base négociée' },
+    { id:'a4', op:'mul', v:2,  label:'Double' }]`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), 12);
+  // L'ordre ne dépend pas de la saisie : liste inversée, même résultat
+  ev(`S.evaluations.evd.notes.s1.adjust.reverse()`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), 12);
+});
+
+test('Ajustement : la note reste bornée à [0, noteMax]', () => {
+  seedTypeD();
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'add', v:-99, label:'Malus' }]`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), 0);
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'add', v:99, label:'Bonus' }]`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), 20);
+});
+
+test('Ajustement : sans note calculée (tout A/NN), rien à ajuster', () => {
+  seedTypeD();
+  ev(`S.evaluations.evd.notes.s1.levels = { q1:{cmp_rai:'NN'}, q2:{cmp_rai:'NN',cmp_com:'NN'}, q3:{cmp_com:'NN'} }`);
+  ev(`S.evaluations.evd.notes.s1.adjust = [{ id:'a1', op:'mul', v:0.5, label:'Triche' }]`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), null);
+});
+
+test('Ajustement : la migration écarte les entrées invalides', () => {
+  seedTypeD();
+  ev(`S.evaluations.evd.notes.s1.adjust = [
+    { id:'ok', op:'mul', v:0.5, label:'Triche' },
+    { op:'inconnu', v:2, label:'X' },
+    { op:'add', v:'abc', label:'Y' }]`);
+  ev(`migrateEvalDefaults()`);
+  assert.equal(ev("S.evaluations.evd.notes.s1.adjust.length"), 1);
+  assert.equal(ev("S.evaluations.evd.notes.s1.adjust[0].op"), 'mul');
+  // Liste vide ou non-tableau : le champ disparaît
+  ev(`S.evaluations.evd.notes.s1.adjust = 'nawak'`);
+  ev(`migrateEvalDefaults()`);
+  assert.equal(ev("S.evaluations.evd.notes.s1.adjust"), undefined);
+});
+
+test('Bonus/malus par commentaire : ne vaut plus que pour le Type A', () => {
+  seedTypeD();
+  // Une éval Type C dont un commentaire porte « -1 pt » : la note ne doit PAS bouger
+  ev(`S.evaluations.evc = { id:'evc', type:'C', nomCourt:'C1', periode:'S1', classIds:['c1'],
+      noteMax:20, coef:1, countsForMean:true, exercices:[{id:'x1',label:'Ex1'}],
+      miniNotes:[{id:'m1',label:'Q1',exerciceId:'x1',max:10,competenceIds:[]}],
+      notes:{ s1:{ values:{m1:10}, comments:{ m1:['présentation, -1 pt'] } } } }`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evc, 's1')"), 20);
+  // La même chose en Type A garde le comportement historique
+  ev(`S.evaluations.evc.type = 'A'; delete S.evaluations.evc.exercices;`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evc, 's1')"), 18);
+});

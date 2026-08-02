@@ -1709,6 +1709,25 @@ Choix persistés dans `_qcmcamState.userPicks = { [rawCsvName]: sid | '__skip__'
 
 **Date appliquée per-classe** (corrige un bug où la date ne « prenait » pas) : le modèle de dates est per-classe (`_mnDateFor(mn, classId)` lit `mn.dates[classId]` **en priorité**, puis `mn.date`). L'import écrit donc `mn.dates[_clsActive.id] = dateDétectée` et recale `mn.date` globale = max des dates per-classe (cascade fallback). L'aperçu (« remplace … » / « déjà appliquée ») lit aussi `_mnDateFor(mn, cls.id)` — sinon écrire la date globale était sans effet visible quand une date per-classe existait déjà.
 
+### Ajustement de la note finale (sanction / bonification, tous types)
+
+Sanction ou bonification portant sur la **note de l'évaluation**, pas sur une question : triche, rendu en retard, bonus de présentation. Remplace le bonus/malus **par cellule**, qui ne vaut plus que pour le **Type A** (cf. ci-dessous).
+
+- **Modèle** : `ev.notes[sid].adjust = [{ id, op, v, label }]` avec `op ∈ {set, mul, add, cap}` (`ADJUST_OPS`). Liste, car les motifs se cumulent (retard **et** bonus). Scrub dans `migrateEvalDefaults` : opération connue + valeur finie, sinon l'entrée saute ; liste vide → champ supprimé.
+- **Ordre d'application FIXE** (`_applyFinalAdjust`) : `set` (le dernier gagne) → `mul` → `add` → `cap` → bornage `[0, noteMax]`. Sans ordre fixe, deux ajustements donneraient un résultat dépendant de l'ordre de saisie. Testé avec la liste inversée.
+- ⚠️ **N'AGIT JAMAIS SUR LES NIVEAUX DE COMPÉTENCE.** Un ÷2 pour triche sanctionne la note ; les niveaux décrivent ce que l'élève a démontré — c'est précisément ce que le Type D sépare. `_evalCompetenceLevel` / `_typeDCompLevel` ne consultent pas la liste : **ne pas les y brancher**. Couvert par un test.
+- **`_computeStudentEvalNote` renvoie la note AJUSTÉE** — c'est la note de l'élève : bulletin, bilans, moyennes de période, statistiques de classe, exports. `_computeStudentEvalNoteRaw` (ancien corps de la fonction) donne la note calculée avant sanction et **ne sert qu'à l'affichage** « 15 → 7,5 ». Décision de l'utilisateur : les indicateurs de classe (moyenne, σ, médiane, rang) utilisent la note sanctionnée — avoir deux moyennes de classe selon l'écran serait incompréhensible.
+- **Motif OBLIGATOIRE** : une note divisée par deux sans raison consignée est intenable face à une famille, et illisible pour soi-même trois mois plus tard. Motifs proposés dans `ADJUST_PRESETS` ; suivant la convention du fichier (cf. `REMINDER_PRESETS`), un motif **pré-remplit** le formulaire, il ne valide pas.
+- **UI** : clic droit sur la **cellule Note** de la ligne élève, dans les **trois** tableurs (A/C, B, D) — `_evalNoteAdjustExtra` fournit les morceaux communs (`ctx`, `tip`, `mark`) séparément, chaque site ayant déjà ses propres `style`/`title`. Cellule ajustée = valeur finale + marqueur **⚖** + infobulle retraçant note calculée, chaque motif, résultat.
+- ⚠️ **Les infobulles arithmétiques montrent la note CALCULÉE** (`_evalNoteTipD`, `_evalNoteTipB`) : afficher « 9/12 pts → 7,5/20 » ferait mentir le calcul. L'ajustement est détaillé juste après, par `_evalAdjustTip`.
+- ⚠️ **`ADJUST_OPS` est déclaré AVANT `init()`** (près de `migrateEvalDefaults`), pas avec les autres helpers d'ajustement. La migration le lit, donc **pendant** `init()` : déclaré plus bas, le `var` était hoisté mais encore `undefined`, `ADJUST_OPS[a.op]` levait une `TypeError` qui **interrompait le script de haut niveau** et laissait une quarantaine de déclarations suivantes non initialisées (symptôme observé : *« Cannot access '_rattrapState' before initialization »*, l'app ne démarrait plus). Même famille que `_bilanCompState`.
+
+#### Le bonus/malus par cellule ne vaut plus que pour le Type A
+
+Il se déduisait du **TEXTE** du commentaire (`_parseCommentsAdjustment` : `-1 pt` = malus, `+1 pt` = bonus, `0 pt` = remplacement) — donc une remarque anodine comme « oubli de l'unité, -1 pt » décalait la note sans que rien ne le signale. Et sur une évaluation par exercices, ajuster une question isolée n'a pas de sens ; en Type D, où une question vaut un niveau et non des points, aucun. Retiré pour B / C / D (arbitrage de l'utilisateur : *« je ne m'en suis jamais servi »*).
+
+⚠️ Une éval **Type C** qui contenait un tel motif voit sa note changer au chargement : `migrateEvalDefaults` les détecte (`_cCommentAdjEvals`) et `_warnCCommentAdj` le signale par un toast, **une fois par session** — une moyenne qui bouge sans un mot est pire que le petit défaut qu'on corrige. Le texte d'aide de la modale Commentaires est adapté au type (`#meval-comments-help`).
+
 ### Bug fix : commentaires d'éval stockés comme string
 
 Bug historique du seed démo : `ev.notes[sid].comments[mnId] = 'foo'` (string) au lieu de `['foo']` (tableau). Conséquence : `nbCom = comments.length` retournait le nombre de caractères (ex. `💬 35`), et `_evalCommentsGetList().list.forEach(...)` plantait à l'ouverture de la modale → clics sur le badge sans effet.

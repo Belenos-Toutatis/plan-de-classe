@@ -4606,7 +4606,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div class="mb" style="max-width:600px;width:100%;max-height:88vh;overflow-y:auto">
     <h2 id="meval-comments-title">💬 Commentaires</h2>
     <input type="hidden" id="meval-comments-mnid">
-    <p style="margin:0 0 10px;font-size:.85em;color:var(--pencil);line-height:1.5">
+    <p id="meval-comments-help" style="margin:0 0 10px;font-size:.85em;color:var(--pencil);line-height:1.5">
       Annote chaque mini-note. Si tu écris un motif <code>[+-]N pt(s)</code> dans un commentaire,
       la note est <strong>automatiquement ajustée</strong> :
       <code>-1pt</code> = malus · <code>+1pt</code> = bonus · <code>0pt tricherie</code> = remplacement.
@@ -4630,6 +4630,52 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn-g btn-sm" onclick="closeMod2('meval-comments');openCommentLibrary()">⚙ Bibliothèque…</button>
       <button class="btn btn-p" onclick="closeMod2('meval-comments')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Ajustement de la note finale (tous types) ── -->
+<div id="meval-adjust" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:600px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2 id="meval-adjust-title">⚖ Ajustement de la note</h2>
+    <input type="hidden" id="meval-adjust-sid">
+    <p style="margin:0 0 10px;font-size:.85em;color:var(--pencil);line-height:1.5">
+      Sanction ou bonification portant sur la <strong>note de l'évaluation</strong> : triche, rendu en retard,
+      bonus de présentation. Les <strong>niveaux de compétence ne sont pas touchés</strong> — ils décrivent ce que
+      l'élève a démontré. Le motif est conservé et apparaît en infobulle sur la note.
+    </p>
+
+    <div id="meval-adjust-summary" style="margin-bottom:12px"></div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:5px">Ajustements appliqués</div>
+      <div id="meval-adjust-list" style="display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:5px">Motifs courants</div>
+      <div id="meval-adjust-presets" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+    </div>
+
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <select id="meval-adjust-op" style="padding:5px 6px;font-family:var(--font-mono)" title="Opération appliquée à la note">
+        <option value="mul">× multiplier</option>
+        <option value="add">+ ajouter / retrancher</option>
+        <option value="set">= remplacer par</option>
+        <option value="cap">≤ plafonner à</option>
+      </select>
+      <input type="number" id="meval-adjust-val" step="0.5" style="width:82px;padding:5px 6px;font-family:var(--font-mono);text-align:right" placeholder="valeur"
+             onkeydown="if(event.key==='Enter'){_evalAdjustAdd();}">
+      <input type="text" id="meval-adjust-label" placeholder="motif (obligatoire)" maxlength="80" style="flex:1;min-width:140px;padding:5px 8px"
+             onkeydown="if(event.key==='Enter'){_evalAdjustAdd();}">
+      <button class="btn btn-p btn-sm" onclick="_evalAdjustAdd()">+ Ajouter</button>
+    </div>
+    <p style="margin:8px 0 0;font-size:.78em;color:var(--pencil-soft);line-height:1.45">
+      Ordre d'application : remplacement, puis multiplication, puis ajout, puis plafond — la note reste bornée entre 0 et le barème.
+    </p>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-p" onclick="closeMod2('meval-adjust')">Fermer</button>
     </div>
   </div>
 </div>
@@ -5125,7 +5171,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
         <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
         <span id="meval-tableur-help-paste"><br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.</span>
-        <span id="meval-tableur-help-head"><br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (bonus/malus).</span>
+        <span id="meval-tableur-help-head"><br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires.</span>
+        <span id="meval-tableur-help-adjust"><br><strong>Note :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur la note d'un élève = ajustement de la note finale (triche ×0,5, retard, bonus…). Les niveaux de compétence ne sont pas touchés.</span>
       </p>
     </div>
 
@@ -6186,11 +6233,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.8';
+const APP_VERSION    = '2.28.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T06:46:26Z';
+const APP_BUILD_DATE = '2026-08-02T07:13:07Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7242,7 +7289,32 @@ function _typeDDefaultPoints(nb) {
   return Array.from({ length: Math.max(2, nb || 4) }, (_, i) => i);
 }
 
+// Évaluations Type C dont une note bougeait via le bonus/malus déduit du texte d'un
+// commentaire — mécanisme retiré pour ce type. Rempli par migrateEvalDefaults, signalé
+// une fois après le chargement (cf. _warnCCommentAdj) : une moyenne qui change sans un
+// mot est pire que le petit défaut qu'on corrige.
+// ⚠️ ADJUST_OPS est déclaré ICI, et non près des autres helpers d'ajustement (~l. 32400),
+// parce que migrateEvalDefaults le lit — donc PENDANT init() (l. 31159). Déclaré plus bas,
+// le `var` était hoisté mais encore `undefined` : `ADJUST_OPS[a.op]` levait une TypeError
+// qui interrompait le script de haut niveau et laissait une quarantaine de déclarations
+// suivantes non initialisées (symptôme observé : « Cannot access '_rattrapState' before
+// initialization »). Même famille de piège que _bilanCompState — cf. CLAUDE.md.
+var ADJUST_OPS = { set: '=', mul: '×', add: '+', cap: '≤' };
+
+var _cCommentAdjEvals = new Set();
+var _cCommentAdjWarned = false;
+function _warnCCommentAdj() {
+  if (_cCommentAdjEvals.size === 0 || _cCommentAdjWarned) return;
+  _cCommentAdjWarned = true;   // une fois par session, pas à chaque rechargement de sync
+  const noms = [..._cCommentAdjEvals].slice(0, 4).join(', ');
+  const reste = _cCommentAdjEvals.size - Math.min(4, _cCommentAdjEvals.size);
+  toast(`⚠ Bonus/malus retiré des commentaires (Type C) : ${noms}${reste > 0 ? ` et ${reste} autre(s)` : ''}. `
+      + `Utilise désormais le clic droit sur la Note.`, 'warn');
+  _cCommentAdjEvals.clear();
+}
+
 function migrateEvalDefaults() {
+  _cCommentAdjEvals.clear();
   // Domaines du socle (fixes — l'utilisateur ne peut pas en ajouter, ce sont les domaines officiels)
   if (!S.competenceDomains || typeof S.competenceDomains !== 'object'
       || Object.keys(S.competenceDomains).length === 0) {
@@ -7395,6 +7467,30 @@ function migrateEvalDefaults() {
     if (!Number.isFinite(+ev.coef) || +ev.coef < 0) ev.coef = 1; else ev.coef = +ev.coef;
     // Notes par élève
     if (!ev.notes || typeof ev.notes !== 'object') ev.notes = {};
+    // Ajustements de note finale : scrub conservateur (opération connue, valeur finie).
+    // ⚠️ `mul` et `cap` acceptent 0 (note annulée, plafond à 0) ; seul `set` négatif n'a
+    // pas de sens — le bornage final s'en charge de toute façon.
+    for (const rec of Object.values(ev.notes)) {
+      if (!rec || typeof rec !== 'object') continue;
+      if (rec.adjust === undefined) continue;
+      if (!Array.isArray(rec.adjust)) { delete rec.adjust; continue; }
+      rec.adjust = rec.adjust.filter(a => a && ADJUST_OPS[a.op] && Number.isFinite(+a.v))
+                             .map(a => ({ id: a.id || uid(), op: a.op, v: +a.v, label: String(a.label || '') }));
+      if (rec.adjust.length === 0) delete rec.adjust;
+    }
+    // Le bonus/malus déduit du texte d'un commentaire ne vaut plus que pour le Type A.
+    // Sur une éval C qui en contenait, la note CHANGE au chargement : on le dit, plutôt
+    // que de laisser une moyenne bouger sans explication.
+    if (ev.type === 'C') {
+      for (const rec of Object.values(ev.notes)) {
+        const com = rec?.comments;
+        if (!com || typeof com !== 'object') continue;
+        if (Object.values(com).some(l => _parseCommentsAdjustment(Array.isArray(l) ? l : [l]).hasAdj)) {
+          _cCommentAdjEvals.add(ev.nomCourt || ev.id);
+          break;
+        }
+      }
+    }
     // Champs auxiliaires couramment lus
     if (ev.studentRemarks && typeof ev.studentRemarks !== 'object') delete ev.studentRemarks;
     if (ev.classIds && !Array.isArray(ev.classIds)) delete ev.classIds;
@@ -31032,6 +31128,7 @@ function init() {
   setTimeout(() => { _passiveUpdateCheck().catch(() => {}); }, 2000);
   // Détection passive des copies de conflit créées par Nextcloud (toast unique).
   setTimeout(() => { _passiveNcConflictCheck().catch(() => {}); }, 3500);
+  setTimeout(_warnCCommentAdj, 4200);   // après le modal de bienvenue et les autres avis
 
   // Modal de bienvenue : à l'issue de l'installation des données fictives uniquement
   if (demoJustInstalled) {
@@ -32306,7 +32403,80 @@ function _typeDCompLevel(ev, sid, cid, exoKey) {
   return den > 0 ? Math.round(num / den) : null;
 }
 
+// ═══════════════ AJUSTEMENT DE LA NOTE FINALE (tous types) ═══════════════
+// Sanction ou bonification portant sur la NOTE de l'évaluation, pas sur une question :
+// triche (÷2 ou 0), rendu en retard, bonus de présentation. Modèle :
+//   ev.notes[sid].adjust = [{ id, op:'set'|'mul'|'add'|'cap', v:number, label:string }]
+//
+// ⚠️ N'AGIT JAMAIS SUR LES NIVEAUX DE COMPÉTENCE. Un ÷2 pour triche sanctionne la note ;
+// les niveaux décrivent ce que l'élève a démontré, et c'est précisément ce que le Type D
+// sépare. Les bilans de compétences passent par _evalCompetenceLevel / _typeDCompLevel,
+// qui ne consultent pas cette liste — ne pas les y brancher.
+//
+// Remplace le bonus/malus PAR CELLULE, qui n'a jamais concerné que le Type A : il se
+// déduisait du TEXTE du commentaire (« -1 pt » dans une remarque décalait la note sans
+// que rien ne le signale) et n'avait pas de sens sur une évaluation par exercices.
+// (ADJUST_OPS est déclaré plus haut, AVANT init() — cf. le commentaire là-bas.)
+function _evalAdjustList(ev, sid) {
+  const a = ev?.notes?.[sid]?.adjust;
+  return Array.isArray(a) ? a : [];
+}
+// Ordre d'application FIXE et documenté : set (le dernier gagne) → mul → add → cap,
+// puis bornage à [0, noteMax]. Sans ordre fixe, deux ajustements donneraient un
+// résultat dépendant de la saisie.
+function _applyFinalAdjust(base, list, noteMax) {
+  if (typeof base !== 'number' || !Array.isArray(list) || list.length === 0) return base;
+  let setV = null, mul = 1, add = 0, cap = null;
+  for (const a of list) {
+    const n = parseFloat(a?.v);
+    if (!Number.isFinite(n)) continue;
+    if (a.op === 'set') setV = n;
+    else if (a.op === 'mul') mul *= n;
+    else if (a.op === 'add') add += n;
+    else if (a.op === 'cap') cap = (cap == null) ? n : Math.min(cap, n);
+  }
+  let v = (setV != null) ? setV : base;
+  v = v * mul + add;
+  if (cap != null) v = Math.min(v, cap);
+  const max = (noteMax > 0) ? noteMax : 20;
+  return Math.max(0, Math.min(v, max));
+}
+// { base, final, list, changed } — le tableur a besoin des deux valeurs pour montrer
+// « 14 → 7 » ; tout le reste de l'app ne consomme que `final`.
+function _evalNoteAdjustInfo(ev, sid) {
+  const base = _computeStudentEvalNoteRaw(ev, sid);
+  const list = _evalAdjustList(ev, sid);
+  if (typeof base !== 'number' || list.length === 0) return { base, final: base, list, changed: false };
+  const final = _roundNoteToGranularity(_applyFinalAdjust(base, list, ev.noteMax), ev);
+  return { base, final, list, changed: final !== base };
+}
+// Tête d'un ajustement : « ×0,5 », « −2 », « =0 », « ≤10 ».
+// ⚠️ Le signe vient de la VALEUR pour `add` : un malus de −2 affiché « +2 » dit
+// l'inverse de ce qu'il fait.
+function _adjustHead(a) {
+  const n = parseFloat(a.v);
+  if (!Number.isFinite(n)) return '?';
+  return (a.op === 'add')
+    ? (n < 0 ? '−' : '+') + _fmtNote(Math.abs(n))
+    : (ADJUST_OPS[a.op] || '?') + _fmtNote(n);
+}
+// Libellé lisible complet : « ×0,5 — Triche »
+function _adjustLabel(a) {
+  return _adjustHead(a) + (a.label ? ' — ' + a.label : '');
+}
+
+// Note de l'évaluation, ajustement compris. C'est LA note de l'élève : celle du bulletin,
+// des bilans, des statistiques de classe et des exports. `_computeStudentEvalNoteRaw`
+// donne la note calculée avant sanction, et ne sert qu'à l'affichage « 14 → 7 ».
 function _computeStudentEvalNote(evalObj, sid) {
+  if (!evalObj) return null;
+  const base = _computeStudentEvalNoteRaw(evalObj, sid);
+  const list = _evalAdjustList(evalObj, sid);
+  if (typeof base !== 'number' || list.length === 0) return base;
+  return _roundNoteToGranularity(_applyFinalAdjust(base, list, evalObj.noteMax), evalObj);
+}
+
+function _computeStudentEvalNoteRaw(evalObj, sid) {
   if (!evalObj) return null;
   if (evalObj.type === 'B') {
     // Type B passe par sa propre fonction puis on applique la granulométrie
@@ -32329,7 +32499,10 @@ function _computeStudentEvalNote(evalObj, sid) {
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
     if (!Number.isFinite(n)) continue;
-    const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+    // Le bonus/malus déduit du texte du commentaire ne vaut QUE pour le Type A.
+    const eff = (evalObj.type === 'A')
+      ? _applyCommentsToValue(n, comments[mn.id] || [], mn.max)
+      : n;
     sumVal += eff;
     sumMax += mn.max;
     hasAny = true;
@@ -35688,6 +35861,7 @@ function _evalTableurUpdateHelpForType(ev) {
   head.innerHTML = (t === 'B')
     ? `<br><strong>En-tête :</strong> édition directe de la date et du créneau · ${kbd('clic droit')} sur l'en-tête d'une passation = compétences, dates par groupe, suppression.`
     : `<br><strong>En-tête :</strong> édition directe du libellé de question et du poids de chaque compétence · 🎯 = compétences évaluées par la question. La structure (exercices, questions) se règle dans <em>🏗 Structure</em>.`;
+  // La ligne « Note » (clic droit = ajustement) vaut pour les quatre types : rien à adapter.
 }
 
 function _evalTableurRender() {
@@ -36007,7 +36181,8 @@ function _evalTableurRender() {
       else if (disp.kind === 'NN') totalBg = 'var(--paper-warm)';
       else totalBg = '';
       const totalColor = totalBg ? _contrastTextColor(totalBg) : 'var(--ink-blue)';
-      h += `<td class="meval-row-total meval-cell-note" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${showBruteCol ? '' : lead}" data-sid="${_esc(sid)}">${disp.text}</td>`;
+      const adjX = _evalNoteAdjustExtra(ev, sid);
+      h += `<td class="meval-row-total meval-cell-note"${adjX.ctx} title="${_escAttr(adjX.tip.trim())}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;color:${totalColor};background:${totalBg || bgRow};${showBruteCol ? '' : lead}cursor:context-menu" data-sid="${_esc(sid)}">${disp.text}${adjX.mark}</td>`;
       return h;
     };
     const mkCompsBody = (lead) => {
@@ -38057,7 +38232,8 @@ function _evalTableurRenderB(ev, cls) {
       const bg = (note20 != null) ? _noteColor(note20, 20) : '';
       const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
       const _tipB = _evalNoteTipB(ev, sid);
-      html += `<td class="meval-row-total meval-cell-note" data-sid="${_esc(sid)}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft);cursor:help" title="${_escAttr(_tipB)}">${note20 != null ? _fmtNote(note20) : '—'}</td>`;
+      const adjXB = _evalNoteAdjustExtra(ev, sid);
+      html += `<td class="meval-row-total meval-cell-note" data-sid="${_esc(sid)}"${adjXB.ctx} style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${col};border-left:2px solid var(--ink-blue-soft);cursor:context-menu" title="${_escAttr(_tipB + adjXB.tip)}">${note20 != null ? _fmtNote(note20) : '—'}${adjXB.mark}</td>`;
     }
     // Niveau par compétence évaluée (calculé)
     const colorsB = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
@@ -38516,7 +38692,9 @@ function _evalNoteTipD(ev, sid) {
     const pe = info.perExo['__orphans__'];
     lines.push(`(sans exercice) : ${_fmtNote(pe.brut)}/${_fmtNote(pe.max)} pts`);
   }
-  lines.push(`Total : ${_fmtNote(info.brut)}/${_fmtNote(info.max)} pts → ${_fmtNote(_computeStudentEvalNote(ev, sid))}/${ev.noteMax || 20}`);
+  // Note CALCULÉE : un éventuel ajustement (triche, retard…) est détaillé juste après par
+  // _evalAdjustTip. Mettre la note ajustée ici ferait mentir l'arithmétique affichée.
+  lines.push(`Total : ${_fmtNote(info.brut)}/${_fmtNote(info.max)} pts → ${_fmtNote(_computeStudentEvalNoteRaw(ev, sid))}/${ev.noteMax || 20}`);
   lines.push('Les cases A/NN sortent du barème : la note porte sur ce qui a été réellement passé.');
   return lines.join('\n');
 }
@@ -38667,7 +38845,8 @@ function _evalTableurRenderD(ev, cls) {
     {
       const note = _computeStudentEvalNote(ev, sid);
       const bg = (note != null) ? _noteColor(note, ev.noteMax || 20) : '';
-      html += `<td class="meval-row-total meval-cell-note" data-sid="${_esc(sid)}" style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${bg ? _contrastTextColor(bg) : 'var(--ink-blue)'};${SEPD}cursor:help" title="${_escAttr(_evalNoteTipD(ev, sid))}">${note != null ? _fmtNote(note) : '—'}</td>`;
+      const adjXD = _evalNoteAdjustExtra(ev, sid);
+      html += `<td class="meval-row-total meval-cell-note" data-sid="${_esc(sid)}"${adjXD.ctx} style="padding:3px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;font-size:.92em;background:${bg || 'var(--paper-warm)'};color:${bg ? _contrastTextColor(bg) : 'var(--ink-blue)'};${SEPD}cursor:context-menu" title="${_escAttr(_evalNoteTipD(ev, sid) + adjXD.tip)}">${note != null ? _fmtNote(note) : '—'}${adjXD.mark}</td>`;
     }
     globalComps.forEach((c, i) => {
       const lv = _typeDCompLevel(ev, sid, c.id);
@@ -45225,6 +45404,141 @@ function _qcmcamNextMnLabel(ev, baseMn) {
 // Contexte courant des commentaires (set par les callers — fiche supprimée, tableur uniquement maintenant)
 const _commentsCtx = { evalId: null, sid: null, mnId: null };
 
+// ═══════════════ Ajustement de la note finale — modale ═══════════════
+// Motifs proposés. Convention du fichier (cf. REMINDER_PRESETS) : un motif PRÉ-REMPLIT
+// le formulaire, il ne valide pas — l'enseignant complète (« Triche — DS du 12/03 »).
+var ADJUST_PRESETS = [
+  { op: 'mul', v: 0.5, label: 'Triche' },
+  { op: 'set', v: 0,   label: 'Triche — note annulée' },
+  { op: 'set', v: 0,   label: 'Copie non rendue' },
+  { op: 'add', v: -2,  label: 'Rendu en retard' },
+  { op: 'add', v: 1,   label: 'Bonus présentation' },
+  { op: 'cap', v: 10,  label: 'Note plafonnée' },
+];
+var _evalAdjustCtx = null;   // { evalId, sid }
+
+function _evalAdjustOpen(sid, evalId) {
+  evalId = evalId || document.getElementById('meval-tableur-evalid')?.value;
+  const ev = S.evaluations?.[evalId];
+  const stu = S.eleves?.[sid];
+  if (!ev || !stu) { toast('⚠ Contexte d\'ajustement incomplet', 'warn'); return; }
+  if (_computeStudentEvalNoteRaw(ev, sid) == null) {
+    toast('⚠ Pas de note à ajuster pour cet élève (aucune saisie, ou tout en A / NN)', 'warn');
+    return;
+  }
+  _evalAdjustCtx = { evalId, sid };
+  document.getElementById('meval-adjust-sid').value = sid;
+  document.getElementById('meval-adjust-title').textContent =
+    `⚖ Ajustement de la note — ${stu.prenom || ''} ${stu.nom || ''}`.trim();
+  _evalAdjustRender();
+  openMod('meval-adjust');
+}
+
+function _evalAdjustRender() {
+  if (!_evalAdjustCtx) return;
+  const ev = S.evaluations?.[_evalAdjustCtx.evalId];
+  const sid = _evalAdjustCtx.sid;
+  if (!ev) return;
+  const info = _evalNoteAdjustInfo(ev, sid);
+  const max = ev.noteMax || 20;
+
+  const sum = document.getElementById('meval-adjust-summary');
+  sum.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:10px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:var(--radius-md);font-family:var(--font-mono)">
+      <span><span style="font-size:.78em;color:var(--pencil)">calculée</span><br><strong style="font-size:1.3em">${_fmtNote(info.base)}</strong><span style="color:var(--pencil);font-size:.8em">/${_fmtNote(max)}</span></span>
+      <span style="font-size:1.4em;color:var(--pencil)">→</span>
+      <span><span style="font-size:.78em;color:var(--pencil)">finale</span><br><strong style="font-size:1.3em;color:${info.changed ? 'var(--margin-red)' : 'var(--ink-blue)'}">${_fmtNote(info.final)}</strong><span style="color:var(--pencil);font-size:.8em">/${_fmtNote(max)}</span></span>
+    </div>`;
+
+  const list = document.getElementById('meval-adjust-list');
+  list.innerHTML = info.list.length === 0
+    ? _emptyStateHTML('⚖', 'Aucun ajustement', 'La note de l\'élève est celle calculée. Choisis un motif ci-dessous, ou compose le tien.')
+    : info.list.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--paper);border:1px solid var(--rule-line);border-left:3px solid var(--margin-red);border-radius:var(--radius-sm)">
+          <span style="flex:1;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(a))}</strong>${a.label ? ' — ' + _esc(a.label) : ''}</span>
+          <button class="btn btn-r btn-sm" onclick="_evalAdjustRemove('${_escJsAttr(a.id)}')" title="Retirer cet ajustement" style="padding:2px 7px">✕</button>
+        </div>`).join('');
+
+  document.getElementById('meval-adjust-presets').innerHTML = ADJUST_PRESETS.map((p, i) =>
+    `<button class="btn btn-g btn-sm" onclick="_evalAdjustFillPreset(${i})" title="Pré-remplit le formulaire — tu peux compléter le motif avant d'ajouter" style="font-size:.82em">${_esc(_adjustHead(p))} ${_esc(p.label)}</button>`
+  ).join('');
+}
+
+function _evalAdjustFillPreset(i) {
+  const p = ADJUST_PRESETS[i];
+  if (!p) return;
+  document.getElementById('meval-adjust-op').value = p.op;
+  document.getElementById('meval-adjust-val').value = p.v;
+  const lab = document.getElementById('meval-adjust-label');
+  lab.value = p.label;
+  lab.focus();
+  lab.setSelectionRange(lab.value.length, lab.value.length);
+}
+
+function _evalAdjustAdd() {
+  if (!_evalAdjustCtx) return;
+  const ev = S.evaluations?.[_evalAdjustCtx.evalId];
+  const sid = _evalAdjustCtx.sid;
+  if (!ev) return;
+  const op = document.getElementById('meval-adjust-op').value;
+  const valEl = document.getElementById('meval-adjust-val');
+  const labEl = document.getElementById('meval-adjust-label');
+  const v = parseFloat(valEl.value);
+  const label = labEl.value.trim();
+  if (!ADJUST_OPS[op]) return;
+  if (!Number.isFinite(v)) { toast('⚠ Indique une valeur', 'warn'); valEl.focus(); return; }
+  if (op === 'mul' && v < 0) { toast('⚠ Un multiplicateur négatif n\'a pas de sens', 'warn'); valEl.focus(); return; }
+  // Motif OBLIGATOIRE : une note divisée par deux sans raison consignée est intenable
+  // face à une famille, et illisible pour soi-même trois mois plus tard.
+  if (!label) { toast('⚠ Indique le motif — il sera conservé avec la note', 'warn'); labEl.focus(); return; }
+  pushUndo();
+  ev.notes = ev.notes || {};
+  ev.notes[sid] = ev.notes[sid] || {};
+  const rec = ev.notes[sid];
+  if (!Array.isArray(rec.adjust)) rec.adjust = [];
+  rec.adjust.push({ id: uid(), op, v, label });
+  ev.updatedAt = Date.now();
+  save();
+  valEl.value = ''; labEl.value = '';
+  _evalAdjustRender();
+  _evalTableurRender();
+}
+
+function _evalAdjustRemove(aid) {
+  if (!_evalAdjustCtx) return;
+  const ev = S.evaluations?.[_evalAdjustCtx.evalId];
+  const rec = ev?.notes?.[_evalAdjustCtx.sid];
+  if (!rec || !Array.isArray(rec.adjust)) return;
+  const i = rec.adjust.findIndex(a => a.id === aid);
+  if (i < 0) return;
+  pushUndo();
+  rec.adjust.splice(i, 1);
+  if (rec.adjust.length === 0) delete rec.adjust;
+  ev.updatedAt = Date.now();
+  save();
+  _evalAdjustRender();
+  _evalTableurRender();
+}
+
+// Infobulle d'une cellule Note ajustée — reprend la note calculée et chaque motif.
+function _evalAdjustTip(info) {
+  if (!info.changed) return '';
+  return `\nNote calculée : ${_fmtNote(info.base)}\n`
+       + info.list.map(a => '• ' + _adjustLabel(a)).join('\n')
+       + `\n→ ${_fmtNote(info.final)}`;
+}
+
+// Ce que les trois cellules « Note » des tableurs (A/C, B, D) ajoutent en commun.
+// Renvoie les morceaux séparément : chaque site a déjà ses propres style/title, on ne
+// peut pas y poser un second attribut.
+function _evalNoteAdjustExtra(ev, sid) {
+  const info = _evalNoteAdjustInfo(ev, sid);
+  return {
+    ctx: ` oncontextmenu="event.preventDefault();_evalAdjustOpen('${_escJsAttr(sid)}')"`,
+    tip: _evalAdjustTip(info) + (info.base == null ? '' : '\n(clic droit = ajuster la note)'),
+    mark: info.changed ? '<span aria-hidden="true" style="font-size:.78em"> ⚖</span>' : '',
+    changed: info.changed,
+  };
+}
+
 function _evalCommentsOpen(mnId, sid, evalId) {
   // Compat : si appelé sans sid/evalId (signature historique), on tente l'éval courante du tableur
   evalId = evalId || document.getElementById('meval-tableur-evalid')?.value;
@@ -45239,6 +45553,15 @@ function _evalCommentsOpen(mnId, sid, evalId) {
   const stu = S.eleves?.[sid];
   const studentName = stu ? `${stu.nom?.toUpperCase() || ''} ${stu.prenom || ''}`.trim() : '';
   document.getElementById('meval-comments-title').textContent = `💬 Commentaires — ${mn?.label || '?'}${studentName ? ' · ' + studentName : ''}`;
+  // Le bonus/malus déduit du texte ne vaut plus que pour le Type A : ailleurs, l'aide le
+  // promettrait à tort — et sur un Type C, « -1 pt » écrit comme simple remarque décalait
+  // la note sans le dire. L'ajustement est désormais sur la note finale (clic droit dessus).
+  const cHelp = document.getElementById('meval-comments-help');
+  if (cHelp) {
+    cHelp.innerHTML = (ev?.type === 'A')
+      ? `Annote chaque mini-note. Si tu écris un motif <code>[+-]N pt(s)</code> dans un commentaire, la note est <strong>automatiquement ajustée</strong> : <code>-1pt</code> = malus · <code>+1pt</code> = bonus · <code>0pt tricherie</code> = remplacement.`
+      : `Annote chaque question. Ces commentaires sont du <strong>texte</strong> — ils ne modifient pas la note. Pour sanctionner ou bonifier, fais un <strong>clic droit sur la note de l'élève</strong> (triche, retard, bonus…).`;
+  }
   _evalCommentsRender();
   _modalReturnTo['meval-comments'] = () => { _evalTableurRender(); };
   openMod('meval-comments');
