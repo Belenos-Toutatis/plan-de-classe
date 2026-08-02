@@ -6308,11 +6308,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.34.0';
+const APP_VERSION    = '2.34.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T15:10:51Z';
+const APP_BUILD_DATE = '2026-08-02T15:21:19Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7401,13 +7401,8 @@ var ADJUST_PRESETS_DEFAULT = [
 // ⚠️ Déclaré avant init() comme ADJUST_PRESETS_DEFAULT — migrateEvalDefaults l'amorce pendant.
 var COMMENT_LIB_DEFAULT = {
   positive: [
-    'Manipulation soignée et sécurisée',
-    'Protocole respecté du début à la fin',
-    'Schéma clair et légendé',
-    'Mesures rigoureuses, unités correctes',
-    'A repéré et corrigé son erreur seul',
-    'Regard critique sur les résultats',
     'Bonne coopération dans le groupe',
+    'A aidé au rangement',
     'Prise d\'initiative pertinente',
   ],
   negative: [
@@ -7419,11 +7414,7 @@ var COMMENT_LIB_DEFAULT = {
     'Circuit électrique non vérifié',
     'Chauffage laissé sans surveillance',
     'Produit utilisé sans lire l\'étiquette',
-    'Verrerie chaude manipulée sans précaution',
-    'Consignes de sécurité rappelées plusieurs fois',
     // Démarche expérimentale et rendu
-    'N\'a pas suivi le protocole',
-    'Mesure relevée sans unité',
     'Schéma non légendé',
     'Tableau de mesures incomplet',
     'Conclusion sans appui sur les mesures',
@@ -7432,6 +7423,32 @@ var COMMENT_LIB_DEFAULT = {
     'N\'a pas participé au travail du groupe',
   ],
 };
+
+// Révision du pack. ⚠️ À INCRÉMENTER dès que COMMENT_LIB_DEFAULT change, en décrivant le
+// mouvement dans les deux listes ci-dessous : une bibliothèque DÉJÀ amorcée ne se met pas à
+// jour toute seule (elle est devenue celle de l'enseignant), il faut lui dire quoi retirer
+// et quoi ajouter. On ne re-pousse JAMAIS tout le pack : cela ressusciterait les
+// commentaires qu'il a supprimés.
+var COMMENT_LIB_REV = 2;
+// Rév. 1 → 2 (2026-08-02, demande de l'utilisateur après essai) : le pack initial était trop
+// bavard côté positifs et redondant côté démarche. Ces commentaires SORTENT du pack —
+// retirés une seule fois d'une bibliothèque déjà amorcée, et seulement s'ils s'y trouvent
+// encore MOT POUR MOT (donc jamais une reformulation de l'enseignant).
+var COMMENT_LIB_REV2_OUT = [
+  'Manipulation soignée et sécurisée',
+  'Protocole respecté du début à la fin',
+  'Schéma clair et légendé',
+  'Mesures rigoureuses, unités correctes',
+  'A repéré et corrigé son erreur seul',
+  'Regard critique sur les résultats',
+  'Verrerie chaude manipulée sans précaution',
+  'Consignes de sécurité rappelées plusieurs fois',
+  'N\'a pas suivi le protocole',
+  'Mesure relevée sans unité',
+];
+// ...et ceux qui y ENTRENT (ajoutés s'ils sont absents). Ne lister QUE les nouveautés de la
+// révision : y remettre tout le pack réintroduirait les suppressions de l'enseignant.
+var COMMENT_LIB_REV2_IN = { positive: ['A aidé au rangement'], negative: [] };
 
 // Comportement de la touche Entrée dans les tableurs. ⚠️ Déclaré ICI, avant init(), pour
 // la même raison qu'ADJUST_OPS : la garde de migrateEvalDefaults le lit pendant init().
@@ -7592,13 +7609,29 @@ function migrateEvalDefaults() {
   // Le drapeau vit dans evalPrefs (déjà en liste blanche d'import, clés à noms fixes) —
   // pas de nouvelle section de S à déclarer. Une réinitialisation totale vide evalPrefs,
   // donc le pack revient : c'est bien ce qu'on veut pour un fichier neuf.
-  if (!ep.commentLibSeeded
-      && S.evalCommentLibrary.positive.length === 0
-      && S.evalCommentLibrary.negative.length === 0) {
-    S.evalCommentLibrary.positive = COMMENT_LIB_DEFAULT.positive.slice();
-    S.evalCommentLibrary.negative = COMMENT_LIB_DEFAULT.negative.slice();
+  // `commentLibSeeded` (booléen) était le drapeau de la rév. 1 : on le convertit en numéro
+  // de révision pour pouvoir faire évoluer le pack ensuite.
+  const _libRev = Number.isFinite(+ep.commentLibRev) ? +ep.commentLibRev
+                : (ep.commentLibSeeded ? 1 : 0);
+  if (_libRev === 0) {
+    if (S.evalCommentLibrary.positive.length === 0 && S.evalCommentLibrary.negative.length === 0) {
+      S.evalCommentLibrary.positive = COMMENT_LIB_DEFAULT.positive.slice();
+      S.evalCommentLibrary.negative = COMMENT_LIB_DEFAULT.negative.slice();
+    }
+  } else if (_libRev < COMMENT_LIB_REV) {
+    // Bibliothèque déjà amorcée : elle appartient à l'enseignant. On applique le SEUL
+    // mouvement de la révision — retirer ce qui sort du pack (s'il y figure encore mot pour
+    // mot), ajouter ce qui y entre (s'il en est absent). Re-pousser le pack entier
+    // ressusciterait ses suppressions.
+    for (const kind of ['positive', 'negative']) {
+      S.evalCommentLibrary[kind] = S.evalCommentLibrary[kind].filter(c => !COMMENT_LIB_REV2_OUT.includes(c));
+      for (const c of (COMMENT_LIB_REV2_IN[kind] || [])) {
+        if (!S.evalCommentLibrary[kind].includes(c)) S.evalCommentLibrary[kind].push(c);
+      }
+    }
   }
-  ep.commentLibSeeded = true;
+  ep.commentLibRev = COMMENT_LIB_REV;
+  delete ep.commentLibSeeded;   // remplacé par le numéro de révision
   // F6 — Scrub des évaluations : si un champ structurel a un type faux (ex. JSON
   // corrompu, import d'un fichier altéré, ancienne phase), normalise plutôt que
   // de laisser crash au 1er render.

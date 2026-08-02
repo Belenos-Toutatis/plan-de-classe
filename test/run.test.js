@@ -1072,19 +1072,46 @@ test('Motifs d\'ajustement : amorçage, scrub, et liste vide respectée', () => 
 test('Bibliothèque : amorçage unique du pack, et suppressions respectées', () => {
   seedTypeD();
   // Bibliothèque vide et jamais amorcée → le pack est posé
-  ev(`S.evalCommentLibrary = { positive: [], negative: [] }; delete S.evalPrefs.commentLibSeeded;
+  ev(`S.evalCommentLibrary = { positive: [], negative: [] };
+      delete S.evalPrefs.commentLibSeeded; delete S.evalPrefs.commentLibRev;
       migrateEvalDefaults();`);
   assert.equal(ev("S.evalCommentLibrary.positive.length"), ev("COMMENT_LIB_DEFAULT.positive.length"));
   assert.equal(ev("S.evalCommentLibrary.negative.length"), ev("COMMENT_LIB_DEFAULT.negative.length"));
-  assert.equal(ev("S.evalPrefs.commentLibSeeded"), true);
-  // ⚠️ L'enseignant vide tout : le drapeau doit empêcher le pack de revenir
+  assert.equal(ev("S.evalPrefs.commentLibRev"), ev("COMMENT_LIB_REV"));
+  // ⚠️ L'enseignant vide tout : la révision enregistrée doit empêcher le pack de revenir
   ev(`S.evalCommentLibrary = { positive: [], negative: [] }; migrateEvalDefaults();`);
   assert.equal(ev("S.evalCommentLibrary.positive.length"), 0);
   assert.equal(ev("S.evalCommentLibrary.negative.length"), 0);
   // Une bibliothèque déjà garnie n'est jamais écrasée
   ev(`S.evalCommentLibrary = { positive: ['à moi'], negative: [] };
-      delete S.evalPrefs.commentLibSeeded; migrateEvalDefaults();`);
+      delete S.evalPrefs.commentLibSeeded; delete S.evalPrefs.commentLibRev;
+      migrateEvalDefaults();`);
   assert.equal(ev("S.evalCommentLibrary.positive.join(',')"), 'à moi');
+});
+
+test('Bibliothèque : une révision du pack retire les sortants sans ressusciter les suppressions', () => {
+  seedTypeD();
+  // Bibliothèque de rév. 1 : le pack d'alors + un commentaire personnel, et une suppression
+  // délibérée de l'enseignant (« Gants non mis », qui EST au pack courant).
+  ev(`S.evalCommentLibrary = {
+        positive: ['Manipulation soignée et sécurisée', 'Bonne coopération dans le groupe', 'À moi'],
+        negative: ['Cheveux non attachés', 'N\\'a pas suivi le protocole'] };
+      S.evalPrefs.commentLibSeeded = true; delete S.evalPrefs.commentLibRev;
+      migrateEvalDefaults();`);
+  const pos = ev("S.evalCommentLibrary.positive");
+  const neg = ev("S.evalCommentLibrary.negative");
+  // Les sortants du pack disparaissent…
+  assert.ok(!pos.includes('Manipulation soignée et sécurisée'), 'un sortant doit être retiré');
+  assert.ok(!neg.includes("N'a pas suivi le protocole"), 'un sortant doit être retiré');
+  // …le commentaire personnel et les entrants du pack restent
+  assert.ok(pos.includes('À moi'), 'le texte de l\'enseignant ne doit jamais être touché');
+  assert.ok(pos.includes('A aidé au rangement'), 'l\'entrant de la révision doit être ajouté');
+  // ⚠️ ET une suppression délibérée ne revient PAS (on ne re-pousse pas tout le pack)
+  assert.ok(!neg.includes('Gants non mis'), 'une suppression de l\'enseignant doit être respectée');
+  assert.equal(ev("S.evalPrefs.commentLibRev"), ev("COMMENT_LIB_REV"));
+  // Rejouer la migration ne change plus rien (le mouvement est à sens unique)
+  ev(`migrateEvalDefaults()`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('|')"), pos.join('|'));
 });
 
 test('Bibliothèque : aucun commentaire type ne porte de motif de points', () => {
