@@ -997,7 +997,7 @@ test('Type D : un commentaire de cellule ne touche pas la note', () => {
 
 test('Type D : les commentaires de cellule meurent avec leur question', () => {
   seedTypeD();
-  assert.equal(ev("_typeDComKey('q2','cmp_com')"), 'q2|cmp_com');
+  assert.equal(ev("_cellComKey('q2','cmp_com')"), 'q2|cmp_com');
   ev(`S.evaluations.evd.notes.s1.comments = {
         'q1|cmp_rai': ['pas de justification'],
         'q2|cmp_rai': ['ok'],
@@ -1017,4 +1017,29 @@ test('Type D : les commentaires de cellule meurent avec leur question', () => {
   // pas celui du test — deepStrictEqual échouerait sur le prototype, pas sur le contenu.
   assert.equal(ev("JSON.stringify(S.evaluations.evd.notes.s1.comments['q1|cmp_com'])"),
                '["écrit en string (legacy)"]');
+});
+
+test('Type B : commentaire de cellule — sans effet sur la note, et lié à sa passation', () => {
+  seedTypeD();  // fournit evalPrefs + compétences + la classe c1 et l'élève s1
+  ev(`S.evaluations.evb = { id:'evb', type:'B', nomCourt:'B1', classIds:['c1'], classId:'c1',
+      periode:'S1', coef:1, noteMax:20, countsForMean:true, weighting:'equal',
+      passations:[
+        { id:'p1', code:'P1', date:'2026-01-10', competenceIds:['cmp_rai','cmp_com'],
+          niveaux:{ s1:{ cmp_rai:3, cmp_com:2 } } },
+        { id:'p2', code:'P2', date:'2026-02-10', competenceIds:['cmp_rai'],
+          niveaux:{ s1:{ cmp_rai:4 } } } ] }`);
+  const avant = ev("_computeStudentEvalNote(S.evaluations.evb, 's1')");
+  assert.ok(avant > 0, 'le socle du test doit produire une note');
+  // Même mécanique de clé qu'en Type D : (porteur × compétence)
+  assert.equal(ev("_cellComKey('p1','cmp_rai')"), 'p1|cmp_rai');
+  // Le motif « -1 pt » ne vaut que pour le Type A : ici il reste du texte
+  ev(`S.evaluations.evb.notes = { s1: { comments: {
+        'p1|cmp_rai': ['-1 pt : hors sujet'], 'p2|cmp_rai': ['bien mieux'] } } }`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evb, 's1')"), avant);
+  // ...et il ne crée pas de fausse « donnée » pour la détection d'éval orpheline
+  ev(`S.evaluations.evb.passations.forEach(p => { p.niveaux = {}; })`);
+  assert.equal(ev("_studentHasAnyDataInEval(S.evaluations.evb, 's1')"), false);
+  // Supprimer une passation emporte SES commentaires, pas ceux des autres
+  ev(`_evalDropCommentsForMn(S.evaluations.evb.notes.s1, 'p1')`);
+  assert.equal(ev("Object.keys(S.evaluations.evb.notes.s1.comments).join(',')"), 'p2|cmp_rai');
 });
