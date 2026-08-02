@@ -4213,8 +4213,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <label>Touche Entrée</label>
         <select id="evalprefs-defaultEnter" style="padding:4px 8px;font-size:.9em">
           <option value="question">Question suivante (→)</option>
-          <option value="student">Élève suivant (↓)</option>
-          <option value="column">Colonne par colonne</option>
+          <option value="byquestion">Question par question</option>
+          <option value="byexo">Exercice par exercice</option>
         </select>
         <label>Granulométrie note</label>
         <select id="evalprefs-defaultGranularity" style="padding:4px 8px;font-size:.9em" title="Précision d'arrondi pour la note finale (réglable aussi par éval)">
@@ -5159,8 +5159,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         </select>
         <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Élève suivant : descend dans la même colonne&#10;• Colonne par colonne : descend, puis remonte en haut de la colonne suivante&#10;• Question par question : remplit la question pour un élève, puis descend — la question est faite pour toute la classe avant de passer à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier">
           <option value="question" selected>↩ Question suivante</option>
-          <option value="student">↩ Élève suivant</option>
-          <option value="column">↩ Colonne par colonne</option>
           <option value="byquestion">↩ Question par question</option>
           <option value="byexo">↩ Exercice par exercice</option>
         </select>
@@ -6247,11 +6245,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.29.0';
+const APP_VERSION    = '2.29.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T08:38:20Z';
+const APP_BUILD_DATE = '2026-08-02T08:52:04Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7261,7 +7259,7 @@ const DEFAULT_EVAL_PREFS = {
   // Défauts à la création d'une nouvelle évaluation
   defaultCoef:      1,
   defaultSort:      'nom-prenom',     // 'nom-prenom' | 'prenom-nom'
-  defaultEnterBehavior: 'question',   // 'question' | 'student' | 'column'
+  defaultEnterBehavior: 'question',   // cf. ENTER_BEHAVIORS
   // Seuils de couleur pour la note finale /maxNote, sous forme [{ max, color }, ...]
   // Le dernier (avec max = null) couvre les valeurs au-dessus du dernier seuil.
   // Défaut : rouge < 8 < orange < 12 < vert < 15 < bleu
@@ -7314,6 +7312,19 @@ function _typeDDefaultPoints(nb) {
 // suivantes non initialisées (symptôme observé : « Cannot access '_rattrapState' before
 // initialization »). Même famille de piège que _bilanCompState — cf. CLAUDE.md.
 var ADJUST_OPS = { set: '=', mul: '×', add: '+', cap: '≤' };
+
+// Comportement de la touche Entrée dans les tableurs. ⚠️ Déclaré ICI, avant init(), pour
+// la même raison qu'ADJUST_OPS : la garde de migrateEvalDefaults le lit pendant init().
+// `student` (descendre puis s'arrêter) et `column` (descendre puis colonne suivante) ont
+// été RETIRÉS, jugés sans usage : « Question par question » fait exactement ce que faisait
+// `column` dès qu'une question tient sur une colonne, et enchaîne là où `student`
+// s'arrêtait. Une valeur enregistrée avant le retrait ne doit pas laisser le sélecteur sur
+// une option inexistante — il afficherait une valeur vide.
+var ENTER_BEHAVIORS = ['question', 'byquestion', 'byexo'];
+function _normalizeEnterBehavior(v) {
+  if (v === 'student' || v === 'column') return 'byquestion';
+  return ENTER_BEHAVIORS.includes(v) ? v : 'question';
+}
 
 var _cCommentAdjEvals = new Set();
 var _cCommentAdjWarned = false;
@@ -7424,7 +7435,7 @@ function migrateEvalDefaults() {
   if (typeof ep.typeDBilanParExercice !== 'boolean') ep.typeDBilanParExercice = false;
   if (typeof ep.defaultCoef !== 'number' || ep.defaultCoef < 0) ep.defaultCoef = 1;
   if (!['nom-prenom','prenom-nom'].includes(ep.defaultSort)) ep.defaultSort = 'nom-prenom';
-  if (!['question','student','column'].includes(ep.defaultEnterBehavior)) ep.defaultEnterBehavior = 'question';
+  ep.defaultEnterBehavior = _normalizeEnterBehavior(ep.defaultEnterBehavior);
   if (typeof ep.defaultGranularity !== 'number' || ep.defaultGranularity < 0) ep.defaultGranularity = 0;
   if (typeof ep.meanGranularity !== 'number' || ep.meanGranularity < 0) ep.meanGranularity = DEFAULT_EVAL_PREFS.meanGranularity;
   if (!Array.isArray(ep.noteThresholds) || ep.noteThresholds.length === 0) {
@@ -31808,7 +31819,7 @@ function _evalPrefsRenderAll(prefs) {
   // ── Défauts éval (coef, tri, touche Entrée) ──
   const dc = document.getElementById('evalprefs-defaultCoef'); if (dc) dc.value = prefs.defaultCoef ?? 1;
   const ds = document.getElementById('evalprefs-defaultSort'); if (ds) ds.value = prefs.defaultSort || 'nom-prenom';
-  const de = document.getElementById('evalprefs-defaultEnter'); if (de) de.value = prefs.defaultEnterBehavior || 'question';
+  const de = document.getElementById('evalprefs-defaultEnter'); if (de) de.value = _normalizeEnterBehavior(prefs.defaultEnterBehavior);
   const dg = document.getElementById('evalprefs-defaultGranularity'); if (dg) dg.value = String(prefs.defaultGranularity ?? 0);
   const mg = document.getElementById('evalprefs-meanGranularity'); if (mg) mg.value = String(prefs.meanGranularity ?? 0.01);
   // ── Seuils de couleur note ──
@@ -32197,7 +32208,7 @@ function _evalPrefsSave() {
   const dCoef = parseFloat(document.getElementById('evalprefs-defaultCoef')?.value);
   S.evalPrefs.defaultCoef = (Number.isFinite(dCoef) && dCoef >= 0) ? dCoef : 1;
   S.evalPrefs.defaultSort = document.getElementById('evalprefs-defaultSort')?.value || 'nom-prenom';
-  S.evalPrefs.defaultEnterBehavior = document.getElementById('evalprefs-defaultEnter')?.value || 'question';
+  S.evalPrefs.defaultEnterBehavior = _normalizeEnterBehavior(document.getElementById('evalprefs-defaultEnter')?.value);
   const dGran = parseFloat(document.getElementById('evalprefs-defaultGranularity')?.value);
   S.evalPrefs.defaultGranularity = (Number.isFinite(dGran) && dGran >= 0) ? dGran : 0;
   const mGran = parseFloat(document.getElementById('evalprefs-meanGranularity')?.value);
@@ -35534,10 +35545,12 @@ function _evalOpenTableur(forcedId) {
   // Persistance du comportement de la touche Entrée
   const enterSel = document.getElementById('meval-tableur-enter');
   if (enterSel) {
-    // Priorité : localStorage > S.evalPrefs.defaultEnterBehavior > 'question'
-    try { enterSel.value = localStorage.getItem('planClasse_evalTableurEnter')
-                        || S.evalPrefs?.defaultEnterBehavior || 'question'; }
-    catch (e) { enterSel.value = S.evalPrefs?.defaultEnterBehavior || 'question'; }
+    // Priorité : localStorage > S.evalPrefs.defaultEnterBehavior > 'question'.
+    // Normalisé : une valeur retirée depuis (student, column) retomberait sinon sur une
+    // option inexistante et laisserait le sélecteur vide.
+    let stored = null;
+    try { stored = localStorage.getItem('planClasse_evalTableurEnter'); } catch (e) {}
+    enterSel.value = _normalizeEnterBehavior(stored || S.evalPrefs?.defaultEnterBehavior);
     enterSel.onchange = () => {
       try { localStorage.setItem('planClasse_evalTableurEnter', enterSel.value); } catch (e) {}
     };
@@ -37004,6 +37017,10 @@ if (!window._evalTableurPasteAttached) {
   window._evalTableurPasteAttached = true;
 }
 
+function _enterBehavior() {
+  return _normalizeEnterBehavior(document.getElementById('meval-tableur-enter')?.value);
+}
+
 // Bornes du bloc de colonnes auquel appartient la colonne `ci` : la QUESTION (ou la
 // passation en Type B), ou l'EXERCICE entier si `byExo`.
 // ⚠️ Lu depuis le DOM, pas recalculé depuis le modèle : l'ordre des colonnes vient du
@@ -37068,11 +37085,12 @@ function _evalTableurKey(e, inputEl) {
     }
   } else if (key === 'Enter') {
     e.preventDefault();
-    const enterBehavior = document.getElementById('meval-tableur-enter')?.value || 'question';
-    if (enterBehavior === 'student') {
-      if (ri < numRows - 1) targetRi = ri + 1;
-      else return;
-    } else if (enterBehavior === 'byquestion' || enterBehavior === 'byexo') {
+    // ⚠️ `student` et `column` ont été RETIRÉS (jugés sans usage) : « Question par
+    // question » les couvre — en A/C, où une question tient sur une colonne, il fait
+    // exactement ce que faisait `column`. _enterBehavior() convertit les valeurs
+    // enregistrées avant ce retrait.
+    const enterBehavior = _enterBehavior();
+    if (enterBehavior === 'byquestion' || enterBehavior === 'byexo') {
       // On termine un BLOC (une question, ou un exercice entier) pour l'élève courant,
       // puis on descend au suivant sur le même bloc — soit la façon dont on corrige
       // réellement : question par question, ou exercice par exercice, sur tout le paquet.
@@ -37082,11 +37100,6 @@ function _evalTableurKey(e, inputEl) {
       if (ci < blk.end) targetCi = ci + 1;
       else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = blk.start; }
       else if (blk.end < numCols - 1) { targetRi = 0; targetCi = blk.end + 1; }
-      else return;
-    } else if (enterBehavior === 'column') {
-      // Descend dans la colonne. En fin de colonne : passe au haut de la colonne suivante.
-      if (ri < numRows - 1) targetRi = ri + 1;
-      else if (ci < numCols - 1) { targetCi = ci + 1; targetRi = 0; }
       else return;
     } else {
       // 'question' (défaut) : cellule suivante (idem Tab sans Shift)
@@ -38847,6 +38860,12 @@ function _evalTableurRenderD(ev, cls) {
     }
   }
   const SEPD = 'border-left:2px solid var(--ink-blue-soft);';
+  // Le bilan par exercice aligne les compétences de TOUS les exercices sur une seule
+  // rangée de colonnes (« Ex1 C1 | Ex1 C2 | Ex2 C2 ») : sans marque de frontière, rien
+  // ne dit où finit un exercice. On pose donc le séparateur fort au CHANGEMENT
+  // d'exercice, et un filet léger entre les compétences d'un même exercice.
+  const _exoCompLead = i => (i === 0 || exoComps[i].exoKey !== exoComps[i - 1].exoKey)
+    ? SEPD : 'border-left:1px solid var(--rule-line-soft);';
 
   const noCompCount = ev.miniNotes.filter(mn => (mn.competenceIds || []).length === 0).length;
   let html = '';
@@ -38871,7 +38890,7 @@ function _evalTableurRenderD(ev, cls) {
     html += `<th rowspan="3" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:44px;font-family:var(--font-mono);font-weight:600;font-size:.82em;background:var(--paper-warm);${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}" title="${_escAttr((c.code || '?') + (c.name ? ' — ' + c.name : '') + '\nNiveau ENTIER atteint sur cette éval (moyenne pondérée par les poids, arrondie) — c\'est cette valeur qui alimente le bilan de période')}">${_esc(c.code)}</th>`;
   });
   exoComps.forEach((x, i) => {
-    html += `<th rowspan="3" style="padding:5px 5px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:44px;font-family:var(--font-mono);font-size:.74em;font-weight:600;color:var(--pencil);background:var(--paper-warm);${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}" title="${_escAttr('Niveau entier sur ' + x.code + ' restreint à ' + x.exoLabel + ' — informatif, sans effet sur les bilans')}">${_esc(x.exoLabel)}<br>${_esc(x.code)}</th>`;
+    html += `<th rowspan="3" style="padding:5px 5px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:44px;font-family:var(--font-mono);font-size:.74em;font-weight:600;color:var(--pencil);background:var(--paper-warm);${_exoCompLead(i)}" title="${_escAttr('Niveau entier sur ' + x.code + ' restreint à ' + x.exoLabel + ' — informatif, sans effet sur les bilans')}">${_esc(x.exoLabel)}<br>${_esc(x.code)}</th>`;
   });
   html += `<th rowspan="3" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);${SEPD}" title="Remarque facultative par élève">📝 Remarque</th>`;
   html += '</tr>';
@@ -38965,7 +38984,7 @@ function _evalTableurRenderD(ev, cls) {
     });
     exoComps.forEach((x, i) => {
       const lv = _typeDCompLevel(ev, sid, x.cid, x.exoKey);
-      html += `<td class="d-exocomp" data-exokey="${_esc(x.exoKey)}" data-cid="${_esc(x.cid)}" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:var(--paper-warm);${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}">${_compPillHTML(lv)}</td>`;
+      html += `<td class="d-exocomp" data-exokey="${_esc(x.exoKey)}" data-cid="${_esc(x.cid)}" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:var(--paper-warm);${_exoCompLead(i)}">${_compPillHTML(lv)}</td>`;
     });
     const remark = ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '';
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${SEPD}background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="${remark ? _escAttr(remark) : 'Remarque facultative pour cet élève'}"></td>`;
@@ -38997,7 +39016,7 @@ function _evalTableurRenderD(ev, cls) {
     const m = lvs.length ? (lvs.reduce((a, b) => a + b, 0) / lvs.length) : null;
     html += `<th class="d-foot-comp" data-cid="${_esc(c.id)}" style="padding:3px 5px;text-align:center;font-family:var(--font-mono);font-size:.82em;border-top:2px solid var(--rule-line)" title="Niveau moyen de classe sur ${_escAttr(c.code || '?')}">${m != null ? m.toFixed(1) : '—'}</th>`;
   });
-  exoComps.forEach(() => { html += `<th style="border-top:2px solid var(--rule-line)"></th>`; });
+  exoComps.forEach((x, i) => { html += `<th style="border-top:2px solid var(--rule-line);${_exoCompLead(i)}"></th>`; });
   html += `<th style="border-top:2px solid var(--rule-line)"></th>`;
   html += '</tr></tfoot></table>';
 
