@@ -5322,16 +5322,20 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       Pour vous permettre de découvrir l'application sans rien configurer, des <strong>données fictives</strong> ont été chargées :
     </p>
     <ul style="font-size:.9em;line-height:1.6;padding-left:22px;margin-bottom:14px">
-      <li><strong>4 classes</strong> fictives (6e A, 6e B, 5e A, 5e B) avec 28 à 32 élèves chacune</li>
-      <li><strong>2 salles</strong> (Salle 102 et Salle 105) — la 6e A et la 5e A utilisent les deux</li>
+      <li><strong>6 classes</strong> fictives (6e A/B, 5e A/B, 4e A, 3e A) de 25 à 32 élèves, plus 2 <strong>classes recomposées</strong></li>
+      <li><strong>4 salles</strong> dont deux en îlots — la 6e A et la 5e A en utilisent deux chacune</li>
       <li><strong>2 classes mobiles</strong> (CM1 et CM2) de 32 tablettes — une tablette est marquée HS dans CM2 pour la démo</li>
-      <li>Tous les élèves sont <strong>placés</strong> dans leur(s) salle(s), avec n° QCMcam configurés (pour le pool CM1)</li>
-      <li>Quelques élèves marqués <strong>PPRE</strong> ou <strong>PPS</strong>, et quelques <strong>compteurs d'oublis</strong> pré-remplis</li>
-      <li><strong>2 disciplines en parallèle</strong> sur la 6ᵉ A (SVT + Bilingue) — sélecteur de flux visible dans les onglets Devoirs / Bilans</li>
+      <li>Tous les élèves sont <strong>placés</strong>, avec n° QCMcam configurés (pour le pool CM1)</li>
+      <li>Quelques élèves marqués <strong>PPRE</strong> ou <strong>PPS</strong>, des <strong>compteurs d'oublis</strong>, des <strong>appels</strong> enregistrés</li>
+      <li><strong>41 évaluations</strong> : les <strong>4 types (A, B, C, D)</strong> dans chaque classe et à <strong>chaque semestre</strong>, avec bulletins et conseils de classe remplis</li>
+      <li><strong>2 disciplines en parallèle</strong> sur la 6ᵉ A (Physique-chimie + Bilingue) — sélecteur de flux dans les onglets Devoirs / Bilans</li>
+      <li>La <strong>3e A n'a aucune évaluation</strong> : c'est volontaire, pour vous montrer à quoi ressemble une classe qui démarre</li>
     </ul>
 
     <div style="background:#eaf4ff;border:1px solid #90c8f0;border-radius:4px;padding:10px 14px;margin-bottom:14px;font-size:.9em">
-      <strong>💡 Pour explorer :</strong> baladez-vous dans les onglets — Classes, Élèves, Plan de classe, Config Salle, Tablettes, QCMCam. Toutes les fonctionnalités sont actives sur les données fictives.
+      <strong>💡 Pour explorer :</strong> baladez-vous dans les onglets, Vie de classe comme Évaluations. Tout est actif sur les données fictives —
+      y compris un <strong>devoir commun à deux classes</strong> (bouton 🔀 Comparer classes), une <strong>élève transférée</strong> en janvier dont les notes
+      de l'ancienne classe restent visibles (marquées ⤴), des <strong>notes ajustées</strong> pour triche ou retard, et des devoirs <strong>facultatifs</strong> ou <strong>diagnostiques</strong>.
     </div>
 
     <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:4px;padding:10px 14px;margin-bottom:14px;font-size:.9em">
@@ -6353,11 +6357,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.36.1';
+const APP_VERSION    = '2.37.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T16:11:00Z';
+const APP_BUILD_DATE = '2026-08-02T16:50:23Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29576,686 +29580,551 @@ function _seedDemoConstraints() {
 }
 
 // ── Seed démo : évaluations + bulletin ──────────────────────────────────
-// Construit un jeu d'évaluations réaliste pour 4 classes (6A, 6B, 5A, 5B) +
-// 1 éval simple sur 4A. La 3A reste sans éval (état vide démontré).
-// Couvre : Types A/B/C, multi-périodes (S1+S2), commentaires, exclusions,
-// dateIndiv (rattrapage), valeurs A/NN, coef/noteMax variés, studentRemarks,
-// bulletinRemarques par (sid×période), bulletinClassRemarques, bulletinWorkedItems.
+// Matrice COMPLÈTE : 5 classes (6A, 6B, 5A, 5B, 4A) × 4 types (A/B/C/D) × 2 semestres
+// = 40 évaluations, plus 2 évals sur la discipline « Physique-chimie bilingue » de la 6A.
+// La 3A reste volontairement sans évaluation : elle documente l'état vide des trois
+// onglets du volet Évaluations.
+//
+// L'intention est DOCUMENTAIRE : un enseignant qui découvre l'app doit pouvoir tomber
+// sur chaque fonctionnalité sans avoir à la créer lui-même. Sont donc mis en scène, en
+// plus des 4 types : évaluation multi-classes (et son tableau croisé), élève transféré
+// et ses évals orphelines ⤴, ajustements de la note finale (triche / retard / bonus),
+// évaluations facultatives (les 3 modes) et diagnostiques, mentions de conseil de classe,
+// commentaires de cellule sur les 4 types — y compris la clé composite des types B et D —,
+// créneaux et dates par classe, remarques par élève, dispenses, rattrapages, absences.
+//
+// ⚠️ Le PLAN ci-dessous est la source unique : ajouter une évaluation à la démo, c'est
+// ajouter une ligne au tableau, pas écrire un littéral de 40 lignes.
 function _seedDemoEvaluations() {
   const now = Date.now();
   const _id = () => 'ev_' + Math.random().toString(36).slice(2, 9) + '_' + (now % 100000).toString(36);
   const _mnId = () => 'mn_' + Math.random().toString(36).slice(2, 8);
   const _exoId = () => 'exo_' + Math.random().toString(36).slice(2, 7);
   const _passId = () => 'pass_' + Math.random().toString(36).slice(2, 8);
+  const _adjId = () => 'adj_' + Math.random().toString(36).slice(2, 8);
+  const D = 86400000;
 
-  // Helper pseudo-aléatoire déterministe par classe + index (pour générer
-  // des notes variées mais reproductibles).
+  // Pseudo-aléatoire déterministe : la démo doit être identique d'une installation à
+  // l'autre (une capture d'écran de la documentation reste valable).
   const _rng = (seed) => {
     let s = seed | 0;
-    return () => {
-      s = (s * 1664525 + 1013904223) | 0;
-      return ((s >>> 0) % 10000) / 10000;
-    };
+    return () => { s = (s * 1664525 + 1013904223) | 0; return ((s >>> 0) % 10000) / 10000; };
   };
-
-  // Compétences disponibles (préchargées : C1..C8)
-  const compIds = Object.keys(S.competences || {}).slice(0, 8);
-
-  // Helper : construit ev.notes pour Type A/C (mini-notes ou exercices avec questions)
-  // - Notes numériques aléatoires (clampées sur [0, mn.max])
-  // - Quelques A (absent) sur ~1 élève par éval
-  // - Quelques NN (non noté) sur ~1 élève
-  // - Quelques commentaires (~2-3 par éval)
-  // - Quelques exclusions (~1 par éval — élève dispensé)
-  // - Une dateIndiv (rattrapage) sur ~1 élève par éval
-  const _seedNotes = (ev, sids, seed, level) => {
-    const r = _rng(seed);
-    ev.notes = ev.notes || {};
-    const mns = ev.miniNotes || [];
-    for (let i = 0; i < sids.length; i++) {
-      const sid = sids[i];
-      // 5% des élèves : absent (toutes mini-notes = 'A')
-      if (i === Math.floor(sids.length * 0.10)) {
-        ev.notes[sid] = { values: {} };
-        for (const mn of mns) ev.notes[sid].values[mn.id] = 'A';
-        if (ev.type === 'A' || ev.type === 'C') ev.notes[sid].dateIndiv = ev.date ? _shiftDate(ev.date, 7) : null;
-        continue;
-      }
-      // 3% des élèves : non noté
-      if (i === Math.floor(sids.length * 0.20)) {
-        ev.notes[sid] = { values: {} };
-        for (const mn of mns) ev.notes[sid].values[mn.id] = 'NN';
-        continue;
-      }
-      // 3% des élèves : élève dispensé d'une partie du barème — `excluded` est une LISTE
-      // d'IDs de mini-notes retirées du barème pour cet élève (aménagement).
-      // Ici on retire les 2 premières questions ; le reste est noté.
-      if (i === Math.floor(sids.length * 0.30) && mns.length >= 3) {
-        const values = {};
-        for (let k = 2; k < mns.length; k++) {
-          values[mns[k].id] = Math.max(0, Math.min(mns[k].max, +(0.7 * mns[k].max).toFixed(1)));
-        }
-        ev.notes[sid] = { values, excluded: [mns[0].id, mns[1].id] };
-        continue;
-      }
-      // Notes numériques
-      const values = {};
-      // Niveau global de l'élève (faible/moyen/fort) — déterministe
-      const lvl = (i % 7 < 2) ? 0.45 : (i % 7 < 5 ? 0.70 : 0.88);
-      for (const mn of mns) {
-        const v = Math.max(0, Math.min(mn.max, +(lvl * mn.max * (0.7 + r() * 0.6)).toFixed(1)));
-        values[mn.id] = v;
-      }
-      ev.notes[sid] = { values };
-      // Quelques commentaires (toujours stockés sous forme de tableau)
-      if (i % 11 === 3) {
-        ev.notes[sid].comments = ev.notes[sid].comments || {};
-        ev.notes[sid].comments[mns[0].id] = ['A confondu deux notions — à revoir.'];
-      }
-      if (i % 13 === 7) {
-        ev.notes[sid].comments = ev.notes[sid].comments || {};
-        ev.notes[sid].comments[mns[Math.min(2, mns.length - 1)].id] = ['Démarche très claire 👍'];
-      }
-    }
-  };
-
-  // Décale une date ISO de N jours
   const _shiftDate = (iso, days) => {
     const d = new Date(iso + 'T12:00:00');
     d.setDate(d.getDate() + days);
     return d.toISOString().slice(0, 10);
   };
 
-  // Helper : peuple ev.studentRemarks pour quelques élèves d'une classe
-  const _seedStudentRemarks = (ev, sids, remarks) => {
-    ev.studentRemarks = ev.studentRemarks || {};
-    for (let i = 0; i < remarks.length && i < sids.length; i++) {
-      const r = remarks[i];
-      ev.studentRemarks[sids[r.idx]] = r.txt;
+  const compIds = Object.keys(S.competences || {}).slice(0, 8);
+  const C = (i) => compIds[i] || compIds[0];          // compétence n° i, avec repli
+  const nbLv = S.evalPrefs?.nbLevels || 4;
+  const sidsOf = (cid) => (S.classes[cid]?.eleves || []);
+
+  // ═══════════════ Disciplines ═══════════════
+  // Posées AVANT les évaluations : chacune naît avec la bonne discipline, plutôt que
+  // d'être réaffectée après coup. La 6A en a deux, pour démontrer le sélecteur de flux.
+  // ⚠️ La discipline PRINCIPALE du catalogue est RENOMMÉE, pas doublée : c'est le geste
+  // qu'un enseignant ferait, et cela évite de laisser « Discipline principale » orpheline
+  // à côté d'une « Physique-chimie » qui porterait tout.
+  if (!S.disciplines) S.disciplines = {};
+  const DISC_PC = _disciplinePrimaryId() || 'disc_main', DISC_BIL = 'disc_pc_bil';
+  S.disciplines[DISC_PC] = Object.assign({ id: DISC_PC, isPrimary: true }, S.disciplines[DISC_PC], { nom: 'Physique-chimie' });
+  if (!S.disciplines[DISC_BIL]) S.disciplines[DISC_BIL] = { id: DISC_BIL, nom: 'Physique-chimie bilingue', isPrimary: false };
+  for (const cid of ['6A', '6B', '5A', '5B', '4A', '3A']) {
+    const c = S.classes[cid];
+    if (c) c.disciplineIds = (cid === '6A') ? [DISC_PC, DISC_BIL] : [DISC_PC];
+  }
+
+  // ═══════════════ Générateurs de saisies ═══════════════
+
+  // Types A et C : notes numériques, plus les cas particuliers qu'un tableur réel contient.
+  // `level` place le centre de gravité de la classe ; le bruit reste déterministe.
+  const _seedNotes = (ev, sids, seed, level) => {
+    const r = _rng(seed);
+    ev.notes = ev.notes || {};
+    const mns = ev.miniNotes || [];
+    if (!mns.length || !sids.length) return;
+    for (let i = 0; i < sids.length; i++) {
+      const sid = sids[i];
+      // Absent : tout en 'A' — hors barème, pas un zéro. Rattrapage programmé.
+      if (i === Math.floor(sids.length * 0.10)) {
+        ev.notes[sid] = { values: {} };
+        for (const mn of mns) ev.notes[sid].values[mn.id] = 'A';
+        ev.notes[sid].dateIndiv = _shiftDate(ev.date, 7);
+        continue;
+      }
+      // Non noté : la copie existe mais n'entre pas dans la moyenne.
+      if (i === Math.floor(sids.length * 0.20)) {
+        ev.notes[sid] = { values: {} };
+        for (const mn of mns) ev.notes[sid].values[mn.id] = 'NN';
+        continue;
+      }
+      // Dispense d'aménagement : les 2 premières questions sortent du barème de CET élève.
+      if (i === Math.floor(sids.length * 0.30) && mns.length >= 3) {
+        const values = {};
+        for (let k = 2; k < mns.length; k++) values[mns[k].id] = +(0.7 * mns[k].max).toFixed(1);
+        ev.notes[sid] = { values, excluded: [mns[0].id, mns[1].id] };
+        continue;
+      }
+      const values = {};
+      const lvl = level * ((i % 7 < 2) ? 0.62 : (i % 7 < 5 ? 0.95 : 1.18));
+      for (const mn of mns) {
+        values[mn.id] = Math.max(0, Math.min(mn.max, +(lvl * mn.max * (0.75 + r() * 0.5)).toFixed(1)));
+      }
+      ev.notes[sid] = { values };
+      // Commentaires de cellule (clé simple : l'id de la question).
+      if (i % 11 === 3) ev.notes[sid].comments = { [mns[0].id]: ['A confondu deux notions — à revoir.'] };
+      if (i % 13 === 7) ev.notes[sid].comments = { [mns[Math.min(2, mns.length - 1)].id]: ['Démarche très claire 👍'] };
+      if (i % 17 === 5 && mns.length > 1) ev.notes[sid].comments = { [mns[1].id]: ['Unité oubliée dans le résultat.'] };
     }
   };
 
-  // Helper : peuple les niveaux d'une passation Type B
-  // niveaux : 1..4, 0 = non évalué, 'A' = absent
+  // Type B : un niveau par (passation × compétence).
   const _seedPassationLevels = (pass, sids, seed) => {
     const r = _rng(seed);
     pass.niveaux = {};
     for (let i = 0; i < sids.length; i++) {
       const sid = sids[i];
-      // 1 absent par passation
       if (i === Math.floor(sids.length * 0.12)) {
         pass.niveaux[sid] = {};
         for (const cid of pass.competenceIds) pass.niveaux[sid][cid] = 'A';
         continue;
       }
-      // Niveau global de l'élève
-      const baseLvl = (i % 5 < 1) ? 1.5 : (i % 5 < 3 ? 2.5 : 3.5);
+      const base = (i % 5 < 1) ? 1.5 : (i % 5 < 3 ? 2.5 : 3.5);
       const m = {};
-      for (const cid of pass.competenceIds) {
-        const v = Math.max(1, Math.min(4, Math.round(baseLvl + (r() - 0.5) * 1.8)));
-        m[cid] = v;
-      }
+      for (const cid of pass.competenceIds) m[cid] = Math.max(1, Math.min(nbLv, Math.round(base + (r() - 0.5) * 1.8)));
       pass.niveaux[sid] = m;
     }
   };
 
-  // ─── 6e A — set riche : 2 Type A, 1 Type B, 1 Type C, sur S1 et S2 ───
-  const cls6A = S.classes['6A'];
-  if (cls6A) {
-    const sids = cls6A.eleves;
-
-    // 1) Type A — "Mesures" (S1, 2025-09-15)
-    const evA1 = {
-      id: _id(), type: 'A',
-      classId: '6A', classIds: ['6A'],
-      nomCourt: 'Mesures', nomLong: 'Mesures et unités SI',
-      date: '2025-09-15', periode: 'S1',
-      coef: 1, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 4 },
-        { id: _mnId(), label: 'Q2', max: 4 },
-        { id: _mnId(), label: 'Q3', max: 6 },
-        { id: _mnId(), label: 'Q4', max: 6 },
-      ],
-      notes: {},
-      createdAt: now - 200 * 86400000, updatedAt: now - 150 * 86400000,
-    };
-    _seedNotes(evA1, sids, 1001, 0.7);
-    _seedStudentRemarks(evA1, sids, [
-      { idx: 4, txt: 'Très bonne maîtrise des conversions.' },
-      { idx: 12, txt: 'Difficultés persistantes en notation scientifique.' },
-    ]);
-    S.evaluations[evA1.id] = evA1;
-
-    // 2) Type B — "Démarche scientifique" (S1, 2 passations + 1 S2)
-    const evB1 = {
-      id: _id(), type: 'B',
-      classId: '6A', classIds: ['6A'],
-      nomCourt: 'Démarche', nomLong: 'Démarche scientifique — suivi compétences',
-      date: '2025-12-05', periode: 'S1',
-      coef: 2, noteMax: 20,
-      weighting: 'equal',
-      passations: [],
-      createdAt: now - 180 * 86400000, updatedAt: now - 60 * 86400000,
-    };
-    const pass1 = { id: _passId(), code: 'P1', date: '2025-10-12', competenceIds: compIds.slice(0, 3), niveaux: {} };
-    const pass2 = { id: _passId(), code: 'P2', date: '2025-12-05', competenceIds: compIds.slice(0, 4), niveaux: {} };
-    const pass3 = { id: _passId(), code: 'P3', date: '2026-03-08', competenceIds: compIds.slice(0, 3), niveaux: {} };
-    _seedPassationLevels(pass1, sids, 2001);
-    _seedPassationLevels(pass2, sids, 2002);
-    _seedPassationLevels(pass3, sids, 2003);
-    evB1.passations.push(pass1, pass2, pass3);
-    S.evaluations[evB1.id] = evB1;
-
-    // 3) Type C — "Contrôle volume/masse" (S1, exos + questions)
-    const evC1 = {
-      id: _id(), type: 'C',
-      classId: '6A', classIds: ['6A'],
-      nomCourt: 'DS Vol/Masse', nomLong: 'Contrôle — volume, masse, masse volumique',
-      date: '2025-11-20', periode: 'S1',
-      coef: 2, noteMax: 20,
-      exercices: [],
-      miniNotes: [],
-      notes: {},
-      createdAt: now - 170 * 86400000, updatedAt: now - 120 * 86400000,
-    };
-    const exo1 = { id: _exoId(), label: 'Ex.1', name: 'Mesures de volume' };
-    const exo2 = { id: _exoId(), label: 'Ex.2', name: 'Masse volumique' };
-    const exo3 = { id: _exoId(), label: 'Ex.3', name: 'Application' };
-    evC1.exercices.push(exo1, exo2, exo3);
-    evC1.miniNotes = [
-      { id: _mnId(), label: 'Q1', max: 2, exerciceId: exo1.id },
-      { id: _mnId(), label: 'Q2', max: 3, exerciceId: exo1.id },
-      { id: _mnId(), label: 'Q1', max: 2, exerciceId: exo2.id },
-      { id: _mnId(), label: 'Q2', max: 4, exerciceId: exo2.id },
-      { id: _mnId(), label: 'Q1', max: 4, exerciceId: exo3.id },
-      { id: _mnId(), label: 'Q2', max: 5, exerciceId: exo3.id },
-    ];
-    // Ajoute compétences liées sur quelques mini-notes (Type C : compétences inline)
-    if (compIds[0]) evC1.miniNotes[0].competenceIds = [compIds[0]];
-    if (compIds[1]) evC1.miniNotes[2].competenceIds = [compIds[1]];
-    if (compIds[2]) evC1.miniNotes[4].competenceIds = [compIds[2], compIds[1]];
-    _seedNotes(evC1, sids, 3001, 0.65);
-    _seedStudentRemarks(evC1, sids, [
-      { idx: 0, txt: 'Excellent contrôle, méthode rigoureuse.' },
-      { idx: 8, txt: 'Erreurs de calcul à corriger absolument.' },
-      { idx: 19, txt: 'Très en progrès depuis le diagnostic.' },
-    ]);
-    S.evaluations[evC1.id] = evC1;
-
-    // 4) Type A — "Éval finale" (S2, 2026-04-10)
-    const evA2 = {
-      id: _id(), type: 'A',
-      classId: '6A', classIds: ['6A'],
-      nomCourt: 'Éval finale', nomLong: 'Évaluation finale de fin d’année',
-      date: '2026-04-10', periode: 'S2',
-      coef: 2, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 5 },
-        { id: _mnId(), label: 'Q2', max: 5 },
-        { id: _mnId(), label: 'Q3', max: 5 },
-        { id: _mnId(), label: 'Q4', max: 5 },
-      ],
-      notes: {},
-      createdAt: now - 40 * 86400000, updatedAt: now - 20 * 86400000,
-    };
-    _seedNotes(evA2, sids, 4001, 0.75);
-    S.evaluations[evA2.id] = evA2;
-
-    // 5) Type D — "DS Énergie" (S2, sommative par compétences : niveaux directs,
-    // barème niveau → points 0/1/2/3, poids ×2 sur une saisie, un absent, une
-    // sanction « rendu en retard » pour démontrer l'ajustement de note finale).
-    const evD1 = {
-      id: _id(), type: 'D',
-      classId: '6A', classIds: ['6A'],
-      nomCourt: 'DS Énergie', nomLong: 'Sommative par compétences — l’énergie et ses conversions',
-      date: '2026-05-12', periode: 'S2',
-      coef: 2, noteMax: 20,
-      pointsParNiveau: [0, 1, 2, 3],
-      bilanParExercice: false,
-      exercices: [], miniNotes: [], notes: {},
-      createdAt: now - 30 * 86400000, updatedAt: now - 10 * 86400000,
-    };
-    const exD1 = { id: _exoId(), label: 'Ex.1', name: 'Restitution de connaissances' };
-    const exD2 = { id: _exoId(), label: 'Ex.2', name: 'Raisonnement' };
-    evD1.exercices.push(exD1, exD2);
-    evD1.miniNotes = [
-      { id: _mnId(), label: 'Q1', exerciceId: exD1.id, competenceIds: [compIds[0]].filter(Boolean), compWeights: {} },
-      { id: _mnId(), label: 'Q2', exerciceId: exD1.id, competenceIds: [compIds[0], compIds[1]].filter(Boolean),
-        compWeights: compIds[0] ? { [compIds[0]]: 2 } : {} },
-      { id: _mnId(), label: 'Q3', exerciceId: exD2.id, competenceIds: [compIds[1]].filter(Boolean), compWeights: {} },
-    ];
-    {
-      const rD = _rng(5001);
-      const nbLv = S.evalPrefs?.nbLevels || 4;
-      sids.forEach((sid, i) => {
-        if (i === Math.floor(sids.length * 0.10)) {
-          // Un élève absent : toutes les cases à 'A' (hors barème)
-          const lv = {};
-          for (const mn of evD1.miniNotes) { lv[mn.id] = {}; for (const cid of mn.competenceIds) lv[mn.id][cid] = 'A'; }
-          evD1.notes[sid] = { levels: lv };
-          return;
+  // Type D : un niveau par (question × compétence), rangé dans `levels` — jamais `values`.
+  const _seedLevelsD = (ev, sids, seed) => {
+    const r = _rng(seed);
+    ev.notes = ev.notes || {};
+    for (let i = 0; i < sids.length; i++) {
+      const sid = sids[i];
+      const lv = {};
+      const absent = (i === Math.floor(sids.length * 0.10));
+      const nonNote = (i === Math.floor(sids.length * 0.22));
+      // ⚠️ Centre de gravité calé pour que les moyennes d'un Type D soient du même ordre
+      // que celles d'un Type A ou C. Un barème niveau → points dont le premier échelon
+      // vaut 0 tire les notes vers le bas : une première version sortait les D à 8,8 de
+      // moyenne contre 12,7 pour les autres types, ce qui laissait croire que ce type de
+      // devoir note plus sévèrement — alors que seule la distribution semée différait.
+      const base = (i % 7 < 2) ? 2 : (i % 7 < 5 ? 3 : 4);
+      for (const mn of ev.miniNotes) {
+        lv[mn.id] = {};
+        for (const cid of (mn.competenceIds || [])) {
+          const bruit = r();
+          lv[mn.id][cid] = absent ? 'A'
+                         : nonNote ? 'NN'
+                         : Math.max(1, Math.min(nbLv, base + (bruit > 0.72 ? 1 : (bruit < 0.24 ? -1 : 0))));
         }
-        const base = (i % 7 < 2) ? 1 : (i % 7 < 5 ? 2 : 3);
-        const lv = {};
-        for (const mn of evD1.miniNotes) {
-          lv[mn.id] = {};
-          for (const cid of mn.competenceIds) {
-            lv[mn.id][cid] = Math.max(1, Math.min(nbLv, base + (rD() > 0.6 ? 1 : 0)));
-          }
-        }
-        evD1.notes[sid] = { levels: lv };
-      });
-      // Une sanction d'exemple (−2 rendu en retard) — les niveaux restent intacts
-      if (sids[5] && evD1.notes[sids[5]]) {
-        evD1.notes[sids[5]].adjust = [{ id: 'adj_' + Math.random().toString(36).slice(2, 8), op: 'add', v: -2, label: 'Rendu en retard' }];
+      }
+      ev.notes[sid] = { levels: lv };
+    }
+  };
+
+  // ⚠️ Commentaire de cellule des types B et D : la cellule est un COUPLE
+  // (porteur × compétence), donc la clé est composite — cf. _cellComKey.
+  const _comOnCouple = (ev, sid, ownerId, cid, txt) => {
+    if (!sid || !ev.notes) return;
+    ev.notes[sid] = ev.notes[sid] || {};
+    ev.notes[sid].comments = ev.notes[sid].comments || {};
+    ev.notes[sid].comments[_cellComKey(ownerId, cid)] = [txt];
+  };
+
+  const _remarks = (ev, sids, list) => {
+    ev.studentRemarks = ev.studentRemarks || {};
+    for (const r of list) if (sids[r.i]) ev.studentRemarks[sids[r.i]] = r.t;
+  };
+  const _adjust = (ev, sid, list) => {
+    if (!sid || !ev.notes?.[sid]) return;
+    ev.notes[sid].adjust = list.map(a => Object.assign({ id: _adjId() }, a));
+  };
+
+  // ═══════════════ Constructeurs par type ═══════════════
+
+  const _base = (p) => ({
+    id: _id(), type: p.type,
+    classId: p.cls, classIds: p.classIds || [p.cls],
+    disciplineId: p.disc || DISC_PC,
+    nomCourt: p.court, nomLong: p.long,
+    date: p.date, periode: p.per,
+    coef: p.coef ?? 1, noteMax: p.noteMax ?? 20,
+    notes: {},
+    createdAt: now - (p.age ?? 120) * D, updatedAt: now - Math.max(1, (p.age ?? 120) - 6) * D,
+  });
+
+  const _buildA = (p) => {
+    const ev = _base(p);
+    ev.miniNotes = p.qs.map(q => ({ id: _mnId(), label: q[0], max: q[1] }));
+    _seedNotes(ev, p.sids, p.seed, p.level ?? 0.72);
+    return ev;
+  };
+
+  const _buildC = (p) => {
+    const ev = _base(p);
+    ev.exercices = []; ev.miniNotes = [];
+    for (const ex of p.exos) {
+      const exo = { id: _exoId(), label: ex.label, name: ex.name };
+      ev.exercices.push(exo);
+      for (const q of ex.qs) {
+        const mn = { id: _mnId(), label: q[0], max: q[1], exerciceId: exo.id };
+        if (q[2] != null) mn.competenceIds = [].concat(q[2]).map(C);   // compétences inline
+        ev.miniNotes.push(mn);
       }
     }
-    S.evaluations[evD1.id] = evD1;
+    _seedNotes(ev, p.sids, p.seed, p.level ?? 0.68);
+    return ev;
+  };
 
-    // Bulletin remarques — par (sid × période) sur ~12 élèves
-    const _setRem = (sid, per, txt) => {
-      if (!S.bulletinRemarques) S.bulletinRemarques = {};
-      if (!S.bulletinRemarques[cls6A.id]) S.bulletinRemarques[cls6A.id] = {};
-      if (!S.bulletinRemarques[cls6A.id][sid]) S.bulletinRemarques[cls6A.id][sid] = {};
-      S.bulletinRemarques[cls6A.id][sid][per] = txt;
-    };
-    const remS1Samples = [
-      'Trimestre satisfaisant, élève sérieux et impliqué.',
-      'Bonne participation orale, des progrès en démarche scientifique.',
-      'Manque de travail à la maison. À reprendre.',
-      'Élève en grande difficulté, besoin de soutien régulier.',
-      'Excellents résultats, à encourager dans cette voie.',
-      'Travail régulier, des progrès à confirmer au S2.',
-      'Comportement à surveiller, perd parfois sa concentration.',
-      'Très bonne assimilation des notions, attentive et curieuse.',
-    ];
-    const remS2Samples = [
-      'Confirme les bons résultats du S1, continue ainsi.',
-      'Net redressement par rapport au S1, bravo.',
-      'Les efforts payent, progrès très visibles ce semestre.',
-      'Année difficile, des bases à consolider sur le plan méthodologique.',
-      'Excellente année, profil scientifique prometteur.',
-    ];
-    for (let i = 0; i < Math.min(8, sids.length); i++) _setRem(sids[i], 'S1', remS1Samples[i]);
-    for (let i = 0; i < Math.min(5, sids.length); i++) _setRem(sids[i], 'S2', remS2Samples[i]);
+  const _buildB = (p) => {
+    const ev = _base(p);
+    ev.weighting = p.weighting || 'equal';
+    if (p.meanRule) ev.meanRule = p.meanRule;
+    ev.passations = p.passations.map((pa, k) => {
+      const pass = { id: _passId(), code: pa.code, date: pa.date, competenceIds: pa.comps.map(C) };
+      if (pa.coef != null) pass.coef = pa.coef;
+      _seedPassationLevels(pass, p.sids, p.seed + k * 37);
+      return pass;
+    });
+    return ev;
+  };
 
-    // Bulletin remarque classe (S1 + S2)
-    if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
-    S.bulletinClassRemarques['6A'] = {
-      'S1': 'Classe agréable et motivée. Niveau hétérogène en démarche scientifique. À poursuivre.',
-      'S2': 'Bonne dynamique sur ce semestre, classe qui a su s’engager dans les TP.'
-    };
+  const _buildD = (p) => {
+    const ev = _base(p);
+    ev.pointsParNiveau = p.points || [0, 1, 2, 3];
+    ev.bilanParExercice = !!p.parExo;
+    ev.exercices = []; ev.miniNotes = [];
+    for (const ex of p.exos) {
+      const exo = { id: _exoId(), label: ex.label, name: ex.name };
+      ev.exercices.push(exo);
+      for (const q of ex.qs) {
+        const mn = { id: _mnId(), label: q[0], exerciceId: exo.id, competenceIds: q[1].map(C), compWeights: {} };
+        if (q[2]) for (const [ci, w] of Object.entries(q[2])) mn.compWeights[C(+ci)] = w;
+        ev.miniNotes.push(mn);
+      }
+    }
+    _seedLevelsD(ev, p.sids, p.seed);
+    return ev;
+  };
 
-    // Éléments travaillés (S1 + S2)
-    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
-    S.bulletinWorkedItems['6A'] = {
-      'S1': [
-        'Mesures et unités du Système International',
-        'Volume, masse, masse volumique',
-        'Démarche scientifique : observer, questionner, mesurer',
-        'Lecture d’un graphique simple',
-      ],
-      'S2': [
-        'Changements d’état de l’eau',
-        'Solutions, dissolution, concentration',
-        'Circuits électriques simples (série / dérivation)',
-        'Évaluation finale — bilan annuel',
-      ],
-    };
+  const BUILD = { A: _buildA, B: _buildB, C: _buildC, D: _buildD };
+
+  // ═══════════════ LE PLAN ═══════════════
+  // Une ligne = une évaluation. Progression de physique-chimie plausible par niveau,
+  // les 4 types à chaque semestre dans chacune des 5 classes.
+  const Q4 = [['Q1', 5], ['Q2', 5], ['Q3', 5], ['Q4', 5]];
+  const Q3 = [['Q1', 6], ['Q2', 6], ['Q3', 8]];
+  const EXO_STD = [
+    { label: 'Ex.1', name: 'Restitution', qs: [['Q1', 2, 0], ['Q2', 3]] },
+    { label: 'Ex.2', name: 'Analyse de document', qs: [['Q1', 3, 1], ['Q2', 4]] },
+    { label: 'Ex.3', name: 'Résolution de problème', qs: [['Q1', 4, [1, 2]], ['Q2', 4]] },
+  ];
+  const EXO_D_STD = [
+    { label: 'Ex.1', name: 'Connaissances', qs: [['Q1', [0]], ['Q2', [0, 1], { 0: 2 }]] },
+    { label: 'Ex.2', name: 'Raisonnement',  qs: [['Q3', [1]], ['Q4', [1, 4]]] },
+  ];
+
+  const PLAN = [
+    // ── 6e A — matière, mouvement, énergie, information ──
+    { cls: '6A', per: 'S1', type: 'A', court: 'Mesures',   long: 'Mesures et unités de longueur',            date: '2025-09-15', age: 200, coef: 1, qs: Q4, seed: 1001, level: 0.70 },
+    { cls: '6A', per: 'S1', type: 'D', court: 'Mélanges',  long: 'Sommative par compétences — mélanges et solutions', date: '2025-10-14', age: 175, coef: 1, exos: EXO_D_STD, seed: 1101, parExo: true },
+    { cls: '6A', per: 'S1', type: 'B', court: 'Démarche',  long: 'Suivi de la démarche scientifique — S1',    date: '2025-12-05', age: 145, coef: 1, weighting: 'equal', meanRule: 'arithmetic', seed: 1201,
+      passations: [ { code: 'TP1', date: '2025-10-10', comps: [1, 2] }, { code: 'TP2', date: '2025-11-14', comps: [1, 2, 4] }, { code: 'TP3', date: '2025-12-05', comps: [1, 4] } ] },
+    { cls: '6A', per: 'S2', type: 'A', court: 'IE Circuits', long: 'Interrogation — le circuit électrique simple', date: '2026-02-10', age: 70, coef: 1, noteMax: 10, qs: [['Q1', 3], ['Q2', 3], ['Q3', 4]], seed: 1301, level: 0.74,
+      facultative: { active: true, mode: 'improveOnly' } },
+    { cls: '6A', per: 'S2', type: 'B', court: 'Démarche 2', long: 'Suivi de la démarche scientifique — S2',   date: '2026-03-14', age: 45, coef: 1, weighting: 'perCompetence', meanRule: 'weightedRecency', seed: 1401,
+      passations: [ { code: 'TP4', date: '2026-02-06', comps: [1, 2] }, { code: 'TP5', date: '2026-03-14', comps: [1, 2, 4] } ] },
+    { cls: '6A', per: 'S2', type: 'C', court: 'DS Énergie', long: 'Contrôle — l’énergie et ses conversions',  date: '2026-04-10', age: 30, coef: 2, exos: EXO_STD, seed: 1501, level: 0.72 },
+    { cls: '6A', per: 'S2', type: 'D', court: 'Lumière',   long: 'Sommative par compétences — lumière et ombres', date: '2026-05-12', age: 12, coef: 2, exos: EXO_D_STD, seed: 1601, points: [0, 2, 4, 6] },
+
+    // ── 6e B — même niveau, autre progression ──
+    { cls: '6B', per: 'S1', type: 'A', court: 'Diag',      long: 'Diagnostic de rentrée (non compté)',        date: '2025-09-25', age: 190, coef: 1, noteMax: 10, qs: [['Q1', 2], ['Q2', 3], ['Q3', 5]], seed: 2001, level: 0.55,
+      countsForMean: false },
+    { cls: '6B', per: 'S1', type: 'D', court: 'États',     long: 'Sommative par compétences — les états de la matière', date: '2025-10-17', age: 172, coef: 1, exos: EXO_D_STD, seed: 2101 },
+    { cls: '6B', per: 'S1', type: 'B', court: 'Démarche',  long: 'Suivi de la démarche scientifique — S1',    date: '2025-12-08', age: 142, coef: 1, weighting: 'equal', meanRule: 'best', seed: 2201,
+      passations: [ { code: 'TP1', date: '2025-10-13', comps: [1, 2] }, { code: 'TP2', date: '2025-12-08', comps: [1, 4] } ] },
+    { cls: '6B', per: 'S2', type: 'A', court: 'Ctrl Élec', long: 'Contrôle — circuits en série et en dérivation', date: '2026-02-05', age: 75, coef: 1, qs: Q4, seed: 2301, level: 0.68 },
+    { cls: '6B', per: 'S2', type: 'C', court: 'DM Volumes', long: 'Devoir maison — volumes et masse volumique', date: '2026-03-15', age: 44, coef: 1, noteMax: 40,
+      exos: [ { label: 'Ex.1', name: 'Lecture d’éprouvette', qs: [['Q1', 5, 0], ['Q2', 5]] },
+              { label: 'Ex.2', name: 'Calculs', qs: [['Q1', 10, 2], ['Q2', 10]] },
+              { label: 'Ex.3', name: 'Rédaction', qs: [['Q1', 10, 3]] } ], seed: 2401, level: 0.70 },
+    { cls: '6B', per: 'S2', type: 'B', court: 'Démarche 2', long: 'Suivi de la démarche scientifique — S2',   date: '2026-04-02', age: 38, coef: 1, weighting: 'perCompetence', meanRule: 'last', seed: 2501,
+      passations: [ { code: 'TP3', date: '2026-02-12', comps: [1, 2] }, { code: 'TP4', date: '2026-04-02', comps: [2, 4] } ] },
+    { cls: '6B', per: 'S2', type: 'D', court: 'Énergie',   long: 'Sommative par compétences — sources d’énergie', date: '2026-05-18', age: 8, coef: 2, exos: EXO_D_STD, seed: 2601, parExo: true },
+
+    // ── 5e A — organisation de la matière, énergie, signaux ──
+    { cls: '5A', per: 'S1', type: 'A', court: 'Surprise',  long: 'Test surprise — lecture d’énoncé',          date: '2025-10-05', age: 182, coef: 1, noteMax: 10, qs: [['Q1', 4], ['Q2', 6]], seed: 3001, level: 0.66,
+      facultative: { active: true, mode: 'bonus' } },
+    { cls: '5A', per: 'S1', type: 'C', court: 'DS Masse',  long: 'Contrôle — masse volumique et dissolution', date: '2025-11-14', age: 165, coef: 2, exos: EXO_STD, seed: 3101, level: 0.69 },
+    { cls: '5A', per: 'S1', type: 'B', court: 'Démarche',  long: 'Suivi de la démarche scientifique — S1',    date: '2025-12-12', age: 138, coef: 1, weighting: 'equal', meanRule: 'arithmetic', seed: 3201,
+      passations: [ { code: 'TP1', date: '2025-09-26', comps: [1, 2] }, { code: 'TP2', date: '2025-11-07', comps: [1, 2, 4] }, { code: 'TP3', date: '2025-12-12', comps: [0, 1] } ] },
+    { cls: '5A', per: 'S1', type: 'D', court: 'Météo',     long: 'Sommative par compétences — météorologie et climat', date: '2026-01-16', age: 100, coef: 1, exos: EXO_D_STD, seed: 3301 },
+    { cls: '5A', per: 'S2', type: 'A', court: 'IE Circuits', long: 'Interrogation — intensité et tension',     date: '2026-02-06', age: 74, coef: 1, qs: Q3, seed: 3401, level: 0.71 },
+    { cls: '5A', per: 'S2', type: 'D', court: 'Élec',      long: 'Sommative par compétences — lois du circuit', date: '2026-03-13', age: 46, coef: 2, exos: EXO_D_STD, seed: 3501, parExo: true, points: [0, 1, 3, 5] },
+    { cls: '5A', per: 'S2', type: 'B', court: 'Démarche 2', long: 'Suivi de la démarche scientifique — S2',    date: '2026-04-03', age: 37, coef: 1, weighting: 'perCompetence', meanRule: 'weightedRecency', seed: 3601,
+      passations: [ { code: 'TP4', date: '2026-02-13', comps: [1, 2] }, { code: 'TP5', date: '2026-03-20', comps: [1, 4] }, { code: 'TP6', date: '2026-04-03', comps: [1, 2, 4] } ] },
+    { cls: '5A', per: 'S2', type: 'C', court: 'DST',       long: 'Devoir surveillé — chapitres 1 à 5',        date: '2026-05-02', age: 22, coef: 3, exos: EXO_STD, seed: 3701, level: 0.66 },
+
+    // ── 5e B ──
+    { cls: '5B', per: 'S1', type: 'A', court: 'Ini',       long: 'Évaluation initiale',                       date: '2025-09-20', age: 195, coef: 1, qs: Q4, seed: 4001, level: 0.63 },
+    { cls: '5B', per: 'S1', type: 'B', court: 'Démarche',  long: 'Suivi de la démarche scientifique — S1',    date: '2025-10-10', age: 178, coef: 1, weighting: 'equal', meanRule: 'last', seed: 4101,
+      passations: [ { code: 'TP1', date: '2025-09-19', comps: [1, 2] }, { code: 'TP2', date: '2025-10-10', comps: [1, 4] } ] },
+    { cls: '5B', per: 'S1', type: 'D', court: 'Solutions', long: 'Sommative par compétences — solutions et solubilité', date: '2025-11-21', age: 158, coef: 1, exos: EXO_D_STD, seed: 4201 },
+    { cls: '5B', per: 'S1', type: 'C', court: 'DS Mél.',   long: 'Contrôle — mélanges et techniques de séparation', date: '2025-12-12', age: 138, coef: 2, exos: EXO_STD, seed: 4301, level: 0.67 },
+    { cls: '5B', per: 'S2', type: 'A', court: 'IE Lumière', long: 'Interrogation — sources et propagation de la lumière', date: '2026-02-10', age: 70, coef: 1, noteMax: 10, qs: [['Q1', 4], ['Q2', 6]], seed: 4401, level: 0.72 },
+    { cls: '5B', per: 'S2', type: 'B', court: 'Démarche 2', long: 'Suivi de la démarche scientifique — S2',   date: '2026-03-20', age: 40, coef: 1, weighting: 'perCompetence', meanRule: 'arithmetic', seed: 4501,
+      passations: [ { code: 'TP3', date: '2026-02-20', comps: [1, 2] }, { code: 'TP4', date: '2026-03-20', comps: [2, 4] } ] },
+    { cls: '5B', per: 'S2', type: 'C', court: 'Bilan',     long: 'Bilan semestriel',                          date: '2026-04-22', age: 28, coef: 2, exos: EXO_STD, seed: 4601, level: 0.70 },
+    { cls: '5B', per: 'S2', type: 'D', court: 'Signaux',   long: 'Sommative par compétences — signaux et information', date: '2026-05-26', age: 5, coef: 1, exos: EXO_D_STD, seed: 4701, parExo: true },
+
+    // ── 4e A — atomes, ions, conduction, lumière, énergie ──
+    { cls: '4A', per: 'S1', type: 'A', court: 'Atomes',    long: 'Contrôle — atomes et molécules',            date: '2025-10-03', age: 184, coef: 1, qs: Q4, seed: 5001, level: 0.70 },
+    { cls: '4A', per: 'S1', type: 'D', court: 'Molécules', long: 'Sommative par compétences — modèle moléculaire', date: '2025-11-07', age: 172, coef: 1, exos: EXO_D_STD, seed: 5101, parExo: true },
+    { cls: '4A', per: 'S1', type: 'B', court: 'Démarche',  long: 'Suivi de la démarche scientifique — S1',    date: '2025-12-05', age: 145, coef: 1, weighting: 'equal', meanRule: 'best', seed: 5201,
+      passations: [ { code: 'TP1', date: '2025-10-17', comps: [1, 2] }, { code: 'TP2', date: '2025-12-05', comps: [1, 2, 4] } ] },
+    { cls: '4A', per: 'S1', type: 'C', court: 'Conduction', long: 'Contrôle — conduction électrique et ions',  date: '2026-01-16', age: 100, coef: 2, exos: EXO_STD, seed: 5301, level: 0.66 },
+    { cls: '4A', per: 'S2', type: 'A', court: 'IE Ions',   long: 'Interrogation — tests d’identification des ions', date: '2026-02-06', age: 74, coef: 1, noteMax: 10, qs: [['Q1', 5], ['Q2', 5]], seed: 5401, level: 0.75,
+      facultative: { active: true, mode: 'over10' } },
+    { cls: '4A', per: 'S2', type: 'B', court: 'Démarche 2', long: 'Suivi de la démarche scientifique — S2',   date: '2026-03-13', age: 46, coef: 1, weighting: 'perCompetence', meanRule: 'last', seed: 5501,
+      passations: [ { code: 'TP3', date: '2026-02-13', comps: [1, 2] }, { code: 'TP4', date: '2026-03-13', comps: [1, 4] } ] },
+    { cls: '4A', per: 'S2', type: 'C', court: 'DS Lumière', long: 'Contrôle — lumière, vitesse et distances', date: '2026-04-17', age: 29, coef: 2, exos: EXO_STD, seed: 5601, level: 0.69 },
+    { cls: '4A', per: 'S2', type: 'D', court: 'Énergie',   long: 'Sommative par compétences — énergie cinétique', date: '2026-05-22', age: 9, coef: 2, exos: EXO_D_STD, seed: 5701 },
+
+    // ── Discipline « Physique-chimie bilingue » (6A) — un flux séparé, aux deux semestres ──
+    { cls: '6A', per: 'S1', type: 'A', court: 'IE Bil.',   long: 'Interrogation bilingue — vocabulaire scientifique', date: '2025-11-08', age: 150, coef: 1, qs: [['Q1', 5], ['Q2', 5], ['Q3', 10]], seed: 6001, level: 0.75,
+      disc: DISC_BIL, only: 5 },
+    { cls: '6A', per: 'S2', type: 'C', court: 'Projet Bil.', long: 'Projet bilingue — présentation d’une expérience', date: '2026-04-24', age: 26, coef: 1,
+      exos: [ { label: 'Ex.1', name: 'Écrit', qs: [['Q1', 6, 3], ['Q2', 4]] }, { label: 'Ex.2', name: 'Oral', qs: [['Q1', 10, 7]] } ], seed: 6101, level: 0.78,
+      disc: DISC_BIL, only: 5 },
+  ];
+
+  // ═══════════════ Construction, en DEUX temps ═══════════════
+  // ⚠️ Le semestre 1 est bâti, PUIS l'élève est transférée, PUIS le semestre 2. L'ordre
+  // n'est pas cosmétique : construire tout d'un coup donnait à une élève partie en janvier
+  // des notes dans les évaluations de S2 de son ancienne classe — le bilan affichait alors
+  // quatre colonnes orphelines ⤴ correspondant à des devoirs qu'elle n'avait pas pu passer.
+  const byKey = {};   // 'cls|per|type' → éval, pour aller garnir ensuite
+  const _buildRows = (rows) => {
+    for (const p of rows) {
+      if (!S.classes[p.cls]) continue;
+      const all = sidsOf(p.cls);
+      p.sids = p.only ? all.slice(0, p.only) : all;
+      if (!p.sids.length) continue;
+      const ev = BUILD[p.type](p);
+      if (p.facultative) ev.facultative = p.facultative;
+      if (p.countsForMean === false) ev.countsForMean = false;
+      S.evaluations[ev.id] = ev;
+      byKey[p.cls + '|' + p.per + '|' + p.type + (p.disc === DISC_BIL ? '|bil' : '')] = ev;
+    }
+  };
+  const EV = (k) => byKey[k];
+
+  _buildRows(PLAN.filter(p => p.per === 'S1'));
+
+  // ── ÉLÈVE TRANSFÉRÉE : une 5e B rejoint la 5e A le 5 janvier. Ses notes de S1 restent
+  // rattachées aux évaluations de la 5e B — elles apparaissent en 5e A comme « orphelines »
+  // ⤴, ce qui est tout l'intérêt de la démonstration : sa moyenne de S1 reste juste alors
+  // que les devoirs qui la composent n'appartiennent pas à sa classe actuelle.
+  {
+    const from = S.classes['5B'], to = S.classes['5A'];
+    const sid = from?.eleves?.[3];
+    const stu = sid && S.eleves[sid];
+    if (stu && to) {
+      from.eleves = from.eleves.filter(x => x !== sid);
+      for (const room of Object.values(from.rooms || {})) {
+        for (const [k, v] of Object.entries(room.seating || {})) if (v === sid) delete room.seating[k];
+      }
+      to.eleves.push(sid);
+      stu.classe_id = to.id;
+      stu.previousClasses = [{ classId: '5B', leftOn: '2026-01-05' }];
+    }
   }
 
-  // ─── 6e B — 1 Type A diag + 1 Type A contrôle + 1 Type C DM (noteMax variable) ───
-  const cls6B = S.classes['6B'];
-  if (cls6B) {
-    const sids = cls6B.eleves;
+  _buildRows(PLAN.filter(p => p.per === 'S2'));
 
-    const evA1 = {
-      id: _id(), type: 'A',
-      classId: '6B', classIds: ['6B'],
-      nomCourt: 'Diag', nomLong: 'Diagnostic de rentrée',
-      date: '2025-09-25', periode: 'S1',
-      coef: 0.5, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 5 },
-        { id: _mnId(), label: 'Q2', max: 5 },
-        { id: _mnId(), label: 'Q3', max: 10 },
-      ],
-      notes: {},
-      createdAt: now - 190 * 86400000, updatedAt: now - 180 * 86400000,
-    };
-    _seedNotes(evA1, sids, 5001, 0.55);
-    S.evaluations[evA1.id] = evA1;
+  // ═══════════════ Mises en scène ═══════════════
 
-    const evA2 = {
-      id: _id(), type: 'A',
-      classId: '6B', classIds: ['6B'],
-      nomCourt: 'Ctrl 1', nomLong: 'Contrôle n°1 — états de la matière',
-      date: '2025-11-08', periode: 'S1',
-      coef: 1, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Cours', max: 6 },
-        { id: _mnId(), label: 'Application', max: 8 },
-        { id: _mnId(), label: 'Problème', max: 6 },
-      ],
-      notes: {},
-      createdAt: now - 170 * 86400000, updatedAt: now - 160 * 86400000,
-    };
-    _seedNotes(evA2, sids, 5002, 0.70);
-    _seedStudentRemarks(evA2, sids, [
-      { idx: 3, txt: 'Méthode à reprendre dès le début.' },
-    ]);
-    S.evaluations[evA2.id] = evA2;
-
-    // DM noté sur /40 (montre noteMax variable)
-    const evC1 = {
+  // ── 1. Évaluation MULTI-CLASSES : le même contrôle en 6A et 6B, à deux dates et sur
+  // deux créneaux différents. C'est ce qui rend le bouton « 🔀 Comparer classes » utile.
+  {
+    const ev = {
       id: _id(), type: 'C',
-      classId: '6B', classIds: ['6B'],
-      nomCourt: 'DM', nomLong: 'Devoir maison — masse volumique',
-      date: '2026-03-15', periode: 'S2',
-      coef: 1, noteMax: 40,
+      classId: '6A', classIds: ['6A', '6B'],
+      disciplineId: DISC_PC,
+      nomCourt: 'DS commun', nomLong: 'Contrôle commun 6e — la matière et ses états',
+      date: '2025-11-21', periode: 'S1', coef: 2, noteMax: 20,
+      dates:   { '6A': '2025-11-20', '6B': '2025-11-21' },
+      slotIds: { '6A': 'M2', '6B': 'S1' },
+      datesManual: { '6A': true, '6B': true },
       exercices: [], miniNotes: [], notes: {},
-      createdAt: now - 70 * 86400000, updatedAt: now - 50 * 86400000,
+      createdAt: now - 168 * D, updatedAt: now - 160 * D,
     };
-    const exo1 = { id: _exoId(), label: 'Ex.1', name: 'Calculs' };
-    const exo2 = { id: _exoId(), label: 'Ex.2', name: 'Rédaction' };
-    evC1.exercices.push(exo1, exo2);
-    evC1.miniNotes = [
-      { id: _mnId(), label: 'Q1', max: 10, exerciceId: exo1.id },
-      { id: _mnId(), label: 'Q2', max: 10, exerciceId: exo1.id },
-      { id: _mnId(), label: 'Q1', max: 10, exerciceId: exo2.id },
-      { id: _mnId(), label: 'Q2', max: 10, exerciceId: exo2.id },
-    ];
-    _seedNotes(evC1, sids, 5003, 0.80);
-    S.evaluations[evC1.id] = evC1;
-
-    if (!S.bulletinRemarques) S.bulletinRemarques = {};
-    S.bulletinRemarques['6B'] = S.bulletinRemarques['6B'] || {};
-    for (let i = 0; i < Math.min(6, sids.length); i++) {
-      S.bulletinRemarques['6B'][sids[i]] = S.bulletinRemarques['6B'][sids[i]] || {};
-      S.bulletinRemarques['6B'][sids[i]]['S1'] = [
-        'Semestre encourageant, élève appliqué.',
-        'Quelques difficultés en cours d’année, surmontables.',
-        'Excellent niveau, à conforter.',
-        'Inquiétudes sur l’investissement, à reprendre.',
-        'Bons réflexes scientifiques, à approfondir.',
-        'Élève discret mais sérieux, bonne progression.'
-      ][i];
+    for (const ex of EXO_STD) {
+      const exo = { id: _exoId(), label: ex.label, name: ex.name };
+      ev.exercices.push(exo);
+      for (const q of ex.qs) {
+        const mn = { id: _mnId(), label: q[0], max: q[1], exerciceId: exo.id };
+        if (q[2] != null) mn.competenceIds = [].concat(q[2]).map(C);
+        ev.miniNotes.push(mn);
+      }
     }
-    if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
-    S.bulletinClassRemarques['6B'] = {
-      'S1': 'Classe agréable, ambiance studieuse. Bon démarrage.',
-      'S2': 'Le travail du DM a été inégal, à reprendre.'
-    };
-    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
-    S.bulletinWorkedItems['6B'] = {
-      'S1': ['Mesures', 'États de la matière', 'Solutions aqueuses'],
-      'S2': ['Masse volumique (DM)', 'Mélanges et séparations']
-    };
+    _seedNotes(ev, sidsOf('6A'), 7001, 0.71);
+    _seedNotes(ev, sidsOf('6B'), 7002, 0.64);
+    _remarks(ev, sidsOf('6A'), [{ i: 1, t: 'Meilleure copie du contrôle commun.' }]);
+    S.evaluations[ev.id] = ev;
   }
 
-  // ─── 5e A — Type A + Type B multi-passations + Type C "DST" ───
-  const cls5A = S.classes['5A'];
-  if (cls5A) {
-    const sids = cls5A.eleves;
-
-    const evA1 = {
-      id: _id(), type: 'A',
-      classId: '5A', classIds: ['5A'],
-      nomCourt: 'Surprise', nomLong: 'Test surprise — lecture d’énoncé',
-      date: '2025-10-05', periode: 'S1',
-      coef: 0.5, noteMax: 10,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 3 },
-        { id: _mnId(), label: 'Q2', max: 3 },
-        { id: _mnId(), label: 'Q3', max: 4 },
-      ],
-      notes: {},
-      createdAt: now - 200 * 86400000, updatedAt: now - 195 * 86400000,
-    };
-    _seedNotes(evA1, sids, 6001, 0.65);
-    S.evaluations[evA1.id] = evA1;
-
-    // Type B — 3 passations sur S1 et S2 (multi-période)
-    const evB1 = {
-      id: _id(), type: 'B',
-      classId: '5A', classIds: ['5A'],
-      nomCourt: 'Démarche5A', nomLong: 'Suivi compétences année — 5e A',
-      date: '2026-03-08', periode: 'S2',
-      coef: 2, noteMax: 20,
-      weighting: 'equal',
-      passations: [],
-      createdAt: now - 180 * 86400000, updatedAt: now - 30 * 86400000,
-    };
-    const pa = { id: _passId(), code: 'A', date: '2025-11-15', competenceIds: compIds.slice(0, 3), niveaux: {} };
-    const pb = { id: _passId(), code: 'B', date: '2026-01-20', competenceIds: compIds.slice(1, 5), niveaux: {} };
-    const pc = { id: _passId(), code: 'C', date: '2026-03-08', competenceIds: compIds.slice(0, 4), niveaux: {} };
-    _seedPassationLevels(pa, sids, 6101);
-    _seedPassationLevels(pb, sids, 6102);
-    _seedPassationLevels(pc, sids, 6103);
-    evB1.passations.push(pa, pb, pc);
-    S.evaluations[evB1.id] = evB1;
-
-    // Type C — DST coef 3
-    const evC1 = {
-      id: _id(), type: 'C',
-      classId: '5A', classIds: ['5A'],
-      nomCourt: 'DST', nomLong: 'Devoir surveillé — chapitres 1 à 5',
-      date: '2026-05-02', periode: 'S2',
-      coef: 3, noteMax: 20,
-      exercices: [], miniNotes: [], notes: {},
-      createdAt: now - 30 * 86400000, updatedAt: now - 5 * 86400000,
-    };
-    const ex1 = { id: _exoId(), label: 'Ex.1', name: 'Cours' };
-    const ex2 = { id: _exoId(), label: 'Ex.2', name: 'Démarche' };
-    const ex3 = { id: _exoId(), label: 'Ex.3', name: 'Problème' };
-    const ex4 = { id: _exoId(), label: 'Ex.4', name: 'Bonus' };
-    evC1.exercices.push(ex1, ex2, ex3, ex4);
-    evC1.miniNotes = [
-      { id: _mnId(), label: 'Q1', max: 2, exerciceId: ex1.id },
-      { id: _mnId(), label: 'Q2', max: 2, exerciceId: ex1.id },
-      { id: _mnId(), label: 'Q1', max: 3, exerciceId: ex2.id },
-      { id: _mnId(), label: 'Q2', max: 3, exerciceId: ex2.id },
-      { id: _mnId(), label: 'Q1', max: 3, exerciceId: ex3.id },
-      { id: _mnId(), label: 'Q2', max: 4, exerciceId: ex3.id },
-      { id: _mnId(), label: 'Bonus', max: 3, exerciceId: ex4.id },
-    ];
-    if (compIds[0]) evC1.miniNotes[0].competenceIds = [compIds[0]];
-    if (compIds[1]) evC1.miniNotes[2].competenceIds = [compIds[1]];
-    if (compIds[2]) evC1.miniNotes[4].competenceIds = [compIds[2]];
-    _seedNotes(evC1, sids, 6201, 0.70);
-    _seedStudentRemarks(evC1, sids, [
-      { idx: 1, txt: 'Très bonne copie, raisonnement solide.' },
-      { idx: 7, txt: 'Hors-sujet sur l’Ex.3.' },
-      { idx: 14, txt: 'Bonus très bien traité.' },
-    ]);
-    S.evaluations[evC1.id] = evC1;
-
-    if (!S.bulletinRemarques) S.bulletinRemarques = {};
-    S.bulletinRemarques['5A'] = S.bulletinRemarques['5A'] || {};
-    const rems5A_S1 = [
-      'Élève appliqué, niveau correct.',
-      'Très bons réflexes scientifiques.',
-      'À reprendre la méthode avant le S2.',
-      'Excellente première moitié d’année.',
-      'Difficultés persistantes en démarche.',
-      'Régularité du travail à confirmer.'
-    ];
-    const rems5A_S2 = [
-      'Confirme le très bon niveau du S1.',
-      'Progrès très nets cette seconde moitié d’année.',
-      'Année difficile, à reprendre les fondamentaux.',
-      'Excellente année globale, profil scientifique.'
-    ];
-    for (let i = 0; i < rems5A_S1.length && i < sids.length; i++) {
-      S.bulletinRemarques['5A'][sids[i]] = S.bulletinRemarques['5A'][sids[i]] || {};
-      S.bulletinRemarques['5A'][sids[i]]['S1'] = rems5A_S1[i];
-    }
-    for (let i = 0; i < rems5A_S2.length && i < sids.length; i++) {
-      S.bulletinRemarques['5A'][sids[i]] = S.bulletinRemarques['5A'][sids[i]] || {};
-      S.bulletinRemarques['5A'][sids[i]]['S2'] = rems5A_S2[i];
-    }
-    if (!S.bulletinClassRemarques) S.bulletinClassRemarques = {};
-    S.bulletinClassRemarques['5A'] = {
-      'S1': 'Classe motivée mais hétérogène. La démarche scientifique progresse.',
-      'S2': 'Très belle évolution sur l’année, classe agréable et engagée.'
-    };
-    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
-    S.bulletinWorkedItems['5A'] = {
-      'S1': ['Lecture d’énoncé', 'Démarche scientifique', 'Mesures et incertitudes'],
-      'S2': ['Solutions et concentrations', 'Réactions chimiques', 'Circuits électriques (Ohm)']
-    };
+  // ── 2. ARRIVÉE et DÉPART en cours d'année (la place est réservée dans un cas,
+  // libérée dans l'autre — cf. _stuActiveOn / _freeDepartedSeats).
+  {
+    const arr = S.eleves[sidsOf('6B')[6]];
+    if (arr) arr.arrivalDate = '2026-01-12';
+    const dep = S.eleves[sidsOf('4A')[9]];
+    if (dep) dep.departureDate = '2026-03-16';
   }
 
-  // ─── 5e B — Type A diag + Type C bilan ───
-  const cls5B = S.classes['5B'];
-  if (cls5B) {
-    const sids = cls5B.eleves;
+  // ── 3. AJUSTEMENTS de la note finale — les quatre motifs livrés, sur quatre copies.
+  {
+    const a = EV('4A|S2|C'), s4 = sidsOf('4A');
+    _adjust(a, s4[2], [{ op: 'mul', v: 0.5, label: 'Triche' }]);
+    _adjust(a, s4[7], [{ op: 'add', v: -2, label: 'Rendu en retard' }]);
+    const b = EV('5A|S2|C'), s5 = sidsOf('5A');
+    // Copie annulée : la note tombe à 0 ET les compétences au minimum (voidComps).
+    _adjust(b, s5[4], [{ op: 'set', v: 0, label: 'Copie non rendue', voidComps: true }]);
+    _adjust(b, s5[11], [{ op: 'add', v: 1, label: 'Bonus présentation' }]);
+    const d = EV('6A|S2|D'), s6 = sidsOf('6A');
+    _adjust(d, s6[5], [{ op: 'add', v: -2, label: 'Rendu en retard' }]);
+  }
 
-    const evA1 = {
-      id: _id(), type: 'A',
-      classId: '5B', classIds: ['5B'],
-      nomCourt: 'Ini', nomLong: 'Évaluation initiale',
-      date: '2025-09-20', periode: 'S1',
-      coef: 1, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 5 },
-        { id: _mnId(), label: 'Q2', max: 5 },
-        { id: _mnId(), label: 'Q3', max: 5 },
-        { id: _mnId(), label: 'Q4', max: 5 },
-      ],
-      notes: {},
-      createdAt: now - 195 * 86400000, updatedAt: now - 190 * 86400000,
-    };
-    _seedNotes(evA1, sids, 7001, 0.60);
-    S.evaluations[evA1.id] = evA1;
-
-    const evC1 = {
-      id: _id(), type: 'C',
-      classId: '5B', classIds: ['5B'],
-      nomCourt: 'Bilan', nomLong: 'Bilan trimestriel',
-      date: '2026-04-22', periode: 'S2',
-      coef: 2, noteMax: 20,
-      exercices: [], miniNotes: [], notes: {},
-      createdAt: now - 25 * 86400000, updatedAt: now - 10 * 86400000,
-    };
-    const ex1 = { id: _exoId(), label: 'Ex.1', name: 'Restitution' };
-    const ex2 = { id: _exoId(), label: 'Ex.2', name: 'Application' };
-    evC1.exercices.push(ex1, ex2);
-    evC1.miniNotes = [
-      { id: _mnId(), label: 'Q1', max: 3, exerciceId: ex1.id },
-      { id: _mnId(), label: 'Q2', max: 4, exerciceId: ex1.id },
-      { id: _mnId(), label: 'Q1', max: 6, exerciceId: ex2.id },
-      { id: _mnId(), label: 'Q2', max: 7, exerciceId: ex2.id },
-    ];
-    if (compIds[0]) evC1.miniNotes[0].competenceIds = [compIds[0]];
-    if (compIds[2]) evC1.miniNotes[2].competenceIds = [compIds[2]];
-    _seedNotes(evC1, sids, 7002, 0.72);
-    S.evaluations[evC1.id] = evC1;
-
-    if (!S.bulletinRemarques) S.bulletinRemarques = {};
-    S.bulletinRemarques['5B'] = S.bulletinRemarques['5B'] || {};
-    for (let i = 0; i < Math.min(4, sids.length); i++) {
-      S.bulletinRemarques['5B'][sids[i]] = S.bulletinRemarques['5B'][sids[i]] || {};
-      S.bulletinRemarques['5B'][sids[i]]['S2'] = [
-        'Bon semestre, à confirmer.',
-        'Difficultés à reprendre en méthodologie.',
-        'Excellent profil, très bonne année.',
-        'Élève en grande difficulté, soutien nécessaire.'
-      ][i];
+  // ── 4. COMMENTAIRES DE CELLULE sur les types B et D : la clé y est composite
+  // (porteur × compétence), c'est le seul endroit de la démo qui le documente.
+  {
+    const b = EV('6A|S1|B'), s6 = sidsOf('6A');
+    if (b?.passations?.[0]) {
+      b.notes = b.notes || {};
+      _comOnCouple(b, s6[2], b.passations[0].id, C(1), 'Protocole suivi sans aide — noter la progression.');
+      _comOnCouple(b, s6[6], b.passations[1]?.id || b.passations[0].id, C(2), 'Schéma non légendé.');
     }
-    if (!S.bulletinWorkedItems) S.bulletinWorkedItems = {};
-    S.bulletinWorkedItems['5B'] = {
-      'S2': ['Évaluation initiale', 'Bilan trimestriel — restitution / application']
-    };
-  }
-
-  // ─── 4e A — 1 Type A simple ───
-  const cls4A = S.classes['4A'];
-  if (cls4A) {
-    const sids = cls4A.eleves;
-    const evA1 = {
-      id: _id(), type: 'A',
-      classId: '4A', classIds: ['4A'],
-      nomCourt: 'Ctrl Élec', nomLong: 'Contrôle électricité',
-      date: '2025-12-12', periode: 'S1',
-      coef: 1, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 5 },
-        { id: _mnId(), label: 'Q2', max: 5 },
-        { id: _mnId(), label: 'Q3', max: 5 },
-        { id: _mnId(), label: 'Q4', max: 5 },
-      ],
-      notes: {},
-      createdAt: now - 150 * 86400000, updatedAt: now - 145 * 86400000,
-    };
-    _seedNotes(evA1, sids, 8001, 0.70);
-    S.evaluations[evA1.id] = evA1;
-  }
-
-  // 3e A : volontairement aucune éval (état vide démontré dans l'UI)
-
-  // ── Disciplines (flux per-classe) — démo ──
-  // Configure la 6A avec une discipline secondaire pour démontrer le toggle de flux.
-  // Ajoute une éval taguée 'secondary' + une remarque bulletin per-channel pour
-  // illustrer la séparation des bilans entre les deux flux.
-  // (Les classes recomposées au sens roster cross-class passent par les virtual
-  // classes — cls.virtual=true — pas un système de sous-groupes dédié.)
-  const _cls6A = S.classes['6A'];
-  const _take5 = (cls) => (cls && cls.eleves ? cls.eleves.slice(0, 5) : []);
-  if (_cls6A) {
-    // Crée 2 disciplines au catalogue : SVT (principale) et SVT Bilingue, et les
-    // attache à la 6A. La discipline générique "Discipline principale" reste pour
-    // les autres classes.
-    if (!S.disciplines) S.disciplines = {};
-    const _discSvtId = 'disc_svt';
-    const _discBilId = 'disc_svt_bil';
-    if (!S.disciplines[_discSvtId]) S.disciplines[_discSvtId] = { id: _discSvtId, nom: 'SVT', isPrimary: false };
-    if (!S.disciplines[_discBilId]) S.disciplines[_discBilId] = { id: _discBilId, nom: 'SVT Bilingue', isPrimary: false };
-    _cls6A.disciplineIds = [_discSvtId, _discBilId];
-    // Réaffecte les évals existantes de la 6A à la discipline SVT (par défaut elles
-    // viennent d'être créées avec ev.disciplineId basé sur cls.disciplineIds[0])
-    for (const ev of Object.values(S.evaluations)) {
-      if (_evalIncludesClass(ev, '6A')) ev.disciplineId = _discSvtId;
+    const d = EV('5A|S2|D');
+    if (d?.miniNotes?.[1]) {
+      const s5 = sidsOf('5A');
+      _comOnCouple(d, s5[3], d.miniNotes[1].id, d.miniNotes[1].competenceIds[0], 'Raisonnement juste, unité manquante.');
+      _comOnCouple(d, s5[8], d.miniNotes[0].id, d.miniNotes[0].competenceIds[0], 'Connaissances solides.');
     }
-    const evBilA = {
-      id: _id(), type: 'A',
-      classId: '6A', classIds: ['6A'],
-      disciplineId: _discBilId,
-      nomCourt: 'IE Bilingue', nomLong: 'Interrogation SVT — vocabulaire bilingue',
-      date: '2025-11-08', periode: 'S1',
-      coef: 1, noteMax: 20,
-      miniNotes: [
-        { id: _mnId(), label: 'Q1', max: 5 },
-        { id: _mnId(), label: 'Q2', max: 5 },
-        { id: _mnId(), label: 'Q3', max: 10 },
-      ],
-      notes: {},
-      createdAt: now - 150 * 86400000, updatedAt: now - 100 * 86400000,
-    };
-    _seedNotes(evBilA, _take5(_cls6A), 9001, 0.75);
-    S.evaluations[evBilA.id] = evBilA;
-    // Remarque bulletin sur la discipline "SVT Bilingue" pour démontrer la séparation
-    if (!S.bulletinClassRemarques['6A']) S.bulletinClassRemarques['6A'] = {};
-    if (!S.bulletinClassRemarques['6A'][_discBilId]) S.bulletinClassRemarques['6A'][_discBilId] = {};
-    S.bulletinClassRemarques['6A'][_discBilId].S1 = 'Groupe Bilingue : bonne participation, vocabulaire SVT en anglais bien assimilé.';
   }
 
-  // Enregistre un seatingHash pour chaque éval démo : permet au tooltip
-  // "position au moment du devoir" de fonctionner. Hash basé sur la salle
-  // active de chaque classe au moment du seed (cohérent avec ce que ferait
-  // _evalNewSave en usage réel).
-  for (const evId of Object.keys(S.evaluations)) {
-    const ev = S.evaluations[evId];
-    if (ev.seatingHash) continue; // déjà fait (idempotent si seed relancé)
+  // ── 5. REMARQUES par élève sur quelques devoirs (visibles en infobulle du bilan).
+  _remarks(EV('6A|S1|A'), sidsOf('6A'), [
+    { i: 0, t: 'Très bon départ, méthode déjà en place.' },
+    { i: 9, t: 'Confond encore masse et volume.' },
+  ]);
+  _remarks(EV('5A|S2|C'), sidsOf('5A'), [
+    { i: 1, t: 'Excellent devoir surveillé, raisonnement rigoureux.' },
+    { i: 12, t: 'Des erreurs de calcul récurrentes — à travailler.' },
+    { i: 20, t: 'Nets progrès depuis le S1.' },
+  ]);
+  _remarks(EV('4A|S1|C'), sidsOf('4A'), [
+    { i: 3, t: 'Copie soignée, à poursuivre.' },
+    { i: 15, t: 'N’a traité que le premier exercice.' },
+  ]);
+
+  // ═══════════════ Bulletin et conseil de classe ═══════════════
+
+  const REM_S1 = [
+    'Semestre satisfaisant, élève sérieux et impliqué.',
+    'Bonne participation orale, des progrès en démarche scientifique.',
+    'Manque de travail personnel. À reprendre dès la rentrée.',
+    'En difficulté sur les bases, besoin d’un soutien régulier.',
+    'Excellents résultats, à encourager dans cette voie.',
+    'Travail régulier, des progrès à confirmer au second semestre.',
+    'Comportement à surveiller, perd parfois sa concentration.',
+    'Très bonne assimilation des notions, curieuse et attentive.',
+  ];
+  const REM_S2 = [
+    'Confirme les bons résultats du premier semestre.',
+    'Net redressement, les efforts ont porté.',
+    'Progrès très visibles en méthode expérimentale.',
+    'Année difficile, des bases à consolider.',
+    'Excellente année, profil scientifique prometteur.',
+    'Participation en hausse, à poursuivre l’an prochain.',
+  ];
+  const ITEMS = {
+    S1: ['Mesures et unités', 'États et changements d’état', 'Démarche expérimentale', 'Mélanges et solutions'],
+    S2: ['Le circuit électrique', 'Énergie et conversions', 'Lumière et ombres', 'Rédaction d’un compte rendu'],
+  };
+  const CLASS_REM = {
+    S1: 'Semestre de mise en route. Le groupe s’investit dans les activités expérimentales ; la rigueur de rédaction reste à travailler.',
+    S2: 'Bon semestre dans l’ensemble. La démarche expérimentale est acquise pour la majorité du groupe.',
+  };
+
+  const mentions = Object.keys(S.conseilMentions || {});
+  const setRem = (cid, sid, per, txt) => {
+    S.bulletinRemarques[cid] = S.bulletinRemarques[cid] || {};
+    S.bulletinRemarques[cid][DISC_PC] = S.bulletinRemarques[cid][DISC_PC] || {};
+    S.bulletinRemarques[cid][DISC_PC][sid] = S.bulletinRemarques[cid][DISC_PC][sid] || {};
+    S.bulletinRemarques[cid][DISC_PC][sid][per] = txt;
+  };
+  const setConseil = (cid, sid, per, mIds) => {
+    S.conseilClasse = S.conseilClasse || {};
+    S.conseilClasse[cid] = S.conseilClasse[cid] || {};
+    S.conseilClasse[cid][DISC_PC] = S.conseilClasse[cid][DISC_PC] || {};
+    S.conseilClasse[cid][DISC_PC][sid] = S.conseilClasse[cid][DISC_PC][sid] || {};
+    const f = {};
+    for (const m of mIds) if (m) f[m] = true;
+    S.conseilClasse[cid][DISC_PC][sid][per] = f;
+  };
+
+  S.bulletinRemarques = S.bulletinRemarques || {};
+  S.bulletinClassRemarques = S.bulletinClassRemarques || {};
+  S.bulletinWorkedItems = S.bulletinWorkedItems || {};
+
+  for (const cid of ['6A', '6B', '5A', '5B', '4A']) {
+    const sids = sidsOf(cid);
+    if (!sids.length) continue;
+    for (let i = 0; i < Math.min(8, sids.length); i++) setRem(cid, sids[i], 'S1', REM_S1[i % REM_S1.length]);
+    for (let i = 0; i < Math.min(6, sids.length); i++) setRem(cid, sids[i], 'S2', REM_S2[i % REM_S2.length]);
+    for (const per of ['S1', 'S2']) {
+      S.bulletinClassRemarques[cid] = S.bulletinClassRemarques[cid] || {};
+      S.bulletinClassRemarques[cid][DISC_PC] = S.bulletinClassRemarques[cid][DISC_PC] || {};
+      S.bulletinClassRemarques[cid][DISC_PC][per] = CLASS_REM[per];
+      S.bulletinWorkedItems[cid] = S.bulletinWorkedItems[cid] || {};
+      S.bulletinWorkedItems[cid][DISC_PC] = S.bulletinWorkedItems[cid][DISC_PC] || {};
+      S.bulletinWorkedItems[cid][DISC_PC][per] = ITEMS[per].slice();
+      // Mentions de conseil : félicitations aux deux premiers, encouragements ensuite,
+      // un avertissement travail — jamais deux mentions incompatibles sur le même élève.
+      if (mentions.length >= 4) {
+        const [FEL, ENC, AVT] = ['cm_fel', 'cm_enc', 'cm_avt'].map(m => mentions.includes(m) ? m : null);
+        if (sids[0]) setConseil(cid, sids[0], per, [FEL]);
+        if (sids[1]) setConseil(cid, sids[1], per, [FEL]);
+        if (sids[4]) setConseil(cid, sids[4], per, [ENC]);
+        if (sids[5]) setConseil(cid, sids[5], per, [ENC]);
+        if (sids[9]) setConseil(cid, sids[9], per, [AVT]);
+      }
+    }
+  }
+  // La discipline bilingue a ses propres remarques : c'est ce qui démontre que les
+  // bilans sont bien séparés par discipline et non partagés au niveau de la classe.
+  S.bulletinClassRemarques['6A'] = S.bulletinClassRemarques['6A'] || {};
+  S.bulletinClassRemarques['6A'][DISC_BIL] = {
+    S1: 'Groupe bilingue : bonne participation, vocabulaire scientifique anglais bien assimilé.',
+    S2: 'Le projet de fin d’année a été mené sérieusement par l’ensemble du groupe.',
+  };
+
+  // ═══════════════ Position au moment du devoir ═══════════════
+  // Un hash du plan de classe par éval : l'infobulle « où était l'élève ce jour-là »
+  // fonctionne alors dès la démo. Idempotent si le seed est rejoué.
+  for (const ev of Object.values(S.evaluations)) {
+    if (ev.seatingHash) continue;
     const classIds = ev.classIds || (ev.classId ? [ev.classId] : []);
     ev.seatingHashes = ev.seatingHashes || {};
     for (const cid of classIds) {
       const c = S.classes[cid];
       if (!c) continue;
-      const room = c.rooms?.[c.activeRoom];
-      const seating = room?.seating || {};
-      const hash = _registerSeatingSnapshot(seating);
+      const hash = _registerSeatingSnapshot(c.rooms?.[c.activeRoom]?.seating || {});
       if (hash) {
         ev.seatingHashes[cid] = hash;
         if (!ev.seatingHash && cid === (ev.classId || classIds[0])) ev.seatingHash = hash;
