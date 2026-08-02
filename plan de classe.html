@@ -6185,11 +6185,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.2';
+const APP_VERSION    = '2.27.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-01T07:24:47Z';
+const APP_BUILD_DATE = '2026-08-02T04:15:56Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -33807,7 +33807,7 @@ function _evalEditRenderMiniNotes() {
   const isD = ev.type === 'D';
   title.textContent = '📚 Structure (exercices → questions)';
   help.innerHTML = isD
-    ? 'Chaque exercice contient des questions. En Type D, une question n\'a <strong>pas de barème en points</strong> : elle évalue <strong>une ou plusieurs compétences</strong> (🎯 — obligatoire, une question sans compétence ne compte pas). Le poids de chaque compétence se règle dans le tableur de saisie.'
+    ? 'Chaque exercice contient des questions. En Type D, une question n\'a <strong>pas de barème en points</strong> : elle évalue <strong>une ou plusieurs compétences</strong> (🎯 — obligatoire, une question sans compétence ne compte pas). Le <strong>poids</strong> saisi après chaque compétence (<code>2×</code>) multiplie ses points ET sa pondération dans le niveau — <code>1×</code> = poids normal. Il se règle aussi depuis l\'en-tête du tableur.'
     : 'Chaque exercice contient des questions avec leur barème. Tu peux <strong>rattacher une ou plusieurs compétences</strong> à chaque question (optionnel) — utile pour générer le bilan compétences (phase 11).';
   ev.exercices = ev.exercices || [];
   let totalPts = 0;
@@ -33858,8 +33858,10 @@ function _evalEditRenderMiniNotes() {
                style="width:60px;padding:3px 6px;font-family:var(--font-mono);text-align:right;font-size:.92em"
                oninput="_evalEditUpdateMiniNote(${globalIdx}, 'max', this.value)">
         <span style="color:var(--pencil);font-size:.8em">pts</span>`}
-        ${isD && (q.competenceIds || []).length === 0
-          ? `<span style="color:var(--margin-red);font-size:.8em;font-weight:600" title="En Type D, une question sans compétence ne compte ni dans la note ni dans les bilans">⚠ aucune compétence</span>`
+        ${isD
+          ? ((q.competenceIds || []).length === 0
+              ? `<span style="color:var(--margin-red);font-size:.8em;font-weight:600" title="En Type D, une question sans compétence ne compte ni dans la note ni dans les bilans">⚠ aucune compétence</span>`
+              : _renderCompetenceWeightsD(q, globalIdx))
           : compChips}
         <button class="btn btn-g btn-sm" onclick="_evalEditPickCompetences(${globalIdx})" title="Rattacher / détacher des compétences${isD ? ' (obligatoire en Type D)' : ''}" style="padding:2px 8px;font-size:.85em">🎯</button>
         <button class="btn btn-r btn-sm" onclick="_evalEditRemoveMiniNote(${globalIdx})" title="Supprimer cette question" style="padding:2px 6px">✕</button>
@@ -33913,6 +33915,56 @@ function _evalEditRenderMiniNotes() {
         ? 'Aucune question pour l\'instant.'
         : `Total : ${totalPts} pts sur ${ev.miniNotes.length} question${ev.miniNotes.length > 1 ? 's' : ''} dans ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''} · ramené à /${ev.noteMax ?? 20} par proportionnalité`;
   }
+}
+
+// Type D : chips de compétences AVEC leur poids éditable. Le poids vit sur le couple
+// (question × compétence) — une même compétence peut peser 1 dans une question et 2 dans
+// une autre — d'où son édition ici, au plus près de la question, et non dans un réglage global.
+// Le « × » suit le nombre (« 2× ») : placé avant, il se lisait comme un bouton de fermeture.
+function _renderCompetenceWeightsD(mn, globalIdx) {
+  const cids = mn.competenceIds || [];
+  if (cids.length === 0) return '';
+  const chips = cids.map(cid => {
+    const c = S.competences?.[cid];
+    const w = _typeDWeight(mn, cid);
+    const lourd = w !== 1;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 4px 1px 6px;background:${lourd ? 'var(--paper-warm)' : 'var(--paper)'};border:1px solid ${lourd ? 'var(--ink-blue-soft)' : 'var(--rule-line)'};border-radius:8px;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue)" title="${_escAttr((c?.name || c?.code || '?') + '\nPoids dans cette question (1 = poids normal)')}">
+      ${_esc(c?.code || '?')}
+      <input type="number" min="0.5" max="20" step="0.5" value="${w}"
+             oninput="_evalEditUpdateCompWeight(${globalIdx}, '${_escJsAttr(cid)}', this.value)"
+             onblur="_evalEditCompWeightBlur(${globalIdx}, '${_escJsAttr(cid)}', this)"
+             aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (mn.label || 'la question'))}"
+             style="width:34px;padding:0 1px;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper);font-family:var(--font-mono);font-size:1em;text-align:right;color:var(--ink-blue)"><span aria-hidden="true" style="color:var(--pencil)">×</span>
+    </span>`;
+  }).join(' ');
+  return `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:4px">${chips}</span>`;
+}
+
+// Poids d'une compétence dans une question (Type D), depuis l'éditeur de structure.
+// Saisie continue (flèches/frappe) → _evalArmUndo. Aucun re-render : la liste des questions
+// serait reconstruite et le champ détruit sous le curseur — même piège que dans le tableur.
+function _evalEditUpdateCompWeight(idx, cid, raw) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const ev = S.evaluations?.[evalId];
+  const mn = ev?.miniNotes?.[idx];
+  if (!ev || !mn || !cid) return;
+  const w = parseFloat(raw);
+  if (raw === '' || !Number.isFinite(w)) return;   // frappe en cours
+  if (w <= 0) { _toastPoidsInvalide(); return; }
+  _evalArmUndo();
+  mn.compWeights = mn.compWeights || {};
+  if (w === 1) delete mn.compWeights[cid]; else mn.compWeights[cid] = w;
+  _evalEditDirty = true;
+  ev.updatedAt = Date.now();
+  save();
+}
+
+function _evalEditCompWeightBlur(idx, cid, inputEl) {
+  const evalId = document.getElementById('meval-edit-id').value;
+  const mn = S.evaluations?.[evalId]?.miniNotes?.[idx];
+  if (!mn) return;
+  const w = parseFloat(inputEl.value);
+  if (!Number.isFinite(w) || w <= 0) inputEl.value = _typeDWeight(mn, cid);
 }
 
 // Rend des "chips" compactes des compétences rattachées à une question (code court).
@@ -38525,7 +38577,7 @@ function _evalTableurRenderD(ev, cls) {
         const w = _typeDWeight(q, cid);
         html += `<th style="padding:2px 3px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:52px;background:var(--paper-warm);${k === 0 ? '' : 'border-left:1px solid var(--rule-line-soft);'}">
           <div style="font-family:var(--font-mono);font-size:.78em;font-weight:700;color:var(--ink-blue)" title="${_escAttr((c?.code || '?') + (c?.name ? ' — ' + c.name : ''))}">${_esc(c?.code || '?')}</div>
-          <div style="display:flex;align-items:center;justify-content:center;gap:1px;font-size:.72em;color:var(--pencil)" title="Poids de cette compétence dans la question (défaut 1) — multiplie les points ET la pondération du niveau">×<input type="number" min="0.5" max="20" step="0.5" value="${w}" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" onchange="_evalTableurDEditWeight(this)" style="width:36px;padding:0 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:1em;text-align:center;color:var(--pencil)"></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:0;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><input type="number" min="0.5" max="20" step="0.5" value="${w}" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}" style="width:30px;padding:0;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:1em;text-align:right;color:var(--pencil)"><span aria-hidden="true">×</span></div>
         </th>`;
       });
     }
@@ -38709,8 +38761,15 @@ function _evalTableurDEditQLabel(inputEl) {
   save();
 }
 
-// Édition du poids d'une compétence dans une question. Mutation structurelle ponctuelle →
-// pushUndo direct, puis re-render complet (tous les totaux et niveaux dérivés changent).
+// Édition du poids d'une compétence dans une question, depuis l'en-tête du tableur.
+// ⚠️ NE PAS appeler _evalTableurRender() ici : il reconstruit le tableau par innerHTML, donc
+// DÉTRUIT le champ que l'utilisateur est en train de manipuler. Avec les flèches du champ
+// numérique, chaque clic émet `input` → le champ disparaissait sous le curseur ; au clavier,
+// le focus sautait dès la validation. Résultat : un poids impossible à saisir alors que le
+// modèle, lui, était correctement mis à jour. On rafraîchit donc EN PLACE les seules colonnes
+// qui dépendent du poids (Σ exos, Note, niveaux de compétence) et on garde le focus.
+// Saisie continue (flèches, frappe) → _evalArmUndo, pas pushUndo : une entrée d'annulation
+// par salve, conformément à la convention du volet Évaluation.
 function _evalTableurDEditWeight(inputEl) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -38718,13 +38777,56 @@ function _evalTableurDEditWeight(inputEl) {
   const cid = inputEl.getAttribute('data-cid');
   if (!ev || !mn || !cid) return;
   const w = parseFloat(inputEl.value);
-  if (!Number.isFinite(w) || w <= 0) { inputEl.value = _typeDWeight(mn, cid); toast('⚠ Poids invalide (> 0 attendu)', 'warn'); return; }
-  pushUndo();
+  // Champ vide ou en cours de frappe : on ne touche à rien, la validation vient au blur.
+  if (inputEl.value === '' || !Number.isFinite(w)) return;
+  if (w <= 0) { _toastPoidsInvalide(); return; }
+  _evalArmUndo();
   mn.compWeights = mn.compWeights || {};
   if (w === 1) delete mn.compWeights[cid]; else mn.compWeights[cid] = w;
   ev.updatedAt = Date.now();
   save();
-  _evalTableurRender();
+  _evalTableurDRefreshAllDerived(ev);
+}
+
+// Au blur : une valeur invalide ou vide est ramenée au poids réellement stocké, pour que
+// l'affichage ne mente jamais sur le modèle.
+function _evalTableurDWeightBlur(inputEl) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const ev = S.evaluations?.[evalId];
+  const mn = ev?.miniNotes?.find(m => m.id === inputEl.getAttribute('data-mnid'));
+  const cid = inputEl.getAttribute('data-cid');
+  if (!ev || !mn || !cid) return;
+  const w = parseFloat(inputEl.value);
+  if (!Number.isFinite(w) || w <= 0) inputEl.value = _typeDWeight(mn, cid);
+}
+
+let _lastPoidsToast = 0;
+function _toastPoidsInvalide() {
+  const now = Date.now();
+  if (now - _lastPoidsToast < 1500) return;
+  _lastPoidsToast = now;
+  toast('⚠ Poids invalide — une valeur strictement positive est attendue', 'warn');
+}
+
+// Recalcule en place toutes les colonnes dérivées du tableur D (toutes les lignes + footer),
+// sans reconstruire le DOM : le champ en cours d'édition survit et garde le focus.
+function _evalTableurDRefreshAllDerived(ev) {
+  const wrap = document.getElementById('meval-tableur-wrap');
+  const tbody = wrap?.querySelector('tbody');
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr[data-sid]'));
+  for (const row of rows) _evalTableurDRefreshRow(ev, row, row.getAttribute('data-sid'));
+  // Footer : moyenne de classe de la Note + niveau moyen par compétence
+  const sids = rows.map(r => r.getAttribute('data-sid'));
+  const fNote = wrap.querySelector('.d-foot-note');
+  if (fNote) {
+    const notes = sids.map(s => _computeStudentEvalNote(ev, s)).filter(n => n != null);
+    fNote.textContent = notes.length ? _fmtNote(notes.reduce((a, b) => a + b, 0) / notes.length) : '—';
+  }
+  wrap.querySelectorAll('.d-foot-comp').forEach(th => {
+    const lvs = sids.map(s => _typeDCompLevel(ev, s, th.getAttribute('data-cid'))).filter(l => l != null);
+    th.textContent = lvs.length ? (lvs.reduce((a, b) => a + b, 0) / lvs.length).toFixed(1) : '—';
+  });
 }
 
 // Ouvre le picker de compétences depuis l'en-tête d'une question du tableur D.
