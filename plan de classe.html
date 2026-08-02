@@ -2048,40 +2048,6 @@ body.ff-no-eval      .ff-eval { display: none !important; }
   outline: none !important;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   POIDS D'UNE COMPÉTENCE (Type D) — en-tête du tableur ET éditeur de structure
-   ═══════════════════════════════════════════════════════════════════
-   ⚠️ Le sélecteur natif d'un input[type=number] RÉSERVE ~33 px de large dans
-   Chrome, qu'il soit visible ou non. Posée à 30–34 px (la place disponible dans
-   une colonne de compétence), la case était donc entièrement occupée par lui :
-   le chiffre débordait hors du cadre — mesuré scrollWidth 41 pour clientWidth 33,
-   donc INVISIBLE — et le moindre clic tombait sur une flèche au lieu de poser un
-   curseur. Champ inutilisable au clavier comme à la souris, alors que le modèle,
-   lui, était correctement mis à jour. Même remède que .counter-input : on retire
-   le sélecteur, la case entière redevient une zone de texte. Les flèches ↑/↓ du
-   clavier continuent d'ajuster la valeur une fois le champ actif. */
-.wpoids {
-  width: 40px !important;
-  text-align: center !important;
-  font-family: var(--font-mono) !important;
-  font-size: .82em !important;
-  font-variant-numeric: tabular-nums !important;
-  padding: 2px 3px !important;
-  border: 1px solid var(--rule-line) !important;
-  border-radius: var(--radius-sm) !important;
-  color: var(--ink-blue) !important;
-  -moz-appearance: textfield;
-}
-.wpoids::-webkit-outer-spin-button,
-.wpoids::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.wpoids:focus {
-  border-color: var(--ink-blue) !important;
-  box-shadow: 0 0 0 2px rgba(26, 37, 47, 0.15) !important;
-  outline: none !important;
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    CIPAD CLIQUABLE (Plan Prof cellules + Tablettes récap)
@@ -2414,8 +2380,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   #meval-tableur tfoot input { min-height: 40px !important; font-size: 1.05em !important; }
   /* Compteurs 📦/📝 de l'onglet Élèves */
   input.counter-input { width: 62px !important; padding: 9px 6px !important; }
-  /* Poids des compétences (Type D) — cible tapable au doigt */
-  input.wpoids { width: 52px !important; min-height: 34px !important; font-size: .95em !important; }
   /* Cases à cocher / radios (Réglages, modales…) */
   input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; }
 }
@@ -6222,11 +6186,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.4';
+const APP_VERSION    = '2.27.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T05:04:49Z';
+const APP_BUILD_DATE = '2026-08-02T05:19:19Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -33981,11 +33945,11 @@ function _renderCompetenceWeightsD(mn, globalIdx) {
     const w = _typeDWeight(mn, cid);
     const lourd = w !== 1;
     return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 4px 1px 6px;background:${lourd ? 'var(--paper-warm)' : 'var(--paper)'};border:1px solid ${lourd ? 'var(--ink-blue-soft)' : 'var(--rule-line)'};border-radius:8px;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue)" title="${_escAttr((c?.name || c?.code || '?') + '\nPoids dans cette question (1 = poids normal)')}">
-      ${_esc(c?.code || '?')}
-      <input type="number" min="0.5" max="20" step="0.5" value="${w}" class="wpoids"
+      ${_esc(c?.code || '?')}<span aria-hidden="true" style="color:var(--pencil);margin:0 1px">×</span><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="no-spinner"
              oninput="_evalEditUpdateCompWeight(${globalIdx}, '${_escJsAttr(cid)}', this.value)"
              onblur="_evalEditCompWeightBlur(${globalIdx}, '${_escJsAttr(cid)}', this)"
-             aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (mn.label || 'la question'))}"><span aria-hidden="true" style="color:var(--pencil)">×</span>
+             aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (mn.label || 'la question'))}"
+             style="width:38px;padding:2px 3px;font-family:var(--font-mono);text-align:center;font-size:.92em">
     </span>`;
   }).join(' ');
   return `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:4px">${chips}</span>`;
@@ -38627,9 +38591,9 @@ function _evalTableurRenderD(ev, cls) {
       cids.forEach((cid, k) => {
         const c = S.competences?.[cid];
         const w = _typeDWeight(q, cid);
-        html += `<th style="padding:2px 3px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:58px;background:var(--paper-warm);${k === 0 ? '' : 'border-left:1px solid var(--rule-line-soft);'}">
+        html += `<th style="padding:2px 3px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:52px;background:var(--paper-warm);${k === 0 ? '' : 'border-left:1px solid var(--rule-line-soft);'}">
           <div style="font-family:var(--font-mono);font-size:.78em;font-weight:700;color:var(--ink-blue)" title="${_escAttr((c?.code || '?') + (c?.name ? ' — ' + c.name : ''))}">${_esc(c?.code || '?')}</div>
-          <div style="display:flex;align-items:center;justify-content:center;gap:0;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="wpoids" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}"><span aria-hidden="true" style="margin-left:2px">×</span></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:1px;line-height:1;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><span aria-hidden="true">×</span><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="no-spinner" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}" style="width:32px;padding:1px 1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);text-align:center;font-size:1.1em;color:var(--ink-blue)"></div>
         </th>`;
       });
     }
