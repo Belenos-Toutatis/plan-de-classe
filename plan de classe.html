@@ -2049,6 +2049,41 @@ body.ff-no-eval      .ff-eval { display: none !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   POIDS D'UNE COMPÉTENCE (Type D) — en-tête du tableur ET éditeur de structure
+   ═══════════════════════════════════════════════════════════════════
+   ⚠️ Le sélecteur natif d'un input[type=number] RÉSERVE ~33 px de large dans
+   Chrome, qu'il soit visible ou non. Posée à 30–34 px (la place disponible dans
+   une colonne de compétence), la case était donc entièrement occupée par lui :
+   le chiffre débordait hors du cadre — mesuré scrollWidth 41 pour clientWidth 33,
+   donc INVISIBLE — et le moindre clic tombait sur une flèche au lieu de poser un
+   curseur. Champ inutilisable au clavier comme à la souris, alors que le modèle,
+   lui, était correctement mis à jour. Même remède que .counter-input : on retire
+   le sélecteur, la case entière redevient une zone de texte. Les flèches ↑/↓ du
+   clavier continuent d'ajuster la valeur une fois le champ actif. */
+.wpoids {
+  width: 40px !important;
+  text-align: center !important;
+  font-family: var(--font-mono) !important;
+  font-size: .82em !important;
+  font-variant-numeric: tabular-nums !important;
+  padding: 2px 3px !important;
+  border: 1px solid var(--rule-line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--ink-blue) !important;
+  -moz-appearance: textfield;
+}
+.wpoids::-webkit-outer-spin-button,
+.wpoids::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.wpoids:focus {
+  border-color: var(--ink-blue) !important;
+  box-shadow: 0 0 0 2px rgba(26, 37, 47, 0.15) !important;
+  outline: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    CIPAD CLIQUABLE (Plan Prof cellules + Tablettes récap)
    ═══════════════════════════════════════════════════════════════════ */
 .cipad.cipad-clickable, .cipad-clickable {
@@ -2379,6 +2414,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   #meval-tableur tfoot input { min-height: 40px !important; font-size: 1.05em !important; }
   /* Compteurs 📦/📝 de l'onglet Élèves */
   input.counter-input { width: 62px !important; padding: 9px 6px !important; }
+  /* Poids des compétences (Type D) — cible tapable au doigt */
+  input.wpoids { width: 52px !important; min-height: 34px !important; font-size: .95em !important; }
   /* Cases à cocher / radios (Réglages, modales…) */
   input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; }
 }
@@ -6185,11 +6222,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.27.3';
+const APP_VERSION    = '2.27.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T04:15:56Z';
+const APP_BUILD_DATE = '2026-08-02T05:04:49Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32233,6 +32270,21 @@ function _typeDWeight(mn, cid) {
   return (Number.isFinite(w) && w > 0) ? w : 1;
 }
 
+// Bornes d'un poids saisi. ⚠️ Le max="20" d'un input[type=number] ne contraint QUE les
+// flèches et la validation de formulaire : une valeur FRAPPÉE le dépasse sans un mot
+// (mesuré — « 30 » accepté et stocké). On borne donc nous-mêmes, sinon le champ annonce
+// une limite qu'il n'applique pas. Renvoie null si la saisie n'est pas un poids valide.
+// ⚠️ `var` et non `const` : cette déclaration est APRÈS l'appel init() (l. 31159). Une
+// `const` y serait en zone morte temporelle pendant tout init() — piège déjà payé une
+// fois (cf. _bilanCompState). Rien ne les lit pendant init() aujourd'hui, mais la règle
+// du fichier est de ne pas laisser l'exception traîner.
+var TYPED_W_MIN = 0.5, TYPED_W_MAX = 20;
+function _typeDClampWeight(raw) {
+  const w = parseFloat(raw);
+  if (!Number.isFinite(w) || w <= 0) return null;
+  return Math.min(TYPED_W_MAX, Math.max(TYPED_W_MIN, w));
+}
+
 // Clé d'exercice d'une question (— '__orphans__' si sans exercice valide), partagée par
 // le calcul, le tableur et les bilans par exercice.
 function _typeDExoKey(ev, mn) {
@@ -33930,11 +33982,10 @@ function _renderCompetenceWeightsD(mn, globalIdx) {
     const lourd = w !== 1;
     return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 4px 1px 6px;background:${lourd ? 'var(--paper-warm)' : 'var(--paper)'};border:1px solid ${lourd ? 'var(--ink-blue-soft)' : 'var(--rule-line)'};border-radius:8px;font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue)" title="${_escAttr((c?.name || c?.code || '?') + '\nPoids dans cette question (1 = poids normal)')}">
       ${_esc(c?.code || '?')}
-      <input type="number" min="0.5" max="20" step="0.5" value="${w}"
+      <input type="number" min="0.5" max="20" step="0.5" value="${w}" class="wpoids"
              oninput="_evalEditUpdateCompWeight(${globalIdx}, '${_escJsAttr(cid)}', this.value)"
              onblur="_evalEditCompWeightBlur(${globalIdx}, '${_escJsAttr(cid)}', this)"
-             aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (mn.label || 'la question'))}"
-             style="width:34px;padding:0 1px;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper);font-family:var(--font-mono);font-size:1em;text-align:right;color:var(--ink-blue)"><span aria-hidden="true" style="color:var(--pencil)">×</span>
+             aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (mn.label || 'la question'))}"><span aria-hidden="true" style="color:var(--pencil)">×</span>
     </span>`;
   }).join(' ');
   return `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:4px">${chips}</span>`;
@@ -33948,9 +33999,10 @@ function _evalEditUpdateCompWeight(idx, cid, raw) {
   const ev = S.evaluations?.[evalId];
   const mn = ev?.miniNotes?.[idx];
   if (!ev || !mn || !cid) return;
-  const w = parseFloat(raw);
-  if (raw === '' || !Number.isFinite(w)) return;   // frappe en cours
-  if (w <= 0) { _toastPoidsInvalide(); return; }
+  if (raw === '' || !Number.isFinite(parseFloat(raw))) return;   // frappe en cours
+  const w = _typeDClampWeight(raw);
+  if (w == null) { _toastPoidsInvalide(); return; }
+  if (w !== parseFloat(raw)) _toastPoidsBorne(w);
   _evalArmUndo();
   mn.compWeights = mn.compWeights || {};
   if (w === 1) delete mn.compWeights[cid]; else mn.compWeights[cid] = w;
@@ -33959,12 +34011,12 @@ function _evalEditUpdateCompWeight(idx, cid, raw) {
   save();
 }
 
+// Voir _evalTableurDWeightBlur : recalage inconditionnel du champ sur le modèle.
 function _evalEditCompWeightBlur(idx, cid, inputEl) {
   const evalId = document.getElementById('meval-edit-id').value;
   const mn = S.evaluations?.[evalId]?.miniNotes?.[idx];
   if (!mn) return;
-  const w = parseFloat(inputEl.value);
-  if (!Number.isFinite(w) || w <= 0) inputEl.value = _typeDWeight(mn, cid);
+  inputEl.value = _typeDWeight(mn, cid);
 }
 
 // Rend des "chips" compactes des compétences rattachées à une question (code court).
@@ -38575,9 +38627,9 @@ function _evalTableurRenderD(ev, cls) {
       cids.forEach((cid, k) => {
         const c = S.competences?.[cid];
         const w = _typeDWeight(q, cid);
-        html += `<th style="padding:2px 3px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:52px;background:var(--paper-warm);${k === 0 ? '' : 'border-left:1px solid var(--rule-line-soft);'}">
+        html += `<th style="padding:2px 3px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:58px;background:var(--paper-warm);${k === 0 ? '' : 'border-left:1px solid var(--rule-line-soft);'}">
           <div style="font-family:var(--font-mono);font-size:.78em;font-weight:700;color:var(--ink-blue)" title="${_escAttr((c?.code || '?') + (c?.name ? ' — ' + c.name : ''))}">${_esc(c?.code || '?')}</div>
-          <div style="display:flex;align-items:center;justify-content:center;gap:0;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><input type="number" min="0.5" max="20" step="0.5" value="${w}" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}" style="width:30px;padding:0;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:1em;text-align:right;color:var(--pencil)"><span aria-hidden="true">×</span></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:0;font-size:.72em;color:var(--pencil)" title="Poids de ${_escAttr(c?.code || '?')} dans cette question — multiplie les points ET la pondération du niveau. 1 = poids normal.&#10;Réglable aussi dans 🏗 Structure."><input type="number" min="0.5" max="20" step="0.5" value="${w}" class="wpoids" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" oninput="_evalTableurDEditWeight(this)" onblur="_evalTableurDWeightBlur(this)" aria-label="${_escAttr('Poids de ' + (c?.code || '?') + ' dans ' + (q.label || 'la question'))}"><span aria-hidden="true" style="margin-left:2px">×</span></div>
         </th>`;
       });
     }
@@ -38776,10 +38828,11 @@ function _evalTableurDEditWeight(inputEl) {
   const mn = ev?.miniNotes?.find(m => m.id === inputEl.getAttribute('data-mnid'));
   const cid = inputEl.getAttribute('data-cid');
   if (!ev || !mn || !cid) return;
-  const w = parseFloat(inputEl.value);
   // Champ vide ou en cours de frappe : on ne touche à rien, la validation vient au blur.
-  if (inputEl.value === '' || !Number.isFinite(w)) return;
-  if (w <= 0) { _toastPoidsInvalide(); return; }
+  if (inputEl.value === '' || !Number.isFinite(parseFloat(inputEl.value))) return;
+  const w = _typeDClampWeight(inputEl.value);
+  if (w == null) { _toastPoidsInvalide(); return; }
+  if (w !== parseFloat(inputEl.value)) _toastPoidsBorne(w);
   _evalArmUndo();
   mn.compWeights = mn.compWeights || {};
   if (w === 1) delete mn.compWeights[cid]; else mn.compWeights[cid] = w;
@@ -38796,8 +38849,10 @@ function _evalTableurDWeightBlur(inputEl) {
   const mn = ev?.miniNotes?.find(m => m.id === inputEl.getAttribute('data-mnid'));
   const cid = inputEl.getAttribute('data-cid');
   if (!ev || !mn || !cid) return;
-  const w = parseFloat(inputEl.value);
-  if (!Number.isFinite(w) || w <= 0) inputEl.value = _typeDWeight(mn, cid);
+  // Resynchronisation INCONDITIONNELLE : une saisie hors bornes a été ramenée dans
+  // [0.5, 20] à l'enregistrement, une saisie invalide n'a rien changé du tout. Dans les
+  // deux cas le champ afficherait autre chose que le modèle si on ne le recalait pas.
+  inputEl.value = _typeDWeight(mn, cid);
 }
 
 let _lastPoidsToast = 0;
@@ -38806,6 +38861,12 @@ function _toastPoidsInvalide() {
   if (now - _lastPoidsToast < 1500) return;
   _lastPoidsToast = now;
   toast('⚠ Poids invalide — une valeur strictement positive est attendue', 'warn');
+}
+function _toastPoidsBorne(w) {
+  const now = Date.now();
+  if (now - _lastPoidsToast < 1500) return;
+  _lastPoidsToast = now;
+  toast(`⚠ Poids ramené à ${_fmtNote(w)} (bornes : ${TYPED_W_MIN} à ${TYPED_W_MAX})`, 'warn');
 }
 
 // Recalcule en place toutes les colonnes dérivées du tableur D (toutes les lignes + footer),
