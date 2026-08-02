@@ -1139,6 +1139,25 @@ test('Bibliothèque : réordonnancement — un pas par appel, bornes inertes', (
   assert.equal(ev("S.evalCommentLibrary.positive.length"), 3);
 });
 
+test('Bibliothèque : déplacement à une position quelconque (chemin du glisser)', () => {
+  seedTypeD();
+  ev(`S.evalCommentLibrary = { positive: ['a', 'b', 'c', 'd', 'e'], negative: [] };`);
+  // Le glisser saute des positions : remonter la dernière tout en haut, puis redescendre
+  ev(`_comLibMoveTo('positive', 4, 0)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('')"), 'eabcd');
+  ev(`_comLibMoveTo('positive', 0, 3)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('')"), 'abced');
+  // Un glisser relâché sur place (to === from) ou hors bornes ne doit RIEN changer —
+  // il re-rend seulement, pour remettre le DOM en accord avec le modèle.
+  const avant = ev("S.evalCommentLibrary.positive.join('')");
+  ev(`_comLibMoveTo('positive', 2, 2); _comLibMoveTo('positive', 1, -1); _comLibMoveTo('positive', 1, 9)`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join('')"), avant);
+  // Aucune de ces trois passes ne doit avoir empilé d'undo
+  const n = ev("undoStack.length");
+  ev(`_comLibMoveTo('positive', 0, 0)`);
+  assert.equal(ev("undoStack.length"), n, 'un déplacement nul ne doit pas polluer la pile d\'undo');
+});
+
 test('Motifs d\'ajustement : réordonnancement, et la constante par défaut reste intacte', () => {
   seedTypeD();
   ev(`S.evalPrefs.adjustPresets = [

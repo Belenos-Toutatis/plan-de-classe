@@ -571,6 +571,15 @@ body.noise-widget-on #toast{bottom:112px}
 .empty-state .es-icon{font-size:1.7em;display:block;margin-bottom:6px;opacity:.8}
 .empty-state strong{color:var(--ink-blue)}
 
+/* ─── Listes de réglages réordonnables au glisser (bibliothèque, motifs d'ajustement) ───
+   La poignée seule porte touch-action:none : au doigt, glisser AILLEURS sur la ligne doit
+   continuer à faire défiler la modale, dont les listes dépassent l'écran sur une tablette. */
+.sort-handle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:0 5px 0 1px;opacity:.45;line-height:1}
+.sort-handle:hover{opacity:.85}
+.sort-handle:active{cursor:grabbing}
+.sort-row{user-select:none;-webkit-user-select:none}
+.sort-row.sort-dragging{opacity:.75;box-shadow:var(--shadow-pop);position:relative;z-index:2}
+
 /* ─── GROUPES ─── */
 /* Couleurs */
 :root{--g1:#23689a;--g1-light:#d6eaf8;--g1-em:#eaf4fc;--g2:#bf4d00;--g2-light:#fde8d8;--g2-em:#fef5ee;--g3:#8e44ad;--g3-light:#e8d5ee;--g3-em:#f4e6f8}
@@ -2382,6 +2391,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   .btn-sm { padding: 9px 13px !important; font-size: .95em !important; }
   .gchip { padding: 9px 16px !important; font-size: .92em !important; }
   .tagchip { padding: 8px 14px !important; }
+  /* Poignée de glisser des listes de réglages : au doigt c'est la SEULE zone qui saisit
+     la ligne (le reste doit faire défiler), donc elle doit être vraiment atteignable */
+  .sort-handle { padding: 6px 11px 6px 5px !important; font-size: 1.15em !important; opacity: .6 !important; }
   /* Cellules du plan : contrôles internes tapables (compteurs 📦/📝, croix
      de retrait, pastille tablette) — mesurés à 31×15 px avant cette règle */
   .cctr { padding: 6px 9px !important; font-size: .88em !important; }
@@ -4200,13 +4212,13 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="about-section">
       <h3>💬 Bibliothèque de commentaires</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Commentaires pré-réglables pour annoter une <strong>cellule</strong> du tableur (question, ou couple question/passation × compétence). Le motif <code>[+-]N pt(s)</code> n'ajuste la note qu'en <strong>Type A</strong> ; ailleurs c'est du texte.</p>
-      <button class="btn btn-g btn-sm" onclick="closeMod2('mevalprefs');openCommentLibrary()">📚 Ouvrir la bibliothèque</button>
+      <button class="btn btn-g btn-sm" onclick="openCommentLibrary('prefs')">📚 Ouvrir la bibliothèque</button>
     </div>
 
     <div class="about-section">
       <h3>⚖ Motifs d'ajustement de la note</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Les boutons proposés au <strong>clic droit sur la note</strong> d'un élève (triche, retard, bonus…). À distinguer de la bibliothèque ci-dessus : ceux-ci portent sur la <strong>note finale</strong> de l'évaluation, pas sur une cellule.</p>
-      <button class="btn btn-g btn-sm" onclick="closeMod2('mevalprefs');openAdjustPresets()">⚖ Ouvrir les motifs</button>
+      <button class="btn btn-g btn-sm" onclick="openAdjustPresets('prefs')">⚖ Ouvrir les motifs</button>
     </div>
 
     <div class="about-section">
@@ -4646,7 +4658,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
 
     <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px">
-      <button class="btn btn-g btn-sm" onclick="closeMod2('meval-comments');openCommentLibrary()">⚙ Bibliothèque…</button>
+      <button class="btn btn-g btn-sm" onclick="openCommentLibrary('comments')">⚙ Bibliothèque…</button>
       <button class="btn btn-p" onclick="closeMod2('meval-comments')">Fermer</button>
     </div>
   </div>
@@ -4715,7 +4727,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       Les boutons proposés dans <strong>⚖ Ajustement de la note</strong> (clic droit sur la note d'un élève).
       Un motif <strong>pré-remplit</strong> le formulaire — tu complètes avant de valider, rien n'est appliqué au clic.
       Ils valent pour <strong>toutes tes évaluations</strong>, tous types confondus.
-      L'ordre ci-dessous est celui des boutons : avec <strong>↑ ↓</strong>, mets en tête les plus courants.
+      L'ordre ci-dessous est celui des boutons : mets en tête les plus courants, en glissant une ligne (par sa poignée <strong>⠿</strong> au doigt) ou avec <strong>↑ ↓</strong>.
     </p>
 
     <div id="madjlib-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px"></div>
@@ -4756,7 +4768,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">Commentaires pré-réglables réutilisables sur toutes tes évaluations, pour annoter une <strong>cellule</strong> du tableur.
       Un motif <code>[+-]N pt(s)</code> n'ajuste la note qu'en <strong>Type A</strong> — sur les autres types, un tel commentaire n'est pas proposé (il serait sans effet) ;
       pour sanctionner ou bonifier, on y fait un <strong>clic droit sur la note</strong> (motifs réglables dans <em>⚙ Réglages → ⚖ Motifs d'ajustement</em>).<br>
-      L'ordre ci-dessous est celui des puces proposées à l'annotation : avec <strong>↑ ↓</strong>, mets en tête ce que tu poses le plus souvent.</p>
+      L'ordre ci-dessous est celui des puces proposées à l'annotation : mets en tête ce que tu poses le plus souvent, en glissant une ligne (par sa poignée <strong>⠿</strong> au doigt) ou avec <strong>↑ ↓</strong>.</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div>
@@ -6310,11 +6322,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.35.0';
+const APP_VERSION    = '2.36.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T15:35:16Z';
+const APP_BUILD_DATE = '2026-08-02T15:51:18Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -46548,13 +46560,19 @@ function _evalCommentsRemove(idx) {
 // ═══════════════ Motifs d'ajustement — catalogue réglable (modale `madjlib`) ═══════════════
 // Pendant de la bibliothèque de commentaires : celle-ci sert les CELLULES, celui-ci la NOTE
 // FINALE. Stocké dans S.evalPrefs.adjustPresets (donc dans le fichier : sync, undo, backups).
-function openAdjustPresets(returnToAdjust) {
-  // Ouverte depuis la modale ⚖, on y revient à la fermeture — sinon l'enseignant perdrait
-  // l'élève qu'il était en train d'ajuster.
-  if (returnToAdjust && _evalAdjustCtx) {
+// `from` dit d'OÙ l'on vient, pour y revenir à la fermeture : régler ses motifs est une
+// parenthèse, pas une destination. `true` = ancienne signature (depuis la modale ⚖).
+function openAdjustPresets(from) {
+  if (from === true) from = 'adjust';
+  delete _modalReturnTo['madjlib'];   // pas d'héritage d'une ouverture précédente
+  if (from === 'adjust' && _evalAdjustCtx) {
+    // Sans ce retour, l'enseignant perdrait la copie qu'il était en train d'ajuster.
     const ctx = { sid: _evalAdjustCtx.sid, evalId: _evalAdjustCtx.evalId };
     closeMod2('meval-adjust');
     _modalReturnTo['madjlib'] = () => _evalAdjustOpen(ctx.sid, ctx.evalId);
+  } else if (from === 'prefs') {
+    closeMod2('mevalprefs');
+    _modalReturnTo['madjlib'] = () => openEvalPrefs();
   }
   _adjLibRender();
   openMod('madjlib');
@@ -46568,26 +46586,35 @@ function _adjLibRender() {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun motif — la modale d\'ajustement proposera seulement la saisie directe. Ajoutes-en un ci-dessous, ou reprends les motifs par défaut.</p>';
     return;
   }
-  wrap.innerHTML = list.map((p, i) => `<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+  wrap.innerHTML = list.map((p, i) => `<div class="sort-row" data-sort-idx="${i}" style="display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+      ${_sortHandleHTML('var(--pencil)')}
       <span style="flex:1;min-width:0;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(p))}</strong>${p.label ? ' — ' + _esc(p.label) : ''}${p.voidComps ? `<br><span style="font-size:.85em;color:var(--margin-red)">⊘ compétences au minimum (copie annulée)</span>` : ''}</span>
       ${_reorderBtnsHTML(`_adjLibMove(${i}, -1)`, `_adjLibMove(${i}, 1)`, i === 0, i === list.length - 1, 'var(--pencil)')}
       <button class="btn btn-r btn-sm" onclick="_adjLibRemove(${i})" title="Supprimer ce motif" style="padding:2px 7px;margin-left:4px">✕</button>
     </div>`).join('');
+  _makeSortable('madjlib-list', _adjLibMoveTo);
 }
 
 // L'ordre des motifs est celui des boutons de la modale d'ajustement — les plus courants en tête.
-function _adjLibMove(idx, delta) {
-  // Lecture directe : _adjustPresets() peut renvoyer la constante ADJUST_PRESETS_DEFAULT,
+function _adjLibMoveTo(from, to) {
+  // ⚠️ Lecture directe : _adjustPresets() peut renvoyer la constante ADJUST_PRESETS_DEFAULT,
   // qu'il ne faut jamais muter (elle sert aussi au « ↺ défauts »).
   const list = S.evalPrefs?.adjustPresets;
-  if (!Array.isArray(list)) return;
-  const to = idx + delta;
-  if (to < 0 || to >= list.length) return;
+  if (!Array.isArray(list) || !list.length || from < 0 || from >= list.length
+      || to < 0 || to >= list.length || to === from) { _adjLibRender(); return; }
   pushUndo();
-  const [item] = list.splice(idx, 1);
+  const [item] = list.splice(from, 1);
   list.splice(to, 0, item);
   save();
   _adjLibRender();
+}
+
+function _adjLibMove(idx, delta) {
+  const list = S.evalPrefs?.adjustPresets;
+  if (!Array.isArray(list)) return;
+  const to = idx + delta;
+  if (to < 0 || to >= list.length || !list[idx]) return;   // bornes : aucun effet
+  _adjLibMoveTo(idx, to);
 }
 
 function _adjLibAdd() {
@@ -46649,19 +46676,114 @@ function _adjLibReset() {
   });
 }
 
-function openCommentLibrary() {
+// Même principe que openAdjustPresets : `from` dit d'où l'on vient pour y revenir.
+// Depuis le sélecteur de commentaires, c'est indispensable — on quittait la cellule qu'on
+// était en train d'annoter pour aller chercher un texte, et on ne la retrouvait plus.
+function openCommentLibrary(from) {
+  delete _modalReturnTo['mcomlib'];
+  if (from === 'comments' && _commentsCtx && _commentsCtx.mnId) {
+    const ctx = { mnId: _commentsCtx.mnId, sid: _commentsCtx.sid, evalId: _commentsCtx.evalId };
+    closeMod2('meval-comments');
+    _modalReturnTo['mcomlib'] = () => _evalCommentsOpen(ctx.mnId, ctx.sid, ctx.evalId);
+  } else if (from === 'prefs') {
+    closeMod2('mevalprefs');
+    _modalReturnTo['mcomlib'] = () => openEvalPrefs();
+  }
   _comLibRender();
   openMod('mcomlib');
 }
 
-// Boutons ↑ / ↓ des listes de réglages réordonnables (bibliothèque de commentaires,
-// motifs d'ajustement). Même convention que la modale 🔗 Liens : un pas par clic,
-// extrémités désactivées. `fg` est passé par l'appelant car ces listes sont posées sur
-// des fonds LITTÉRAUX : un token de thème y serait faux (cf. CLAUDE.md, contraste).
+// ═══════════ Listes de réglages réordonnables (bibliothèque, motifs d'ajustement) ═══════════
+// Deux gestes pour le même résultat : les boutons ↑ / ↓ (précis, un pas par clic) et le
+// glisser (rapide quand la liste est longue et qu'on remonte un motif de loin).
+
+// Poignée de glisser. Volontairement un <span> et non un <button> : le contrôleur ignore
+// les <button> de la ligne (↑ ↓ ✕ doivent rester cliquables), la distinction est donc
+// portée par la balise elle-même. aria-hidden : le geste équivalent existe en boutons.
+function _sortHandleHTML(fg) {
+  return `<span class="sort-handle" title="Glisser pour déplacer" aria-hidden="true" style="color:${fg}">⠿</span>`;
+}
+
+// Boutons ↑ / ↓. Même convention que la modale 🔗 Liens : un pas par clic, extrémités
+// désactivées. `fg` est passé par l'appelant car ces listes sont posées sur des fonds
+// LITTÉRAUX : un token de thème y serait faux (cf. CLAUDE.md, contraste).
 function _reorderBtnsHTML(onUp, onDown, isFirst, isLast, fg) {
   const btn = (call, dis, glyph, label) =>
     `<button ${dis ? 'disabled' : `onclick="${_escAttr(call)}"`} title="${label}" aria-label="${label}" style="background:transparent;border:none;color:${fg};cursor:${dis ? 'default' : 'pointer'};opacity:${dis ? '.2' : '.9'};padding:1px 3px;font-size:1em;line-height:1">${glyph}</button>`;
   return btn(onUp, isFirst, '↑', 'Monter') + btn(onDown, isLast, '↓', 'Descendre');
+}
+
+// Glisser-déposer de réordonnancement, en Pointer Events — souris, doigt et stylet par le
+// même chemin (le contrôleur tactile `_tdAttach` est câblé sur la grille du plan, il n'est
+// pas réutilisable ici). Les listes sont reconstruites à chaque render mais leur CONTENEUR
+// est statique dans le HTML : on installe donc les écouteurs une fois sur lui, par délégation.
+var _sortDrag = null;   // { c, row, from, onMove, startY, moved }
+
+function _makeSortable(containerId, onMove) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  if (c.dataset.sortableInit === '1') { c._sortOnMove = onMove; return; }
+  c.dataset.sortableInit = '1';
+  c._sortOnMove = onMove;
+
+  c.addEventListener('pointerdown', (e) => {
+    const row = e.target.closest && e.target.closest('.sort-row');
+    if (!row || row.parentElement !== c) return;
+    if (e.button > 0) return;                       // clic droit / molette : pas une saisie
+    if (e.target.closest('button')) return;         // ↑ ↓ ✕ gardent leur clic
+    // ⚠️ Hors souris, seule la poignée saisit : ailleurs sur la ligne, le geste doit rester
+    // un défilement de la modale (ces listes dépassent l'écran sur une tablette). Le stylet
+    // est logé à la même enseigne que le doigt — `touch-action` s'applique aux deux.
+    if (e.pointerType !== 'mouse' && !e.target.closest('.sort-handle')) return;
+    const from = +row.dataset.sortIdx;
+    if (!Number.isInteger(from)) return;
+    _sortDrag = { c, row, from, onMove: c._sortOnMove, startY: e.clientY, moved: false };
+    try { row.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();                             // pas de sélection de texte pendant le glisser
+  });
+
+  c.addEventListener('pointermove', (e) => {
+    const s = _sortDrag;
+    if (!s || s.c !== c) return;
+    if (!s.moved) {
+      if (Math.abs(e.clientY - s.startY) < 5) return;   // seuil : un clic ne doit pas réordonner
+      s.moved = true;
+      s.row.classList.add('sort-dragging');
+    }
+    // Réordonnancement VIF du DOM : la ligne saisie franchit le milieu d'une voisine, elle
+    // passe de l'autre côté. Le test de position relative évite l'oscillation (sans lui, la
+    // ligne ré-insérée déplace ses voisines et redéclenche aussitôt le franchissement).
+    const _step = () => {
+      for (const other of [...c.children]) {
+        if (other === s.row || !other.classList.contains('sort-row')) continue;
+        const r = other.getBoundingClientRect();
+        const mid = r.top + r.height / 2;
+        const rowIsAfter = !!(other.compareDocumentPosition(s.row) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (e.clientY < mid && rowIsAfter) { c.insertBefore(s.row, other); return true; }
+        if (e.clientY > mid && !rowIsAfter) { c.insertBefore(s.row, other.nextSibling); return true; }
+      }
+      return false;
+    };
+    // On répète jusqu'à stabilité : un geste rapide (ou un pointeur qui saute) produit un
+    // seul `pointermove` par-dessus plusieurs lignes — sans cette boucle, la ligne n'en
+    // franchirait qu'UNE par événement et traînerait derrière le curseur.
+    for (let guard = c.children.length + 1; guard > 0 && _step(); guard--) { /* … */ }
+  });
+
+  const _end = (e) => {
+    const s = _sortDrag;
+    if (!s || s.c !== c) return;
+    _sortDrag = null;
+    s.row.classList.remove('sort-dragging');
+    try { s.row.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (!s.moved) return;                           // simple clic : rien à faire
+    const to = [...c.children].filter(el => el.classList.contains('sort-row')).indexOf(s.row);
+    // `to === from` (ou introuvable) passe quand même par onMove : le DOM a bougé pendant le
+    // glisser, seul un re-render le remet en accord avec le modèle.
+    s.onMove(s.from, to);
+  };
+  c.addEventListener('pointerup', _end);
+  c.addEventListener('pointercancel', _end);
 }
 
 function _comLibRender() {
@@ -46678,28 +46800,39 @@ function _comLibRender() {
     const fg = _contrastTextColor(bg);
     let html = '';
     lib[kind].forEach((c, i) => {
-      html += `<div style="display:flex;align-items:center;gap:2px;padding:4px 8px;background:${bg};color:${fg};border-left:3px solid ${kind === 'positive' ? '#16a34a' : '#dc2626'};border-radius:3px;font-size:.88em">
+      html += `<div class="sort-row" data-sort-idx="${i}" style="display:flex;align-items:center;gap:2px;padding:4px 8px;background:${bg};color:${fg};border-left:3px solid ${kind === 'positive' ? '#16a34a' : '#dc2626'};border-radius:3px;font-size:.88em">
+        ${_sortHandleHTML(fg)}
         <span style="flex:1;min-width:0">${_esc(c)}</span>
         ${_reorderBtnsHTML(`_comLibMove('${kind}', ${i}, -1)`, `_comLibMove('${kind}', ${i}, 1)`, i === 0, i === lib[kind].length - 1, fg)}
         <button onclick="_comLibRemove('${kind}', ${i})" title="Supprimer" aria-label="Supprimer" style="background:transparent;border:none;color:#b03d2e;cursor:pointer;padding:2px 6px">✕</button>
       </div>`;
     });
     wrap.innerHTML = html;
+    _makeSortable(wrap.id, (from, to) => _comLibMoveTo(kind, from, to));
   }
 }
 
 // L'ordre de la bibliothèque est celui des puces proposées à l'annotation d'une cellule :
 // l'enseignant met en tête ce qu'il pose le plus souvent.
+function _comLibMoveTo(kind, from, to) {
+  const list = S.evalCommentLibrary?.[kind];
+  // Un déplacement nul re-rend quand même : après un glisser, le DOM a bougé et seul un
+  // re-render le remet en accord avec le modèle (index des boutons compris).
+  if (!Array.isArray(list) || !list.length || from < 0 || from >= list.length
+      || to < 0 || to >= list.length || to === from) { _comLibRender(); return; }
+  pushUndo();
+  const [item] = list.splice(from, 1);
+  list.splice(to, 0, item);
+  save();
+  _comLibRender();
+}
+
 function _comLibMove(kind, idx, delta) {
   const list = S.evalCommentLibrary?.[kind];
   if (!Array.isArray(list)) return;
   const to = idx + delta;
-  if (to < 0 || to >= list.length) return;
-  pushUndo();
-  const [item] = list.splice(idx, 1);
-  list.splice(to, 0, item);
-  save();
-  _comLibRender();
+  if (to < 0 || to >= list.length || !list[idx]) return;   // bornes : aucun effet, pas même un re-render
+  _comLibMoveTo(kind, idx, to);
 }
 
 function _comLibAdd(kind) {
