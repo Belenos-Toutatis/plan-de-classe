@@ -1448,6 +1448,12 @@ body.tableur-sobr-comps #meval-tableur-wrap .meval-cell-comp,
 body.tableur-sobr-comps #meval-tableur-wrap .meval-cell-comp input.meval-niveau-input { background: transparent !important; color: var(--ink-deep) !important; }
 /* Sobriété compétences : neutralise aussi la pastille de niveau (couleur portée par .comp-pill) */
 body.tableur-sobr-comps #meval-tableur-wrap .comp-pill { background: transparent !important; color: var(--ink-deep) !important; border: 1px solid var(--rule-line) !important; }
+/* Pastille de MOYENNE du pied de tableau (_statsCellHTML) : elle code soit une note, soit
+   un niveau — elle suit donc l'interrupteur correspondant. Sans ces deux règles le pied
+   restait bariolé alors que toutes les lignes étaient passées en noir sur blanc. Vaut
+   pour les quatre types, le pied étant construit par une fonction partagée. */
+body.tableur-sobr-notes #meval-tableur-wrap .stat-pill-note,
+body.tableur-sobr-comps #meval-tableur-wrap .stat-pill-comp { background: transparent !important; color: var(--ink-deep) !important; }
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder { color: var(--pencil-soft) !important; }
 html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
@@ -6239,11 +6245,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.28.1';
+const APP_VERSION    = '2.28.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T07:54:02Z';
+const APP_BUILD_DATE = '2026-08-02T08:23:29Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -35875,6 +35881,15 @@ function _evalTableurSobrRestore() {
 var _TABLEUR_HELP_KBD = 'background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em';
 var _tableurHelpOrig = null;
 function _evalTableurUpdateHelpForType(ev) {
+  // Libellé du choix « ↩ Entrée » : la cellule suivante n'est une QUESTION qu'en Type A/C.
+  // En B et D une colonne est un couple (passation|question × compétence) — l'annoncer
+  // « Question suivante » décrivait un déplacement qui n'existe pas.
+  const optQ = document.querySelector('#meval-tableur-enter option[value="question"]');
+  if (optQ) {
+    optQ.textContent = (ev?.type === 'D') ? '↩ Comp/Quest. suivante'
+                     : (ev?.type === 'B') ? '↩ Compétence suivante'
+                     : '↩ Question suivante';
+  }
   const paste = document.getElementById('meval-tableur-help-paste');
   const head  = document.getElementById('meval-tableur-help-head');
   if (!paste || !head) return;
@@ -36983,11 +36998,15 @@ function _evalTableurKey(e, inputEl) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
-  // numCols dépend du type : Type B = somme des compétences sur toutes les passations ;
-  // Type A/C = nombre de mini-notes/questions.
+  // numCols dépend du type. ⚠️ Une colonne n'est PAS toujours une question : en Type B
+  // comme en Type D, c'est un couple (question|passation × compétence). Compter les
+  // questions en Type D arrêtait la navigation avant la dernière colonne — 2 questions
+  // dont une à 2 compétences font 3 colonnes, pas 2.
   let numCols;
   if (ev.type === 'B') {
     numCols = (ev.passations || []).reduce((s, p) => s + (p.competenceIds?.length || 0), 0);
+  } else if (ev.type === 'D') {
+    numCols = (ev.miniNotes || []).reduce((s, mn) => s + (mn.competenceIds?.length || 0), 0);
   } else {
     numCols = ev.miniNotes?.length || 0;
   }
@@ -38378,18 +38397,21 @@ function _statsCellHTML(values, opts) {
   // sans dégrader la lisibilité de la ligne stats. Deux modes :
   //   - noteMax : couleur de barème note (rouge→orange→vert→bleu via _noteColor)
   //   - compLevels : couleur du niveau 1-4 (palette S.evalPrefs.maitriseColors)
-  let avgPillStyle = '';
+  // La pastille porte une CLASSE selon ce qu'elle code (note ou niveau), pour que le mode
+  // Sobriété la neutralise comme le reste : sans elle, le pied de tableau restait bariolé
+  // alors que toutes les lignes étaient passées en noir sur blanc. Vaut pour les 4 types.
+  let avgPillStyle = '', avgPillCls = '';
   if (typeof noteMax === 'number' && noteMax > 0) {
     const bg = _noteColor(stats.avg, noteMax);
-    if (bg) avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`;
+    if (bg) { avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`; avgPillCls = 'stat-pill-note'; }
   } else if (compLevels) {
     const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
     const idx = Math.max(1, Math.min(colors.length, Math.round(stats.avg))) - 1;
     const bg = colors[idx];
-    if (bg) avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`;
+    if (bg) { avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`; avgPillCls = 'stat-pill-comp'; }
   }
   if (!fullStats) {
-    const avgHtml = avgPillStyle ? `<span style="${avgPillStyle}">${fmt(stats.avg)}</span>` : fmt(stats.avg);
+    const avgHtml = avgPillStyle ? `<span class="${avgPillCls}" style="${avgPillStyle}">${fmt(stats.avg)}</span>` : fmt(stats.avg);
     return `<div title="Moyenne sur ${stats.count} valeur(s)"><span style="color:var(--pencil);font-size:.82em">moy</span> ${avgHtml}</div>`;
   }
   // Mode complet : stats principales (μ, n) visibles inline,
@@ -38409,7 +38431,7 @@ function _statsCellHTML(values, opts) {
     tipLines.push(`< ${fmt(halfMax)} : ${below} élève${below > 1 ? 's' : ''}`);
   }
   const tip = tipLines.join('\n');
-  const avgHtml = avgPillStyle ? `<span style="${avgPillStyle}">${fmt(stats.avg)}</span>` : fmt(stats.avg);
+  const avgHtml = avgPillStyle ? `<span class="${avgPillCls}" style="${avgPillStyle}">${fmt(stats.avg)}</span>` : fmt(stats.avg);
   return `<div title="${_esc(tip)}" style="font-size:.82em;line-height:1.4;text-align:center;font-family:var(--font-mono);white-space:nowrap;cursor:help">`
        + `<strong>μ</strong> ${avgHtml}<br>`
        + `<span style="color:var(--pencil);font-size:.85em">n=${stats.count} · σ ${fmt(stats.std)}</span>`
@@ -38885,12 +38907,14 @@ function _evalTableurRenderD(ev, cls) {
     globalComps.forEach((c, i) => {
       const lv = _typeDCompLevel(ev, sid, c.id);
       const bg = (lv != null) ? _typeDCellBg(lv) : '';
-      html += `<td class="d-comp-cell" data-cid="${_esc(c.id)}" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${bg || 'var(--paper-warm)'};color:${bg ? _contrastTextColor(bg) : 'var(--pencil)'};${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}" title="${_escAttr('Niveau entier sur ' + (c.code || '?') + ' — alimente le bilan de période')}">${lv != null ? _esc(_formatNiveau(lv)) : '—'}</td>`;
+      // Pastille, comme le bilan de compétences du Type C (_compPillHTML) : la couleur est
+      // portée par .comp-pill, ce qui rend la colonne sensible au mode Sobriété — un aplat
+      // de fond sur le <td> y échappait.
+      html += `<td class="d-comp-cell" data-cid="${_esc(c.id)}" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:var(--paper-warm);${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}" title="${_escAttr('Niveau entier sur ' + (c.code || '?') + ' — alimente le bilan de période')}">${_compPillHTML(lv)}</td>`;
     });
     exoComps.forEach((x, i) => {
       const lv = _typeDCompLevel(ev, sid, x.cid, x.exoKey);
-      const bg = (lv != null) ? _typeDCellBg(lv) : '';
-      html += `<td class="d-exocomp" data-exokey="${_esc(x.exoKey)}" data-cid="${_esc(x.cid)}" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;background:${bg || 'var(--paper-warm)'};color:${bg ? _contrastTextColor(bg) : 'var(--pencil)'};${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}">${lv != null ? _esc(_formatNiveau(lv)) : '—'}</td>`;
+      html += `<td class="d-exocomp" data-exokey="${_esc(x.exoKey)}" data-cid="${_esc(x.cid)}" style="padding:3px 5px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:var(--paper-warm);${i === 0 ? SEPD : 'border-left:1px solid var(--rule-line-soft);'}">${_compPillHTML(lv)}</td>`;
     });
     const remark = ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '';
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${SEPD}background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="${remark ? _escAttr(remark) : 'Remarque facultative pour cet élève'}"></td>`;
@@ -38994,19 +39018,12 @@ function _evalTableurDRefreshRow(ev, row, sid) {
     cellNote.style.color = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
     cellNote.title = _evalNoteTipD(ev, sid);
   }
+  // Pastilles : la couleur vit dans .comp-pill, le <td> reste neutre (cf. rendu).
   row.querySelectorAll('.d-comp-cell').forEach(td => {
-    const lv = _typeDCompLevel(ev, sid, td.getAttribute('data-cid'));
-    const bg = (lv != null) ? _typeDCellBg(lv) : '';
-    td.textContent = (lv != null) ? _formatNiveau(lv) : '—';
-    td.style.background = bg || 'var(--paper-warm)';
-    td.style.color = bg ? _contrastTextColor(bg) : 'var(--pencil)';
+    td.innerHTML = _compPillHTML(_typeDCompLevel(ev, sid, td.getAttribute('data-cid')));
   });
   row.querySelectorAll('.d-exocomp').forEach(td => {
-    const lv = _typeDCompLevel(ev, sid, td.getAttribute('data-cid'), td.getAttribute('data-exokey'));
-    const bg = (lv != null) ? _typeDCellBg(lv) : '';
-    td.textContent = (lv != null) ? _formatNiveau(lv) : '—';
-    td.style.background = bg || 'var(--paper-warm)';
-    td.style.color = bg ? _contrastTextColor(bg) : 'var(--pencil)';
+    td.innerHTML = _compPillHTML(_typeDCompLevel(ev, sid, td.getAttribute('data-cid'), td.getAttribute('data-exokey')));
   });
 }
 
