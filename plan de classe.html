@@ -5189,7 +5189,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
         <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
         <span id="meval-tableur-help-paste"><br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.</span>
-        <span id="meval-tableur-help-head"><br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires.</span>
+        <!-- Toujours réécrit par _evalTableurUpdateHelpForType (un texte par type) : cette
+             version décrit le Type A, elle sert de repli si le script n'a pas encore tourné. -->
+        <span id="meval-tableur-help-head"><br><strong>En-tête :</strong> édition directe du code court, du max et de la date · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur un en-tête = nom complet / suppression · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur une cellule = commentaires (un motif <code>−1 pt</code> y ajuste la note).</span>
         <span id="meval-tableur-help-adjust"><br><strong>Note :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">clic droit</kbd> sur la note d'un élève = ajustement de la note finale (triche ×0,5, retard, bonus…). Les niveaux de compétence ne bougent pas, sauf si tu coches « copie annulée ».</span>
       </p>
     </div>
@@ -6251,11 +6253,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.30.0';
+const APP_VERSION    = '2.31.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T11:16:01Z';
+const APP_BUILD_DATE = '2026-08-02T12:23:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32670,6 +32672,23 @@ function _typeDExoKey(ev, mn) {
     ? mn.exerciceId : '__orphans__';
 }
 
+// Clé de commentaire d'une cellule Type D. En A/C une cellule EST une question, donc la map
+// `ev.notes[sid].comments` est keyée par mini-note ; en D une cellule est un couple
+// (question × compétence) — on annote donc le couple, avec une clé composite `mnId|cid`
+// dans la MÊME map (le séparateur `|` n'apparaît jamais dans un id généré).
+function _typeDComKey(mnId, cid) { return mnId + '|' + cid; }
+
+// Supprime les commentaires attachés à une question : la clé simple (A/C) ET les clés
+// composites `mnId|cid` (D). Sans le second passage, supprimer une question laisserait
+// des commentaires orphelins dans le fichier, invisibles et jamais relus.
+function _evalDropCommentsForMn(rec, mnId) {
+  const com = rec && rec.comments;
+  if (!com) return;
+  delete com[mnId];
+  const pref = mnId + '|';
+  for (const k of Object.keys(com)) if (k.startsWith(pref)) delete com[k];
+}
+
 // Détail complet de la note d'un élève sur une éval D : points bruts, barème effectif
 // (les cases A/NN en sont RETIRÉES), sous-totaux par exercice, note ramenée sur noteMax
 // (SANS granulométrie — appliquée par _computeStudentEvalNote, source unique de vérité).
@@ -34594,6 +34613,7 @@ function _evalEditRemoveExo(idx) {
         for (const qid of qIds) {
           if (ev.notes[sid]?.values) delete ev.notes[sid].values[qid];
           if (ev.notes[sid]?.levels) delete ev.notes[sid].levels[qid];
+          _evalDropCommentsForMn(ev.notes[sid], qid);
         }
       }
       ev.exercices.splice(idx, 1);
@@ -35248,6 +35268,7 @@ function _evalEditRemoveMiniNote(idx) {
       for (const sid in (ev.notes || {})) {
         if (ev.notes[sid]?.values) delete ev.notes[sid].values[mn.id];
         if (ev.notes[sid]?.levels) delete ev.notes[sid].levels[mn.id];
+        _evalDropCommentsForMn(ev.notes[sid], mn.id);
       }
       _evalEditDirty = true;
       _evalEditRenderMiniNotes();
@@ -36283,21 +36304,35 @@ function _evalTableurUpdateHelpForType(ev) {
   const paste = document.getElementById('meval-tableur-help-paste');
   const head  = document.getElementById('meval-tableur-help-head');
   if (!paste || !head) return;
-  // Le texte statique du HTML décrit A/C : on le mémorise au premier passage pour pouvoir
-  // y revenir. Sans ça, ouvrir un Type D puis un Type A laisserait le texte du D en place.
+  // Seul le texte « Coller » du HTML est réutilisé tel quel (il décrit A/C) : la ligne
+  // « En-tête » est reconstruite pour CHAQUE type, les quatre en-têtes n'offrant pas les
+  // mêmes éditions directes. Mémorisé au premier passage — sans ça, ouvrir un Type D
+  // puis un Type A laisserait le texte du D en place.
   if (_tableurHelpOrig == null) _tableurHelpOrig = { paste: paste.innerHTML, head: head.innerHTML };
   const kbd = t => `<kbd style="${_TABLEUR_HELP_KBD}">${t}</kbd>`;
   const t = ev?.type;
-  if (t === 'A' || t === 'C') {
-    paste.innerHTML = _tableurHelpOrig.paste;
-    head.innerHTML  = _tableurHelpOrig.head;
-    return;
+  // ⚠️ Clic droit sur une CELLULE : le motif « −1 pt » écrit dans le texte n'ajuste la note
+  // qu'en **Type A**. Partout ailleurs le commentaire est une annotation pure depuis que le
+  // bonus/malus est passé sur la NOTE FINALE (clic droit sur la note) — l'annoncer autrement
+  // promettait un effet sur les points qui n'existe plus.
+  const comCell = (t === 'A')
+    ? `${kbd('clic droit')} sur une cellule = commentaires (un motif <code>−1 pt</code> y ajuste la note).`
+    : `${kbd('clic droit')} sur une cellule = commentaire (du texte : il ne change pas les points).`;
+  paste.innerHTML = (t === 'A' || t === 'C')
+    ? _tableurHelpOrig.paste
+    : `<br><strong>Coller :</strong> non disponible sur ce type — la saisie se fait cellule par cellule.`;
+  if (t === 'A') {
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du code court, du max et de la date · ${kbd('clic droit')} sur un en-tête = nom complet / suppression · ${comCell}`;
+  } else if (t === 'C') {
+    // ⚠️ PAS de date dans l'en-tête d'un Type C : une sommative a UNE date par classe
+    // (bandeau du haut / Réglages), jamais une par question — cf. `dateInput = isTypeC ? ''`
+    // dans le rendu. Le texte commun A/C l'annonçait pourtant, pour les deux.
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du code court de l'exercice ou de la question et du max · ${kbd('clic droit')} sur un en-tête = nom complet / suppression · ${comCell}`;
+  } else if (t === 'B') {
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe de la date et du créneau · ${kbd('clic droit')} sur l'en-tête d'une passation = compétences, dates par groupe, suppression.`;
+  } else {
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du libellé de question et du poids de chaque compétence · 🎯 = compétences évaluées par la question · ${comCell} La structure (exercices, questions) se règle dans <em>🏗 Structure</em>.`;
   }
-  // Ni A ni C : pas de collage multi-cellules, pas de commentaires par cellule.
-  paste.innerHTML = `<br><strong>Coller :</strong> non disponible sur ce type — la saisie se fait cellule par cellule.`;
-  head.innerHTML = (t === 'B')
-    ? `<br><strong>En-tête :</strong> édition directe de la date et du créneau · ${kbd('clic droit')} sur l'en-tête d'une passation = compétences, dates par groupe, suppression.`
-    : `<br><strong>En-tête :</strong> édition directe du libellé de question et du poids de chaque compétence · 🎯 = compétences évaluées par la question. La structure (exercices, questions) se règle dans <em>🏗 Structure</em>.`;
   // La ligne « Note » (clic droit = ajustement) vaut pour les quatre types : rien à adapter.
 }
 
@@ -36580,9 +36615,15 @@ function _evalTableurRender() {
       // on l'affiche en tooltip (préfixe 🧮) — sinon tooltip standard. Le title
       // est posé à la fois sur le <td> (zone large) ET sur l'<input> (cohérence).
       const _storedExpr = ev.notes?.[sid]?.exprs?.[mn.id];
+      // ⚠️ « bonus / malus » ne vaut QUE pour le Type A (motif « −1 pt » lu dans le texte) :
+      // en Type C le commentaire est une annotation pure depuis que l'ajustement est passé
+      // sur la note finale. L'infobulle promettait encore de modifier les points.
+      const _comHint = (ev.type === 'A')
+        ? 'Clic droit = commentaires (un motif « −1 pt » ajuste la note)'
+        : 'Clic droit = commentaire (du texte — il ne change pas les points)';
       const _cellTitle  = _storedExpr
-        ? `🧮 ${_storedExpr} = ${_esc(dispVal)}\n(clic droit = commentaires)`
-        : 'Clic droit = commentaires (bonus / malus / annotations)';
+        ? `🧮 ${_storedExpr} = ${_esc(dispVal)}\n${_comHint}`
+        : _comHint;
       const _titleAttr  = _escAttr(_cellTitle);
       html += `<td class="meval-cell-note" style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${cellColor ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
@@ -39350,7 +39391,23 @@ function _evalTableurRenderD(ev, cls) {
           const lead = (qi === 0 && k === 0) ? SEPD : (k === 0 ? 'border-left:1px solid var(--rule-line);' : 'border-left:1px solid var(--rule-line-soft);');
           const comp = S.competences?.[cid];
           const aria = `Niveau de ${stu.prenom || ''} ${stu.nom || ''} sur ${comp?.code || cid} (${q.label || 'question'})`;
-          html += `<td class="meval-cell-comp" style="padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${lead}${bg ? 'background:' + bg : ''}"><input type="text" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(_typeDDisplayVal(cur))}" oninput="_evalTableurDUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="Tape 1-${nb} pour le niveau, 0 pour effacer, ${_esc(_codeA())} (absent) ou ${_esc(_codeNN())} (non noté — sort du barème)" aria-label="${_escAttr(aria)}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${bg ? '700' : '400'};font-size:.88em;text-align:center;color:${bg ? _contrastTextColor(bg) : ''};border:1px solid var(--rule-line);border-radius:3px"></td>`;
+          // Commentaire de la cellule (couple question × compétence), comme en Type A/C.
+          // La cellule ne fait que 36 px : pas de pastille 💬 cliquable (elle masquerait le
+          // niveau) mais un coin rouge, le texte du commentaire passant dans l'infobulle.
+          const comKey  = _typeDComKey(q.id, cid);
+          const comList = ev.notes?.[sid]?.comments?.[comKey];
+          const nbCom   = Array.isArray(comList) ? comList.length : 0;
+          // ⚠️ La couleur du coin se DÉRIVE du fond de la cellule, comme le chiffre : posé en
+          // `--margin-red` fixe, il tombait à 1,3:1 sur une cellule de niveau 1 (rouge sur
+          // rouge, mesuré) — donc invisible là où il est le plus utile.
+          const markColor = bg ? _contrastTextColor(bg) : 'var(--margin-red)';
+          const comMark = nbCom > 0
+            ? `<span aria-hidden="true" style="position:absolute;top:0;right:0;border-top:7px solid ${markColor};border-left:7px solid transparent;pointer-events:none"></span>`
+            : '';
+          const cellTip = `Tape 1-${nb} pour le niveau, 0 pour effacer, ${_codeA()} (absent) ou ${_codeNN()} (non noté — sort du barème)`
+            + (nbCom > 0 ? `\n💬 ${comList.join(' · ')}` : '')
+            + `\n(clic droit = commentaire)`;
+          html += `<td class="meval-cell-comp" style="position:relative;padding:1px 2px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${lead}${bg ? 'background:' + bg : ''}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_escJsAttr(comKey)}','${_escJsAttr(sid)}','${_escJsAttr(ev.id)}')"><input type="text" data-mnid="${_esc(q.id)}" data-cid="${_esc(cid)}" data-ri="${ri}" data-ci="${ci}" maxlength="3" value="${_esc(_typeDDisplayVal(cur))}" oninput="_evalTableurDUpdate(this)" onkeydown="_evalTableurKey(event,this)" title="${_escAttr(cellTip)}" aria-label="${_escAttr(aria)}${nbCom > 0 ? ' — ' + nbCom + ' commentaire' + (nbCom > 1 ? 's' : '') : ''}" class="meval-niveau-input" style="width:36px;padding:2px 3px;font-family:var(--font-mono);font-weight:${bg ? '700' : '400'};font-size:.88em;text-align:center;color:${bg ? _contrastTextColor(bg) : ''};border:1px solid var(--rule-line);border-radius:3px">${comMark}</td>`;
           ci++;
         });
       });
@@ -39451,6 +39508,10 @@ function _evalTableurDUpdate(inputEl) {
   if (td) td.style.background = bg;
   inputEl.style.color = bg ? _contrastTextColor(bg) : '';
   inputEl.style.fontWeight = bg ? '700' : '400';
+  // Le coin « commentaire » tire sa couleur du fond : il doit suivre le nouveau niveau,
+  // sinon il garde le contraste calculé pour l'ancien (invisible après un rouge → bleu).
+  const _comMark = td?.querySelector('span[aria-hidden="true"]');
+  if (_comMark) _comMark.style.borderTopColor = bg ? _contrastTextColor(bg) : 'var(--margin-red)';
   ev.updatedAt = Date.now();
   save();
   // Footer de la cellule modifiée + colonnes dérivées de la ligne.
@@ -40201,7 +40262,7 @@ function _tableurMnDelete() {
       for (const sid in (ev.notes || {})) {
         if (ev.notes[sid]?.values) delete ev.notes[sid].values[mnId];
         if (ev.notes[sid]?.levels) delete ev.notes[sid].levels[mnId];
-        if (ev.notes[sid]?.comments) delete ev.notes[sid].comments[mnId];
+        _evalDropCommentsForMn(ev.notes[sid], mnId);
       }
       ev.updatedAt = Date.now();
       save();
@@ -40520,7 +40581,7 @@ function _tableurExoDelete() {
       for (const sid in (ev.notes || {})) {
         if (ev.notes[sid]?.values) for (const qid of qsIds) delete ev.notes[sid].values[qid];
         if (ev.notes[sid]?.levels) for (const qid of qsIds) delete ev.notes[sid].levels[qid];
-        if (ev.notes[sid]?.comments) for (const qid of qsIds) delete ev.notes[sid].comments[qid];
+        for (const qid of qsIds) _evalDropCommentsForMn(ev.notes[sid], qid);
       }
       ev.updatedAt = Date.now();
       save();
@@ -46112,10 +46173,14 @@ function _evalCommentsOpen(mnId, sid, evalId) {
   _commentsCtx.mnId   = mnId;
   document.getElementById('meval-comments-mnid').value = mnId;
   const ev = S.evaluations?.[evalId];
-  const mn = ev?.miniNotes?.find(m => m.id === mnId);
+  // Type D : la clé est un couple `mnId|cid` (cf. _typeDComKey) — le titre doit nommer la
+  // question ET la compétence, sinon deux cellules d'une même question sont indiscernables.
+  const _keyParts = String(mnId).split('|');
+  const mn = ev?.miniNotes?.find(m => m.id === _keyParts[0]);
+  const compLbl = _keyParts[1] ? (S.competences?.[_keyParts[1]]?.code || _keyParts[1]) : '';
   const stu = S.eleves?.[sid];
   const studentName = stu ? `${stu.nom?.toUpperCase() || ''} ${stu.prenom || ''}`.trim() : '';
-  document.getElementById('meval-comments-title').textContent = `💬 Commentaires — ${mn?.label || '?'}${studentName ? ' · ' + studentName : ''}`;
+  document.getElementById('meval-comments-title').textContent = `💬 Commentaires — ${mn?.label || '?'}${compLbl ? ' · ' + compLbl : ''}${studentName ? ' · ' + studentName : ''}`;
   // Le bonus/malus déduit du texte ne vaut plus que pour le Type A : ailleurs, l'aide le
   // promettrait à tort — et sur un Type C, « -1 pt » écrit comme simple remarque décalait
   // la note sans le dire. L'ajustement est désormais sur la note finale (clic droit dessus).
@@ -46123,7 +46188,7 @@ function _evalCommentsOpen(mnId, sid, evalId) {
   if (cHelp) {
     cHelp.innerHTML = (ev?.type === 'A')
       ? `Annote chaque mini-note. Si tu écris un motif <code>[+-]N pt(s)</code> dans un commentaire, la note est <strong>automatiquement ajustée</strong> : <code>-1pt</code> = malus · <code>+1pt</code> = bonus · <code>0pt tricherie</code> = remplacement.`
-      : `Annote chaque question. Ces commentaires sont du <strong>texte</strong> — ils ne modifient pas la note. Pour sanctionner ou bonifier, fais un <strong>clic droit sur la note de l'élève</strong> (triche, retard, bonus…).`;
+      : `Annote ${ev?.type === 'D' ? 'chaque couple <strong>question × compétence</strong>' : 'chaque question'}. Ces commentaires sont du <strong>texte</strong> — ils ne modifient pas la note. Pour sanctionner ou bonifier, fais un <strong>clic droit sur la note de l'élève</strong> (triche, retard, bonus…).`;
   }
   _evalCommentsRender();
   _modalReturnTo['meval-comments'] = () => { _evalTableurRender(); };
@@ -46157,7 +46222,11 @@ function _evalCommentsRender() {
   } else {
     let html = '';
     ctx.list.forEach((c, i) => {
-      const adj = _parseCommentsAdjustment([c]);
+      // ⚠️ La pastille « −1pt » ne s'affiche qu'en Type A : ailleurs le motif n'a plus AUCUN
+      // effet sur la note (l'ajustement est passé sur la note finale). L'afficher quand même
+      // faisait croire que le commentaire retirait des points — c'était le reste le plus
+      // visible de l'ancien bonus/malus par cellule.
+      const adj = (ctx.ev?.type === 'A') ? _parseCommentsAdjustment([c]) : { delta: 0, replace: null };
       const adjLbl = adj.delta !== 0 || adj.replace != null
         ? `<span style="font-family:var(--font-mono);color:var(--margin-red);font-size:.85em;margin-right:8px">${adj.replace != null ? `=${adj.replace}` : ''}${adj.delta > 0 ? '+' + adj.delta : adj.delta < 0 ? adj.delta : ''}pt</span>`
         : '';

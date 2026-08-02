@@ -984,3 +984,37 @@ test('Type D : un niveau stocké au-delà de nbLevels reste neutre à l\'afficha
   assert.notEqual(ev("_typeDCellBg(4, 4)"), '');
   assert.notEqual(ev("_typeDCellBg(4)"), '');
 });
+
+test('Type D : un commentaire de cellule ne touche pas la note', () => {
+  seedTypeD();
+  const avant = ev("_computeStudentEvalNote(S.evaluations.evd, 's1')");
+  // Le motif « -1 pt » n'ajuste la note qu'en Type A : sur un D il reste du texte.
+  ev(`S.evaluations.evd.notes.s1.comments = { 'q1|cmp_rai': ['-1 pt bavardage'] }`);
+  assert.equal(ev("_computeStudentEvalNote(S.evaluations.evd, 's1')"), avant);
+  assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"),
+               ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"));
+});
+
+test('Type D : les commentaires de cellule meurent avec leur question', () => {
+  seedTypeD();
+  assert.equal(ev("_typeDComKey('q2','cmp_com')"), 'q2|cmp_com');
+  ev(`S.evaluations.evd.notes.s1.comments = {
+        'q1|cmp_rai': ['pas de justification'],
+        'q2|cmp_rai': ['ok'],
+        'q2|cmp_com': ['rédaction confuse'],
+        'q3': ['clé simple, façon A/C'] }`);
+  // Supprimer q2 doit emporter SES DEUX clés composites, et rien d'autre
+  ev(`_evalDropCommentsForMn(S.evaluations.evd.notes.s1, 'q2')`);
+  assert.equal(ev("Object.keys(S.evaluations.evd.notes.s1.comments).sort().join(',')"),
+               'q1|cmp_rai,q3');
+  // La clé simple (Type A/C) reste gérée par le même helper
+  ev(`_evalDropCommentsForMn(S.evaluations.evd.notes.s1, 'q3')`);
+  assert.equal(ev("Object.keys(S.evaluations.evd.notes.s1.comments).join(',')"), 'q1|cmp_rai');
+  // La migration ré-emballe une string en tableau, clé composite comprise
+  ev(`S.evaluations.evd.notes.s1.comments['q1|cmp_com'] = 'écrit en string (legacy)'`);
+  ev(`migrateEvalDefaults()`);
+  // Comparaison par JSON : l'objet vient du contexte `vm`, donc son Array.prototype n'est
+  // pas celui du test — deepStrictEqual échouerait sur le prototype, pas sur le contenu.
+  assert.equal(ev("JSON.stringify(S.evaluations.evd.notes.s1.comments['q1|cmp_com'])"),
+               '["écrit en string (legacy)"]');
+});
