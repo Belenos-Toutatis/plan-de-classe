@@ -1043,3 +1043,28 @@ test('Type B : commentaire de cellule — sans effet sur la note, et lié à sa 
   ev(`_evalDropCommentsForMn(S.evaluations.evb.notes.s1, 'p1')`);
   assert.equal(ev("Object.keys(S.evaluations.evb.notes.s1.comments).join(',')"), 'p2|cmp_rai');
 });
+
+test('Motifs d\'ajustement : amorçage, scrub, et liste vide respectée', () => {
+  seedTypeD();
+  // Clé absente → amorçage sur les défauts, chaque motif recevant un id
+  ev(`delete S.evalPrefs.adjustPresets; migrateEvalDefaults();`);
+  assert.equal(ev("S.evalPrefs.adjustPresets.length"), ev("ADJUST_PRESETS_DEFAULT.length"));
+  assert.ok(ev("S.evalPrefs.adjustPresets.every(p => !!p.id)"), 'chaque motif doit recevoir un id');
+  // ⚠️ Liste VIDE = choix de l'utilisateur (il les a tous supprimés) : ne PAS ré-amorcer,
+  // sinon ses suppressions reviendraient à chaque chargement.
+  ev(`S.evalPrefs.adjustPresets = []; migrateEvalDefaults();`);
+  assert.equal(ev("S.evalPrefs.adjustPresets.length"), 0);
+  assert.equal(ev("_adjustPresets().length"), 0);
+  // Scrub : opération inconnue ou valeur non finie écartées, voidComps préservé
+  ev(`S.evalPrefs.adjustPresets = [
+        { op:'mul', v:0.5, label:'Triche' },
+        { op:'nawak', v:2, label:'X' },
+        { op:'add', v:'abc', label:'Y' },
+        { op:'set', v:0, label:'Annulée', voidComps:true } ];
+      migrateEvalDefaults();`);
+  assert.equal(ev("S.evalPrefs.adjustPresets.length"), 2);
+  assert.equal(ev("S.evalPrefs.adjustPresets[1].voidComps"), true);
+  // Le repli ne joue que si la clé n'est pas un tableau (fichier chargé hors migration)
+  ev(`S.evalPrefs.adjustPresets = 'nawak'`);
+  assert.equal(ev("_adjustPresets().length"), ev("ADJUST_PRESETS_DEFAULT.length"));
+});

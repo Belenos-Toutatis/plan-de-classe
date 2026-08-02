@@ -4199,8 +4199,14 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div class="about-section">
       <h3>💬 Bibliothèque de commentaires</h3>
-      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Commentaires pré-réglables réutilisables pour annoter les mini-notes (avec parsing automatique <code>[+-]N pt(s)</code>).</p>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Commentaires pré-réglables pour annoter une <strong>cellule</strong> du tableur (question, ou couple question/passation × compétence). Le motif <code>[+-]N pt(s)</code> n'ajuste la note qu'en <strong>Type A</strong> ; ailleurs c'est du texte.</p>
       <button class="btn btn-g btn-sm" onclick="closeMod2('mevalprefs');openCommentLibrary()">📚 Ouvrir la bibliothèque</button>
+    </div>
+
+    <div class="about-section">
+      <h3>⚖ Motifs d'ajustement de la note</h3>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Les boutons proposés au <strong>clic droit sur la note</strong> d'un élève (triche, retard, bonus…). À distinguer de la bibliothèque ci-dessus : ceux-ci portent sur la <strong>note finale</strong> de l'évaluation, pas sur une cellule.</p>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('mevalprefs');openAdjustPresets()">⚖ Ouvrir les motifs</button>
     </div>
 
     <div class="about-section">
@@ -4666,7 +4672,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
 
     <div style="margin-bottom:12px">
-      <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:5px">Motifs courants</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono)">Motifs courants</span>
+        <button class="btn btn-g btn-sm" onclick="openAdjustPresets(true)" title="Modifier la liste des motifs proposés — réglage global, valable pour toutes tes évaluations" style="padding:1px 8px;font-size:.78em">⚙ Motifs…</button>
+      </div>
       <div id="meval-adjust-presets" style="display:flex;gap:5px;flex-wrap:wrap"></div>
     </div>
 
@@ -4694,6 +4703,47 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="btn btn-p" onclick="closeMod2('meval-adjust')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Motifs d'ajustement de la note finale (pendant de la bibliothèque de commentaires) ── -->
+<div id="madjlib" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>⚖ Motifs d'ajustement de la note</h2>
+    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
+      Les boutons proposés dans <strong>⚖ Ajustement de la note</strong> (clic droit sur la note d'un élève).
+      Un motif <strong>pré-remplit</strong> le formulaire — tu complètes avant de valider, rien n'est appliqué au clic.
+      Ils valent pour <strong>toutes tes évaluations</strong>, tous types confondus.
+    </p>
+
+    <div id="madjlib-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px"></div>
+
+    <div style="border-top:1px dashed var(--rule-line);padding-top:12px">
+      <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:6px">➕ Nouveau motif</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="madjlib-op" style="padding:5px 6px;font-family:var(--font-mono)" title="Opération appliquée à la note">
+          <option value="mul">× multiplier</option>
+          <option value="add">+ ajouter / retrancher</option>
+          <option value="set">= remplacer par</option>
+          <option value="cap">≤ plafonner à</option>
+        </select>
+        <input type="number" id="madjlib-val" step="0.5" style="width:82px;padding:5px 6px;font-family:var(--font-mono);text-align:right" placeholder="valeur"
+               onkeydown="if(event.key==='Enter'){_adjLibAdd();}">
+        <input type="text" id="madjlib-label" placeholder="motif (ex. Rendu en retard)" maxlength="80" style="flex:1;min-width:150px;padding:5px 8px"
+               onkeydown="if(event.key==='Enter'){_adjLibAdd();}">
+        <button class="btn btn-p btn-sm" onclick="_adjLibAdd()">+ Ajouter</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.86em;cursor:pointer">
+        <input type="checkbox" id="madjlib-void">
+        <span>Copie <strong>annulée</strong> — ce motif met aussi les compétences au minimum
+          <span style="color:var(--pencil)">(triche, copie non rendue : la preuve n'est plus recevable)</span></span>
+      </label>
+    </div>
+
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-g btn-sm" onclick="_adjLibReset()" title="Remet la liste des motifs livrés avec l'application">↺ Motifs par défaut</button>
+      <button class="btn btn-p" onclick="closeMod2('madjlib')">Fermer</button>
     </div>
   </div>
 </div>
@@ -6253,11 +6303,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.32.0';
+const APP_VERSION    = '2.33.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T12:47:39Z';
+const APP_BUILD_DATE = '2026-08-02T14:37:51Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7321,6 +7371,22 @@ function _typeDDefaultPoints(nb) {
 // initialization »). Même famille de piège que _bilanCompState — cf. CLAUDE.md.
 var ADJUST_OPS = { set: '=', mul: '×', add: '+', cap: '≤' };
 
+// Motifs d'ajustement proposés dans la modale ⚖ — ce ne sont que les DÉFAUTS : le catalogue
+// vivant est `S.evalPrefs.adjustPresets`, réglable dans Réglages → « ⚖ Motifs d'ajustement »
+// (pendant de la bibliothèque de commentaires, qui elle ne sert que les cellules).
+// Convention du fichier (cf. REMINDER_PRESETS) : un motif PRÉ-REMPLIT le formulaire, il ne
+// valide pas — l'enseignant complète (« Triche — DS du 12/03 »).
+// ⚠️ Déclaré ICI pour la même raison qu'ADJUST_OPS : migrateEvalDefaults l'amorce PENDANT
+// init(). Plus bas, le `var` serait hoisté mais encore `undefined` au moment de l'amorçage.
+var ADJUST_PRESETS_DEFAULT = [
+  { op: 'mul', v: 0.5, label: 'Triche' },
+  { op: 'set', v: 0,   label: 'Triche — note annulée', voidComps: true },
+  { op: 'set', v: 0,   label: 'Copie non rendue',      voidComps: true },
+  { op: 'add', v: -2,  label: 'Rendu en retard' },
+  { op: 'add', v: 1,   label: 'Bonus présentation' },
+  { op: 'cap', v: 10,  label: 'Note plafonnée' },
+];
+
 // Comportement de la touche Entrée dans les tableurs. ⚠️ Déclaré ICI, avant init(), pour
 // la même raison qu'ADJUST_OPS : la garde de migrateEvalDefaults le lit pendant init().
 // `student` (descendre puis s'arrêter) et `column` (descendre puis colonne suivante) ont
@@ -7441,6 +7507,21 @@ function migrateEvalDefaults() {
     ep.typeDPoints = ep.typeDPoints.map(Number);
   }
   if (typeof ep.typeDBilanParExercice !== 'boolean') ep.typeDBilanParExercice = false;
+  // Motifs d'ajustement de la note finale (catalogue réglable — modale `madjlib`).
+  // ⚠️ Amorcé sur les défauts UNIQUEMENT si la clé n'existe pas : une liste VIDE est
+  // légitime (l'enseignant les a tous supprimés) et ne doit pas être ré-amorcée à chaque
+  // chargement — sinon ses suppressions reviendraient d'elles-mêmes.
+  if (!Array.isArray(ep.adjustPresets)) {
+    ep.adjustPresets = ADJUST_PRESETS_DEFAULT.map(p => Object.assign({ id: uid() }, p));
+  } else {
+    ep.adjustPresets = ep.adjustPresets
+      .filter(p => p && ADJUST_OPS[p.op] && Number.isFinite(+p.v))
+      .map(p => {
+        const o = { id: p.id || uid(), op: p.op, v: +p.v, label: String(p.label || '').slice(0, 80) };
+        if (p.voidComps) o.voidComps = true;
+        return o;
+      });
+  }
   if (typeof ep.defaultCoef !== 'number' || ep.defaultCoef < 0) ep.defaultCoef = 1;
   if (!['nom-prenom','prenom-nom'].includes(ep.defaultSort)) ep.defaultSort = 'nom-prenom';
   ep.defaultEnterBehavior = _normalizeEnterBehavior(ep.defaultEnterBehavior);
@@ -46052,16 +46133,14 @@ function _qcmcamNextMnLabel(ev, baseMn) {
 const _commentsCtx = { evalId: null, sid: null, mnId: null };
 
 // ═══════════════ Ajustement de la note finale — modale ═══════════════
-// Motifs proposés. Convention du fichier (cf. REMINDER_PRESETS) : un motif PRÉ-REMPLIT
-// le formulaire, il ne valide pas — l'enseignant complète (« Triche — DS du 12/03 »).
-var ADJUST_PRESETS = [
-  { op: 'mul', v: 0.5, label: 'Triche' },
-  { op: 'set', v: 0,   label: 'Triche — note annulée', voidComps: true },
-  { op: 'set', v: 0,   label: 'Copie non rendue',      voidComps: true },
-  { op: 'add', v: -2,  label: 'Rendu en retard' },
-  { op: 'add', v: 1,   label: 'Bonus présentation' },
-  { op: 'cap', v: 10,  label: 'Note plafonnée' },
-];
+// Catalogue vivant des motifs proposés : réglable par l'enseignant (Réglages → ⚖ Motifs
+// d'ajustement, modale `madjlib`), amorcé sur ADJUST_PRESETS_DEFAULT par migrateEvalDefaults.
+// Le repli sur les défauts ne joue que si la clé manque (fichier chargé hors migration) —
+// une liste VIDE est un choix de l'utilisateur, on la respecte.
+function _adjustPresets() {
+  const l = S.evalPrefs?.adjustPresets;
+  return Array.isArray(l) ? l : ADJUST_PRESETS_DEFAULT;
+}
 var _evalAdjustCtx = null;   // { evalId, sid }
 
 function _evalAdjustOpen(sid, evalId) {
@@ -46107,13 +46186,16 @@ function _evalAdjustRender() {
           <button class="btn btn-r btn-sm" onclick="_evalAdjustRemove('${_escJsAttr(a.id)}')" title="Retirer cet ajustement" style="padding:2px 7px">✕</button>
         </div>`).join('');
 
-  document.getElementById('meval-adjust-presets').innerHTML = ADJUST_PRESETS.map((p, i) =>
-    `<button class="btn btn-g btn-sm" onclick="_evalAdjustFillPreset(${i})" title="Pré-remplit le formulaire — tu peux compléter le motif avant d'ajouter" style="font-size:.82em">${_esc(_adjustHead(p))} ${_esc(p.label)}</button>`
-  ).join('');
+  const _presets = _adjustPresets();
+  document.getElementById('meval-adjust-presets').innerHTML = _presets.length === 0
+    ? `<span style="font-size:.85em;color:var(--pencil);font-style:italic">Aucun motif enregistré — saisis directement l'opération ci-dessous, ou ajoutes-en dans <strong>⚙ Motifs…</strong></span>`
+    : _presets.map((p, i) =>
+        `<button class="btn btn-g btn-sm" onclick="_evalAdjustFillPreset(${i})" title="Pré-remplit le formulaire — tu peux compléter le motif avant d'ajouter" style="font-size:.82em">${_esc(_adjustHead(p))} ${_esc(p.label)}</button>`
+      ).join('');
 }
 
 function _evalAdjustFillPreset(i) {
-  const p = ADJUST_PRESETS[i];
+  const p = _adjustPresets()[i];
   if (!p) return;
   document.getElementById('meval-adjust-op').value = p.op;
   document.getElementById('meval-adjust-val').value = p.v;
@@ -46337,6 +46419,94 @@ function _evalCommentsRemove(idx) {
 }
 
 // ── Bibliothèque ──
+// ═══════════════ Motifs d'ajustement — catalogue réglable (modale `madjlib`) ═══════════════
+// Pendant de la bibliothèque de commentaires : celle-ci sert les CELLULES, celui-ci la NOTE
+// FINALE. Stocké dans S.evalPrefs.adjustPresets (donc dans le fichier : sync, undo, backups).
+function openAdjustPresets(returnToAdjust) {
+  // Ouverte depuis la modale ⚖, on y revient à la fermeture — sinon l'enseignant perdrait
+  // l'élève qu'il était en train d'ajuster.
+  if (returnToAdjust && _evalAdjustCtx) {
+    const ctx = { sid: _evalAdjustCtx.sid, evalId: _evalAdjustCtx.evalId };
+    closeMod2('meval-adjust');
+    _modalReturnTo['madjlib'] = () => _evalAdjustOpen(ctx.sid, ctx.evalId);
+  }
+  _adjLibRender();
+  openMod('madjlib');
+}
+
+function _adjLibRender() {
+  const wrap = document.getElementById('madjlib-list');
+  if (!wrap) return;
+  const list = _adjustPresets();
+  if (list.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun motif — la modale d\'ajustement proposera seulement la saisie directe. Ajoutes-en un ci-dessous, ou reprends les motifs par défaut.</p>';
+    return;
+  }
+  wrap.innerHTML = list.map((p, i) => `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px">
+      <span style="flex:1;font-size:.9em"><strong style="font-family:var(--font-mono)">${_esc(_adjustHead(p))}</strong>${p.label ? ' — ' + _esc(p.label) : ''}${p.voidComps ? `<br><span style="font-size:.85em;color:var(--margin-red)">⊘ compétences au minimum (copie annulée)</span>` : ''}</span>
+      <button class="btn btn-r btn-sm" onclick="_adjLibRemove(${i})" title="Supprimer ce motif" style="padding:2px 7px">✕</button>
+    </div>`).join('');
+}
+
+function _adjLibAdd() {
+  const op = document.getElementById('madjlib-op').value;
+  const v = parseFloat(document.getElementById('madjlib-val').value);
+  const labInp = document.getElementById('madjlib-label');
+  const label = (labInp.value || '').trim();
+  if (!ADJUST_OPS[op]) { toast('⚠ Opération inconnue', 'warn'); return; }
+  if (!Number.isFinite(v)) {
+    toast('⚠ Valeur manquante ou invalide', 'warn');
+    document.getElementById('madjlib-val').focus(); return;
+  }
+  // Même garde qu'à l'ajout d'un ajustement (_evalAdjustAdd) : « ×−1 » donne une note
+  // négative, que le bornage ramène à 0 — un « =0 » déguisé, illisible. Piège rencontré
+  // en test : l'opération reste sur « × » par défaut, on tape −1 en pensant retrancher.
+  if (op === 'mul' && v < 0) {
+    toast('⚠ Un multiplicateur négatif n\'a pas de sens — pour retrancher, choisis « + ajouter »', 'warn');
+    document.getElementById('madjlib-val').focus(); return;
+  }
+  // Motif obligatoire, comme à l'ajout d'un ajustement : « ×0,5 » sans raison sur un
+  // bulletin est indéfendable devant une famille.
+  if (!label) { toast('⚠ Le motif est obligatoire', 'warn'); labInp.focus(); return; }
+  pushUndo();
+  S.evalPrefs = S.evalPrefs || {};
+  if (!Array.isArray(S.evalPrefs.adjustPresets)) S.evalPrefs.adjustPresets = [];
+  S.evalPrefs.adjustPresets.push({
+    id: uid(), op, v, label,
+    ...(document.getElementById('madjlib-void').checked ? { voidComps: true } : {}),
+  });
+  save();
+  document.getElementById('madjlib-val').value = '';
+  labInp.value = '';
+  document.getElementById('madjlib-void').checked = false;
+  _adjLibRender();
+}
+
+function _adjLibRemove(idx) {
+  const list = S.evalPrefs?.adjustPresets;
+  if (!Array.isArray(list) || !list[idx]) return;
+  pushUndo();
+  list.splice(idx, 1);
+  save();
+  _adjLibRender();
+}
+
+function _adjLibReset() {
+  _uiConfirm({
+    title: '↺ Motifs par défaut',
+    message: 'Remplacer la liste actuelle par les motifs livrés avec l\'application ?\n\nTes ajustements déjà appliqués aux élèves ne changent pas — seuls les boutons proposés sont réinitialisés.',
+    okLabel: '↺ Réinitialiser',
+    onOk: () => {
+      pushUndo();
+      S.evalPrefs = S.evalPrefs || {};
+      S.evalPrefs.adjustPresets = ADJUST_PRESETS_DEFAULT.map(p => Object.assign({ id: uid() }, p));
+      save();
+      _adjLibRender();
+      toast('↺ Motifs par défaut rétablis');
+    },
+  });
+}
+
 function openCommentLibrary() {
   _comLibRender();
   openMod('mcomlib');

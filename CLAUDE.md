@@ -1584,6 +1584,21 @@ Une infobulle au survol de la cellule **Note /20** dans le tableur explique le c
     - **« clic droit sur une cellule » n'ajuste plus les points, sauf en Type A** (le motif « −1 pt » n'y est lu que là). Corrigé au **trois** endroits qui le promettaient encore : la ligne d'aide, l'**infobulle de la cellule** A/C (« bonus / malus / annotations » en dur) et la **pastille rouge `−1pt`** de la modale `meval-comments`, que `_evalCommentsRender` affichait pour tous les types. Elle est conservée en Type A, où elle décrit un effet réel.
   - **Hors périmètre, volontaire** : import QCMcam (sans objet pour des niveaux) ; feuilles Synthèse/Compétences du classeur sans le C inline ; conversion C de `_evalStudentLevelForComp` toujours en quartiles 1..4 (changer les seuils modifierait des affichages existants) ; commentaires de cellule absents des exports (ils restent un pense-bête de correction, pas une donnée de bulletin).
 
+#### Deux catalogues réglables, à ne pas confondre (Réglages → Évaluations)
+
+L'enseignant règle **deux** listes de textes pré-remplis, voisines dans les Réglages mais sans rapport — le libellé de chaque section le dit explicitement, parce que la confusion est immédiate :
+
+| | Sert | Stockage | Modale |
+|---|---|---|---|
+| **💬 Bibliothèque de commentaires** | annoter une **CELLULE** (question, ou couple question/passation × compétence) | `S.evalCommentLibrary = { positive, negative }` | `mcomlib` |
+| **⚖ Motifs d'ajustement** | le **clic droit sur la NOTE** (triche, retard, bonus…) | `S.evalPrefs.adjustPresets = [{id, op, v, label, voidComps?}]` | `madjlib` |
+
+- ⚠️ **`ADJUST_PRESETS_DEFAULT` est déclaré AVANT `init()`**, à côté d'`ADJUST_OPS` et pour la même raison : `migrateEvalDefaults` l'amorce **pendant** `init()`, or un `var` déclaré plus bas y serait hoisté mais encore `undefined` (cf. le piège documenté plus haut). Le catalogue vivant se lit par **`_adjustPresets()`** — jamais la constante directement.
+- ⚠️ **Une liste VIDE est un choix de l'utilisateur** (il a tout supprimé) : la migration n'amorce que si la **clé n'existe pas**, sinon les suppressions reviendraient à chaque chargement. Le repli sur les défauts dans `_adjustPresets()` ne joue donc que si la valeur n'est pas un tableau. La modale ⚖ affiche alors une phrase qui renvoie vers « ⚙ Motifs… » plutôt qu'un vide muet.
+- Rangé dans **`S.evalPrefs`** (et non une nouvelle section de `S`) : c'est une préférence, `evalPrefs` est déjà dans la liste blanche de `_validateImport` avec des clés à noms fixes — aucun ajout à faire là-bas. Scrub à chaque chargement dans `migrateEvalDefaults` (op connue, valeur finie, `voidComps` préservé, id attribué).
+- **Deux portes d'entrée** : Réglages, et un bouton **⚙ Motifs…** dans la modale ⚖ elle-même (pendant du « ⚙ Bibliothèque… » de la modale de commentaires). ⚠️ Depuis ⚖, `openAdjustPresets(true)` **mémorise l'élève** et pose `_modalReturnTo['madjlib']` pour y revenir à la fermeture — sans ça, aller régler ses motifs faisait perdre la copie en cours d'ajustement.
+- ⚠️ **`op:'mul'` avec une valeur négative est refusé** dans les DEUX formulaires (`_evalAdjustAdd` de longue date, `_adjLibAdd` depuis) : « ×−1 » donne une note négative que le bornage ramène à 0, soit un « =0 » déguisé et illisible. Piège rencontré en test réel — l'opération reste sur « × » par défaut et on tape −1 en pensant retrancher ; le message dit quoi faire à la place.
+
 #### Agrégation des compétences (TOUS types) — une éval = un niveau entier, pondéré par coef
 
 Règle arrêtée avec l'utilisateur (2026-07-30), **rétroactive** : chaque évaluation produit **un niveau ENTIER par compétence** (`_evalCompetenceLevel` : B = règle de moyenne intra-éval puis arrondi ; A/C = moyenne des niveaux déduits des questions, arrondie ; D = `_typeDCompLevel`), et la période fait la **moyenne de ces entiers pondérée par `ev.coef`**, arrondie à l'entier (`_aggregateStudentCompetence.levelMean`). Avant, toutes les saisies individuelles étaient empilées : une éval pesait proportionnellement au nombre de fois où elle avait évalué la compétence ((1+1+1+4)/4 = 1,75 contre (1+4)/2 → 3 désormais).
