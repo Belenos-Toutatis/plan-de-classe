@@ -4775,7 +4775,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </div>
     </div>
 
-    <div class="ma" style="margin-top:14px"><button class="btn btn-p" onclick="closeMod2('mcomlib')">Fermer</button></div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-g btn-sm" onclick="_comLibAddPack()" title="Ré-ajoute les commentaires types livrés avec l'application (sciences expérimentales). Tes propres commentaires ne sont pas touchés.">＋ Commentaires types</button>
+      <button class="btn btn-p" onclick="closeMod2('mcomlib')">Fermer</button>
+    </div>
   </div>
 </div>
 
@@ -6305,11 +6308,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.33.1';
+const APP_VERSION    = '2.34.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T14:55:09Z';
+const APP_BUILD_DATE = '2026-08-02T15:10:51Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7389,6 +7392,47 @@ var ADJUST_PRESETS_DEFAULT = [
   { op: 'cap', v: 10,  label: 'Note plafonnée' },
 ];
 
+// Commentaires types livrés avec l'app — orientés sciences expérimentales (travaux pratiques
+// de physique-chimie / SVT), le terrain de l'utilisateur. Servent à JUSTIFIER une note :
+// sécurité au laboratoire, respect du protocole, qualité du rendu, participation.
+// ⚠️ AUCUN ne porte de motif « [+-]N pt » : un tel motif n'ajuste la note qu'en Type A, et
+// serait donc masqué sur les types B/C/D (cf. _evalCommentsRender). Un commentaire type doit
+// rester proposable partout ; pour retirer des points, c'est le clic droit sur la NOTE.
+// ⚠️ Déclaré avant init() comme ADJUST_PRESETS_DEFAULT — migrateEvalDefaults l'amorce pendant.
+var COMMENT_LIB_DEFAULT = {
+  positive: [
+    'Manipulation soignée et sécurisée',
+    'Protocole respecté du début à la fin',
+    'Schéma clair et légendé',
+    'Mesures rigoureuses, unités correctes',
+    'A repéré et corrigé son erreur seul',
+    'Regard critique sur les résultats',
+    'Bonne coopération dans le groupe',
+    'Prise d\'initiative pertinente',
+  ],
+  negative: [
+    // Sécurité — l'ordre suit celui du contrôle visuel en début de séance
+    'Cheveux non attachés',
+    'Blouse non fermée',
+    'Gants non mis',
+    'Lunettes de protection non portées',
+    'Circuit électrique non vérifié',
+    'Chauffage laissé sans surveillance',
+    'Produit utilisé sans lire l\'étiquette',
+    'Verrerie chaude manipulée sans précaution',
+    'Consignes de sécurité rappelées plusieurs fois',
+    // Démarche expérimentale et rendu
+    'N\'a pas suivi le protocole',
+    'Mesure relevée sans unité',
+    'Schéma non légendé',
+    'Tableau de mesures incomplet',
+    'Conclusion sans appui sur les mesures',
+    'Paillasse non rangée en fin de séance',
+    // Participation
+    'N\'a pas participé au travail du groupe',
+  ],
+};
+
 // Comportement de la touche Entrée dans les tableurs. ⚠️ Déclaré ICI, avant init(), pour
 // la même raison qu'ADJUST_OPS : la garde de migrateEvalDefaults le lit pendant init().
 // `student` (descendre puis s'arrêter) et `column` (descendre puis colonne suivante) ont
@@ -7540,6 +7584,21 @@ function migrateEvalDefaults() {
   }
   if (!Array.isArray(S.evalCommentLibrary.positive)) S.evalCommentLibrary.positive = [];
   if (!Array.isArray(S.evalCommentLibrary.negative)) S.evalCommentLibrary.negative = [];
+  // Amorçage UNIQUE du pack de commentaires types. ⚠️ Raisonnement inverse de celui des
+  // motifs d'ajustement : ceux-ci sont livrés remplis, donc une liste vide y est un choix
+  // de l'utilisateur qu'on respecte. La bibliothèque, elle, partait vide — « vide » n'y
+  // signifiait rien. On l'amorce donc une fois, et le drapeau garantit qu'un enseignant
+  // qui supprime ces commentaires ne les voit pas revenir au chargement suivant.
+  // Le drapeau vit dans evalPrefs (déjà en liste blanche d'import, clés à noms fixes) —
+  // pas de nouvelle section de S à déclarer. Une réinitialisation totale vide evalPrefs,
+  // donc le pack revient : c'est bien ce qu'on veut pour un fichier neuf.
+  if (!ep.commentLibSeeded
+      && S.evalCommentLibrary.positive.length === 0
+      && S.evalCommentLibrary.negative.length === 0) {
+    S.evalCommentLibrary.positive = COMMENT_LIB_DEFAULT.positive.slice();
+    S.evalCommentLibrary.negative = COMMENT_LIB_DEFAULT.negative.slice();
+  }
+  ep.commentLibSeeded = true;
   // F6 — Scrub des évaluations : si un champ structurel a un type faux (ex. JSON
   // corrompu, import d'un fichier altéré, ancienne phase), normalise plutôt que
   // de laisser crash au 1er render.
@@ -46562,6 +46621,27 @@ function _comLibAdd(kind) {
   save();
   inp.value = '';
   _comLibRender();
+}
+
+// Ré-ajoute le pack de commentaires types en FUSION, jamais en remplacement : contrairement
+// aux motifs d'ajustement (« ↺ défauts » assumé), la bibliothèque contient du texte écrit par
+// l'enseignant — un écrasement lui coûterait son travail. Les doublons sont ignorés.
+function _comLibAddPack() {
+  const lib = S.evalCommentLibrary || (S.evalCommentLibrary = { positive: [], negative: [] });
+  for (const kind of ['positive', 'negative']) if (!Array.isArray(lib[kind])) lib[kind] = [];
+  // Les manquants sont calculés AVANT toute mutation : pushUndo doit capturer l'état d'avant.
+  const miss = {
+    positive: COMMENT_LIB_DEFAULT.positive.filter(c => !lib.positive.includes(c)),
+    negative: COMMENT_LIB_DEFAULT.negative.filter(c => !lib.negative.includes(c)),
+  };
+  const n = miss.positive.length + miss.negative.length;
+  if (n === 0) { toast('💡 Les commentaires types sont déjà tous dans ta bibliothèque', 'info'); return; }
+  pushUndo();
+  lib.positive.push(...miss.positive);
+  lib.negative.push(...miss.negative);
+  save();
+  _comLibRender();
+  toast(`✓ ${n} commentaire${n > 1 ? 's' : ''} type${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}`);
 }
 
 function _comLibRemove(kind, idx) {

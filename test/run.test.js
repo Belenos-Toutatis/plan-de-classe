@@ -1068,3 +1068,30 @@ test('Motifs d\'ajustement : amorçage, scrub, et liste vide respectée', () => 
   ev(`S.evalPrefs.adjustPresets = 'nawak'`);
   assert.equal(ev("_adjustPresets().length"), ev("ADJUST_PRESETS_DEFAULT.length"));
 });
+
+test('Bibliothèque : amorçage unique du pack, et suppressions respectées', () => {
+  seedTypeD();
+  // Bibliothèque vide et jamais amorcée → le pack est posé
+  ev(`S.evalCommentLibrary = { positive: [], negative: [] }; delete S.evalPrefs.commentLibSeeded;
+      migrateEvalDefaults();`);
+  assert.equal(ev("S.evalCommentLibrary.positive.length"), ev("COMMENT_LIB_DEFAULT.positive.length"));
+  assert.equal(ev("S.evalCommentLibrary.negative.length"), ev("COMMENT_LIB_DEFAULT.negative.length"));
+  assert.equal(ev("S.evalPrefs.commentLibSeeded"), true);
+  // ⚠️ L'enseignant vide tout : le drapeau doit empêcher le pack de revenir
+  ev(`S.evalCommentLibrary = { positive: [], negative: [] }; migrateEvalDefaults();`);
+  assert.equal(ev("S.evalCommentLibrary.positive.length"), 0);
+  assert.equal(ev("S.evalCommentLibrary.negative.length"), 0);
+  // Une bibliothèque déjà garnie n'est jamais écrasée
+  ev(`S.evalCommentLibrary = { positive: ['à moi'], negative: [] };
+      delete S.evalPrefs.commentLibSeeded; migrateEvalDefaults();`);
+  assert.equal(ev("S.evalCommentLibrary.positive.join(',')"), 'à moi');
+});
+
+test('Bibliothèque : aucun commentaire type ne porte de motif de points', () => {
+  seedTypeD();
+  // Un motif « [+-]N pt » serait masqué sur les Types B/C/D (il n'y ajuste rien) : les
+  // commentaires livrés doivent rester proposables partout.
+  const avecPoints = ev(`[...COMMENT_LIB_DEFAULT.positive, ...COMMENT_LIB_DEFAULT.negative]
+      .filter(c => _parseCommentsAdjustment([c]).hasAdj)`);
+  assert.equal(avecPoints.length, 0, 'aucun commentaire type ne doit ajuster de points');
+});
