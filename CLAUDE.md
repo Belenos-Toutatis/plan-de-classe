@@ -662,19 +662,18 @@ Sous le récap dans l'onglet **Tablettes**, section **"⚙️ Configuration des 
 - `printSuiviPret()` itère `pool.count` lignes, étiquette via `poolLabel()`, lot via `findPoolLot()`. Les numéros dans `pool.unavailable` apparaissent grisés avec mention "🚫 indisponible" en colspan sur les colonnes Élève/Remarque (le prof voit qu'elles sont HS au moment du prêt). **Nom du fichier PDF** (`document.title`, repris comme nom par défaut à l'impression) : `Suivi_Pret_Tablettes-<pool>-<classe+G?>-<AAAA-MM-JJ>-<horaire>`, parties vides omises (`.filter(Boolean)`), chaque morceau assaini (`[\\/:*?"<>|]` retirés, espaces → `_`). La date utilise `dateVal` (format ISO, tri chronologique).
 
 ### Réinitialisation du fichier (modal `mreset`)
-Bouton **🗑 Réinitialiser…** dans le header de l'onglet **Classes** (en danger, à droite). Ouvre la modale `mreset` qui affiche un récap des compteurs actuels et propose 2 options :
+Bouton **🗑 Réinitialiser…** dans le header de l'onglet **Classes** (en danger, à droite). Ouvre la modale `mreset` (récap des compteurs actuels + 3 options). Refondue le 2026-08-02 : les deux premières options n'étaient ni cohérentes ni utiles — « conserver les salles » ne conservait QUE les salles et les classes mobiles, en jetant les disciplines, le référentiel, les commentaires types et les motifs d'ajustement, c'est-à-dire précisément ce qu'un enseignant paramètre une fois pour toutes.
 
-- **🏫 Réinitialiser en conservant les salles** (`resetKeepingRooms()`) :
-  - Vide : `S.classes`, `S.eleves`, `S.snapshots`, `S.attendance`, `S.cur`
-  - Conserve : `S.salles` (dimensions, places vides, horaires), `S.tabletPools` (config des classes mobiles)
-  - Confirmation par `_uiConfirm`, `pushUndo()` avant
-- **🔥 Tout effacer (fin d'année définitive)** (`resetEverything()`) :
-  - Vide tout : classes, élèves, salles, classes mobiles, snapshots, attendance
-  - **Confirmation par saisie obligatoire** : l'utilisateur doit taper exactement `EFFACER TOUT`
-  - `postLoadHook()` est rappelé après → recrée les pools par défaut (CM1/CM2) — l'utilisateur peut les supprimer ensuite s'il veut vraiment partir vierge
-  - `pushUndo()` avant : reste annulable via Ctrl+Z dans la session courante
+- **🎓 Fin d'année scolaire** (`resetEndOfYear()` → modale `mresetyear` → `_doResetEndOfYear(exportFirst)`) :
+  - ⚠️ **La frontière est : indexé par élève ou par classe → part ; paramétré une fois pour toutes → reste.** **Toute nouvelle section de `S` doit être rangée dans l'un des deux camps** — une section oubliée SURVIT par défaut, ce qui est le mauvais côté pour une donnée d'année. Un test (`run.test.js`) monte un état maximal et vérifie les deux camps.
+  - **Vidé** : `classes` (les recomposées avec), `eleves`, `evaluations`, `snapshots`, `attendance`, `seatingSnapshots`, `movedHighlights`, `bulletinRemarques`/`ClassRemarques`/`WorkedItems`, `conseilClasse` (les **attributions**), `cur`.
+  - **Conservé** : `salles` (dimensions, places vides, horaires, patterns de ramassage, options de mélange, places exclues QCMCam), `tabletPools`, `tags` (le **catalogue**), `disciplines`, `competences`, `competenceDomains`, `evalPrefs` (dont `adjustPresets`), `evalCommentLibrary`, `conseilMentions`, `conseilIncompat`, `userLinks`, `featureFlags`.
+  - ⚠️ **La confirmation propose « 💾 Exporter puis effacer » comme action principale**, pas un simple rappel de sauvegarder — un rappel s'ignore d'un clic, l'effacement ne se rattrape plus une fois l'onglet fermé. **Si l'export échoue, RIEN n'est effacé** (même règle que l'archivage avant résolution de conflit) : toast d'erreur, bouton réarmé, modale laissée ouverte.
+  - Les classes sont bien **effacées**, pas conservées vides — arbitrage de l'utilisateur. Conséquence assumée, écrite dans la modale : les zones de groupes peintes sur les places et le placement des AESH partent avec les classes (ils vivent dans `cls.rooms[salleId]`, pas dans `S.salles`).
+- **🔥 Tout effacer** (`resetEverything()`) : le fichier redevient ce qu'il était au tout premier lancement, **réglages et personnalisations compris**. La modale `mresetnuke` les énumère et renvoie explicitement vers « Fin d'année scolaire » pour qui voulait les garder — c'est la seule différence entre les deux options, elle doit être lisible avant le geste. **Confirmation par saisie** de `EFFACER TOUT`. `postLoadHook()` rappelé après → recrée les défauts (pools CM1/CM2, référentiel C1–C8, prefs, mentions, pack de commentaires).
+- **🧪 Charger les données de démo** (`loadDemoOnDemand()`) : cf. section *Données de démo*.
 
-Les deux actions appellent ensuite `save()`, ferment la modale, `refreshSelector()` et re-render l'onglet courant. Toast de confirmation à la fin.
+Toutes appellent ensuite `save()`, ferment la modale, `refreshSelector()` et re-render l'onglet courant. `pushUndo()` avant : annulable par Ctrl+Z **tant que l'onglet reste ouvert** — la formulation « dans la session courante » a été remplacée partout, elle laissait croire à une durabilité qu'un F5 dément.
 
 ### Désaffectation des tablettes (modal `mclear-ipads`)
 Accessible depuis :

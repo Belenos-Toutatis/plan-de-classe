@@ -1158,6 +1158,48 @@ test('Bibliothèque : déplacement à une position quelconque (chemin du glisser
   assert.equal(ev("undoStack.length"), n, 'un déplacement nul ne doit pas polluer la pile d\'undo');
 });
 
+test('Fin d\'année : les données de l\'année partent, les réglages restent', () => {
+  seedTypeD();
+  // État maximal : une section de chaque camp est remplie, pour qu'un oubli se voie.
+  ev(`S.snapshots = { sn1: { id: 'sn1', type: 'positions', classId: 'c1' } };
+      S.attendance = { c1: { a1: { id: 'a1', date: '2026-01-12', absents: [] } } };
+      S.movedHighlights = { c1: { s1: { keys: ['0,0'] } } };
+      S.bulletinRemarques = { c1: { disc_main: { e1: { S1: 'texte' } } } };
+      S.bulletinClassRemarques = { c1: { disc_main: { S1: 'texte' } } };
+      S.bulletinWorkedItems = { c1: { disc_main: { S1: ['item'] } } };
+      S.conseilClasse = { c1: { disc_main: { e1: { S1: { cm_fel: true } } } } };
+      S.seatingSnapshots = { h1: { '0,0': 'e1' } };
+      S.tags = { t1: { id: 't1', abbr: 'DF', name: 'Devoirs faits', color: '#123456' } };
+      S.userLinks = [{ label: 'ENT', url: 'https://ent.example', icon: '🔗' }];
+      S.salles = { sa1: { nom: 'Salle 102', rows: 4, cols: 5, positions_vides: [] } };
+      S.disciplines = { disc_main: { id: 'disc_main', nom: 'Physique-chimie', isPrimary: true } };
+      S.conseilMentions = { cm_fel: { id: 'cm_fel', nom: 'Félicitations', abbr: 'F', color: '#2563eb', ord: 0 } };
+      S.evalPrefs.adjustPresets = [{ id: 'p1', op: 'add', v: -2, label: 'Rendu en retard' }];
+      S.evalCommentLibrary = { positive: ['A aidé au rangement'], negative: ['Blouse non fermée'] };
+      globalThis.__undoSpy = 0; pushUndo = function () { globalThis.__undoSpy++; };
+      _doResetEndOfYear(false);`);
+  // — Camp « données de l'année » : tout doit être vide —
+  for (const k of ['classes', 'eleves', 'evaluations', 'snapshots', 'attendance', 'seatingSnapshots',
+                   'movedHighlights', 'bulletinRemarques', 'bulletinClassRemarques',
+                   'bulletinWorkedItems', 'conseilClasse']) {
+    assert.equal(ev(`Object.keys(S.${k} || {}).length`), 0, `S.${k} doit être vidé en fin d'année`);
+  }
+  assert.equal(ev('S.cur'), null);
+  // — Camp « réglages et personnalisation » : tout doit survivre —
+  assert.ok(ev('Object.keys(S.salles).length') > 0, 'les salles doivent survivre');
+  assert.ok(ev('Object.keys(S.competences).length') > 0, 'le référentiel doit survivre');
+  assert.ok(ev('Object.keys(S.disciplines).length') > 0, 'les disciplines doivent survivre');
+  assert.ok(ev('Object.keys(S.conseilMentions).length') > 0, 'les mentions de conseil doivent survivre');
+  assert.ok(ev('S.evalPrefs.adjustPresets.length') > 0, 'les motifs d\'ajustement doivent survivre');
+  assert.ok(ev('S.evalCommentLibrary.negative.length') > 0, 'les commentaires types doivent survivre');
+  assert.equal(ev('Object.keys(S.tags).length'), 1, 'le catalogue de tags doit survivre');
+  assert.equal(ev('S.userLinks.length'), 1, 'les liens perso doivent survivre');
+  // Annulable : pushUndo est appelé AVANT la purge (la pile réelle est neutralisée pour
+  // toute la suite, on espionne donc l'appel plutôt que son effet).
+  assert.equal(ev('globalThis.__undoSpy'), 1, 'la réinitialisation doit être annulable');
+  ev('pushUndo = function () {};');
+});
+
 test('Motifs d\'ajustement : réordonnancement, et la constante par défaut reste intacte', () => {
   seedTypeD();
   ev(`S.evalPrefs.adjustPresets = [

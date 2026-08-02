@@ -5360,21 +5360,22 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="mreset" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:560px;width:100%">
     <h2>🗑 Réinitialiser le fichier</h2>
-    <p style="font-size:.88em;color:var(--pencil);margin-bottom:8px">⚠️ Action irréversible (mais annulable via Ctrl+Z dans la session courante). Pensez à <strong>exporter une sauvegarde JSON</strong> avant si besoin.</p>
+    <p style="font-size:.88em;color:var(--pencil);margin-bottom:8px">⚠️ Annulable par Ctrl+Z tant que cet onglet reste ouvert — pas au-delà.</p>
     <p id="mreset-stats" style="font-size:.82em;color:var(--pencil);background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px;padding:6px 10px;margin-bottom:12px"></p>
     <div style="display:flex;flex-direction:column;gap:6px">
-      <button class="btn btn-w" onclick="resetKeepingRooms()" style="text-align:left;padding:10px 14px">
-        <strong>🏫 Réinitialiser en conservant les salles</strong>
+      <button class="btn btn-w" onclick="resetEndOfYear()" style="text-align:left;padding:10px 14px">
+        <strong>🎓 Fin d'année scolaire</strong>
         <div class="btn-desc">
-          Efface : classes, élèves, snapshots, appels enregistrés.<br>
-          Conserve : salles (dimensions, places vides, horaires), classes mobiles (tablettes, lots, indispos).
+          Tu repars avec tes salles et tes réglages, sans aucun élève.<br>
+          <strong>Effacé</strong> : classes et élèves · évaluations et notes · bilans et remarques de bulletin · conseils de classe · appels · snapshots.<br>
+          <strong>Conservé</strong> : salles, plans et horaires · classes mobiles · tags · disciplines · compétences · commentaires types · motifs d'ajustement · mentions de conseil.
         </div>
       </button>
       <button class="btn btn-d" onclick="resetEverything()" style="text-align:left;padding:10px 14px">
-        <strong>🔥 Tout effacer (fin d'année définitive)</strong>
+        <strong>🔥 Tout effacer</strong>
         <div class="btn-desc">
-          Efface absolument tout : classes, élèves, salles, snapshots, appels, classes mobiles.<br>
-          Confirmation par saisie demandée. Tu repars de zéro.
+          Le fichier redevient ce qu'il était au tout premier lancement — réglages et personnalisations compris.<br>
+          Confirmation par saisie demandée.
         </div>
       </button>
       <div style="border-top:1px dashed var(--rule-line);margin:6px 0 4px"></div>
@@ -5388,6 +5389,27 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="ma" style="margin-top:10px">
       <button class="btn btn-g" onclick="closeMod2('mreset')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Confirmation « Fin d'année scolaire » ──────────────────────────────────
+     Modale dédiée plutôt que _uiConfirm : il faut TROIS issues, dont une qui exporte
+     avant d'effacer. Un simple rappel « pensez à sauvegarder » s'ignore d'un clic —
+     l'effacement, lui, ne se rattrape plus une fois l'onglet fermé. -->
+<div id="mresetyear" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px;width:100%">
+    <h2>🎓 Fin d'année scolaire</h2>
+    <p id="mresetyear-stats" style="font-size:.85em;color:var(--pencil);background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px;padding:8px 12px;margin-bottom:12px;line-height:1.6"></p>
+    <p style="font-size:.9em;line-height:1.6;margin:0 0 6px"><strong>Conservé :</strong> <span style="color:var(--pencil)">salles, plans et horaires · classes mobiles · tags · disciplines · référentiel de compétences · commentaires types · motifs d'ajustement · mentions de conseil · réglages d'évaluation.</span></p>
+    <p style="font-size:.9em;line-height:1.6;margin:0 0 14px"><strong>Tu recréeras</strong> tes classes en septembre : les zones de groupes peintes sur les places et le placement des AESH partent avec elles.</p>
+    <div class="al al-w" style="font-size:.88em;line-height:1.6;margin-bottom:14px">
+      Ctrl+Z restaure l'année tant que cet onglet reste ouvert. <strong>Une fois fermé, seul un fichier exporté la ramène.</strong>
+    </div>
+    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button class="btn btn-g" onclick="closeMod2('mresetyear')">Annuler</button>
+      <button class="btn btn-w" onclick="_doResetEndOfYear(false)">Effacer sans exporter</button>
+      <button class="btn btn-p" id="mresetyear-export" onclick="_doResetEndOfYear(true)" data-autofocus>💾 Exporter puis effacer</button>
     </div>
   </div>
 </div>
@@ -5654,16 +5676,17 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="mresetnuke" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:520px;width:100%">
     <h2>🔥 Tout effacer</h2>
-    <p style="font-size:.9em;color:#c0392b;font-weight:600;margin-bottom:10px;background:#fdedec;border:1px solid #f5b7b1;border-radius:4px;padding:8px 10px">
-      ⚠️ Cette action efface ABSOLUMENT TOUT et est <strong>irréversible</strong> hors session courante :<br>
-      → Toutes les classes, tous les élèves, toutes les classes recomposées<br>
-      → Toutes les salles avec leur configuration<br>
-      → Toutes les classes mobiles (tablettes)<br>
-      → Tous les snapshots et appels enregistrés<br>
-      → Tous les tags
+    <!-- ⚠️ Texte en var(--ink-deep), pas en var(--margin-red) : le rouge du thème sombre posé
+         sur ce fond rouge translucide ne donnait que 3,56:1. L'alarme est portée par le cadre
+         et le fond, qui n'ont eux aucun texte à supporter. -->
+    <p style="font-size:.9em;color:var(--ink-deep);margin-bottom:10px;background:var(--margin-red-soft);border:1px solid var(--margin-red);border-radius:4px;padding:8px 12px;line-height:1.65">
+      ⚠️ <strong>Le fichier redevient ce qu'il était au tout premier lancement</strong>, et c'est <strong>irréversible</strong> une fois cet onglet fermé.<br>
+      → Classes, élèves, classes recomposées, évaluations, bilans, appels, snapshots<br>
+      → <strong>Et aussi tes réglages</strong> : salles et leurs plans, classes mobiles, tags, disciplines, commentaires types, motifs d'ajustement, mentions de conseil<br>
+      <span style="font-size:.92em">Pour ne garder que ces réglages, ferme et choisis plutôt <strong>🎓 Fin d'année scolaire</strong>.</span>
     </p>
-    <p style="font-size:.85em;color:#555;margin-bottom:8px">Pour confirmer, tapez exactement <code style="background:#eee;padding:1px 6px;border-radius:3px;font-weight:700">EFFACER TOUT</code> ci-dessous :</p>
-    <input id="mresetnuke-input" type="text" oninput="_resetNukeValidate()" autocomplete="off" placeholder="EFFACER TOUT" style="width:100%;padding:8px 10px;border:2px solid #ccc;border-radius:4px;font-size:1em;font-family:monospace;text-transform:uppercase">
+    <p style="font-size:.85em;color:var(--pencil);margin-bottom:8px">Pour confirmer, tapez exactement <code style="background:var(--paper-warm);padding:1px 6px;border-radius:3px;font-weight:700">EFFACER TOUT</code> ci-dessous :</p>
+    <input id="mresetnuke-input" type="text" oninput="_resetNukeValidate()" autocomplete="off" placeholder="EFFACER TOUT" style="width:100%;padding:8px 10px;border:2px solid var(--rule-line);border-radius:4px;font-size:1em;font-family:var(--font-mono);text-transform:uppercase">
     <p id="mresetnuke-status" style="font-size:.82em;color:var(--pencil);margin-top:4px;min-height:1.2em"></p>
     <div class="ma" style="margin-top:10px">
       <button class="btn btn-g" onclick="closeMod2('mresetnuke')">Annuler</button>
@@ -6360,11 +6383,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.37.2';
+const APP_VERSION    = '2.38.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T17:08:32Z';
+const APP_BUILD_DATE = '2026-08-02T17:34:59Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -17664,9 +17687,9 @@ function openResetModal() {
   openMod('mreset');
 }
 
-// Réinitialisation partielle : conserve salles + classes mobiles
+// Réinitialisation de fin d'année : conserve réglages et personnalisations
 // Confirmation in-app générique (remplace confirm() natif, qui peut être bloqué par
-// l'anti-popup du navigateur — cf. incident sur resetKeepingRooms / loadDemoOnDemand).
+// l'anti-popup du navigateur — cf. incident sur la réinitialisation / loadDemoOnDemand).
 // opts : { title, message, okLabel, okClass ('btn-p'|'btn-d'|…), onOk, onCancel, closeFirst }
 // onCancel est appelé si l'utilisateur ferme la modale sans valider (Annuler / Échap / clic fond).
 // ─── État vide actionnable : dit QUOI faire, pas juste « c'est vide » ───
@@ -17752,34 +17775,64 @@ function _uiPrompt(opts) {
   if (inp) setTimeout(() => { try { inp.focus(); inp.select(); } catch (_) {} }, 60);
 }
 
-function resetKeepingRooms() {
-  _uiConfirm({
-    title: '🏫 Réinitialiser en conservant les salles',
-    message: 'Réinitialiser ?\n\n→ Efface : classes, élèves, snapshots, appels enregistrés, évaluations.\n→ Conserve : salles (avec leurs places vides + horaires), classes mobiles (tablettes, lots, indispos), référentiel de compétences et préférences évaluation.\n\nAnnulable via Ctrl+Z dans la session courante.',
-    okLabel: '🏫 Réinitialiser', okClass: 'btn-w', closeFirst: 'mreset',
-    onOk: _doResetKeepingRooms,
-  });
+// ═══════════ Fin d'année scolaire ═══════════
+// Efface les DONNÉES DE L'ANNÉE, garde tout ce qui relève du réglage et de la
+// personnalisation. La frontière est celle-ci : ce qui est indexé par élève ou par classe
+// s'en va, ce que l'enseignant a paramétré une fois pour toutes reste.
+// ⚠️ Toute nouvelle section de `S` doit être classée dans l'un des deux camps ci-dessous —
+// une section oubliée survit par défaut, ce qui est le mauvais côté pour une donnée d'année.
+function resetEndOfYear() {
+  const nb = (o) => Object.keys(o || {}).length;
+  const nbApp = Object.values(S.attendance || {}).reduce((n, m) => n + nb(m), 0);
+  document.getElementById('mresetyear-stats').innerHTML =
+    `<strong>Ce qui sera effacé :</strong><br>${nb(S.classes)} classe(s) · ${nb(S.eleves)} élève(s) · `
+    + `${nb(S.evaluations)} évaluation(s) · ${nbApp} appel(s) · ${nb(S.snapshots)} snapshot(s)`;
+  closeMod2('mreset');
+  openMod('mresetyear');
 }
 
-function _doResetKeepingRooms() {
+async function _doResetEndOfYear(exportFirst) {
+  if (exportFirst) {
+    const btn = document.getElementById('mresetyear-export');
+    if (btn) { btn.disabled = true; btn.textContent = '💾 Export en cours…'; }
+    try {
+      await exportJSON();
+    } catch (e) {
+      // ⚠️ Export raté = on N'EFFACE PAS. Même règle que l'archivage d'une version avant
+      // résolution de conflit : jamais de destruction sans la copie qu'on vient de promettre.
+      console.warn('Export avant réinitialisation échoué :', e);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Exporter puis effacer'; }
+      toast('⚠ Export impossible — rien n\'a été effacé. Réessaie, ou passe par 💾 Données.', 'warn');
+      return;
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Exporter puis effacer'; }
+  }
   pushUndo();
-  S.classes   = {};
-  S.eleves    = {};
+  // — Données de l'année : effacées —
+  S.classes = {};                 // les classes recomposées (cls.virtual) partent avec
+  S.eleves = {};
+  S.evaluations = {};
   S.snapshots = {};
   S.attendance = {};
-  S.seatingSnapshots = {};   // les snapshots de seating perdent tout sens sans les appels qui les référencent
-  S.tags = {};               // tags cumulables : pas d'élèves → pas de tags utilisés
-  S.evaluations = {};        // évaluations vidées (référentiel de compétences et prefs préservés)
+  S.seatingSnapshots = {};        // ne sont référencés que par des appels et des évals, tous partis
+  S.movedHighlights = {};
+  S.bulletinRemarques = {};
+  S.bulletinClassRemarques = {};
+  S.bulletinWorkedItems = {};
+  S.conseilClasse = {};           // les ATTRIBUTIONS partent ; le catalogue de mentions reste
   S.cur = null;
-  // Salles, tabletPools, et leurs configs (horaires, indispos, lots) sont préservés.
-  // Le champ S.salles[id] reste mais cls.rooms[id].ipadsByPool n'a plus de sens (classes effacées).
+  // — Réglages et personnalisation : conservés —
+  // S.salles (dimensions, places vides, horaires, patterns de ramassage, options de mélange,
+  // places exclues QCMCam) · S.tabletPools · S.tags (le catalogue, pas les affectations qui
+  // vivaient sur les élèves) · S.disciplines · S.competences · S.competenceDomains ·
+  // S.evalPrefs (dont les motifs d'ajustement) · S.evalCommentLibrary · S.conseilMentions ·
+  // S.conseilIncompat · S.userLinks · S.featureFlags.
   save();
-  closeMod2('mreset');
+  closeMod2('mresetyear');
   refreshSelector();
-  // Re-render onglet courant (typiquement Classes)
   const at = document.querySelector('.tab.on');
-  if (at) renderTab(at.id.replace('tab-',''));
-  toast('🗑 Réinitialisation effectuée — salles et classes mobiles conservées.');
+  if (at) renderTab(at.id.replace('tab-', ''));
+  toast('🎓 Année effacée — salles, réglages et personnalisations conservés.');
 }
 
 // Réinitialisation complète : tout efface — ouvre la modale de confirmation
