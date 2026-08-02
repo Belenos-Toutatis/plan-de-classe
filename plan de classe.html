@@ -1750,8 +1750,14 @@ body:has(.mo.on)::before { display: none; }
 /* ─── Inputs ─── */
 /* :not(.counter-input) : les compteurs 📦/📝 de l'onglet Élèves portent leur échelle
    de couleurs (oubliColor) en style inline — le background:var(--paper)!important
-   de cette règle l'écrasait dans les deux thèmes (noir sur noir en sombre). */
-input[type="text"], input[type="number"]:not(.counter-input), input[type="date"], input[type="time"],
+   de cette règle l'écrasait dans les deux thèmes (noir sur noir en sombre).
+   :not(.meval-niveau-input) : les cellules de saisie de niveaux (tableurs B/D et notes
+   A/C) portent une couleur de texte calculée par _contrastTextColor en style inline —
+   le color:var(--ink-deep)!important d'ici la battait (un inline ne bat jamais un
+   !important) : en thème sombre, tout devenait AMBRE sur les fonds rouge/vert/gris
+   (1,8:1 mesuré sur une case Absent). La règle sombre dédiée (l. ~1424) excluait déjà
+   cette classe — c'est CETTE règle de base qui trahissait l'intention. */
+input[type="text"]:not(.meval-niveau-input), input[type="number"]:not(.counter-input), input[type="date"], input[type="time"],
 input[type="search"], input[type="email"], input[type="password"], select, textarea {
   font-family: var(--font-sans) !important;
   background: var(--paper) !important;
@@ -3026,10 +3032,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <p class="al al-i evhelp" id="evhelp-notes" style="margin-bottom:8px;position:relative;padding-right:28px">
       <button onclick="_evhelpToggle('notes')" title="Masquer ce mode d'emploi (réaffichable via le ? à gauche de Période)" style="position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1">✕</button>
-      Trois types d'évaluations disponibles : <strong>Type A</strong> (somme de mini-notes /20),
-      <strong>Type B</strong> (suivi de compétences par passations), <strong>Type C</strong> (sommative avec exercices et questions).
+      Quatre types d'évaluations disponibles : <strong>Type A</strong> (somme de mini-notes /20),
+      <strong>Type B</strong> (suivi de compétences par passations), <strong>Type C</strong> (sommative avec exercices et questions),
+      <strong>Type D</strong> (sommative par compétences — chaque question s'évalue par un niveau, un barème niveau → points fait la note).
       Chaque évaluation est rattachée à une ou plusieurs classes et à une période.
-      <em>Prochainement : évaluation sommative par compétence. Les bilans par compétence et le bilan d'évaluation sont encore au stade de brouillon.</em>
     </p>
     <div id="evals-list-wrap"></div>
   </div>
@@ -4848,7 +4854,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="meval-pick-comp" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:680px;width:100%;max-height:80vh;overflow-y:auto">
     <h2>🎯 Compétences évaluées par cette question</h2>
-    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
+    <p id="meval-pick-comp-help" style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
       Choisis une ou plusieurs compétences du référentiel. Quand l'élève sera évalué, son niveau de maîtrise sera dérivé du score obtenu à cette question (voir <strong>⚙ Paramètres → Conversion note → niveau</strong>).
     </p>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:.85em">
@@ -6245,11 +6251,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.29.2';
+const APP_VERSION    = '2.30.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-02T09:24:15Z';
+const APP_BUILD_DATE = '2026-08-02T11:16:01Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14711,6 +14717,21 @@ function _renduListCols(ev) {
         cols.push({ key: `pass:${p.id}:${cid}`, label: `${p.code || '?'} · ${c?.code || cid}`, kind: 'pass-comp', passId: p.id, cid });
       }
     }
+  } else if (ev.type === 'D') {
+    // Type D : une colonne par (question × compétence) — les colonnes « mini-notes »
+    // liraient `values` (inexistant en D) et n'afficheraient que des tirets.
+    for (const mn of (ev.miniNotes || [])) {
+      for (const cid of (mn.competenceIds || [])) {
+        const c = S.competences?.[cid];
+        cols.push({ key: `dcell:${mn.id}:${cid}`, label: `${mn.label || '?'} · ${c?.code || cid}`, kind: 'd-cell', mnId: mn.id, cid });
+      }
+    }
+    // Σ exercice (brut/max effectif — via _computeStudentEvalNoteDInfo.perExo)
+    if (Array.isArray(ev.exercices)) {
+      for (const e of ev.exercices) {
+        cols.push({ key: `exo:${e.id}`, label: `Σ ${e.label || '?'}`, kind: 'exo-sum', exoId: e.id });
+      }
+    }
   } else {
     // Type A / C : mini-notes
     for (const mn of (ev.miniNotes || [])) {
@@ -14822,6 +14843,16 @@ function _renduRender() {
     // Description complète pour le tooltip projection (custom) + tooltip natif (mode normal)
     const fullParts = [c.label];
     if (c.kind === 'mn' && c.max != null) fullParts.push(`Question, barème /${c.max}`);
+    else if (c.kind === 'd-cell') {
+      const comp = S.competences?.[c.cid];
+      fullParts.length = 0;
+      fullParts.push(`Niveau saisi sur ${comp?.code || c.cid}${comp?.name ? ' (' + comp.name + ')' : ''} à cette question`);
+    }
+    else if (c.kind === 'exo-sum' && ev.type === 'D') {
+      const exo = ev.exercices?.find(e => e.id === c.exoId);
+      fullParts.length = 0;
+      fullParts.push(`Points bruts / barème effectif sur l'exercice ${exo?.label || '?'} (les cases A/NN sortent du barème)`);
+    }
     else if (c.kind === 'exo-sum') {
       const exo = ev.exercices?.find(e => e.id === c.exoId);
       const sumMax = (ev.miniNotes || []).filter(m => m.exerciceId === c.exoId).reduce((s, m) => s + (m.max || 0), 0);
@@ -14856,10 +14887,23 @@ function _renduRender() {
       let cellStyle = 'padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.88em';
       if (c.kind === 'mn') {
         const v = ev.notes?.[sid]?.values?.[c.mnId];
-        if (v === 'A') cellHtml = 'A';
-        else if (v === 'NN') cellHtml = 'NN';
+        if (v === 'A') cellHtml = _esc(_codeA());
+        else if (v === 'NN') cellHtml = _esc(_codeNN());
         else if (v == null || v === '') cellHtml = '—';
         else cellHtml = `${String(v).replace('.', ',')} <span style="color:var(--pencil);font-size:.78em">/${c.max}</span>`;
+      } else if (c.kind === 'd-cell') {
+        // Type D : niveau saisi par (question × compétence) — même code couleur que pass-comp
+        const v = ev.notes?.[sid]?.levels?.[c.mnId]?.[c.cid];
+        if (v === 'A' || v === 'NN') cellHtml = _esc(_typeDDisplayVal(v));
+        else if (typeof v === 'number' && v >= 1 && v <= (S.evalPrefs?.nbLevels || 4)) {
+          const bg = colors[Math.min(colors.length - 1, v - 1)] || '';
+          cellStyle += `;background:${bg};color:${_contrastTextColor(bg)};font-weight:700`;
+          cellHtml = _formatNiveau(v);
+        } else cellHtml = '—';
+      } else if (c.kind === 'exo-sum' && ev.type === 'D') {
+        // Type D : brut/max effectif de l'exercice (A/NN hors barème)
+        const pe = _computeStudentEvalNoteDInfo(ev, sid)?.perExo?.[c.exoId];
+        cellHtml = pe ? `${_fmtNote(pe.brut)} <span style="color:var(--pencil);font-size:.78em">/${_fmtNote(pe.max)}</span>` : '—';
       } else if (c.kind === 'exo-sum') {
         const sum = _computeStudentExoSum(ev, sid, c.exoId);
         const exo = ev.exercices?.find(e => e.id === c.exoId);
@@ -14885,7 +14929,9 @@ function _renduRender() {
         const niv = _evalStudentLevelForComp(ev, sid, c.cid);
         if (niv == null) cellHtml = '—';
         else {
-          const lvlInt = Math.max(1, Math.min(4, Math.round(niv)));
+          // Borne = nb de niveaux configuré (2..6), pas 4 en dur : avec 6 niveaux,
+          // un niveau 5/6 prenait la couleur ET le libellé du 4.
+          const lvlInt = Math.max(1, Math.min(colors.length, Math.round(niv)));
           const bg = colors[lvlInt - 1] || '';
           cellStyle += `;background:${bg};color:${_contrastTextColor(bg)};font-weight:700`;
           cellHtml = _formatNiveau(lvlInt);
@@ -15133,6 +15179,12 @@ function _evalShowNoteDetail(evalId, sid) {
   if (ev.periode) ll.push(_esc(ev.periode));
   ll.push(`coef ${ev.coef ?? 1}`);
   if (note != null) ll.push(`<strong>Note : ${_fmtNote(note)}/${ev.noteMax} (= ${_fmtNote(note20)}/20)</strong>`);
+  // Ajustement de note finale actif (tous types) : sans cette ligne, le détail affichait
+  // « Note : 6,67/20 » sans expliquer le ×0,5 — la note semblait fausse vis-à-vis des saisies.
+  const adjInfo = _evalNoteAdjustInfo(ev, sid);
+  if (adjInfo.changed) {
+    ll.push(`<span style="color:var(--margin-red)">⚖ ${adjInfo.list.map(a => _esc(_adjustLabel(a))).join(' · ')} (calculée ${_fmtNote(adjInfo.base)} → finale ${_fmtNote(adjInfo.final)})</span>`);
+  }
   document.getElementById('mnotedet-sub').innerHTML = `${_esc(stu.prenom)} ${_esc((stu.nom||'').toUpperCase())} · ` + ll.join(' · ');
 
   const body = document.getElementById('mnotedet-body');
@@ -15174,6 +15226,72 @@ function _evalShowNoteDetail(evalId, sid) {
     if (note != null) {
       html += `<p style="margin:10px 0 0;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;font-family:var(--font-mono);font-size:.92em">Note finale : <strong>${_fmtNote(note)}</strong>/${ev.noteMax}${note20 != null ? ' &nbsp;(= <strong>' + _fmtNote(note20) + '</strong>/20)' : ''}</p>`;
     }
+  } else if (ev.type === 'D') {
+    // Type D : niveaux par (question × compétence). ⚠️ Ne PAS retomber sur la branche A/C :
+    // elle lit `values` et `mn.max` (inexistants en D) — le détail affichait littéralement
+    // « Barème /undefined » et aucune saisie.
+    const table = _typeDPointsTable(ev);
+    const nb = table.length;
+    const ptsMax = Math.max(...table);
+    const dLevels = ev.notes?.[sid]?.levels || {};
+    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    // Ordre du tableur : questions groupées par exercice, orphelines en fin.
+    const orderedD = [];
+    for (const exo of (ev.exercices || [])) {
+      for (const mn of (ev.miniNotes || []).filter(m => m.exerciceId === exo.id)) orderedD.push({ exo, mn });
+    }
+    for (const mn of (ev.miniNotes || []).filter(m => _typeDExoKey(ev, m) === '__orphans__')) orderedD.push({ exo: null, mn });
+    html += `<table style="width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>`;
+    html += `<th style="${hdr}">Exercice</th><th style="${hdr}">Question</th><th style="${hdr}">Compétence</th><th style="${hdr};text-align:center">Poids</th><th style="${hdr};text-align:center">Niveau</th><th style="${hdr};text-align:center">Points</th></tr></thead><tbody>`;
+    let curExoKey = '__init';
+    for (const { exo, mn } of orderedD) {
+      const exoKey = exo ? exo.id : '__orphans__';
+      const cids = mn.competenceIds || [];
+      let firstOfMn = true;
+      for (const cid of cids) {
+        const c = S.competences?.[cid];
+        const w = _typeDWeight(mn, cid);
+        const v = dLevels[mn.id]?.[cid];
+        const exoCell = (exoKey !== curExoKey)
+          ? `<td style="${cellTxt};font-family:var(--font-mono);color:var(--ink-blue);font-weight:600">${exo ? _esc(exo.label || '?') : '<em>Sans exercice</em>'}</td>`
+          : `<td style="${cellTxt}"></td>`;
+        curExoKey = exoKey;
+        const qCell = firstOfMn ? `<strong>${_esc(mn.label || '?')}</strong>` : '';
+        firstOfMn = false;
+        let nivCell, ptsCell;
+        if (v === 'A' || v === 'NN') {
+          nivCell = `<span style="background:#9ca3af;color:${_contrastTextColor('#9ca3af')};padding:2px 8px;border-radius:4px;font-weight:600">${_esc(_typeDDisplayVal(v))}</span>`;
+          ptsCell = `<span style="color:var(--pencil);font-style:italic" title="Hors barème : la note porte sur ce qui a été réellement passé">hors barème</span>`;
+        } else if (typeof v === 'number' && v >= 1 && v <= nb) {
+          const bg = colors[Math.max(0, Math.min(colors.length - 1, v - 1))] || 'var(--paper-warm)';
+          nivCell = `<span style="background:${bg};color:${_contrastTextColor(bg)};padding:2px 8px;border-radius:4px;font-weight:600">${_esc(_formatNiveau(v))}</span>`;
+          ptsCell = `${_fmtNote(table[v - 1] * w)}/${_fmtNote(ptsMax * w)}`;
+        } else {
+          nivCell = '—';
+          ptsCell = '—';
+        }
+        html += `<tr>${exoCell}<td style="${cellTxt}">${qCell}</td><td style="${cellTxt}">${_esc(c?.code || cid)}${c?.name ? ' <span style="color:var(--pencil);font-size:.85em">— ' + _esc(c.name) + '</span>' : ''}</td><td style="${cellNum};color:var(--pencil)">×${_fmtNote(w)}</td><td style="${cellNum}">${nivCell}</td><td style="${cellNum}">${ptsCell}</td></tr>`;
+      }
+      if (cids.length === 0) {
+        html += `<tr><td style="${cellTxt}"></td><td style="${cellTxt}"><strong>${_esc(mn.label || '?')}</strong></td><td colspan="4" style="${cellTxt};color:var(--margin-red);font-size:.85em">⚠ Question sans compétence — ne compte pas</td></tr>`;
+      }
+    }
+    if (orderedD.length === 0) html += `<tr><td colspan="6" style="${cellTxt};color:var(--pencil);font-style:italic;text-align:center">Aucune question définie.</td></tr>`;
+    html += '</tbody></table>';
+    const infoD = _computeStudentEvalNoteDInfo(ev, sid);
+    if (infoD) {
+      // La flèche porte sur la note CALCULÉE (brut/max × noteMax) — pas la finale : avec un
+      // ajustement actif, « 12/15 pts → 14/20 » serait arithmétiquement faux (12/15 → 16).
+      // La ligne ⚖ du sous-titre montre déjà « calculée 16 → finale 14 ».
+      const rawD = _computeStudentEvalNoteRaw(ev, sid);
+      const adjTail = (adjInfo.changed && note != null)
+        ? ` &nbsp;· après ajustement : <strong>${_fmtNote(note)}</strong>/${ev.noteMax}`
+        : (note20 != null && (ev.noteMax || 20) !== 20 ? ' &nbsp;(= <strong>' + _fmtNote(note20) + '</strong>/20)' : '');
+      html += `<p style="margin:10px 0 0;padding:8px 12px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;font-family:var(--font-mono);font-size:.92em">Total : <strong>${_fmtNote(infoD.brut)}</strong>/${_fmtNote(infoD.max)} pts → <strong>${_fmtNote(rawD)}</strong>/${ev.noteMax}${adjTail}</p>`;
+    } else {
+      html += `<p style="margin:10px 0 0;font-size:.85em;color:var(--pencil);font-style:italic">Aucune saisie comptée (vide, ${_esc(_codeA())} ou ${_esc(_codeNN())} partout) — pas de note calculable.</p>`;
+    }
+    html += `<p style="margin:8px 0 0;font-size:.82em;color:var(--pencil);font-style:italic">Barème niveau → points : ${table.map((p, i) => `${_esc(_formatNiveau(i + 1))} → ${_fmtNote(p)}`).join(' · ')}. Les cases ${_esc(_codeA())}/${_esc(_codeNN())} sortent du barème.</p>`;
   } else {
     // Type A / C : mini-notes (regroupées par exercice en Type C)
     const isTypeC = (ev.type === 'C');
@@ -27764,18 +27882,26 @@ const _NotesExport = (function () {
         return rk ? (p + ' : ' + rk) : '';
       }).filter(Boolean).join(' | ');
       r.push(S0(allRem));
-      // Niveau moyen toutes compétences (Type B)
+      // Niveau moyen toutes compétences (Type B + Type D — le D évalue par niveaux
+      // directs, l'ignorer ici laissait la colonne vide pour un enseignant tout-D ;
+      // le C inline reste volontairement hors périmètre de cette feuille)
       const compLvls = [];
       const compIds = new Set();
       for (const ev of Object.values(S.evaluations || {})) {
-        if (!_evalIncludesClass(ev, cls.id) || ev.type !== 'B') continue;
-        for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+        if (!_evalIncludesClass(ev, cls.id)) continue;
+        if (ev.type === 'B') {
+          for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+        } else if (ev.type === 'D') {
+          for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) compIds.add(cid);
+        }
       }
       for (const cid of compIds) {
         let sum = 0, k = 0;
         for (const ev of Object.values(S.evaluations || {})) {
-          if (!_evalIncludesClass(ev, cls.id) || ev.type !== 'B') continue;
-          const lvl = _computeStudentCompetenceLevel(ev, stu.id, cid);
+          if (!_evalIncludesClass(ev, cls.id)) continue;
+          let lvl = null;
+          if (ev.type === 'B') lvl = _computeStudentCompetenceLevel(ev, stu.id, cid);
+          else if (ev.type === 'D') lvl = _typeDCompLevel(ev, stu.id, cid);
           if (lvl > 0) { sum += lvl; k++; }
         }
         if (k > 0) compLvls.push(sum / k);
@@ -27903,11 +28029,14 @@ const _NotesExport = (function () {
     const rows = [];
     rows.push([T('🎯 Bilan compétences — ' + (cls.nom || ''))]);
     rows.push([]);
-    // Collecte compétences évaluées pour la classe (uniquement Type B; Type C inline ignoré ici)
+    // Collecte compétences évaluées pour la classe (Type B + Type D ; Type C inline ignoré ici)
     const compIds = new Set();
     for (const ev of evs) {
-      if (ev.type !== 'B') continue;
-      for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+      if (ev.type === 'B') {
+        for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+      } else if (ev.type === 'D') {
+        for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) compIds.add(cid);
+      }
     }
     const compArr = Array.from(compIds).map(cid => S.competences?.[cid]).filter(Boolean)
       .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
@@ -27928,8 +28057,9 @@ const _NotesExport = (function () {
       compArr.forEach((c, idx) => {
         let s = 0, k = 0;
         for (const ev of evs) {
-          if (ev.type !== 'B') continue;
-          const lvl = _computeStudentCompetenceLevel(ev, stu.id, c.id);
+          let lvl = null;
+          if (ev.type === 'B') lvl = _computeStudentCompetenceLevel(ev, stu.id, c.id);
+          else if (ev.type === 'D') lvl = _typeDCompLevel(ev, stu.id, c.id);
           if (lvl > 0) { s += lvl; k++; }
         }
         if (k > 0) {
@@ -28127,6 +28257,97 @@ const _NotesExport = (function () {
         cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
           cols.map(() => ({ width: 10 }))
         ).concat([{ width: 10 }, { width: 8 }, { width: 22 }])
+      };
+    }
+
+    // Type D — miroir du tableur : une colonne par (question × compétence) avec le NIVEAU
+    // saisi, Σ points par exercice (brut/max effectif — les cases A/NN sortent du barème),
+    // note finale, niveau entier par compétence, remarque. Avant cette branche, une éval D
+    // produisait une feuille réduite au titre (aucune donnée élève).
+    if (ev.type === 'D') {
+      const dTable = _typeDPointsTable(ev);
+      const nbD = dTable.length;
+      // Colonnes (question × compétence), groupées par exercice comme à l'écran
+      const dCols = [];   // { mn, cid, code, exoLabel, w }
+      const dExos = [];   // { key, label } — exos comptables, dans l'ordre
+      const _pushExoQs = (exoKey, exoLabel) => {
+        for (const mn of (ev.miniNotes || [])) {
+          if (_typeDExoKey(ev, mn) !== exoKey) continue;
+          for (const cid of (mn.competenceIds || [])) {
+            const c = S.competences?.[cid];
+            dCols.push({ mn, cid, code: c?.code || cid, exoLabel, w: _typeDWeight(mn, cid) });
+          }
+        }
+      };
+      for (const exo of (ev.exercices || [])) {
+        const label = exo.label || exo.id;
+        const before = dCols.length;
+        _pushExoQs(exo.id, label);
+        if (dCols.length > before) dExos.push({ key: exo.id, label });
+      }
+      const beforeOrph = dCols.length;
+      _pushExoQs('__orphans__', 'Sans exercice');
+      if (dCols.length > beforeOrph) dExos.push({ key: '__orphans__', label: 'Sans exercice' });
+      // Compétences évaluées (niveau entier par élève — même valeur que le tableur)
+      const dComps = _evalListEvaluatedCompetences(ev, 'code');
+      const head = [H('N°'), H('Nom'), H('Prénom'), H('Grp')];
+      for (const col of dCols) {
+        head.push(H(col.exoLabel + ' · ' + (col.mn.label || '') + '\n' + col.code + (col.w !== 1 ? ' ×' + col.w : '')));
+      }
+      for (const ex of dExos) head.push(H('Σ ' + ex.label + '\n(pts)'));
+      head.push(H('Note\n/' + (ev.noteMax || 20)));
+      for (const c of dComps) head.push(H('Niv\n' + (c.code || '')));
+      head.push(H('Remarque'));
+      rows.push(head);
+      let n = 0;
+      for (const stu of students) {
+        n++;
+        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+        const dLevels = ev.notes?.[stu.id]?.levels || {};
+        for (const col of dCols) {
+          const v = dLevels[col.mn.id]?.[col.cid];
+          if (v === 'A' || v === 'NN') {
+            r.push(S0(v, { align: 'center', italic: true, color: v === 'A' ? 'B03D2E' : '56697F' }));
+          } else if (typeof v === 'number' && v >= 1 && v <= nbD) {
+            const bg = levelCellBg(v);
+            r.push({ v, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
+          } else r.push(EMPTY());
+        }
+        const infoD = _computeStudentEvalNoteDInfo(ev, stu.id);
+        for (const ex of dExos) {
+          const pe = infoD?.perExo?.[ex.key];
+          r.push(pe ? S0(fmtNumFr(pe.brut, 2) + '/' + fmtNumFr(pe.max, 2), { align: 'center' }) : EMPTY());
+        }
+        const total = _computeStudentEvalNote(ev, stu.id);
+        if (total != null) {
+          const total20 = (total / (ev.noteMax || 20)) * 20;
+          const bg = noteCellBg(total20);
+          r.push({ v: Math.round(total * 100) / 100, t: 'n', border: true, align: 'right', bold: true, bg, color: bg ? textOnHex(bg) : null });
+        } else {
+          const reason = _studentNoteAbsenceReason(ev, stu.id);
+          const code = (reason === 'A' || reason === 'NN') ? reason : '';
+          r.push(S0(code, { align: 'center', italic: !!code, color: code === 'A' ? 'B03D2E' : '56697F' }));
+        }
+        for (const c of dComps) {
+          const lvl = _typeDCompLevel(ev, stu.id, c.id);
+          if (lvl != null) {
+            const bg = levelCellBg(lvl);
+            r.push({ v: lvl, t: 'n', border: true, align: 'center', bg, color: bg ? textOnHex(bg) : null });
+          } else r.push(EMPTY());
+        }
+        r.push(S0((ev.studentRemarks?.[stu.id]) || ''));
+        rows.push(r);
+      }
+      rows.push([]);
+      rows.push([S0('Barème niveau → points : ' + dTable.map((p, i) => (i + 1) + ' → ' + fmtNumFr(p, 2)).join(' · ')
+        + ' · Les cases A/NN sortent du barème (note sur ce qui a été réellement passé).', { italic: true, color: '56697F' })]);
+      return {
+        name: _safeSheetName(ev),
+        rows,
+        cols: [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 6 }].concat(
+          dCols.map(() => ({ width: 10 }))
+        ).concat(dExos.map(() => ({ width: 10 }))).concat([{ width: 10 }])
+          .concat(dComps.map(() => ({ width: 8 }))).concat([{ width: 22 }])
       };
     }
 
@@ -29348,6 +29569,57 @@ function _seedDemoEvaluations() {
     };
     _seedNotes(evA2, sids, 4001, 0.75);
     S.evaluations[evA2.id] = evA2;
+
+    // 5) Type D — "DS Énergie" (S2, sommative par compétences : niveaux directs,
+    // barème niveau → points 0/1/2/3, poids ×2 sur une saisie, un absent, une
+    // sanction « rendu en retard » pour démontrer l'ajustement de note finale).
+    const evD1 = {
+      id: _id(), type: 'D',
+      classId: '6A', classIds: ['6A'],
+      nomCourt: 'DS Énergie', nomLong: 'Sommative par compétences — l’énergie et ses conversions',
+      date: '2026-05-12', periode: 'S2',
+      coef: 2, noteMax: 20,
+      pointsParNiveau: [0, 1, 2, 3],
+      bilanParExercice: false,
+      exercices: [], miniNotes: [], notes: {},
+      createdAt: now - 30 * 86400000, updatedAt: now - 10 * 86400000,
+    };
+    const exD1 = { id: _exoId(), label: 'Ex.1', name: 'Restitution de connaissances' };
+    const exD2 = { id: _exoId(), label: 'Ex.2', name: 'Raisonnement' };
+    evD1.exercices.push(exD1, exD2);
+    evD1.miniNotes = [
+      { id: _mnId(), label: 'Q1', exerciceId: exD1.id, competenceIds: [compIds[0]].filter(Boolean), compWeights: {} },
+      { id: _mnId(), label: 'Q2', exerciceId: exD1.id, competenceIds: [compIds[0], compIds[1]].filter(Boolean),
+        compWeights: compIds[0] ? { [compIds[0]]: 2 } : {} },
+      { id: _mnId(), label: 'Q3', exerciceId: exD2.id, competenceIds: [compIds[1]].filter(Boolean), compWeights: {} },
+    ];
+    {
+      const rD = _rng(5001);
+      const nbLv = S.evalPrefs?.nbLevels || 4;
+      sids.forEach((sid, i) => {
+        if (i === Math.floor(sids.length * 0.10)) {
+          // Un élève absent : toutes les cases à 'A' (hors barème)
+          const lv = {};
+          for (const mn of evD1.miniNotes) { lv[mn.id] = {}; for (const cid of mn.competenceIds) lv[mn.id][cid] = 'A'; }
+          evD1.notes[sid] = { levels: lv };
+          return;
+        }
+        const base = (i % 7 < 2) ? 1 : (i % 7 < 5 ? 2 : 3);
+        const lv = {};
+        for (const mn of evD1.miniNotes) {
+          lv[mn.id] = {};
+          for (const cid of mn.competenceIds) {
+            lv[mn.id][cid] = Math.max(1, Math.min(nbLv, base + (rD() > 0.6 ? 1 : 0)));
+          }
+        }
+        evD1.notes[sid] = { levels: lv };
+      });
+      // Une sanction d'exemple (−2 rendu en retard) — les niveaux restent intacts
+      if (sids[5] && evD1.notes[sids[5]]) {
+        evD1.notes[sids[5]].adjust = [{ id: 'adj_' + Math.random().toString(36).slice(2, 8), op: 'add', v: -2, label: 'Rendu en retard' }];
+      }
+    }
+    S.evaluations[evD1.id] = evD1;
 
     // Bulletin remarques — par (sid × période) sur ~12 élèves
     const _setRem = (sid, per, txt) => {
@@ -32203,6 +32475,7 @@ function _evalPrefsSave() {
     typeDPoints.push((Number.isFinite(v) && v >= 0) ? v : i);
   }
   S.evalPrefs.typeDPoints = typeDPoints;
+  _typeDBaremeWarn(typeDPoints);
   S.evalPrefs.typeDBilanParExercice = !!document.getElementById('evalprefs-typedbilanexo')?.checked;
   // Défauts éval
   const dCoef = parseFloat(document.getElementById('evalprefs-defaultCoef')?.value);
@@ -32375,6 +32648,21 @@ function _typeDClampWeight(raw) {
   return Math.min(TYPED_W_MAX, Math.max(TYPED_W_MIN, w));
 }
 
+// Avertit (toast, non bloquant) si un barème niveau → points décroît quelque part :
+// un niveau supérieur qui rapporte MOINS de points est forcément une erreur de saisie
+// (des paliers ÉGAUX restent légitimes — ex. [0,0,1,2] : niveaux 1 et 2 à 0 pt).
+// On n'empêche pas d'enregistrer : le calcul est de toute façon borné par le max réel
+// de la table (cf. _computeStudentEvalNoteDInfo).
+function _typeDBaremeWarn(pts) {
+  if (!Array.isArray(pts)) return;
+  for (let i = 1; i < pts.length; i++) {
+    if (+pts[i] < +pts[i - 1]) {
+      toast(`⚠ Barème : le niveau ${i + 1} (${_fmtNote(+pts[i])} pt) rapporte moins que le niveau ${i} (${_fmtNote(+pts[i - 1])} pt) — vérifie la saisie`, 'warn');
+      return;
+    }
+  }
+}
+
 // Clé d'exercice d'une question (— '__orphans__' si sans exercice valide), partagée par
 // le calcul, le tableur et les bilans par exercice.
 function _typeDExoKey(ev, mn) {
@@ -32390,7 +32678,10 @@ function _computeStudentEvalNoteDInfo(ev, sid) {
   if (!ev || ev.type !== 'D') return null;
   const table = _typeDPointsTable(ev);
   const nb = table.length;
-  const ptsMax = table[nb - 1];
+  // ⚠️ Max RÉEL de la table, pas la dernière case : un barème saisi décroissant
+  // (ex. [0,3,2,1]) donnait brut > max → note 60/20. L'éditeur avertit désormais
+  // (_typeDBaremeWarn), mais le calcul doit rester borné même sur un JSON hérité.
+  const ptsMax = Math.max(...table);
   const levels = ev.notes?.[sid]?.levels || {};
   const perExo = {};
   let brut = 0, max = 0, hasAny = false;
@@ -33082,8 +33373,6 @@ function openNewEvalModal() {
   document.getElementById('meval-new-notemax').value = S.evalPrefs?.maxNoteDefault || 20;
   document.getElementById('meval-new-coef').value = (S.evalPrefs?.defaultCoef ?? 1);
   document.getElementById('meval-new-granularity').value = '';
-  // Sélecteur de discipline (flux) : régénéré depuis les classes cochées
-  _evalRefreshChannelSelect('meval-new');
   // Type : déverrouillé, A coché par défaut
   document.getElementById('meval-new-type-lock').style.display = 'none';
   for (const r of document.querySelectorAll('input[name="meval-new-type"]')) {
@@ -33114,6 +33403,13 @@ function openNewEvalModal() {
   _evalNewState.dates = {};
   _evalNewState.slotIds = {};
   _evalRenderNewClassPicker(cur ? [cur.id] : (allCls[0] ? [allCls[0].id] : []));
+  // Sélecteur de discipline (flux) : régénéré depuis les classes cochées.
+  // ⚠️ APRÈS _evalRenderNewClassPicker, jamais avant : appelé avant le pré-cochage,
+  // il voyait zéro classe cochée et figeait le select caché sur la discipline
+  // principale du catalogue — l'éval créée était alors rattachée à une discipline
+  // que la classe n'enseigne pas, donc invisible de Devoirs et des deux bilans
+  // sitôt créée (bug reproduit : 1re ouverture de la modale par chargement de page).
+  _evalRefreshChannelSelect('meval-new');
   openMod('meval-new');
   setTimeout(() => document.getElementById('meval-new-nomcourt')?.focus(), 50);
 }
@@ -33214,11 +33510,12 @@ function _evalNewClassRowHTML(c) {
   }
   // Mode auto = pas de date dans _evalNewState.dates[c.id] (la date sera dérivée
   // de la 1re mini-note ou passation ajoutée). Mode manuel = une date est posée.
-  // Type C : mode auto désactivé (une éval sommative se passe le jour J, pas
-  // d'accumulation de constituants). Le bouton « ↻ Auto » et le marqueur « (auto) »
-  // sont masqués pour ce type.
+  // Type C ET D : mode auto désactivé (une éval sommative se passe le jour J, pas
+  // d'accumulation de constituants — et _evalAutoUpdateDate ne sait de toute façon
+  // rien calculer pour D : les questions n'ont pas de date). Le bouton « ↻ Auto »
+  // et le marqueur « (auto) » sont masqués pour ces types.
   const _typeNow = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
-  const _autoAllowed = (_typeNow !== 'C');
+  const _autoAllowed = (_typeNow !== 'C' && _typeNow !== 'D');
   const isAuto = !date && _autoAllowed;
   let modeBtn = '';
   if (_autoAllowed) {
@@ -33456,27 +33753,45 @@ function _evalNewSave() {
       compsBeforeTotal: type === 'C' ? true : undefined,
       createdAt: now, updatedAt: now,
     };
-    if (type === 'D') {
-      // Barème niveau → points lu depuis les inputs de la modale (repli : défaut général).
-      const nbD = S.evalPrefs?.nbLevels || 4;
-      const pts = [];
-      document.querySelectorAll('.meval-new-typed-pt').forEach(inp => {
-        const i = parseInt(inp.dataset.lvl, 10);
-        const v = parseFloat(inp.value);
-        if (Number.isFinite(i)) pts[i] = (Number.isFinite(v) && v >= 0) ? v : null;
-      });
-      evObj.pointsParNiveau = (pts.length === nbD && pts.every(p => p != null))
-        ? pts : _typeDPointsTable({ });
-      evObj.bilanParExercice = !!document.getElementById('meval-new-typed-bilanexo')?.checked;
+  }
+
+  // Options Type D (barème niveau → points + bilan par exercice) : lues depuis les inputs
+  // de la modale — EN CRÉATION COMME EN DUPLICATION. ⚠️ Ce bloc vivait dans la branche
+  // création seule : la modale Dupliquer affichait l'éditeur de barème mais IGNORAIT toute
+  // modification (champs inertes). En duplication, des inputs invalides/absents laissent
+  // le barème copié de la source intact.
+  if (evObj.type === 'D') {
+    const nbD = S.evalPrefs?.nbLevels || 4;
+    const pts = [];
+    document.querySelectorAll('.meval-new-typed-pt').forEach(inp => {
+      const i = parseInt(inp.dataset.lvl, 10);
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(i)) pts[i] = (Number.isFinite(v) && v >= 0) ? v : null;
+    });
+    if (pts.length === nbD && pts.every(p => p != null)) {
+      evObj.pointsParNiveau = pts;
+    } else if (!Array.isArray(evObj.pointsParNiveau)) {
+      evObj.pointsParNiveau = _typeDPointsTable({ });   // création sans inputs exploitables
     }
+    evObj.bilanParExercice = !!document.getElementById('meval-new-typed-bilanexo')?.checked;
+    _typeDBaremeWarn(evObj.pointsParNiveau);
   }
 
   // Classes affectées (multi)
   evObj.classId = primaryCls.id;
   evObj.classIds = validIds.slice();
-  // Discipline (id du catalogue global)
+  // Discipline (id du catalogue global). Garde-fou : la valeur du select doit appartenir
+  // à l'UNION des disciplines des classes cochées — un select resté sur un état antérieur
+  // (ex. discipline principale alors que la classe n'enseigne que SVT) produirait une éval
+  // invisible de tous les bilans. Dans ce cas on retombe sur la 1re discipline de la
+  // classe primaire, comme si rien n'avait été choisi.
   const _discNew = document.getElementById('meval-new-channel')?.value || '';
-  if (_discNew && S.disciplines?.[_discNew]) {
+  const _discUnion = new Set();
+  for (const cid of validIds) {
+    const c = S.classes?.[cid];
+    if (c) for (const did of _clsDisciplineIds(c)) _discUnion.add(did);
+  }
+  if (_discNew && S.disciplines?.[_discNew] && _discUnion.has(_discNew)) {
     evObj.disciplineId = _discNew;
   } else {
     // Fallback : 1re discipline de la classe primaire
@@ -33634,9 +33949,10 @@ function _evalEditRenderClasses(ev) {
       </label>`;
     if (checked) {
       const isManual = !!ev.datesManual?.[c.id];
-      // Type C : mode auto désactivé (une éval sommative se passe le jour J, pas
-      // d'accumulation de constituants — cohérent avec la modale Nouvelle éval).
-      const _autoAllowed = (ev.type !== 'C');
+      // Type C ET D : mode auto désactivé (une éval sommative se passe le jour J ; et
+      // _evalAutoUpdateDate ne sait rien calculer pour D — cliquer « ↻ Auto » figeait
+      // la date sous une étiquette « (auto) » mensongère). Cohérent avec meval-new.
+      const _autoAllowed = (ev.type !== 'C' && ev.type !== 'D');
       // Bouton "↻ Auto" visible uniquement si la date a été réglée manuellement
       // ET si le mode auto est autorisé pour ce type. Hint "(auto)" sinon.
       let autoCtl = '';
@@ -34151,7 +34467,7 @@ function _evalEditRenderMiniNotes() {
     // Barème théorique = Σ (poids × points du niveau max) sur toutes les (question × comp).
     // « Théorique » car les cases A/NN d'un élève sortent de SON barème.
     const table = _typeDPointsTable(ev);
-    const ptsMaxD = table[table.length - 1];
+    const ptsMaxD = Math.max(...table);   // max réel, aligné sur _computeStudentEvalNoteDInfo
     let maxD = 0, nbSaisies = 0;
     for (const mn of ev.miniNotes) for (const cid of (mn.competenceIds || [])) { maxD += ptsMaxD * _typeDWeight(mn, cid); nbSaisies++; }
     document.getElementById('meval-edit-totalpts').textContent =
@@ -34271,12 +34587,13 @@ function _evalEditRemoveExo(idx) {
     title: '🗑 Supprimer l\'exercice', okLabel: '🗑 Supprimer', okClass: 'btn-d', message: msg,
     onOk: () => {
       pushUndo();
-      // Supprime l'exo et ses questions (avec leurs saisies)
+      // Supprime l'exo et ses questions (avec leurs saisies — values A/C ET levels D)
       const qIds = ev.miniNotes.filter(mn => mn.exerciceId === exo.id).map(mn => mn.id);
       ev.miniNotes = ev.miniNotes.filter(mn => mn.exerciceId !== exo.id);
       for (const sid in (ev.notes || {})) {
         for (const qid of qIds) {
           if (ev.notes[sid]?.values) delete ev.notes[sid].values[qid];
+          if (ev.notes[sid]?.levels) delete ev.notes[sid].levels[qid];
         }
       }
       ev.exercices.splice(idx, 1);
@@ -34331,6 +34648,15 @@ function _evalEditPickCompetences(target) {
   _competencePicker.primaryQIdx = validIdxs[0];
   _competencePicker.alsoQIdxs   = new Set(validIdxs.slice(1));  // cibles additionnelles cochées par défaut
   _competencePicker.selected    = new Set(firstQ.competenceIds);
+  // Texte d'aide selon le type : la modale est partagée C/D, mais les mécanismes diffèrent —
+  // en C le niveau est DÉRIVÉ du score, en D il est SAISI directement. Le texte C affiché
+  // sur une éval D expliquait un mécanisme qui n'existe pas dans ce type.
+  const _pickHelp = document.getElementById('meval-pick-comp-help');
+  if (_pickHelp) {
+    _pickHelp.innerHTML = (ev.type === 'D')
+      ? `Choisis une ou plusieurs compétences du référentiel (<strong>au moins une</strong> — une question sans compétence ne compte pas). Le niveau de chaque compétence se <strong>saisit directement</strong> dans le tableur ; le barème niveau → points de l'éval en fait la note.`
+      : `Choisis une ou plusieurs compétences du référentiel. Quand l'élève sera évalué, son niveau de maîtrise sera dérivé du score obtenu à cette question (voir <strong>⚙ Paramètres → Conversion note → niveau</strong>).`;
+  }
   _competencePickerRender();
   _competencePickerRenderAlso();
   openMod('meval-pick-comp');
@@ -34899,22 +35225,29 @@ function _evalEditRemoveMiniNote(idx) {
   const ev = S.evaluations?.[evalId];
   if (!ev || !ev.miniNotes[idx]) return;
   const mn = ev.miniNotes[idx];
-  // Avertit si des notes ont été saisies sur cette mini-note
+  // Avertit si des notes ont été saisies sur cette mini-note.
+  // ⚠️ Type D : les saisies vivent dans notes[sid].levels[mnId], pas values — sans ce
+  // comptage, la confirmation annonçait « 0 saisie perdue » pour une question D notée.
   let usage = 0;
   for (const sid in (ev.notes || {})) {
     if (ev.notes[sid]?.values?.[mn.id] != null) usage++;
+    else if (Object.keys(ev.notes[sid]?.levels?.[mn.id] || {}).length > 0) usage++;
   }
+  const lbl = (ev.type === 'C' || ev.type === 'D') ? 'question' : 'mini-note';
   const msg = usage > 0
-    ? `Supprimer la mini-note "${mn.label || '(sans nom)'}" ? ${usage} saisie${usage > 1 ? 's' : ''} associée${usage > 1 ? 's' : ''} sera perdue${usage > 1 ? 's' : ''}.`
-    : `Supprimer la mini-note "${mn.label || '(sans nom)'}" ?`;
+    ? `Supprimer la ${lbl} "${mn.label || '(sans nom)'}" ? ${usage} saisie${usage > 1 ? 's' : ''} associée${usage > 1 ? 's' : ''} sera perdue${usage > 1 ? 's' : ''}.`
+    : `Supprimer la ${lbl} "${mn.label || '(sans nom)'}" ?`;
   _uiConfirm({
-    title: '🗑 Supprimer la mini-note', okLabel: '🗑 Supprimer', okClass: 'btn-d', message: msg,
+    title: '🗑 Supprimer', okLabel: '🗑 Supprimer', okClass: 'btn-d', message: msg,
     onOk: () => {
       pushUndo();
-      // Retire la mini-note ET nettoie les saisies orphelines
+      // Retire la mini-note ET nettoie les saisies orphelines (values A/C, levels D —
+      // un reste dans levels ferait dire à _studentHasAnyDataInEval que l'élève « a des
+      // données », faussant le compteur « saisis » et la détection d'éval orpheline).
       ev.miniNotes.splice(idx, 1);
       for (const sid in (ev.notes || {})) {
         if (ev.notes[sid]?.values) delete ev.notes[sid].values[mn.id];
+        if (ev.notes[sid]?.levels) delete ev.notes[sid].levels[mn.id];
       }
       _evalEditDirty = true;
       _evalEditRenderMiniNotes();
@@ -34997,6 +35330,7 @@ function _evalEditSave() {
     });
     ev.pointsParNiveau = pts;
     ev.bilanParExercice = !!document.getElementById('meval-edit-typed-bilanexo')?.checked;
+    _typeDBaremeWarn(pts);
   }
   ev.updatedAt = Date.now();
   _evalEditDirty = false;
@@ -35044,7 +35378,7 @@ function _evalOpenSaisie() {
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
   if (!ev.miniNotes || ev.miniNotes.length === 0) {
-    toast('⚠ Ajoute d\'abord au moins une mini-note avant de saisir', 'warn');
+    toast(`⚠ Ajoute d'abord au moins une ${(ev.type === 'C' || ev.type === 'D') ? 'question' : 'mini-note'} avant de saisir`, 'warn');
     return;
   }
   // Sauvegarde implicite des modifs de structure non encore enregistrées (pour fiabilité)
@@ -35437,6 +35771,18 @@ function _evalDuplicate(evalId) {
   }
   _evalNewToggleFacMode();
   _evalNewOnTypeChange();
+  // Type D : l'éditeur de barème vient d'être rendu avec les DÉFAUTS généraux — on le
+  // re-remplit avec le barème DE LA SOURCE (sinon dupliquer remplacerait silencieusement
+  // un barème personnalisé par le défaut). Idem pour le toggle « bilan par exercice ».
+  if (ev.type === 'D') {
+    const srcPts = Array.isArray(ev.pointsParNiveau) ? ev.pointsParNiveau : _typeDPointsTable(ev);
+    document.querySelectorAll('.meval-new-typed-pt').forEach(inp => {
+      const i = parseInt(inp.dataset.lvl, 10);
+      if (Number.isFinite(i) && srcPts[i] != null) inp.value = srcPts[i];
+    });
+    const bx = document.getElementById('meval-new-typed-bilanexo');
+    if (bx) bx.checked = !!ev.bilanParExercice;
+  }
   // Classes : pré-coche celles de la source (qui existent encore), avec
   // recopie des dates/créneaux per-classe pour partir des valeurs d'origine.
   const srcClassIds = (_evalClassIds(ev) || []).filter(id => S.classes?.[id]);
@@ -35450,6 +35796,14 @@ function _evalDuplicate(evalId) {
     if (sl) _evalNewState.slotIds[cid] = sl;
   }
   _evalRenderNewClassPicker(srcClassIds.length ? srcClassIds : [allCls[0].id]);
+  // Discipline : refresh APRÈS le pré-cochage (cf. openNewEvalModal), puis pré-sélection
+  // de la discipline de la SOURCE si elle est encore proposée — sans ça, dupliquer une
+  // éval « SVT Bilingue » la rebasculait silencieusement sur la 1re discipline du select.
+  _evalRefreshChannelSelect('meval-new');
+  const _dupSel = document.getElementById('meval-new-channel');
+  if (_dupSel && ev.disciplineId && [..._dupSel.options].some(o => o.value === ev.disciplineId)) {
+    _dupSel.value = ev.disciplineId;
+  }
   openMod('meval-new');
   setTimeout(() => {
     const inp = document.getElementById('meval-new-nomcourt');
@@ -35500,7 +35854,7 @@ function _evalOpenTableur(forcedId) {
       return;
     }
   } else if (!ev.miniNotes || ev.miniNotes.length === 0) {
-    toast('⚠ Ajoute d\'abord au moins une mini-note avant de saisir', 'warn');
+    toast(`⚠ Ajoute d'abord au moins une ${(ev.type === 'C' || ev.type === 'D') ? 'question' : 'mini-note'} avant de saisir`, 'warn');
     _modalReturnTo['meval-structure'] = _bounceBackToTableur;
     openEvalStructure(evalId);
     return;
@@ -37555,7 +37909,7 @@ function _bilanRenderCrossTab() {
       const on = _bilanXState.selectedEvalId === e.id;
       const date = _evalDateFor(e) || '';
       const dateLbl = date ? _fmtDateFr(date) : '—';
-      const typeBadge = e.type === 'B' ? 'B' : (e.type === 'C' ? 'C' : 'A');
+      const typeBadge = e.type || 'A';   // ternaire A/B/C d'avant : une éval D s'affichait [A]
       const tip = `${e.nomLong || e.nomCourt || ''} · ${e.type} · coef ${e.coef ?? 1} · ${dateLbl}`;
       html += `<button class="chip ${on ? 'on' : ''}" onclick="_bilanCrossTabSelect('${_esc(e.id)}')" title="${_escAttr(tip)}" style="padding:3px 10px;border-radius:12px;border:1px solid var(--rule-line);cursor:pointer;background:${on ? 'var(--ink-blue)' : 'var(--paper-warm)'};color:${on ? '#fff' : 'var(--ink-deep)'};font-size:.85em;font-family:var(--font-mono)">[${typeBadge}] ${_esc(e.nomCourt || '?')}</button>`;
     }
@@ -37846,7 +38200,8 @@ function _evalRenderBilanComps() {
       // Comp non évaluée → afficher "0" (niveau "non évalué"), pas "—"
       const isNull = (niv == null);
       const dispVal = isNull ? _formatNiveau(0) : _formatNiveau(Math.round(niv));
-      const bg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(3, Math.round(niv) - 1))];
+      // Borne = taille de la palette (suit nbLevels), pas 3 en dur (niveaux 5/6 → couleur du 4)
+      const bg = isNull ? 'var(--paper-warm)' : colors[Math.max(0, Math.min(colors.length - 1, Math.round(niv) - 1))];
       const color = _contrastTextColor(bg);
       html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${isNull ? 400 : 700};background:${bg};color:${color}">${dispVal}</td>`;
     }
@@ -38620,6 +38975,27 @@ function _studentNoteAbsenceReason(ev, sid) {
     if (nA > 0) return 'A';
     return 'none';
   }
+  if (ev.type === 'D') {
+    // Saisies dans notes[sid].levels[mnId][cid] — sans cette branche, un élève tout-A
+    // affichait « — » (indiscernable d'un élève pas encore noté) au Bilan des notes,
+    // dans l'export ENT et le popup bilan compétences.
+    const dLevels = ev.notes?.[sid]?.levels || {};
+    let nA = 0, nNN = 0, nNum = 0;
+    for (const mn of (ev.miniNotes || [])) {
+      const perComp = dLevels[mn.id] || {};
+      for (const cid of (mn.competenceIds || [])) {
+        const v = perComp[cid];
+        if (v === 'A') nA++;
+        else if (v === 'NN') nNN++;
+        else if (typeof v === 'number' && v >= 1) nNum++;
+      }
+    }
+    if (nNum > 0) return null;
+    if (nA > 0 && nNN === 0) return 'A';
+    if (nNN > 0 && nA === 0) return 'NN';
+    if (nA > 0 || nNN > 0) return 'A';  // mix de A+NN sans niveau → on privilégie 'A'
+    return 'none';
+  }
   // Type A / C
   const values = ev.notes?.[sid]?.values || {};
   const mns = ev.miniNotes || [];
@@ -38800,12 +39176,18 @@ function _typeDDisplayVal(v) {
   return '';
 }
 
-// Fond de cellule d'une valeur stockée ('' si vide).
-function _typeDCellBg(v) {
+// Fond de cellule d'une valeur stockée ('' si vide). `nb` optionnel = nombre de niveaux
+// courant : une valeur AU-DELÀ (niveau 5 saisi avant une réduction du réglage à 4) reste
+// alors NEUTRE — elle est exclue du calcul, lui donner la couleur du niveau max laissait
+// croire qu'elle comptait (divergence affichage/calcul silencieuse).
+function _typeDCellBg(v, nb) {
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
   if (v === 'A') return '#9ca3af';
   if (v === 'NN') return '#6b7280';
-  if (typeof v === 'number' && v >= 1) return colors[Math.max(0, Math.min(colors.length - 1, v - 1))];
+  if (typeof v === 'number' && v >= 1) {
+    if (nb && v > nb) return '';
+    return colors[Math.max(0, Math.min(colors.length - 1, v - 1))];
+  }
   return '';
 }
 
@@ -38964,7 +39346,7 @@ function _evalTableurRenderD(ev, cls) {
         }
         cids.forEach((cid, k) => {
           const cur = levels[q.id]?.[cid];
-          const bg = _typeDCellBg(cur);
+          const bg = _typeDCellBg(cur, nb);   // nb : un niveau stocké > nb reste neutre (hors calcul)
           const lead = (qi === 0 && k === 0) ? SEPD : (k === 0 ? 'border-left:1px solid var(--rule-line);' : 'border-left:1px solid var(--rule-line-soft);');
           const comp = S.competences?.[cid];
           const aria = `Niveau de ${stu.prenom || ''} ${stu.nom || ''} sur ${comp?.code || cid} (${q.label || 'question'})`;
@@ -39065,7 +39447,7 @@ function _evalTableurDUpdate(inputEl) {
   } else {
     slot[cid] = parsed;
   }
-  const bg = _typeDCellBg(parsed === 0 ? null : parsed);
+  const bg = _typeDCellBg(parsed === 0 ? null : parsed, nb);
   if (td) td.style.background = bg;
   inputEl.style.color = bg ? _contrastTextColor(bg) : '';
   inputEl.style.fontWeight = bg ? '700' : '400';
@@ -39806,6 +40188,7 @@ function _tableurMnDelete() {
   let usage = 0;
   for (const sid in (ev.notes || {})) {
     if (ev.notes[sid]?.values?.[mnId] != null) usage++;
+    else if (Object.keys(ev.notes[sid]?.levels?.[mnId] || {}).length > 0) usage++;
   }
   const msg = usage > 0
     ? `Supprimer "${mn.label || '(sans nom)'}" ? ${usage} saisie(s) perdue(s).`
@@ -39817,6 +40200,7 @@ function _tableurMnDelete() {
       ev.miniNotes = ev.miniNotes.filter(m => m.id !== mnId);
       for (const sid in (ev.notes || {})) {
         if (ev.notes[sid]?.values) delete ev.notes[sid].values[mnId];
+        if (ev.notes[sid]?.levels) delete ev.notes[sid].levels[mnId];
         if (ev.notes[sid]?.comments) delete ev.notes[sid].comments[mnId];
       }
       ev.updatedAt = Date.now();
@@ -40135,6 +40519,7 @@ function _tableurExoDelete() {
       ev.miniNotes = ev.miniNotes.filter(mn => !qsIds.has(mn.id));
       for (const sid in (ev.notes || {})) {
         if (ev.notes[sid]?.values) for (const qid of qsIds) delete ev.notes[sid].values[qid];
+        if (ev.notes[sid]?.levels) for (const qid of qsIds) delete ev.notes[sid].levels[qid];
         if (ev.notes[sid]?.comments) for (const qid of qsIds) delete ev.notes[sid].comments[qid];
       }
       ev.updatedAt = Date.now();
@@ -40187,11 +40572,13 @@ function _tableurAddMn() {
   _evalTableurRender();
 }
 
-// Ajoute un exercice (Type C uniquement) + une 1re question dedans
+// Ajoute un exercice (Type C ou D) + une 1re question dedans.
+// ⚠️ Le bouton « + Exo » est affiché pour C ET D (cf. _evalTableurUpdateToolbar) : une garde
+// `type !== 'C'` en faisait un bouton MORT en D (clic sans effet ni message — constaté).
 function _tableurAddExo() {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
-  if (!ev || ev.type !== 'C') return;
+  if (!ev || (ev.type !== 'C' && ev.type !== 'D')) return;
   pushUndo();
   ev.exercices = ev.exercices || [];
   const exoId = 'exo_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5);
@@ -40201,11 +40588,18 @@ function _tableurAddExo() {
   ev.miniNotes.push({
     id: _newMiniNoteId(),
     label: `Q${exoIdx}.1`,
-    max: 1, exerciceId: exoId, competenceIds: []
+    // Type D : pas de barème en points par question — les points viennent des niveaux.
+    ...(ev.type === 'D' ? { compWeights: {} } : { max: 1 }),
+    exerciceId: exoId, competenceIds: []
   });
   ev.updatedAt = Date.now();
   save();
   _evalTableurRender();
+  // Type D : compétence obligatoire — enchaîne sur le picker, comme _tableurAddMn.
+  if (ev.type === 'D') {
+    document.getElementById('meval-edit-id').value = ev.id;
+    _evalEditPickCompetences(ev.miniNotes.length - 1);
+  }
 }
 
 // Toggle plein écran du tableur (mémorisé entre sessions)
@@ -40737,7 +41131,11 @@ function _evalAutoFillAbsentsForPass(ev, pass, classId) {
 function _evalAutoFillAbsentsForEvalClass(ev, classId) {
   if (!ev || !classId) return 0;
   let filled = 0;
-  if (ev.type === 'A' || ev.type === 'C') {
+  // ⚠️ D inclus : _evalAutoFillAbsentsForMn sait poser « A » par (question × compétence),
+  // mais ce wrapper — le SEUL appelé par les points d'entrée du D (date/créneau du bandeau
+  // multi-classes, Réglages per-classe) — le sautait : l'auto-remplissage des absents ne se
+  // déclenchait donc JAMAIS sur une éval D.
+  if (ev.type === 'A' || ev.type === 'C' || ev.type === 'D') {
     for (const mn of (ev.miniNotes || [])) {
       filled += _evalAutoFillAbsentsForMn(ev, mn, classId);
     }
@@ -43031,7 +43429,10 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
         if (!(mn.competenceIds || []).includes(cid)) continue;
         const v = dLevels[mn.id]?.[cid];
         if (typeof v !== 'number' || v < 1 || v > nbD) continue;
-        entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: mn.label, date: _evalDateFor(ev, classId) || ev.date, niveau: v });
+        // Le poids ≠ 1 est signalé dans le libellé : l'infobulle montrait « Q2 : niveau 4 »
+        // sans dire que cette saisie pèse double dans le niveau de l'éval.
+        const wD = _typeDWeight(mn, cid);
+        entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: (mn.label || '?') + (wD !== 1 ? ` (×${wD})` : ''), date: _evalDateFor(ev, classId) || ev.date, niveau: v });
       }
     }
     // Niveau ENTIER de cette évaluation, pondéré ensuite par son coefficient. `entries` reste
@@ -44294,14 +44695,17 @@ function _evalExportOpen() {
   openMod('meval-export');
 }
 
-// Retourne la liste des compétences évaluées dans l'éval (Type B/C) ordonnée par code
+// Retourne la liste des compétences évaluées dans l'éval (tous types) ordonnée par code.
+// ⚠️ Jumeau historique de _evalListEvaluatedCompetences : les deux avaient divergé (celui-ci
+// ignorait le D → l'export ENT d'une éval PAR COMPÉTENCES affichait « Compétences (0) »).
+// Tout nouveau type doit être ajouté aux DEUX, ou ce helper fusionné dans l'autre.
 function _evalCompetencesEvaluated(ev) {
   const ids = new Set();
   if (ev.type === 'B') {
     for (const p of (ev.passations || [])) {
       for (const cid of (p.competenceIds || [])) ids.add(cid);
     }
-  } else if (ev.type === 'C' || ev.type === 'A') {
+  } else if (ev.type === 'C' || ev.type === 'A' || ev.type === 'D') {
     for (const mn of (ev.miniNotes || [])) {
       for (const cid of (mn.competenceIds || [])) ids.add(cid);
     }
@@ -44316,6 +44720,8 @@ function _evalCompetencesEvaluated(ev) {
 // Type C : agrège les questions évaluées sur cette compétence (chacune convertie en niveau via _noteToLevel) et moyenne arithmétique (règle simple ; affinements possibles plus tard).
 function _evalStudentCompetenceLevel(ev, sid, cid) {
   if (ev.type === 'B') return _computeStudentCompetenceLevel(ev, sid, cid);
+  // Type D : niveaux saisis directement — délègue (annulation de copie déjà appliquée).
+  if (ev.type === 'D') return _typeDCompLevel(ev, sid, cid);
   // Type A/C : passe par les questions
   const values   = ev.notes?.[sid]?.values || {};
   const comments = ev.notes?.[sid]?.comments || {};

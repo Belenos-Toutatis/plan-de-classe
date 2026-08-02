@@ -918,3 +918,69 @@ test('Copie annulée : le drapeau survit à la migration', () => {
   assert.equal(ev("S.evaluations.evd.notes.s1.adjust[0].voidComps"), true);
   assert.equal(ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"), 1);
 });
+
+// ─── Audit Type D (2026-08-02) : surfaces annexes branchées sur le D ────────────
+
+test('Type D : _studentNoteAbsenceReason distingue A / NN / none', () => {
+  seedTypeD();
+  // Tout-A → 'A' (avant le correctif : branche A/C lisait `values` → 'none' → « — »)
+  ev(`S.evaluations.evd.notes.s1 = { levels: { q1:{cmp_rai:'A'}, q2:{cmp_rai:'A',cmp_com:'A'}, q3:{cmp_com:'A'} } }`);
+  assert.equal(ev("_studentNoteAbsenceReason(S.evaluations.evd, 's1')"), 'A');
+  assert.equal(ev("_studentNoteDisplay(S.evaluations.evd, 's1').kind"), 'A');
+  // Tout-NN → 'NN'
+  ev(`S.evaluations.evd.notes.s1 = { levels: { q1:{cmp_rai:'NN'}, q2:{cmp_rai:'NN',cmp_com:'NN'}, q3:{cmp_com:'NN'} } }`);
+  assert.equal(ev("_studentNoteAbsenceReason(S.evaluations.evd, 's1')"), 'NN');
+  // Une saisie numérique → null (note calculable)
+  ev(`S.evaluations.evd.notes.s1 = { levels: { q1:{cmp_rai:3} } }`);
+  assert.equal(ev("_studentNoteAbsenceReason(S.evaluations.evd, 's1')"), null);
+  // Aucune saisie → 'none'
+  ev(`S.evaluations.evd.notes.s1 = { levels: {} }`);
+  assert.equal(ev("_studentNoteAbsenceReason(S.evaluations.evd, 's1')"), 'none');
+});
+
+test('Type D : export ENT — compétences listées et niveaux délégués', () => {
+  seedTypeD();
+  // _evalCompetencesEvaluated (jumeau export) doit voir les compétences du D…
+  const codes = ev("_evalCompetencesEvaluated(S.evaluations.evd).map(c => c.code).sort().join(',')");
+  assert.equal(codes, 'COM,RAI');
+  // …et rester ALIGNÉ sur _evalListEvaluatedCompetences (les deux avaient divergé)
+  const codes2 = ev("_evalListEvaluatedCompetences(S.evaluations.evd, 'code').map(c => c.code).sort().join(',')");
+  assert.equal(codes, codes2);
+  // Niveau par élève : délégué à _typeDCompLevel (avant : lecture de `values` → null)
+  assert.equal(ev("_evalStudentCompetenceLevel(S.evaluations.evd, 's1', 'cmp_rai')"),
+               ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')"));
+});
+
+test('Type D : barème décroissant borné par le max réel de la table', () => {
+  seedTypeD();
+  // Barème pathologique [0,3,2,1] : niveau 2 rapporte 3 pts. Avant le correctif,
+  // ptsMax = dernière case (1) → note 60/20. Désormais max réel (3) → note ≤ noteMax.
+  ev(`S.evaluations.evd.pointsParNiveau = [0, 3, 2, 1]`);
+  ev(`S.evaluations.evd.notes.s1 = { levels: { q1: { cmp_rai: 2 } } }`);
+  const note = ev("_computeStudentEvalNote(S.evaluations.evd, 's1')");
+  assert.ok(note <= 20, `note ${note} doit rester ≤ noteMax`);
+  assert.equal(note, 20); // 3 pts / max 3 → 20
+});
+
+test('Type D : l\'auto-remplissage des absents passe par le wrapper per-classe', () => {
+  seedTypeD();
+  ev(`S.attendance = { c1: { r1: { id:'r1', date:'2026-05-01', slotId:'M1', groupe:0,
+      absents:['s1'], retards:{}, eleves:{} } } }`);
+  ev(`S.evaluations.evd.dates = { c1: '2026-05-01' }; S.evaluations.evd.slotIds = { c1: 'M1' };`);
+  ev(`S.evaluations.evd.notes = {}`);
+  // Avant : le wrapper ne traitait que A/C et B → 0 rempli pour une éval D.
+  const filled = ev("_evalAutoFillAbsentsForEvalClass(S.evaluations.evd, 'c1')");
+  assert.equal(filled, 4); // 4 couples (question × compétence)
+  assert.equal(ev("S.evaluations.evd.notes.s1.levels.q1.cmp_rai"), 'A');
+  assert.equal(ev("S.evaluations.evd.notes.s1.levels.q2.cmp_com"), 'A');
+});
+
+test('Type D : un niveau stocké au-delà de nbLevels reste neutre à l\'affichage', () => {
+  seedTypeD();
+  // Niveau 5 hérité d'un réglage à 6 niveaux réduit à 4 : exclu du calcul, donc
+  // la cellule ne doit PAS porter la couleur du niveau max (fausse impression de comptage).
+  assert.equal(ev("_typeDCellBg(5, 4)"), '');
+  // Sans le paramètre nb (pastilles alimentées par _typeDCompLevel ≤ nb) : comportement inchangé
+  assert.notEqual(ev("_typeDCellBg(4, 4)"), '');
+  assert.notEqual(ev("_typeDCellBg(4)"), '');
+});
