@@ -109,7 +109,7 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - `sw.js` — service worker (utilisation hors-ligne, network-first)
   - 💡 **Bruit de console attendu en `file://`, à ne pas re-diagnostiquer** : ouvert en fichier local, l'origine vaut `null` et Chrome refuse d'aller chercher le manifeste (`blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome, …, http, https`), d'où un `ERR_FAILED` sur `manifest.json`. Le service worker échoue pour la même raison, silencieusement (`.catch(() => {})`). **Inoffensif** : le manifeste ne sert qu'à l'installation et au thème de fenêtre, pas au fonctionnement de l'app. Absent en `https`. Volontairement **non corrigé** : le `<link rel="manifest">` est statique en tête de `<head>` et récupéré pendant l'analyse, avant tout script — le faire taire imposerait de l'injecter en JS, donc de toucher au mécanisme d'installation (qui, lui, sert vraiment) pour un gain limité à la propreté de la console dans un mode où la PWA est inerte.
 - `README.md` — documentation utilisateur (orientée GitHub)
-- `LICENSE` — double licence : MIT (code de l'app) + CC BY-NC-SA 4.0 (composants ArUco — algorithme, mapping des 125 patterns, layout d'impression — dérivés de QCMcam par Sébastien COGEZ)
+- `LICENSE` — double licence : MIT (code de l'app, layout d'impression des marqueurs compris) + Apache 2.0 (dictionnaire ArUco `QCMCAM_4X4_157h3`, repris du dépôt de QCMcam 2 par Sébastien COGEZ). ⚠️ La partie 2 était CC BY-NC-SA 4.0 jusqu'à la 2.38.0, du temps de l'ancien dictionnaire de 125 motifs de qcmcam.net v1 ; celui-ci a été retiré en 2.39.0.
 - `CREDITS.md` — remerciements détaillés à Sébastien COGEZ (QCMcam), à la communauté enseignante, et aux polices embarquées (Fraunces, IBM Plex Sans, JetBrains Mono — toutes sous SIL Open Font License)
 - `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`, `*.bak`, `*.tmp`)
 - `plan-classe-AAAA-MM-JJ-HHhMMmSS.json` — exports manuels horodatés (non versionnés)
@@ -204,7 +204,7 @@ La nav `#nav` est structurée en **deux groupes** séparés par un filet vertica
 3. **Plan (Prof)** — placement drag & drop, sélecteur multi-salles + sélecteur de classe mobile à côté, zoom, filtres groupes
 4. **Config Salle** — gestion globale du catalogue de salles
 5. **Tablettes** — récap tablettes avec sélecteur de salle + bouton "Affecter automatiquement", génération PDF "Fiche de prêt"
-6. **QCMCam** — plan visuel vue prof + export CSV multi-salles avec identifiant `classe-salle`
+6. **QCMCam** — plan visuel vue prof + export CSV multi-salles avec identifiant `classe-salle` (en-tête auto-reconnu par QCMcam 2) + import des résultats
 
 ### Groupe 2 — "Évaluations" (3 onglets actifs)
 1. **📊 Devoirs** (`tab-notes`) — création/édition d'évaluations Type A (mini-notes /20), Type B (compétences par passations), Type C (sommative avec exercices). Saisie en tableur ou en fiche par élève. Multi-classes. Tableau d'évaluations avec stats.
@@ -284,7 +284,7 @@ salle = {
     placeUlisAbsents: bool        // inclure ULIS et UPE2A hors inclusion (défaut false)
   },
   qcmExcluded: ['r,c', ...]       // places explicitement exclues de la numérotation QCMCam
-                                  // (utile en Cas 3 séquentiel quand total > 125 — l'utilisateur
+                                  // (utile en Cas 3 séquentiel quand total > ARUCO_MAX — l'utilisateur
                                   // choisit en cliquant sur le plan QCMCam quelles tables n'auront
                                   // pas de marqueur). Stocké sur la salle car les marqueurs sont
                                   // physiquement collés sur les tables et partagés entre classes.
@@ -921,30 +921,52 @@ Le modal **🕓 Historique** d'un élève a deux onglets :
 
 ### Stratégie de numérotation (`_qcmNumbering(cls, salleId)`)
 
-QCMCam utilise des marqueurs ArUco 4×4 limités à **1–125**. La fonction `_qcmNumbering` retourne `{ keyToNum, numToKey, strategy, step, isSequential, max, overflowCount, total, userExcluded }` et choisit automatiquement la stratégie la plus lisible :
+QCMCam utilise des marqueurs ArUco 4×4 limités à **1–`ARUCO_MAX`** (157 depuis QCMcam 2 ; 125 auparavant). La fonction `_qcmNumbering` retourne `{ keyToNum, numToKey, strategy, step, isSequential, max, overflowCount, total, userExcluded }` et choisit automatiquement la stratégie la plus lisible :
 
-- **Cas 1 — `strategy: 'lisible-10'` (pas = 10)** — si `cols ≤ 10 ET rows ≤ 12`
+- **Cas 1 — `strategy: 'lisible-10'` (pas = 10)** — si `cols ≤ 10 ET rows ≤ 15`
   - `n = rangée × 10 + position` (position = 1 à gauche, cols à droite en vue prof)
-  - Max possible : `11×10 + 10 = 120` ≤ 125
+  - Max possible : `14×10 + 10 = 150` ≤ 157
   - Numéros parlants : `23` = rangée 2, place 3 depuis la gauche
 
-- **Cas 2 — `strategy: 'lisible-20'` (pas = 20)** — si `cols ≤ 15 ET rows ≤ 6` (et hors Cas 1)
+- **Cas 2 — `strategy: 'lisible-20'` (pas = 20)** — si `cols ≤ 15 ET rows ≤ 8` (et hors Cas 1)
   - `n = rangée × 20 + position`
-  - Max possible : `5×20 + 15 = 115` ≤ 125
+  - Max possible : `7×20 + 15 = 155` ≤ 157
   - Trou de 5 numéros entre rangées (16-20, 36-40… non utilisés) pour préserver la lisibilité "dizaines = rangée"
   - Numéros parlants : `23` = rangée 1, place 3 depuis la gauche
 
 - **Cas 3 — `strategy: 'sequential'`** — pour toute salle au-delà de ces deux cas
   - Numérotation `1..N` dans l'ordre vue prof (rangée la plus proche du prof `r=0` d'abord, puis vers le fond ; gauche → droite dans chaque rangée), en sautant les `positions_vides` ET les `salle.qcmExcluded` (cf. ci-dessous)
-  - Si encore > 125 après exclusion : tronqué (`overflowCount`)
+  - Si encore > `ARUCO_MAX` après exclusion : tronqué (`overflowCount`)
   - Plus de signification rangée/place dans le numéro lui-même
 
 **Priorité Cas 1 vs Cas 2** : quand les deux s'appliquent (ex. 5×8 entre dans les deux), **Cas 1 gagne** (numéros plus serrés, plus dense visuellement).
+
+### Export de la liste d'élèves (`_allQcmLines` + `QCM_EXPORT_HEADER`)
+
+TSV `Marqueur ⇥ Prénom ⇥ Groupe`, précédé d'une **ligne d'en-tête** (`QCM_EXPORT_HEADER`), une ligne par élève de chaque couple classe × salle. Ajouté au fichier ET à la copie presse-papier par les deux appelants (`exportQcmCsv`, `copyQcmAllClasses`) — `_allQcmLines()` ne renvoie que les lignes de données, pour que les compteurs des toasts restent justes.
+
+- **L'en-tête est auto-reconnu par l'assistant d'import de QCMcam 2** (`ModalImportGroups.svelte` : `normalizeHeader` met en minuscules, retire les accents, et compare à `{ prenom, nom, groupe, marqueur }`). Vérifié sur `q2.qcmcam.net` : les trois `<select>` se pré-remplissent en vert et la ligne d'en-tête est cochée « ignorer » automatiquement. Sans lui, il faut mapper les colonnes à la main à chaque import.
+- ⚠️ **Le nom affiché part dans « Prénom », jamais dans « Nom »** — c'est un libellé unique (`getDisplayName`, prénom désambiguïsé par un préfixe de nom si besoin), pas un couple. Peu importe laquelle des deux colonnes, mais il faut que ce soit toujours **la même** : QCMcam apparie ses élèves sur (nom, prénom).
+- ⚠️ **Les non-placés gardent `NA1`, `NA2`…** C'est délibéré et vérifié en conditions réelles. QCMcam fait `Number(marqueur)` puis `markerId > 0 ? markerId : 0` : `NA1` → `NaN` → **0**, c'est-à-dire « pas de carte », exactement leur statut. Les deux alternatives sont pires, testées sur `q2` :
+  - **`0` écrit explicitement** → le garde-fou anti-doublon d'`addStudent` compare *avant* la coercition, `0 === 0` est vrai, donc seul le **premier** non-placé est importé et les autres disparaissent **sans message** ;
+  - **colonne vide** → QCMcam renumérote à partir de 1 par groupe **sans regarder les numéros déjà pris**, ce qui entre en collision avec les élèves placés et fait perdre les doublons, toujours en silence.
+  Avec `NaN`, le test de doublon échoue (`NaN === NaN` est faux) et **tous** les non-placés passent. À ne pas « corriger ».
+- ⚠️ **À l'import, choisir « Remplacer », pas « Mettre à jour ».** `Group.syncStudents` n'ajoute que les élèves absents et ne retire que les partis (appariement sur nom + prénom) : un élève déjà présent n'est **jamais** modifié, numéro de carte compris. Après un mélange de plan, « Mettre à jour » ne change donc rien (mesuré : « 0 groupe(s) et 0 élève(s) »). Rappel dans l'infobulle du bouton d'export.
 
 ### Cohérence avec la saisie position (Élèves)
 - `seatQCMToKey(input, cls)` utilise désormais `_qcmNumbering(cls, cls.activeRoom).numToKey` pour parser le numéro tapé — le nombre saisi correspond exactement à celui affiché dans l'onglet QCMCam et imprimé sur le marqueur ArUco.
 - Helper `qcmNumForCell(cls, salleId, r, c)` pour les lookups one-off (utilisé dans `renderStudents`, `exportNotesCsv`, etc.).
 - `seatLabelQCM` (formule simple `r*10+pos`) reste comme fallback quand aucune salle active n'est connue du contexte.
+
+### Bandeau des exclusions devenues sans effet (`_qcmClearExclusions`)
+
+⚠️ **Ne concerne QUE `salle.qcmExcluded`** (« cette table n'aura pas de marqueur », posé au clic sur le plan QCMCam), **jamais `positions_vides`** (« il n'y a pas de table ici »), qui sert à ménager les allées et l'espace entre les groupes et n'a aucun rapport avec la limite du dictionnaire. Les deux se ressemblent à l'écrit, pas à l'usage.
+
+L'élargissement des bornes (125 → 157) rend certaines exclusions caduques, dans deux situations toutes deux **silencieuses** :
+- **la salle n'est plus en séquentiel** — `_qcmNumbering` ne lit `qcmExcluded` que dans la branche Cas 3, donc les places ont retrouvé un numéro toutes seules et la liste dort. Et comme le clic d'exclusion n'est proposé **qu'en** séquentiel, elles ne sont ni visibles ni modifiables depuis le plan — elles se réappliqueraient sans prévenir si la salle y repassait (ajout de colonnes) ;
+- **la salle est encore en séquentiel mais ne déborde plus** — l'exclusion continue de s'appliquer alors qu'il y a désormais la place.
+
+Un bandeau dans l'onglet QCMCam signale les deux cas, avec un bouton **↺ Réintégrer ces places** (`_qcmClearExclusions` : `_uiConfirm` + `pushUndo` + vidage + rappel de réimprimer, la numérotation des autres places pouvant se décaler).
 
 ### Exclusion interactive de places (Cas 3 uniquement)
 Quand la salle est en stratégie séquentielle (Cas 3), **chaque cellule du plan visuel de l'onglet QCMCam devient cliquable** (cursor: pointer, hover bleu encre, classe `.qcm-pcell-clickable`). Un clic toggle l'inclusion :
@@ -971,8 +993,8 @@ Accessible via la modale **🎯 Marqueurs ArUco** (`Ctrl+P` sur l'onglet QCMCam)
 - Les places **exclues** apparaissent avec leur hachuré + 🚫 sur l'impression — utile à coller au bureau du prof comme rappel.
 
 ### Bandeaux d'avertissement
-- Rouge (`overflowCount > 0`) : "*N places au-delà de la 125e — ces places n'ont pas de numéro QCMCam et n'apparaissent pas dans l'export.*" + invitation à cliquer.
-- Orange (`isSequential` sans overflow) : "*Numérotation séquentielle — la formule habituelle dépasserait 125, les numéros ne correspondent plus à la position physique.*"
+- Rouge (`overflowCount > 0`) : "*N places au-delà de la 157e — ces places n'ont pas de numéro QCMCam et n'apparaissent pas dans l'export.*" + invitation à cliquer.
+- Orange (`isSequential` sans overflow) : "*Numérotation séquentielle — la formule habituelle dépasserait 157, les numéros ne correspondent plus à la position physique.*"
 
 ### Crédits Sébastien COGEZ
 Pied du bandeau d'info de l'onglet QCMCam (italique, 0.78em, séparé par un filet dashed) : remerciements à Sébastien COGEZ + mention licence CC BY-NC-SA 4.0 pour les marqueurs ArUco distribués par QCMcam. Présent aussi dans la zone "papier à jeter" des impressions de marqueurs ArUco générés localement.
@@ -981,20 +1003,38 @@ Pied du bandeau d'info de l'onglet QCMCam (italique, 0.78em, séparé par un fil
 
 Accessible via le bouton **🎯 Marqueurs ArUco** dans l'onglet QCMCam OU par **Ctrl+P** sur cet onglet. 3 cartes :
 
-1. **📥 Planche officielle** — lien direct vers le PDF 50 marqueurs de qcmcam.net
-2. **🛠 Générateur en ligne** — lien vers le générateur personnalisable qcmcam.net (numéros 1-125, marqueurs nominatifs depuis un CSV)
+1. **📥 Planches officielles** — lien vers la page « Cartes » de QCMcam 2 (`?view=marker&action=download`) : PDF prêts à imprimer en A5/A4 par tranches de 30 (1-30, 31-60, 61-90), dictionnaire `4x4_157h3`. ⚠️ Les anciennes planches de `qcmcam.net` (dictionnaire 125) ne conviennent plus — leurs URL renvoient d'ailleurs 404 sur `q2`, ne pas se contenter de réécrire le domaine.
+2. **🛠 Générateur en ligne** — lien vers le générateur personnalisable de QCMcam 2 (`q2.qcmcam.net/?view=marker&action=generate`, numéros 1-157, marqueurs nominatifs depuis un CSV)
 3. **🎯 Générateur intégré local** (carte verte) — voir ci-dessous
 
 ### Générateur ArUco intégré (`printSalleArucoMarkers`)
 
 Génère localement uniquement les marqueurs correspondant aux places utiles de la salle active. Un jeu par salle, réutilisable entre classes.
 
-**Algo** (extrait de `markers4x4.js` de qcmcam.net) :
-- Mapping `_ARUCO_N_TO_RAW[n]` (inversion du `p4` source — 125 patterns valides)
-- `id_raw` → 4 chiffres base 4 → 4 lignes via `_ARUCO_OPTS = [[0,0,1,0],[0,0,1,1],[1,1,1,0],[1,0,1,1]]`
+**Algo** — dictionnaire **`QCMCAM_4X4_157h3`** de QCMcam 2 (`src/lib/js/aruco.js`), miroir de son `AR.Dictionary.generateCANVAS` :
+- `_ARUCO_CODES[n - 1]` — 157 entiers de 16 bits (`ARUCO_MAX = 157`), le marqueur n° n est l'entrée `n-1`
+- code → binaire sur 16 bits, lu **en ligne** (`bits[y*4 + x]`) ; bit à **1 = case BLANCHE**
 - Matrice 6×6 : bordure noire + 4×4 data au centre
+
+⚠️ **Rupture avec l'ancien dictionnaire** (`markers4x4.js` de qcmcam.net v1, 125 motifs encodés en base 4 via `_ARUCO_N_TO_RAW` / `_ARUCO_OPTS`, supprimés en 2.39.0) : les 125 anciennes matrices ont été comparées une à une aux 157 nouvelles, **rotations comprises — aucune ne correspond**. Passer à QCMcam 2 impose donc de **réimprimer tous les marqueurs collés sur les tables**, et les nouveaux ne sont pas lus par l'ancien qcmcam.net. Un bandeau `.al-w` le dit dans l'onglet QCMCam.
+
+💡 **Méthode de vérification de l'encodage** (à rejouer si le dictionnaire rechange) : ouvrir le générateur officiel (`q2.qcmcam.net/?view=marker`), lire les pixels du canvas 720×720 au centre de chaque module (quiet zone 90 px, bordure 90 px, cellules de 90 px à partir de 180) et comparer la chaîne de 16 bits à `_ARUCO_CODES[n-1].toString(2)`. Fait sur les n° 1, 2, 42, 100 et 157 : identiques. Un test complémentaire exécute `_arucoDrawMarker` sur un canvas bouchon et vérifie la matrice 6×6 réellement peinte — la comparaison de chaînes seule ne verrait pas une transposition ligne/colonne.
 - Lettres **A/B/C/D** + numéro côte à côte sur les 4 côtés, tous en **10pt physique** (calibré par calcul `numFs_px = 3.528 × W / sizeMm`). Anti-triche : illisible depuis la place du voisin.
 - Marqueur central = 82% du canvas (gros gain de surface utile après passage de la lettre à 10pt)
+
+**Orientation des cartes — anti-copie** (`_arucoRotationsForRoom`, `_arucoSeatHash`) :
+
+Le verso porte le numéro en grand. Sans rotation, un élève voit le verso de son voisin et en déduit « haut du verso = A au recto », donc sa réponse. Chaque recto est donc tourné d'un quart de tour (la matrice ArUco est invariante par rotation, la détection reste correcte).
+
+⚠️ **Le tirage est CONTRAINT, pas simplement aléatoire** : avec 4 orientations indépendantes, deux voisins de rangée tombent sur la même **une fois sur quatre** — or c'est justement le voisin de gauche ou de droite qu'on recopie, et même orientation = la position de la carte levée donne directement sa réponse. Places séparées par une allée traitées comme voisines — plus strict que nécessaire, sans coût.
+
+**On ne tire pas l'orientation, on tire l'ÉCART** avec la place précédente (90 / 180 / 270, jamais 0), **par triplets** : chaque groupe de trois pas consécutifs utilise les trois écarts une fois chacun dans un ordre tiré au sort, et le premier écart d'un triplet ne répète jamais le dernier du précédent. Donc écarts exactement équilibrés **et** jamais deux pas de suite au même écart.
+
+⚠️ **`_arucoSeatHash` termine par un brassage d'avalanche (murmur3 fmix32), ce n'est pas décoratif.** Avec FNV-1a seul, deux places voisines ne diffèrent que par le dernier caractère de la clé et le `% 3` en aval était biaisé : **mesuré sur 7 000 paires, 180° à 38,5 % et 270° à 26 %** au lieu de 33,3 %. Le tirage était uniforme *sur le papier* — le défaut a été **signalé en usage réel** (« celles qui suivent sont souvent juste à 180° »), pas trouvé au raisonnement. Un test mesure désormais la distribution sur ~1 900 paires et échoue au-delà de 3 points d'écart. **Leçon générale : un `% n` sur une empreinte faiblement brassée n'est pas uniforme, quelle que soit la propreté de l'argument théorique.**
+
+⚠️ **DÉTERMINISTE** (empreinte FNV-1a de `salleId|r,c`), surtout pas `Math.random()` : une carte perdue doit se réimprimer **à l'identique**, sinon le nouveau tirage peut tomber sur l'orientation d'une voisine restée sur la table et rouvrir le trou qu'on vient de boucher, sans que rien ne le signale. Le motif reste imprévisible (empreinte, pas suite régulière) et l'orientation d'une carte collée sur une table est de toute façon figée pour l'année. Corollaire : `printSalleArucoMarkers` calcule les orientations sur **toute la salle**, même en réimpression d'un sous-ensemble — d'où le `_qcmNumbering` désormais fait dans les deux branches. Repli sur l'empreinte du seul numéro si la place est inconnue.
+
+Deux tests couvrent ces deux propriétés (aucune collision de voisinage sur une salle à allée + place manquante ; deux appels identiques, et motif différent d'une salle à l'autre).
 
 **Layout d'impression** (CSS `@media print` + `@page { margin: 0 }`) :
 
@@ -1015,7 +1055,7 @@ Crédit licence CC BY-NC-SA des marqueurs Sébastien COGEZ — **hors zone à d�
 
 ⚠️ **Le souligné est un repère de SENS DE LECTURE, pas une décoration.** Sans lui, un carré découpé portant un `6` se lit `9` selon le sens où on le prend — marqueur collé sur la mauvaise table, donc réponses QCMCam attribuées au mauvais élève.
 
-**`_ARUCO_ROT_AMBIGU = {6, 9, 66, 68, 86, 89, 98, 99}`.** Dérivation, **à rejouer si la plage (1–125), la police du verso (Arial) ou la convention d'écriture changent** :
+**`_ARUCO_ROT_AMBIGU = {6, 9, 66, 68, 86, 89, 98, 99}`.** Dérivation, **à rejouer si la plage (1–`ARUCO_MAX`), la police du verso (Arial) ou la convention d'écriture changent** — rejouée au passage à 157 : de 100 à 157 tous les numéros contiennent un `1`, donc s'orientent seuls, **ensemble inchangé** :
 - Chiffres qui restent des chiffres après rotation à 180° : `0→0`, `6→9`, `8→8`, `9→6`.
 - Le `1` se retourne en `1` mais **l'Arial le trahit** (empattement en haut à gauche, base plate) : sa présence révèle l'orientation, donc tout numéro contenant un `1` s'oriente seul. Inutile de le souligner.
 - Les marqueurs s'écrivent **sans zéro de tête** : `60`/`80`/`90` deviennent `09`/`08`/`06`, qui n'existent pas → le sens se déduit là aussi.
@@ -1728,24 +1768,47 @@ Le tableur d'éval a un `<thead>` sticky-top et `<tfoot>` sticky-bottom dans le 
 
 ### Import CSV QCMcam (Type A / C, tableur)
 
-Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des notes »), visible uniquement pour Type A et C. Ouvre la modale `meval-qcmcam` qui importe un fichier `resultats.csv` exporté depuis qcmcam.net (« Exporter liste élèves.csv »).
+Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des notes »), visible uniquement pour Type A et C. Ouvre la modale `meval-qcmcam` qui importe le fichier de résultats exporté depuis QCMcam.
 
-**Format CSV attendu** : TSV (séparateur tabulation), guillemets droits optionnels, CRLF. Header `id / Nom / Q1..Qn / Score`. Ligne « Bonne réponse » (id vide) après le header. Une ligne par élève ensuite.
+**Deux formats acceptés, détectés automatiquement** (le séparateur est déduit du contenu : celui de TAB / `;` qui apparaît le plus) :
 
-**Détection du score** : dernière cellule numérique non vide après la colonne Nom — le score peut être padé loin à droite quand toutes les questions n'ont pas été soumises.
+| | QCMcam **v2** (`Session-N-resultats.csv`) | QCMcam **v1** (`resultats.csv`) |
+|---|---|---|
+| Séparateur | `;` | TAB |
+| Avant les colonnes | bloc `Session` / `Date` / `Groupe` / `QCM` | rien |
+| Ligne de colonnes | `Participant;Q1;…;Qn;Scores` | `id / Nom / Q1..Qn / Score` |
+| Ligne de corrigé | `Bonnes réponses;D;C;…;--` | 1re cellule vide |
+| Pas de réponse | `-` | cellule vide |
+| Score | `1/6` | nombre |
 
-**Détection absent** : si toutes les colonnes Q* de l'élève sont vides → `score = 'A'` (exclu du total, comme la saisie manuelle) au lieu de `0`.
+⚠️ **QCMcam 2 est MULTILINGUE (fr/en/de/es/it) et ses en-têtes sont TRADUITS** — nouveauté de la v2, la v1 était francophone seule. `Q{n}` devient `F{n}` (de), `P{n}` (es), `D{n}` (it) ; `Participant` devient `Teilnehmer` / `Partecipante` ; `Scores` devient `Punktzahlen` / `Puntuaciones` ; « Bonnes réponses » devient « Correct answers » / « Richtige Antworten ». Seuls le **`--`** du score du corrigé et le **`-`** des non-réponses sont écrits en dur dans son code. Le parseur en tient compte :
+- colonnes de questions reconnues par `_QCM_QCOL_RE` = 1 ou 2 lettres suivies d'un nombre (pas `/^q\d+$/`) ;
+- colonne des noms : quelques traductions listées, sinon repli sur la 1re colonne (juste en v2) ;
+- colonne du score : repli sur la dernière colonne nommée qui ne soit ni les noms ni une question ;
+- ligne du corrigé : libellé français **ou** score valant exactement `--` — le seul test indépendant de la langue. Sans lui le corrigé apparaissait comme un élève inconnu de plus.
 
-**Détection du barème** (`_qcmcamExtractRows`) : prio (1) max de réponses non vides par élève (= ce que la classe a réellement vu) > (2) nb de « Bonne réponse » renseignées > (3) `qIdx.length`. Le prof peut avoir oublié de saisir les bonnes réponses dans qcmcam, donc on ne s'y fie pas en priorité.
+Un test couvre un export allemand complet. Ce n'est pas théorique pour un usage partagé : il suffit qu'un collègue exporte depuis une interface dans une autre langue.
+
+⚠️ **La ligne de colonnes n'est PAS à un rang fixe** (1 en v1, 5 en v2) : `_qcmcamHeaderRowIndex` la trouve comme la 1re ligne contenant une cellule `Q<n>`, pour que le bloc d'en-tête de v2 puisse gagner ou perdre une ligne sans rien casser.
+
+**Détection du score** : colonne `Score`/`Scores` si elle existe, sinon repli v1 sur la dernière cellule exploitable après la colonne des noms (le score pouvait être padé loin à droite quand toutes les questions n'avaient pas été soumises). `_qcmcamParseScore` accepte les deux écritures et renvoie `{value, denom}`.
+
+**Détection absent** : si toutes les colonnes Q* de l'élève sont vides → `score = 'A'` (exclu du total, comme la saisie manuelle) au lieu de `0`. ⚠️ « Vide » = cellule vide **ou `-` / `--`** (`_qcmcamAnswerEmpty`) : en v2 une non-réponse s'écrit `-`, donc sans ce test tout le monde paraîtrait présent.
+
+**Détection du barème** (`_qcmcamExtractRows`) : prio (0) **dénominateur du score v2** > (1) max de réponses non vides par élève > (2) nb de « Bonnes réponses » renseignées > (3) `qIdx.length`.
+
+⚠️ **Le dénominateur passe AVANT le max de réponses**, contrairement à la logique v1. Si personne n'a répondu à une question (carte non détectée, question passée trop vite), le max de réponses la fait disparaître du barème alors qu'elle a bien été posée. Cas réel rencontré : un fichier de 6 questions dont la Q1 n'a été scannée pour aucun élève sortait `/5` au lieu de `/6`. Le dénominateur est écrit par QCMcam, il fait foi. En v1 il n'existe pas, donc la cascade historique s'applique inchangée (couvert par un test).
 
 **3 modes proposés** (radio dans l'aperçu, seulement si barème détecté ≠ `mn.max`) :
 - `update` — modifie `mn.max` de la mini-note sélectionnée
 - `create` — crée une nouvelle mini-note avec le bon barème (label suffixé `bis`/`ter`/…, copie `exerciceId` + `competenceIds`, insertion juste après l'originale). **Utile si la mini-note a déjà été utilisée pour d'autres classes** — on garde l'historique intact.
 - `keep` — laisse `mn.max` inchangé, clampe les scores hors limite
 
-**Date** : motif `AAAA-MM-JJ` cherché dans le nom du fichier via `_qcmcamExtractDate`. Si trouvée, checkbox « 📅 Appliquer à la mini-note » (cochée par défaut sauf si identique). Toujours appliquée à la nouvelle mini-note en mode `create`.
+**Bloc d'en-tête v2** (`_qcmcamExtractMeta`) : lit `Date` (`JJ/MM/AAAA hh:mm:ss`), `Groupe` et `QCM` dans les lignes qui précèdent la ligne de colonnes. Le **groupe** est l'identifiant `classe-salle` que NOUS avons exporté : l'aperçu s'en sert pour vérifier qu'on n'importe pas les résultats d'une classe dans une autre (bandeau d'avertissement si aucune salle de la classe active ne correspond).
 
-**Créneau** (`_qcmcamExtractSlot`) : scanne la queue du nom de fichier APRÈS la date détectée (avant l'extension) et tente de matcher un id de créneau du planning de la salle active de la classe pour le jour de la date. Ex. `resultats_2026-05-26_M2.csv` → détecte le créneau `M2`. Match insensible à la casse, borné par caractères non-alphanumériques (séparateurs `-`, `_`, espaces…). Slots triés par longueur décroissante pour ne pas matcher `M1` avant `M10`. Affiché dans l'aperçu en bloc 🕒 avec checkbox « Appliquer à la mini-note » (cochée par défaut sauf si identique au créneau actuel). Appliqué à `mn.slotIds[cls.id]` au save, comme la date. Quand date OU créneau sont appliqués, déclenche `_evalAutoFillAbsentsForMn` (cf. section *Auto-fill « A »*).
+**Date** : celle du bloc d'en-tête v2 en priorité, sinon le motif `AAAA-MM-JJ` cherché dans le nom du fichier (`_qcmcamExtractDate`, v1). ⚠️ **Si les deux existent et divergent, l'aperçu le SIGNALE** (`dateAlt`, idem `slotAlt` pour le créneau) au lieu de trancher en silence : l'utilisateur nomme ses fichiers à la main pour ses archives, un écart veut donc dire fichier renommé ou réexporté depuis une autre séance. ⚠️ Indispensable : l'export v2 s'appelle `Session-10-resultats.csv` et **ne porte plus aucune date dans son nom**. `_qcmcamState.dateSrc` mémorise la provenance pour que l'aperçu ne mente pas sur l'origine du chiffre. Checkbox « 📅 Appliquer à la mini-note » (cochée par défaut sauf si identique). Toujours appliquée à la nouvelle mini-note en mode `create`.
+
+**Créneau** : en v2, déduit de l'**heure** du bloc d'en-tête confrontée au planning de la salle active pour le jour de la date (`_qcmcamSlotFromTime` → `getSalleSchedule` + `findCurrentSlot`) — bien plus fiable que de supposer que le prof a écrit le code du créneau dans le nom du fichier. Repli v1 (`_qcmcamExtractSlot`) : scanne la queue du nom de fichier APRÈS la date détectée (avant l'extension) et tente de matcher un id de créneau du planning de la salle active de la classe pour le jour de la date. Ex. `resultats_2026-05-26_M2.csv` → détecte le créneau `M2`. Match insensible à la casse, borné par caractères non-alphanumériques (séparateurs `-`, `_`, espaces…). Slots triés par longueur décroissante pour ne pas matcher `M1` avant `M10`. Affiché dans l'aperçu en bloc 🕒 avec checkbox « Appliquer à la mini-note » (cochée par défaut sauf si identique au créneau actuel). Appliqué à `mn.slotIds[cls.id]` au save, comme la date. Quand date OU créneau sont appliqués, déclenche `_evalAutoFillAbsentsForMn` (cf. section *Auto-fill « A »*).
 
 **Normalisation** (`_qcmcamNorm`) : NFD → suppression des accents → minuscules → traits d'union `-`, apostrophes droite `'` ou courbe `’`, ET points `.` remplacés par espace → écrasement des espaces multiples. Le point couvre le format d'export désambiguïsé `getDisplayName` (`« Léo MART. »`), sinon `'martin'.startsWith('mart.')` échouait. Un prénom composé comme `Lou-Anna` devient ainsi `'lou anna'` (et non `'louanna'`).
 
@@ -1765,6 +1828,8 @@ Tests de régression (12 cas dans une seed démo classique) : Lou-Anna ≠ Louan
 - Les lignes résolues manuellement gardent leur picker (✎ vs → pour signaler) afin de pouvoir changer d'avis
 
 Choix persistés dans `_qcmcamState.userPicks = { [rawCsvName]: sid | '__skip__' }`. Reset à chaque ouverture de modale et à chaque changement de fichier (le picker manuel ne traverse pas les fichiers).
+
+**Chargement unifié** (`_qcmcamIngest`) : les deux chemins d'entrée (dossier mémorisé et fichier choisi à la main) passent par la même fonction — parse, bloc d'en-tête, lignes, barème, date et créneau. ⚠️ Avant, chacun refaisait le travail de son côté et une correction n'était appliquée qu'à l'un des deux.
 
 **Picker fichier** :
 - Handle du **dossier d'import** stocké dans IndexedDB sous la clé `'qcmcam-import-dir'`. Au 1er import → bouton « 📂 Choisir le dossier… ». Aux suivants → liste directe.
@@ -2252,7 +2317,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - **Moyenne — facultatives `improveOnly`** : `_computeStudentMeanForPeriod` ET son miroir `_computeStudentFacultativeCounted` (hachuré « non comptée » du Bilan) appliquent d'abord les modes déterministes (`over10`/`bonus`), puis les `improveOnly` **triées par note décroissante** (ordre optimal ET déterministe : on inclut exactement les notes au-dessus de la moyenne finale). Les **deux** fonctions DOIVENT rester alignées.
 - **Tri des passations Type B** (`last`/`weightedRecency`) : utilise la date PER-CLASSE de l'élève (`_passDateFor(p, S.eleves[sid].classe_id)`, ou `classId` direct dans `_aggregateStudentCompetence`/`_evalDateFor`), pas la date globale `p.date` (= max des classes sur une éval multi-classes → ordre faux).
 - **Match import CSV QCMcam** (`_qcmcamMatchStudent`, étage 2) : si le préfixe de nom du CSV contredit le candidat prénom (`filt.length === 0`), on renvoie **`ambig`** (jamais `ok` auto, même candidat unique) → l'utilisateur tranche, pas de note au mauvais élève.
-- **Affichage n° de position** : `_qcmDisplayLabel(cls, r, c, cols)` renvoie **`🚫`** pour une place sans numéro QCM (overflow > 125e / exclue) au lieu d'un numéro legacy `r*10+pos` trompeur (non re-saisissable, risque de collision). Sans salle active → fallback legacy. Utilisé partout où on affiche un n° de position (`refreshPosInputs`/`onPosBlur` cohérents, liste Élèves, export, plan d'appel).
+- **Affichage n° de position** : `_qcmDisplayLabel(cls, r, c, cols)` renvoie **`🚫`** pour une place sans numéro QCM (overflow > `ARUCO_MAX` / exclue) au lieu d'un numéro legacy `r*10+pos` trompeur (non re-saisissable, risque de collision). Sans salle active → fallback legacy. Utilisé partout où on affiche un n° de position (`refreshPosInputs`/`onPosBlur` cohérents, liste Élèves, export, plan d'appel).
 - **`switchClass` purge l'état d'appel de la classe QUITTÉE** : si on change de classe en mode appel, en édition d'un appel passé, **OU en état post-appel** (`_appelSavedSlot` non null même avec `_appelMode` false — condition élargie, une garde limitée à `_appelMode || _editingAttendanceId` ratait ce 3ᵉ cas), `_absentToday`/`_lateToday`/`_aeshAbsentToday`/`_editingAttendanceId`/`_appelMode`/`_appelSavedSlot` sont vidés AVANT de changer `S.cur` (sinon les absents « fuyaient » sur la nouvelle classe). **Défense en profondeur** dans `_doSaveAttendance` : `absents`/`retards` sont filtrés par appartenance à la classe (`cls.eleves.includes(sid)`, avec repli sur l'identité du record précédent pour les élèves supprimés depuis) avant écriture — un sid étranger ne peut plus s'enregistrer même si un appel de la logique amont était contourné. `editAttendance` (bascule de classe depuis « Appels passés ») passe par `switchClass()` plutôt que de muter `S.cur` directement, pour bénéficier de la même purge. `renderStudentView` appelle aussi `_absencesAutoReset()` (comme `renderTeacherGrid`) pour ne pas laisser le visuel d'absence figé en Vue Élève après la fin du créneau.
 - **Détection de doublon d'appel** (`_findExistingAttendance`) inclut le **groupe** : un appel G1 puis un appel G2 sur le même créneau sont des records DISTINCTS (le 2nd n'écrase plus le 1er).
 - **Mélange aléatoire** (`_runRandomPlacement`) : la boucle des 30 essais restaure `room.aeshSeating` ET passe une **copie fraîche** de `studentsToPlace` à chaque essai, et capture `aeshSeating` dans `best`. Sinon : collision élève/AESH (positions AESH du dernier essai avec le seating d'un essai antérieur) et élèves liés à une AESH laissés non placés.

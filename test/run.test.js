@@ -324,7 +324,10 @@ test('_qcmcamMatchStudent : préfixe de nom contredisant → ambig (pas de match
 test('_qcmDisplayLabel : place exclue (Cas 3) → 🚫 (pas de numéro legacy trompeur)', () => {
   setState({
     classes: { c1: { id: 'c1', activeRoom: 'r1' } }, eleves: {},
-    salles: { r1: { nom: 'S', rows: 8, cols: 15, positions_vides: [], qcmExcluded: ['0,0'] } }, // 8×15 → séquentiel (Cas 3)
+    // 16×15 → séquentiel (Cas 3) : trop de colonnes pour le Cas 1 (≤ 10) et trop de
+    // rangées pour le Cas 2 (≤ 8). ⚠️ Ces bornes ont bougé avec le dictionnaire à 157
+    // marqueurs : un 8×15 relevait du Cas 3 du temps des 125, il relève du Cas 2 depuis.
+    salles: { r1: { nom: 'S', rows: 16, cols: 15, positions_vides: [], qcmExcluded: ['0,0'] } },
   });
   assert.equal(ev('_qcmDisplayLabel(S.classes.c1, 0, 0, 15)'), '🚫', 'place exclue → marqueur');
   assert.match(ev('_qcmDisplayLabel(S.classes.c1, 0, 1, 15)'), /^\d+$/, 'place numérotée → numéro');
@@ -1214,4 +1217,225 @@ test('Motifs d\'ajustement : réordonnancement, et la constante par défaut rest
   ev(`delete S.evalPrefs.adjustPresets; _adjLibMove(0, 1);`);
   assert.equal(ev("ADJUST_PRESETS_DEFAULT.map(p => p.label).join('|')"), avant,
     'ADJUST_PRESETS_DEFAULT ne doit jamais être muté');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QCMCam v2 — dictionnaire ArUco 157 et bornes de numérotation
+// ─────────────────────────────────────────────────────────────────────────────
+test('ArUco : dictionnaire QCMCAM_4X4_157h3 complet, 16 bits, sans doublon', () => {
+  assert.equal(ev('ARUCO_MAX'), 157);
+  assert.equal(ev('_ARUCO_CODES.length'), 157);
+  assert.equal(ev('_ARUCO_CODES.every(c => Number.isInteger(c) && c >= 0 && c < 65536)'), true);
+  assert.equal(ev('new Set(_ARUCO_CODES).size'), 157, 'codes en double = deux places au même marqueur');
+  // Ancrages sur la source (src/lib/js/aruco.js de QCMcam 2) : 1er, 2e et dernier.
+  assert.equal(ev('_ARUCO_CODES[0]'), 47103);
+  assert.equal(ev('_ARUCO_CODES[1]'), 18431);
+  assert.equal(ev('_ARUCO_CODES[156]'), 18995);
+});
+
+test('_qcmNumbering : bornes des 3 stratégies, recalées sur ARUCO_MAX = 157', () => {
+  const mk = (rows, cols) => {
+    setState({
+      classes: { c1: { id: 'c1', activeRoom: 'r1' } }, eleves: {},
+      salles: { r1: { nom: 'S', rows, cols, positions_vides: [] } },
+    });
+    return get('(()=>{const q=_qcmNumbering(S.classes.c1,"r1");return {s:q.strategy,max:q.max,of:q.overflowCount};})()');
+  };
+  // Cas 1 (pas 10) — la borne rows passe de 12 à 15 : max 14×10+10 = 150 ≤ 157
+  assert.deepEqual(mk(15, 10), { s: 'lisible-10', max: 150, of: 0 });
+  // Cas 2 (pas 20) — la borne rows passe de 6 à 8 : max 7×20+15 = 155 ≤ 157
+  assert.deepEqual(mk(8, 15), { s: 'lisible-20', max: 155, of: 0 });
+  // Au-delà → séquentiel, tronqué à ARUCO_MAX
+  const seq = mk(16, 15);
+  assert.equal(seq.s, 'sequential');
+  assert.equal(seq.max, 157);
+  assert.equal(seq.of, 16 * 15 - 157);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QCMCam — import des résultats (formats v1 TSV et v2 CSV « ; »)
+// ─────────────────────────────────────────────────────────────────────────────
+const V2_CSV = [
+  'Session 10;;;;;;;',
+  'Date;30/08/2026 16:39:58;;;;;;',
+  'Groupe;6A-Sc1;;;;;;',
+  'QCM;5e - a1 - chgt etats;;;;;;',
+  'Participant;Q1;Q2;Q3;Q4;Q5;Q6;Scores',
+  'Bonnes réponses;D;C;C;A;B;C;--',
+  'Ambre;-;-;-;-;C;B;0/6',
+  'Chloé;-;B;-;B;B;-;1/6',
+  'Manon;-;-;-;-;-;-;0/6',
+].join('\n');
+
+test('QCMCam v2 : bloc d\'en-tête (date, heure, groupe) lu dans le fichier', () => {
+  const m = get(`_qcmcamExtractMeta(_qcmcamParseCsv(${JSON.stringify(V2_CSV)}))`);
+  assert.equal(m.date, '2026-08-30');
+  assert.equal(m.time, '16:39');
+  assert.equal(m.groupe, '6A-Sc1');
+});
+
+test('QCMCam v2 : lignes élèves, « - » = pas de réponse, absent, barème = dénominateur', () => {
+  const r = get(`_qcmcamExtractRows(_qcmcamParseCsv(${JSON.stringify(V2_CSV)}))`);
+  // La ligne « Bonnes réponses » ne doit pas devenir un élève
+  assert.deepEqual(r.rows.map(x => x.nom), ['Ambre', 'Chloé', 'Manon']);
+  assert.equal(r.rows[0].score, 0);
+  assert.equal(r.rows[1].score, 1);
+  // Manon n'a répondu à rien → absente (et pas 0, qui vaut « a répondu faux »)
+  assert.equal(r.rows[2].score, 'A');
+  // ⚠️ Le dénominateur prime sur le max de réponses par élève : personne n'a répondu
+  // à Q1, le max de réponses vaut 3 — le QCM comptait pourtant bien 6 questions.
+  assert.equal(r.maxPoints, 6);
+});
+
+test('QCMCam v1 : le format TSV historique reste lu à l\'identique', () => {
+  const v1 = [
+    'id\tNom\tQ1\tQ2\tQ3\tScore',
+    '\tBonne réponse\tA\tB\tC\t',
+    '1\tLéa\tA\tB\t\t2',
+    '2\tHugo\t\t\t\t0',
+  ].join('\n');
+  const r = get(`_qcmcamExtractRows(_qcmcamParseCsv(${JSON.stringify(v1)}))`);
+  assert.deepEqual(r.rows.map(x => x.nom), ['Léa', 'Hugo']);
+  assert.equal(r.rows[0].score, 2);
+  assert.equal(r.rows[1].score, 'A', 'aucune réponse → absent');
+  assert.equal(r.maxPoints, 2, 'pas de dénominateur en v1 → max de réponses par élève');
+});
+
+test('QCMCam : l\'en-tête d\'export est celui qu\'auto-détecte l\'assistant de QCMcam 2', () => {
+  // normalizeHeader() de QCMcam 2 : minuscules + accents retirés, comparé à
+  // { prenom, nom, groupe, marqueur }. Le nom affiché part en « Prénom » (colonne
+  // unique), et surtout PAS en « Nom ».
+  const cols = ev('QCM_EXPORT_HEADER').split('\t');
+  const norm = c => c.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  assert.deepEqual(cols.map(norm), ['marqueur', 'prenom', 'groupe']);
+});
+
+test('Marqueurs ArUco : deux places voisines d\'une rangée n\'ont jamais la même orientation', () => {
+  // Salle avec une allée centrale (colonnes 4 et 5 vides) et une place manquante,
+  // pour vérifier que le voisinage est bien calculé sur les places RÉELLES.
+  const vides = ['0,4', '1,4', '2,4', '3,4', '0,5', '1,5', '2,5', '3,5', '2,7'];
+  setState({
+    classes: { c1: { id: 'c1', activeRoom: 'r1' } }, eleves: {},
+    salles: { r1: { nom: 'S', rows: 4, cols: 10, positions_vides: vides } },
+  });
+  const res = get(`(()=>{
+    const q = _qcmNumbering(S.classes.c1, 'r1');
+    const rot = _arucoRotationsForRoom('r1', q.numToKey);
+    // Reconstruit les rangées : num -> 'r,c'
+    const byRow = {};
+    for (const [num, key] of q.numToKey) {
+      const [r, c] = key.split(',').map(Number);
+      (byRow[r] = byRow[r] || []).push({ c, rot: rot.get(num) });
+    }
+    const collisions = [], deltaRuns = [];
+    let count = 0;
+    for (const r in byRow) {
+      const seats = byRow[r].sort((a, b) => a.c - b.c);
+      let last = null;
+      for (let i = 1; i < seats.length; i++) {
+        count++;
+        if (seats[i].rot === seats[i-1].rot) collisions.push(r + ':' + seats[i].c);
+        const d = ((seats[i].rot - seats[i-1].rot) + 4) % 4;
+        if (last !== null && d === last) deltaRuns.push(r + ':' + seats[i].c);
+        last = d;
+      }
+    }
+    return { collisions, deltaRuns, count, size: rot.size,
+             values: [...new Set([...rot.values()])].sort() };
+  })()`);
+  assert.equal(res.size, 4 * 10 - vides.length, 'une orientation par place utile');
+  assert.ok(res.count > 20, 'assez de paires voisines testées');
+  assert.deepEqual(res.collisions, [], 'deux voisins de rangée partagent une orientation');
+  assert.deepEqual(res.deltaRuns, [], 'deux écarts consécutifs identiques (série de 180°…)');
+  // Les 4 orientations doivent réellement être utilisées (sinon ce n'est plus du hasard)
+  assert.deepEqual(res.values, [0, 1, 2, 3]);
+});
+
+test('Marqueurs ArUco : orientations déterministes (une carte perdue se réimprime à l\'identique)', () => {
+  setState({
+    classes: { c1: { id: 'c1', activeRoom: 'r1' } }, eleves: {},
+    salles: { r1: { nom: 'S', rows: 3, cols: 6, positions_vides: [] } },
+  });
+  const snap = () => get(`(()=>{
+    const q = _qcmNumbering(S.classes.c1, 'r1');
+    return [..._arucoRotationsForRoom('r1', q.numToKey)];
+  })()`);
+  assert.deepEqual(snap(), snap(), 'deux impressions doivent donner les mêmes orientations');
+  // ...et une AUTRE salle doit donner un motif différent (l'empreinte inclut salleId)
+  const other = get(`(()=>{
+    const q = _qcmNumbering(S.classes.c1, 'r1');
+    return [..._arucoRotationsForRoom('r2-autre-salle', q.numToKey)];
+  })()`);
+  assert.notDeepEqual(other, snap(), 'le motif doit dépendre de la salle');
+});
+
+test('Marqueurs ArUco : les trois écarts 90/180/270 sont équilibrés (pas de 180° dominant)', () => {
+  // Régression sur un défaut signalé en usage réel : l'empreinte FNV non brassée
+  // rendait le `% 3` biaisé (180° à 38,5 %, 270° à 26 % sur 7 000 paires) alors que
+  // le tirage était uniforme sur le papier. On mesure sur un échantillon large.
+  const tally = { 1: 0, 2: 0, 3: 0 };
+  let pairs = 0;
+  for (let i = 0; i < 60; i++) {
+    setState({
+      classes: { c1: { id: 'c1', activeRoom: 'r' + i } }, eleves: {},
+      salles: { ['r' + i]: { nom: 'S', rows: 5, cols: 8, positions_vides: [] } },
+    });
+    const rows = get(`(()=>{
+      const q = _qcmNumbering(S.classes.c1, 'r${i}');
+      const rot = _arucoRotationsForRoom('r${i}', q.numToKey);
+      const byRow = {};
+      for (const [num, key] of q.numToKey) {
+        const [r, c] = key.split(',').map(Number);
+        (byRow[r] = byRow[r] || []).push({ c, rot: rot.get(num) });
+      }
+      return Object.values(byRow).map(a => a.sort((x, y) => x.c - y.c).map(x => x.rot));
+    })()`);
+    for (const row of rows) {
+      for (let k = 1; k < row.length; k++) {
+        tally[((row[k] - row[k - 1]) + 4) % 4]++;
+        pairs++;
+      }
+    }
+  }
+  assert.ok(pairs > 1500, 'échantillon suffisant');
+  for (const d of [1, 2, 3]) {
+    const pct = 100 * tally[d] / pairs;
+    assert.ok(Math.abs(pct - 33.3) < 3,
+      `écart ${d * 90}° à ${pct.toFixed(1)} % (attendu ~33,3 %)`);
+  }
+});
+
+test('QCMCam v2 : un export dans une autre langue reste lisible (en-têtes traduits)', () => {
+  // QCMcam 2 traduit ses en-têtes : 'Q{n}' devient 'F{n}' en allemand, le libellé du
+  // corrigé « Bonnes réponses » devient « Richtige Antworten ». Seuls le « -- » du
+  // score du corrigé et le « - » des non-réponses sont écrits en dur dans son code.
+  const de = [
+    'Sitzung 10;;;;',
+    'Date;30/08/2026 16:39:58;;;;',
+    'Groupe;6A-Sc1;;;;',
+    'Teilnehmer;F1;F2;F3;Punktzahlen',
+    'Richtige Antworten;D;C;A;--',
+    'Léa D.;D;C;-;2/3',
+    'Hugo P.;-;-;-;0/3',
+  ].join('\n');
+  const r = get(`_qcmcamExtractRows(_qcmcamParseCsv(${JSON.stringify(de)}))`);
+  assert.deepEqual(r.rows.map(x => x.nom), ['Léa D.', 'Hugo P.'],
+    'le corrigé traduit ne doit pas passer pour un élève');
+  assert.equal(r.rows[0].score, 2);
+  assert.equal(r.rows[1].score, 'A');
+  assert.equal(r.maxPoints, 3);
+});
+
+test('_qcmClearExclusions : réintègre les places « sans marqueur » d\'une salle', () => {
+  setState({
+    classes: { c1: { id: 'c1', activeRoom: 'r1' } }, eleves: {},
+    salles: { r1: { nom: 'S', rows: 8, cols: 15, positions_vides: [], qcmExcluded: ['0,0', '0,1'] } },
+  });
+  // 8×15 relevait du Cas 3 quand le dictionnaire comptait 125 marqueurs ; il relève du
+  // Cas 2 depuis les 157, où qcmExcluded n'est plus lu : la place a déjà un numéro.
+  assert.equal(ev('_qcmNumbering(S.classes.c1, "r1").strategy'), 'lisible-20');
+  assert.ok(ev('_qcmNumbering(S.classes.c1, "r1").keyToNum.get("0,0")') > 0,
+    'la place exclue a retrouvé un numéro toute seule');
+  ev('_qcmClearExclusions("r1")');
+  assert.deepEqual(get('S.salles.r1.qcmExcluded'), [], 'la liste dormante doit être vidée');
 });

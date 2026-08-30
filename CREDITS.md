@@ -6,17 +6,19 @@ Plan de Classe est une PWA libre faite par un enseignant pour des enseignants. P
 
 ## 🎯 QCMcam — Sébastien COGEZ
 
-**Site** : <https://qcmcam.net>
+**Site** : <https://q2.qcmcam.net/>
 
 QCMcam est un outil libre et gratuit de QCM en classe : les élèves répondent en levant une carte papier munie d'un marqueur ArUco que le professeur scanne avec la webcam ou un smartphone. Aucun équipement par élève.
 
 L'onglet **📷 QCMCam** de Plan de Classe s'appuie entièrement sur ce travail :
 
-- **Export CSV** au format directement importable dans qcmcam.net (identifiants `classe-salle`, numérotation des places compatible avec la limite ArUco 4×4 de 125 marqueurs).
-- **Génération locale des marqueurs ArUco** d'une salle (algorithme et mapping des 125 patterns 4×4) — réimplémentation en JavaScript du `markers4x4.js` de qcmcam.net, sous licence CC BY-NC-SA 4.0.
+- **Export CSV** au format directement importable dans QCMcam (identifiants `classe-salle`, en-tête reconnu automatiquement par l'assistant d'import, numérotation des places compatible avec la limite ArUco 4×4 de 157 marqueurs).
+- **Import des résultats** (`Session-N-resultats.csv` de QCMcam 2, ou l'ancien `resultats.csv`) directement dans une évaluation.
+- **Génération locale des marqueurs ArUco** d'une salle : le dictionnaire `QCMCAM_4X4_157h3` de **QCMcam 2** est repris tel quel, et le rendu est une réimplémentation JavaScript suivant la même convention, pour que les marqueurs imprimés soient reconnus par le scanner de QCMcam.
 - **Impression du plan QCMCam** avec les numéros visibles sur chaque place (vue prof, sans noms), pratique à coller au bureau du prof ou à afficher au tableau.
 
-> **Licence des composants ArUco** : [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.fr) — utilisation pédagogique non commerciale autorisée, mention de l'auteur conservée, dérivés sous même licence.
+> **Licence des composants ArUco** : le dépôt de [QCMcam 2](https://forge.apps.education.fr/qcmcam/qcmcam2) est publié sous [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) — redistribution libre, attribution conservée et modifications signalées.
+> *(Jusqu'à la 2.38.0, l'app embarquait l'ancien dictionnaire de 125 motifs de qcmcam.net v1, sous CC BY-NC-SA 4.0 ; il a été retiré en 2.39.0.)*
 >
 > Détails dans [LICENSE](./LICENSE) — Part 2.
 
