@@ -1406,6 +1406,8 @@ const APP_REPO_USER  = 'Belenos-Toutatis';
 const APP_REPO_NAME  = 'plan-de-classe';
 ```
 
+⚠️ **La détection interroge les commits qui touchent `plan de classe.html`**, pas le dernier commit du dépôt (`?path=<fichier>&sha=main&per_page=1`, qui renvoie un **tableau**). Sans ce filtre, un commit de documentation, de tests ou de `package-lock.json` devient « le dernier commit sur main », sa date dépasse `APP_BUILD_DATE` de plus que la tolérance, et **l'app s'annonce périmée à elle-même**. Constaté en usage réel juste après la 2.39.0 : un commit de verrou npm poussé 36 min plus tard a déclenché l'alerte sur une version pourtant à jour. Le cache de la pastille porte un numéro (`_UPDATE_BADGE_CACHE_V`) pour que les entrées écrites par l'ancienne logique ne fassent pas survivre la fausse alerte pendant les 6 h de TTL.
+
 **Comparaison robuste** : la détection (`checkForUpdate`, `_passiveUpdateCheck`) fait `(Date.parse(latestCommit) - Date.parse(APP_BUILD_DATE)) > APP_UPDATE_TOLERANCE_MS` → MAJ dispo. **Numérique via `Date.parse`** (pas une comparaison de chaînes) car GitHub renvoie la date AVEC décalage (`…T07:05:39+02:00`, pas normalisée en `Z`) → une comparaison textuelle serait faussée par le fuseau. La **tolérance** (10 min) absorbe le délai entre « je fige `APP_BUILD_DATE` » et « le commit s'horodate » (sinon faux positif « MAJ dispo » sur sa propre version, cf. incident 2026-05-30 où une date de build estimée 1 h 35 trop tôt déclenchait l'alerte).
 
 ⚠️ **À bumper à chaque push** : `APP_BUILD_DATE` (toujours — la régler sur l'**heure UTC réelle** via `date -u +"%Y-%m-%dT%H:%M:%SZ"`, pas une estimation) et `APP_VERSION` quand la release le mérite. L'affichage (header chip `v X.Y.Z`, modales, `about-version-disp`) utilise `APP_VERSION`.

@@ -6384,16 +6384,24 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.39.0';
+const APP_VERSION    = '2.39.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-08-30T16:44:36Z';
+const APP_BUILD_DATE = '2026-09-01T21:26:22Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
 // (sinon faux positif « MAJ disponible » sur sa propre version).
 const APP_UPDATE_TOLERANCE_MS = 10 * 60 * 1000;
+// Fichier de l'app dans le dépôt. La détection de mise à jour interroge les commits
+// qui touchent CE fichier, pas le dernier commit du dépôt.
+// ⚠️ Sans ce filtre, un commit qui ne change pas l'app — documentation, tests,
+// package-lock.json — fait croire à une mise à jour : il devient « le dernier commit
+// sur main », sa date dépasse APP_BUILD_DATE de plus que la tolérance, et l'app
+// s'annonce périmée à elle-même. Constaté en usage réel juste après la 2.39.0, où un
+// commit de verrou npm poussé une demi-heure plus tard a déclenché l'alerte.
+const APP_MAIN_FILE = 'plan de classe.html';
 const APP_REPO_USER  = 'Belenos-Toutatis';
 const APP_REPO_NAME  = 'plan-de-classe';
 
@@ -10949,10 +10957,15 @@ async function checkForUpdate() {
   openMod('mupdate');
 
   try {
-    const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits/main`;
+    const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits`
+              + `?path=${encodeURIComponent(APP_MAIN_FILE)}&sha=main&per_page=1`;
     const r = await _fetchTimeout(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
     if (!r.ok) throw new Error(`HTTP ${r.status} — ${r.statusText}`);
-    const data = await r.json();
+    const list = await r.json();
+    // Ce point d'entrée renvoie un TABLEAU (contrairement à /commits/main) : le plus
+    // récent des commits qui touchent le fichier de l'app.
+    const data = Array.isArray(list) ? list[0] : null;
+    if (!data) throw new Error('Aucun commit trouvé pour le fichier de l\'app');
     const latestSha  = (data.sha || '').slice(0, 7);
     const latestDate = data.commit?.author?.date || data.commit?.committer?.date;
     const latestMsg  = (data.commit?.message || '').split('\n')[0];
@@ -11034,6 +11047,7 @@ async function checkForUpdate() {
 //   - en local : seulement si la version locale est ≥ 7 jours plus ancienne
 // Cache 6h dans localStorage pour ne pas saturer l'API GitHub (60 req/h/IP).
 const _UPDATE_BADGE_CACHE_KEY = 'planClasse_updateCheck';
+const _UPDATE_BADGE_CACHE_V   = 2; // à incrémenter si la source de `latestDate` change
 const _UPDATE_BADGE_TTL_MS    = 6 * 3600 * 1000;
 const _UPDATE_BADGE_LOCAL_MS  = 7 * 24 * 3600 * 1000;
 
@@ -11047,7 +11061,11 @@ async function _passiveUpdateCheck() {
     const raw = localStorage.getItem(_UPDATE_BADGE_CACHE_KEY);
     if (raw) {
       const c = JSON.parse(raw);
-      if (c && c.ts && (Date.now() - c.ts < _UPDATE_BADGE_TTL_MS) && c.latestDate) {
+      // ⚠️ Le `v` invalide les entrées écrites par une version antérieure de la
+      // détection : elles contiennent la date du dernier commit du DÉPÔT, qui ferait
+      // survivre la fausse alerte pendant toute la durée du cache (6 h).
+      if (c && c.ts && (Date.now() - c.ts < _UPDATE_BADGE_TTL_MS) && c.latestDate
+          && c.v === _UPDATE_BADGE_CACHE_V) {
         latestDate = c.latestDate;
       }
     }
@@ -11055,13 +11073,16 @@ async function _passiveUpdateCheck() {
   // Sinon fetch GitHub
   if (!latestDate) {
     try {
-      const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits/main`;
+      const url = `https://api.github.com/repos/${APP_REPO_USER}/${APP_REPO_NAME}/commits`
+                + `?path=${encodeURIComponent(APP_MAIN_FILE)}&sha=main&per_page=1`;
       const r = await _fetchTimeout(url, { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } });
       if (!r.ok) return;
-      const data = await r.json();
+      const list = await r.json();
+      const data = Array.isArray(list) ? list[0] : null;
+      if (!data) return;
       latestDate = data.commit?.author?.date || data.commit?.committer?.date;
       if (!latestDate) return;
-      try { localStorage.setItem(_UPDATE_BADGE_CACHE_KEY, JSON.stringify({ ts: Date.now(), latestDate })); } catch (e) {}
+      try { localStorage.setItem(_UPDATE_BADGE_CACHE_KEY, JSON.stringify({ ts: Date.now(), latestDate, v: _UPDATE_BADGE_CACHE_V })); } catch (e) {}
     } catch (e) { return; /* offline ou rate-limit : pas de pastille, on retentera plus tard */ }
   }
   // Décide d'afficher la pastille (comparaison numérique + tolérance, cf. checkForUpdate)
