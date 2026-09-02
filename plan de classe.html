@@ -3452,6 +3452,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <select id="ipm-pool" onchange="updateIpmPoolInfo()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em"></select>
       <span id="ipm-pool-info" style="font-size:.82em;color:var(--pencil)"></span>
     </div>
+    <div id="ipm-lot-row" class="fg" style="display:none">
+      <label>Lots à utiliser <span style="font-weight:400;font-size:.82em;color:var(--pencil)">— aucun coché = toute la classe mobile</span></label>
+      <div id="ipm-lots" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <span id="ipm-lot-info" style="font-size:.82em;color:var(--pencil)"></span>
+    </div>
     <div id="ipm-excl-row" class="fg">
       <label>Tables sans tablette — classe entière (étiquettes séparées par virgule)</label>
       <input id="ipm-excl" placeholder="ex : 4, 7, A, 1B">
@@ -6384,11 +6389,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.39.1';
+const APP_VERSION    = '2.40.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-01T21:26:22Z';
+const APP_BUILD_DATE = '2026-09-02T22:18:42Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -20803,6 +20808,58 @@ function updateIpmPoolInfo() {
   const u = (p.unavailable || []);
   info.textContent = `${avail.length} tablette(s) disponible(s) sur ${p.count||0}` +
     (u.length ? ` — indisponibles : ${u.join(', ')}` : '');
+  _renderIpmLots(p);
+}
+
+// Cases à cocher des lots de la classe mobile choisie. Cas d'usage : le chariot est
+// partagé, on n'a qu'un lot sous la main, et il faut équiper la classe avec.
+// N'apparaît que si le pool a des lots — beaucoup n'en ont pas.
+function _renderIpmLots(pool) {
+  const row  = document.getElementById('ipm-lot-row');
+  const wrap = document.getElementById('ipm-lots');
+  if (!row || !wrap) return;
+  const lots = (pool?.lots || []).filter(l => l && Number.isFinite(+l.from) && Number.isFinite(+l.to));
+  if (!lots.length) { row.style.display = 'none'; wrap.innerHTML = ''; _updateIpmLotInfo(); return; }
+  row.style.display = '';
+  const u = poolUnavailableSet(pool);
+  wrap.innerHTML = lots.map((l, i) => {
+    let n = 0;
+    for (let k = +l.from; k <= +l.to; k++) if (!u.has(k)) n++;
+    return `<label style="display:flex;align-items:center;gap:5px;font-size:.9em;cursor:pointer;border:1px solid var(--rule-line);border-radius:4px;padding:3px 8px;background:var(--paper)">
+      <input type="checkbox" class="ipm-lot-cb" data-from="${+l.from}" data-to="${+l.to}" onchange="_updateIpmLotInfo()" style="width:15px;height:15px;cursor:pointer">
+      <span>Lot <strong>${_escName(l.nom || String(i + 1))}</strong> <span style="color:var(--pencil)">(n° ${+l.from}–${+l.to} · ${n} dispo)</span></span>
+    </label>`;
+  }).join('');
+  _updateIpmLotInfo();
+}
+
+// Numéros retenus pour un pool, en tenant compte des lots cochés.
+// Aucun lot coché (ou pool sans lot) → toute la classe mobile.
+function _ipmSelectedNumbers(pool) {
+  const all = poolAvailableNumbers(pool);
+  const boxes = [...document.querySelectorAll('.ipm-lot-cb')].filter(b => b.checked);
+  if (!boxes.length) return all;
+  const ranges = boxes.map(b => [+b.dataset.from, +b.dataset.to]);
+  return all.filter(n => ranges.some(([a, z]) => n >= a && n <= z));
+}
+
+// Libellé des lots cochés, pour les bandeaux (null si toute la classe mobile).
+function _ipmSelectedLotLabel() {
+  const boxes = [...document.querySelectorAll('.ipm-lot-cb')].filter(b => b.checked);
+  if (!boxes.length) return null;
+  return boxes.map(b => b.closest('label')?.querySelector('strong')?.textContent || '?').join(' + ');
+}
+
+function _updateIpmLotInfo() {
+  const el = document.getElementById('ipm-lot-info');
+  const sel = document.getElementById('ipm-pool');
+  const pool = S.tabletPools?.[sel?.value];
+  if (!el || !pool) return;
+  const n = _ipmSelectedNumbers(pool).length;
+  const lab = _ipmSelectedLotLabel();
+  el.textContent = lab
+    ? `→ ${n} tablette(s) utilisable(s) (lot ${lab}). S'il n'y en a pas assez, un plan s'ouvrira pour choisir les tables à équiper.`
+    : `→ ${n} tablette(s) utilisable(s) (toute la classe mobile).`;
 }
 
 function _collectSeats(cls) {
@@ -20959,6 +21016,16 @@ function autoIpads(scope) {
   const allPools = document.getElementById('ipm-all-pools')?.checked;
   const allRooms = document.getElementById('ipm-all-rooms')?.checked;
 
+  // Lots cochés : ne s'appliquent qu'à la classe mobile choisie ci-dessus. Si
+  // « affecter aussi aux autres classes mobiles » est coché, les autres pools gardent
+  // toutes leurs tablettes — un lot est une plage de numéros PROPRE à son pool, la
+  // notion n'a aucun sens transposée à un autre chariot.
+  const lotNums  = _ipmSelectedNumbers(pool);
+  const lotLabel = _ipmSelectedLotLabel();
+  if (!lotNums.length) {
+    return toast('⚠️ Aucune tablette disponible dans le ou les lots cochés.', 'warn');
+  }
+
   // Listes de pools et salles à parcourir
   const poolIds = allPools ? Object.keys(S.tabletPools || {}) : [poolId];
   const roomIds = allRooms ? Object.keys(cls.rooms || {}) : [cls.activeRoom].filter(Boolean);
@@ -20973,9 +21040,10 @@ function autoIpads(scope) {
     for (const pId of poolIds) {
       const pp = S.tabletPools[pId];
       if (!pp) continue;
-      const localAvail = poolAvailableNumbers(pp);
+      const isChosen   = (pId === poolId);
+      const localAvail = isChosen ? lotNums : poolAvailableNumbers(pp);
       if (!localAvail.length) continue;
-      combinations.push({ rId, pId, available: localAvail });
+      combinations.push({ rId, pId, available: localAvail, lotLabel: isChosen ? lotLabel : null });
     }
   }
   if (!combinations.length) return toast('⚠️ Aucune combinaison salle × classe mobile valide.', 'warn');
@@ -21001,7 +21069,7 @@ function _processNextCombination() {
 
   const next = q.pending.shift();
   const { cls, scope, exclSet } = q;
-  const { rId, pId, available } = next;
+  const { rId, pId, available, lotLabel } = next;
 
   cls.activeRoom = rId;
   cls.activePool = pId;
@@ -21027,7 +21095,7 @@ function _processNextCombination() {
     q.summary.withOverflow++;
     _ipovfState = {
       cls, scope, pool: S.tabletPools[pId],
-      allSeats, exclSet, available,
+      allSeats, exclSet, available, lotLabel,
       queueMode: true, currentRoom: rId, currentPool: pId
     };
     _openIpovfModal(needed, available.length);
@@ -21103,13 +21171,16 @@ function _openIpovfModal(needed, available) {
       const total = _ipovfQueue.summary.combos + _ipovfQueue.summary.withOverflow + _ipovfQueue.pending.length;
       const idx   = _ipovfQueue.summary.combos + _ipovfQueue.summary.withOverflow;
       ctx.style.display = '';
-      ctx.innerHTML = `📍 Combinaison <strong>${idx}/${total}</strong> — Salle <strong>${_escName(salle?.nom || '?')}</strong> × Classe mobile <strong>${_escName(pool?.nom || '?')}</strong>`;
+      ctx.innerHTML = `📍 Combinaison <strong>${idx}/${total}</strong> — Salle <strong>${_escName(salle?.nom || '?')}</strong> × Classe mobile <strong>${_escName(pool?.nom || '?')}</strong>`
+        + (state.lotLabel ? ` · lot <strong>${_escName(state.lotLabel)}</strong>` : '');
     } else {
       ctx.style.display = 'none';
     }
   }
 
-  info.innerHTML = `<strong>${needed}</strong> table(s)/élève(s) à équiper, mais seulement <strong>${available}</strong> tablette(s) disponible(s). Choisissez celles à équiper en priorité.`;
+  info.innerHTML = `<strong>${needed}</strong> table(s)/élève(s) à équiper, mais seulement <strong>${available}</strong> tablette(s) disponible(s)`
+    + (state.lotLabel ? ` dans le lot <strong>${_escName(state.lotLabel)}</strong>` : '')
+    + `. Choisissez celles à équiper en priorité.`;
 
   // Détermine la liste des cibles selon le scope
   let candidates = [];

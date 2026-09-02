@@ -714,6 +714,18 @@ Trois étendues proposées (1 bouton chacune, avec compteur d'affectations actue
   - Si `needed > available` → ouvre `mipovf` (modale plan visuel) avec **bandeau de contexte** "📍 Combinaison X/Y — Salle ... × Classe mobile ..." (affiché si la file contient ≥ 2 combinaisons via flag `multi`).
   - À la fin de la file : `_finishAutoIpads()` restaure `cls.activeRoom`/`cls.activePool` d'origine, save, render, toast récap (`N affectations effectuées (dont M avec choix de tables)`).
 
+#### Restriction à un ou plusieurs lots
+
+Le chariot est souvent partagé : on n'a parfois qu'un lot sous la main et il faut équiper la classe entière avec. La modale `mip` propose donc des cases à cocher **par lot** (`#ipm-lot-row`, rendues par `_renderIpmLots` à chaque changement de classe mobile ; masquées si le pool n'a pas de lots). **Aucune case cochée = toute la classe mobile.**
+
+- `_ipmSelectedNumbers(pool)` — les numéros disponibles ∩ les plages des lots cochés (les indisponibles restent exclus).
+- `_ipmSelectedLotLabel()` — libellé pour les bandeaux (`null` si toute la classe mobile).
+- `_updateIpmLotInfo()` — compteur en direct sous les cases, qui annonce l'ouverture du plan si le compte ne suffit pas.
+
+⚠️ **La restriction ne s'applique qu'à la classe mobile CHOISIE dans le sélecteur.** Si « affecter aussi aux autres classes mobiles » est coché, les autres pools gardent toutes leurs tablettes : un lot est une plage de numéros propre à son pool, la notion n'a aucun sens transposée à un autre chariot. `autoIpads` porte `lotLabel` sur chaque combinaison, et seule celle du pool choisi le reçoit.
+
+💡 **Aucun mécanisme nouveau n'était nécessaire pour le cas « pas assez de tablettes »** : `_processNextCombination` ouvre déjà `mipovf` dès que `needed > available.length`. Réduire `available` à un lot déclenche donc le plan visuel tout seul. Le lot est rappelé dans le bandeau de contexte et dans la phrase d'explication.
+
 ### Modale plan visuel `mipovf` (sélection des tables à équiper)
 - Rendu par `_renderIpovfPlan()` : grille de la salle active (rows × cols), affichée dans `#mipovf-grid-wrap`.
 - **Cellules** :

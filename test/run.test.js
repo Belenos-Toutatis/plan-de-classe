@@ -1439,3 +1439,34 @@ test('_qcmClearExclusions : réintègre les places « sans marqueur » d\'une sa
   ev('_qcmClearExclusions("r1")');
   assert.deepEqual(get('S.salles.r1.qcmExcluded'), [], 'la liste dormante doit être vidée');
 });
+
+test('Tablettes : l\'affectation auto peut se limiter à un lot de la classe mobile', () => {
+  setState({
+    tabletPools: { p1: { id: 'p1', nom: 'CM1', count: 31, unavailable: [7],
+      lots: [{ nom: '3', from: 1, to: 15 }, { nom: '4', from: 16, to: 31 }] } },
+  });
+  const stubBoxes = checked => ev(`document.querySelectorAll = function (sel) {
+    if (sel !== '.ipm-lot-cb') return [];
+    return ${JSON.stringify(checked)}.map((on, i) => ({
+      checked: on,
+      dataset: { from: String(i === 0 ? 1 : 16), to: String(i === 0 ? 15 : 31) },
+      closest: () => ({ querySelector: () => ({ textContent: i === 0 ? '3' : '4' }) }),
+    }));
+  };`);
+
+  // Aucun lot coché → toute la classe mobile (31 moins la tablette 7 hors service)
+  stubBoxes([false, false]);
+  assert.equal(ev('_ipmSelectedNumbers(S.tabletPools.p1).length'), 30);
+  assert.equal(ev('_ipmSelectedLotLabel()'), null, 'pas de lot → pas de libellé');
+
+  // Lot 3 seul → 1..15, la 7 restant exclue car indisponible
+  stubBoxes([true, false]);
+  assert.deepEqual(get('_ipmSelectedNumbers(S.tabletPools.p1)'),
+    [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15]);
+  assert.equal(ev('_ipmSelectedLotLabel()'), '3');
+
+  // Les deux lots cochés → équivalent à toute la classe mobile
+  stubBoxes([true, true]);
+  assert.equal(ev('_ipmSelectedNumbers(S.tabletPools.p1).length'), 30);
+  assert.equal(ev('_ipmSelectedLotLabel()'), '3 + 4');
+});
