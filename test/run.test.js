@@ -1489,3 +1489,53 @@ test('Tablettes : l\'affectation auto applique les modes cochés, et eux seuls',
   // Chaque mode repart de 1 : les numérotations sont indépendantes, pas cumulées
   assert.deepEqual([...new Set(Object.values(pool.g1))].sort(), [1, 2]);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tablettes — en classe entière, le numéro est une propriété de la TABLE
+// ─────────────────────────────────────────────────────────────────────────────
+function _ceRun({ aeshKey = null, excl = [], keepKeys = null, nums = [1,2,3,4,5,6,7,8,9,10] } = {}) {
+  setState({
+    classes: { c1: { id: 'c1', activeRoom: 'r1', activePool: 'p1', eleves: [],
+      rooms: { r1: { seating: {}, ipadsByPool: {},
+        aeshCount: aeshKey ? 1 : 0, aeshSeating: aeshKey ? { 0: aeshKey } : {} } } } },
+    eleves: {},
+    salles: { r1: { nom: 'S', rows: 1, cols: 5, positions_vides: [] } },
+    tabletPools: { p1: { id: 'p1', nom: 'CM1', count: 10, unavailable: [], lots: [] } },
+  });
+  ev(`globalThis.__keep = ${keepKeys ? JSON.stringify(keepKeys) : 'null'};
+      const seats = _collectSeats(S.classes.c1);
+      _applyAssignmentFor(S.classes.c1, [0], seats, new Set(${JSON.stringify(excl)}),
+        ${JSON.stringify(nums)}, globalThis.__keep ? new Set(globalThis.__keep) : null);`);
+  return get('S.classes.c1.rooms.r1.ipadsByPool.p1.ce');
+}
+
+test('Tablettes CE : une place AESH consomme son numéro, les autres tables ne bougent pas', () => {
+  const sans = _ceRun();
+  const avec = _ceRun({ aeshKey: '0,3' });
+  // Ordre vue prof : la colonne la plus à droite (c=4) est servie en premier
+  assert.deepEqual(sans, { '0,4': 1, '0,3': 2, '0,2': 3, '0,1': 4, '0,0': 5 });
+  // La table de l'AESH ne reçoit rien, et surtout AUCUNE autre ne se décale.
+  assert.equal(avec['0,3'], undefined, "la place AESH n'a pas de tablette");
+  for (const k of ['0,0', '0,1', '0,2', '0,4']) {
+    assert.equal(avec[k], sans[k], `la table ${k} doit garder son numéro`);
+  }
+  // C'était le bug : sans le rang, la classe entière se compactait sur 1..4.
+  assert.ok(!Object.values(avec).includes(2), 'le n° 2 reste inutilisé, réservé à la place AESH');
+});
+
+test('Tablettes CE : les tables déclarées « sans tablette » ne consomment PAS de numéro', () => {
+  // Contrairement à l'AESH : le champ d'exclusion sort la table de la disposition,
+  // ce qui est justement son but (libérer des tablettes).
+  const r = _ceRun({ excl: [ev('seatLabel(0, 3, 5)').toUpperCase()] });
+  assert.equal(r['0,3'], undefined);
+  assert.deepEqual(Object.values(r).sort((a, b) => a - b), [1, 2, 3, 4],
+    'les numéros restent contigus');
+});
+
+test('Tablettes CE : tables choisies à la main → distribution à la suite', () => {
+  // Cas de débordement : il n'y a par définition pas assez de numéros pour couvrir
+  // tous les rangs, donc on sert les tables cochées dans l'ordre.
+  const r = _ceRun({ keepKeys: ['0,0', '0,1'], nums: [1, 2] });
+  assert.deepEqual(Object.keys(r).sort(), ['0,0', '0,1']);
+  assert.deepEqual(Object.values(r).sort((a, b) => a - b), [1, 2]);
+});

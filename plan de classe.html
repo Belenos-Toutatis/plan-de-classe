@@ -6392,11 +6392,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.41.0';
+const APP_VERSION    = '2.41.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-02T22:24:57Z';
+const APP_BUILD_DATE = '2026-09-02T22:34:07Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -20907,14 +20907,14 @@ function _collectSeats(cls) {
   const _rows = cls.configuration.rows || 4;
   const _cols = cls.configuration.cols || 10;
   const allSeats = [];
-  // Exclure les places occupées par une AESH : elles n'ont pas de tablette (Phase 1)
+  // Les places occupées par une AESH n'ont pas de tablette, mais elles restent dans la
+  // liste, marquées : en classe entière elles CONSOMMENT leur rang (cf. _ceTargets).
   const aeshKeys = new Set(Object.values((activeRoomData(cls) || {}).aeshSeating || {}));
   for (let r = 0; r < _rows; r++) {
     for (let c = 0; c < _cols; c++) {
       const key = `${r},${c}`;
       if (cls.configuration.positions_vides.includes(key)) continue;
-      if (aeshKeys.has(key)) continue;
-      allSeats.push({ key, seat: seatOrder(r, c, _cols), label: seatLabel(r, c, _cols) });
+      allSeats.push({ key, seat: seatOrder(r, c, _cols), label: seatLabel(r, c, _cols), isAesh: aeshKeys.has(key) });
     }
   }
   allSeats.sort((a, b) => a.seat - b.seat);
@@ -20924,24 +20924,54 @@ function _collectSeats(cls) {
 // Cibles CE : toutes les tables (sièges non-vides au sens "positions_vides") non exclues.
 // Les sièges vides reçoivent aussi une tablette : facilite la distribution physique fixe par table.
 function _ceTargets(cls, allSeats, exclSet, keepKeys) {
-  return allSeats.filter(({ key, label }) => {
-    if (keepKeys && !keepKeys.has(key)) return false;
-    if (exclSet.has(label.toUpperCase())) return false;
-    return true;
-  });
+  // En classe entière, le numéro de tablette est une propriété de la TABLE, pas de son
+  // occupant : les tablettes restent physiquement posées d'une classe à l'autre.
+  // Chaque table reçoit donc un `rank`, et c'est ce rang qui indexe les numéros.
+  //
+  // ⚠️ Une place occupée par une AESH consomme son rang sans recevoir de tablette.
+  // Sinon la numérotation se compacte et TOUT décale derrière elle : une salle avec
+  // une AESH en 2e place donnait 1, 2, 3 aux tables 1, 3, 4 — alors que la classe
+  // suivante, sans AESH, donnait 1, 2, 3, 4 aux mêmes tables. La tablette posée sur la
+  // table 3 aurait dû être à la fois la 2 et la 3. Signalé en usage réel.
+  //
+  // Les tables déclarées « sans tablette » (champ d'exclusion), elles, ne consomment
+  // rien : elles sortent de la disposition, ce qui est le but du champ.
+  const out = [];
+  let rank = 0;
+  for (const s of allSeats) {
+    if (exclSet && exclSet.has(String(s.label).toUpperCase())) continue;
+    const r = rank++;
+    if (s.isAesh) continue;
+    if (keepKeys && !keepKeys.has(s.key)) continue;
+    out.push({ ...s, rank: r });
+  }
+  return out;
 }
 
 // Cibles groupe : sièges occupés par un élève du bon groupe (et optionnellement keepKeys)
 function _groupTargets(cls, allSeats, grp, keepKeys) {
-  return allSeats.filter(({ key }) => {
+  return allSeats.filter(({ key, isAesh }) => {
+    if (isAesh) return false;   // une AESH n'a pas de tablette
     if (keepKeys && !keepKeys.has(key)) return false;
     const sid = cls.seating[key];
     return sid && S.eleves[sid] && S.eleves[sid].groupe === grp;
   });
 }
 
-function _assignCEIpads(cls, targets, availableNums) {
+// positional = le numéro vient du RANG de la table (cf. _ceTargets), ce qui garde les
+// tablettes aux mêmes places d'une classe à l'autre.
+// Sinon (tables choisies à la main dans la modale de débordement) on distribue à la
+// suite : il n'y a par définition pas assez de numéros pour couvrir tous les rangs, et
+// l'utilisateur vient justement de désigner les tables à servir.
+function _assignCEIpads(cls, targets, availableNums, positional) {
   cls.ipads = {};
+  if (positional) {
+    for (const t of targets) {
+      const n = availableNums[t.rank];
+      if (n !== undefined) cls.ipads[t.key] = n;
+    }
+    return;
+  }
   for (let i = 0; i < targets.length && i < availableNums.length; i++) {
     cls.ipads[targets[i].key] = availableNums[i];
   }
@@ -21123,9 +21153,15 @@ function _processNextCombination() {
 
   // Besoin = le plus gourmand des modes cochés (chaque mode a sa propre numérotation,
   // ils se partagent donc le même stock sans s'additionner).
+  // En classe entière, le besoin n'est pas le NOMBRE de tables servies mais le rang de
+  // la dernière : il faut assez de numéros pour l'atteindre, les places AESH
+  // intercalées en consommant un au passage.
+  const ceNeed = () => {
+    const t = _ceTargets(cls, allSeats, exclSet);
+    return t.length ? t[t.length - 1].rank + 1 : 0;
+  };
   const needed = modes.reduce((mx, m) => Math.max(mx,
-    m === 0 ? _ceTargets(cls, allSeats, exclSet).length
-            : _groupTargets(cls, allSeats, m).length), 0);
+    m === 0 ? ceNeed() : _groupTargets(cls, allSeats, m).length), 0);
 
   if (needed > available.length) {
     // Overflow : ouvre la modale pour cette combinaison
@@ -21147,8 +21183,9 @@ function _processNextCombination() {
 
 // Applique l'assignation pour chaque mode coché (dans le contexte cls.activeRoom × cls.activePool)
 function _applyAssignmentFor(cls, modes, allSeats, exclSet, available, keepKeys) {
+  const positional = (keepKeys == null);
   for (const m of modes) {
-    if (m === 0) _assignCEIpads(cls, _ceTargets(cls, allSeats, exclSet, keepKeys), available);
+    if (m === 0) _assignCEIpads(cls, _ceTargets(cls, allSeats, exclSet, keepKeys), available, positional);
     else _assignGroupIpads(cls, _groupTargets(cls, allSeats, m, keepKeys), m, available);
   }
 }
