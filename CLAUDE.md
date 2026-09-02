@@ -703,13 +703,19 @@ Trois étendues proposées (1 bouton chacune, avec compteur d'affectations actue
 
 ### Auto-affectation des tablettes (modal `mip`) — file d'attente
 - Sélecteur de **classe mobile** + champ d'exclusion d'étiquettes de tables.
+- **Modes à affecter** (`#ipm-modes`, `_renderIpmModes`) : cases à cocher **Classe entière / Groupe 1 / 2 / 3**, cumulables. `_ipmSelectedModes()` renvoie un tableau d'entiers (`0` = classe entière).
+  - ⚠️ **Avant, le mode était déduit de `groupFilter`** — le filtre groupe du Plan Prof. Depuis l'onglet **Tablettes** ce filtre n'est ni visible ni modifiable : on ne pouvait donc y affecter que le mode hérité du dernier passage dans Plan Prof, sans le savoir. Le filtre ne sert plus qu'à **pré-cocher**.
+  - Un groupe **sans aucun élève dans la classe** est proposé désactivé (compté sur le roster, pas sur les places de la salle active — l'affectation peut porter sur d'autres salles).
+  - Le bouton d'action est unique (`#ipm-btn-go`), désactivé tant qu'aucun mode n'est coché. Les deux anciens boutons (« Mode actif uniquement » / « Tous les modes ») ont disparu : ils sont devenus « CE cochée seule » et « les quatre cochées ».
+  - Le champ d'exclusion de tables ne concerne **que** la classe entière (rappelé dans le libellé et dans la ligne d'info).
 - **Étendue** (deux checkboxes) :
   - `ipm-all-pools` : Affecter aussi aux autres classes mobiles
   - `ipm-all-rooms` : Affecter aussi aux autres salles de cette classe
 - L'algorithme utilise les **numéros disponibles** du pool (`poolAvailableNumbers(pool)`) au lieu de 1..N. Les indisponibles sont sautés.
 - Mode CE : assigne à **toutes** les tables non-`positions_vides` et non-exclues (même tables vides — pour faciliter la distribution physique fixe). Modes G1/G2 : seulement les sièges occupés par des élèves du groupe.
-- `autoIpads(scope)` construit une **file d'attente** (`_ipovfQueue`) de toutes les combinaisons (room × pool) sélectionnées, fait `pushUndo()` une seule fois au début, puis appelle `_processNextCombination()` qui itère :
-  - Pour chaque combinaison, calcule le besoin selon le scope (CE/G1/G2/all)
+- `autoIpads()` (sans argument — les modes viennent des cases) construit une **file d'attente** (`_ipovfQueue`) de toutes les combinaisons (room × pool) sélectionnées, fait `pushUndo()` une seule fois au début, puis appelle `_processNextCombination()` qui itère :
+  - Pour chaque combinaison, le besoin est le **plus gourmand des modes cochés** — chaque mode a sa propre numérotation, ils se partagent le stock sans s'additionner
+  - `_applyAssignmentFor(cls, modes, …)` boucle sur les modes ; `mipovf` propose les cibles de la classe entière si elle est cochée (elles couvrent toutes les tables), sinon l'**union** des groupes cochés (disjointe : un élève n'a qu'un groupe)
   - Si `needed ≤ available` → `_applyAssignmentFor()` directement, passe à la suivante
   - Si `needed > available` → ouvre `mipovf` (modale plan visuel) avec **bandeau de contexte** "📍 Combinaison X/Y — Salle ... × Classe mobile ..." (affiché si la file contient ≥ 2 combinaisons via flag `multi`).
   - À la fin de la file : `_finishAutoIpads()` restaure `cls.activeRoom`/`cls.activePool` d'origine, save, render, toast récap (`N affectations effectuées (dont M avec choix de tables)`).

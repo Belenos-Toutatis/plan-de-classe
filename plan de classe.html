@@ -3446,7 +3446,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="mip" class="mo" onclick="closeMod(this,event)">
   <div class="mb">
     <h2>Placement automatique des tablettes</h2>
-    <p id="ipm-mode-info" style="background:#eaf4ff;border:1px solid #90c8f0;border-radius:4px;padding:8px 12px;font-size:.92em;margin-bottom:12px"></p>
+    <div class="fg" style="background:#eaf4ff;border:1px solid #90c8f0;border-radius:4px;padding:8px 12px">
+      <label style="font-weight:600;margin-bottom:4px">Modes à affecter</label>
+      <div id="ipm-modes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <p id="ipm-mode-info" style="font-size:.82em;color:var(--pencil);margin:6px 0 0"></p>
+    </div>
     <div class="fg">
       <label>Classe mobile</label>
       <select id="ipm-pool" onchange="updateIpmPoolInfo()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em"></select>
@@ -3458,7 +3462,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span id="ipm-lot-info" style="font-size:.82em;color:var(--pencil)"></span>
     </div>
     <div id="ipm-excl-row" class="fg">
-      <label>Tables sans tablette — classe entière (étiquettes séparées par virgule)</label>
+      <label>Tables sans tablette — classe entière uniquement (étiquettes séparées par virgule)</label>
       <input id="ipm-excl" placeholder="ex : 4, 7, A, 1B">
     </div>
     <div class="fg" style="background:#fafafa;border:1px solid #e0e0e0;border-radius:4px;padding:8px 12px">
@@ -3475,8 +3479,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="ma" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-g" onclick="closeMod2('mip')">Annuler</button>
-      <button class="btn btn-p" id="ipm-btn-current" onclick="autoIpads('current')">Mode actif uniquement</button>
-      <button class="btn btn-s" onclick="autoIpads('all')">Tous les modes (CE + G1 + G2 + G3)</button>
+      <button class="btn btn-p" id="ipm-btn-go" onclick="autoIpads()">📱 Affecter</button>
     </div>
   </div>
 </div>
@@ -6389,11 +6392,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.40.0';
+const APP_VERSION    = '2.41.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-02T22:18:42Z';
+const APP_BUILD_DATE = '2026-09-02T22:24:57Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -20775,16 +20778,7 @@ function openAutoIpads() {
   const pools = Object.values(S.tabletPools || {});
   if (!pools.length) return toast('⚠️ Aucune classe mobile configurée — créez-en une dans l\'onglet Tablettes.', 'warn');
 
-  const gf = groupFilter;
-  const infoEl = document.getElementById('ipm-mode-info');
-  const btnCurrent = document.getElementById('ipm-btn-current');
-  if (gf === 0) {
-    infoEl.textContent = 'Mode actif : Classe entière — une tablette par table occupée (numéros 1→N parmi les disponibles). Le champ ci-dessous s\'applique à ce mode.';
-    btnCurrent.textContent = 'Mode actif uniquement (CE)';
-  } else {
-    infoEl.textContent = `Mode actif : Groupe ${gf} — une tablette par élève G${gf} présent, dans l'ordre des places. Le champ d'exclusion ne s'applique qu'à la classe entière.`;
-    btnCurrent.textContent = `Mode actif uniquement (G${gf})`;
-  }
+  _renderIpmModes(cls);
 
   // Peuple le sélecteur de classe mobile
   const sel = document.getElementById('ipm-pool');
@@ -20796,6 +20790,53 @@ function openAutoIpads() {
   updateIpmPoolInfo();
 
   openMod('mip');
+}
+
+// Cases « Modes à affecter » : classe entière et/ou groupes. Avant, le mode était
+// déduit du filtre groupe du Plan Prof — invisible et non modifiable depuis l'onglet
+// Tablettes, d'où l'impossibilité d'y choisir autre chose que le filtre en cours.
+// Le filtre courant sert désormais de simple PRÉ-COCHAGE.
+function _renderIpmModes(cls) {
+  const wrap = document.getElementById('ipm-modes');
+  if (!wrap || !cls) return;
+  // Un groupe sans aucun élève dans la classe est proposé désactivé : le cocher
+  // n'affecterait rien. On compte sur le ROSTER (pas sur les places de la salle
+  // active) — l'affectation peut porter sur d'autres salles.
+  const counts = { 1: 0, 2: 0, 3: 0 };
+  for (const sid of (cls.eleves || [])) {
+    const g = S.eleves?.[sid]?.groupe;
+    if (g === 1 || g === 2 || g === 3) counts[g]++;
+  }
+  const modes = [
+    { v: 0, lab: 'Classe entière', hint: 'une tablette par table', on: groupFilter === 0, dis: false },
+    ...[1, 2, 3].map(g => ({
+      v: g, lab: `Groupe ${g}`,
+      hint: counts[g] ? `${counts[g]} élève${counts[g] > 1 ? 's' : ''}` : 'aucun élève',
+      on: groupFilter === g, dis: counts[g] === 0,
+    })),
+  ];
+  wrap.innerHTML = modes.map(m => `<label title="${m.dis ? 'Aucun élève dans ce groupe' : ''}" style="display:flex;align-items:center;gap:5px;font-size:.9em;padding:3px 8px;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);${m.dis ? 'opacity:.45;cursor:not-allowed' : 'cursor:pointer'}">
+    <input type="checkbox" class="ipm-mode-cb" value="${m.v}" ${m.on && !m.dis ? 'checked' : ''} ${m.dis ? 'disabled' : ''} onchange="_updateIpmModeInfo()" style="width:15px;height:15px">
+    <span><strong>${m.lab}</strong> <span style="color:var(--pencil)">(${m.hint})</span></span>
+  </label>`).join('');
+  _updateIpmModeInfo();
+}
+
+// Modes cochés, sous forme de tableau d'entiers (0 = classe entière).
+function _ipmSelectedModes() {
+  return [...document.querySelectorAll('.ipm-mode-cb')].filter(b => b.checked).map(b => +b.value);
+}
+
+function _updateIpmModeInfo() {
+  const el = document.getElementById('ipm-mode-info');
+  const btn = document.getElementById('ipm-btn-go');
+  if (!el) return;
+  const m = _ipmSelectedModes();
+  if (btn) btn.disabled = (m.length === 0);
+  if (!m.length) { el.textContent = '⚠️ Coche au moins un mode.'; return; }
+  const noms = m.map(v => v === 0 ? 'Classe entière' : `Groupe ${v}`).join(' · ');
+  el.textContent = `${noms} — chaque mode a ses propres numéros de tablette.`
+    + (m.includes(0) ? ' Le champ d\'exclusion ci-dessous ne s\'applique qu\'à la classe entière.' : '');
 }
 
 function updateIpmPoolInfo() {
@@ -21003,9 +21044,14 @@ function clearIpads(scope) {
 // Annuler dans la modale = annuler tout le batch (pushUndo restauré).
 let _ipovfQueue = null;
 
-function autoIpads(scope) {
+function autoIpads() {
   const cls = getCls();
   if (!cls) return;
+
+  // Modes cochés (0 = classe entière, 1..3 = groupes). Remplace l'ancien couple
+  // scope 'current'/'all', qui déduisait le mode du filtre groupe du Plan Prof.
+  const modes = _ipmSelectedModes();
+  if (!modes.length) return toast('⚠️ Coche au moins un mode à affecter.', 'warn');
 
   const poolId = document.getElementById('ipm-pool').value;
   const pool = S.tabletPools?.[poolId];
@@ -21053,7 +21099,7 @@ function autoIpads(scope) {
   closeMod2('mip');
 
   _ipovfQueue = {
-    cls, scope, exclSet,
+    cls, modes, exclSet,
     oldRoom: cls.activeRoom, oldPool: cls.activePool,
     pending: combinations,
     summary: { combos: 0, withOverflow: 0 },
@@ -21068,33 +21114,24 @@ function _processNextCombination() {
   if (!q.pending.length) return _finishAutoIpads();
 
   const next = q.pending.shift();
-  const { cls, scope, exclSet } = q;
+  const { cls, modes, exclSet } = q;
   const { rId, pId, available, lotLabel } = next;
 
   cls.activeRoom = rId;
   cls.activePool = pId;
   const allSeats = _collectSeats(cls);
 
-  // Compte le besoin selon le scope
-  let needed = 0;
-  if (scope === 'all') {
-    needed = Math.max(
-      _ceTargets(cls, allSeats, exclSet).length,
-      _groupTargets(cls, allSeats, 1).length,
-      _groupTargets(cls, allSeats, 2).length,
-      _groupTargets(cls, allSeats, 3).length
-    );
-  } else if (groupFilter === 0) {
-    needed = _ceTargets(cls, allSeats, exclSet).length;
-  } else {
-    needed = _groupTargets(cls, allSeats, groupFilter).length;
-  }
+  // Besoin = le plus gourmand des modes cochés (chaque mode a sa propre numérotation,
+  // ils se partagent donc le même stock sans s'additionner).
+  const needed = modes.reduce((mx, m) => Math.max(mx,
+    m === 0 ? _ceTargets(cls, allSeats, exclSet).length
+            : _groupTargets(cls, allSeats, m).length), 0);
 
   if (needed > available.length) {
     // Overflow : ouvre la modale pour cette combinaison
     q.summary.withOverflow++;
     _ipovfState = {
-      cls, scope, pool: S.tabletPools[pId],
+      cls, modes, pool: S.tabletPools[pId],
       allSeats, exclSet, available, lotLabel,
       queueMode: true, currentRoom: rId, currentPool: pId
     };
@@ -21103,22 +21140,16 @@ function _processNextCombination() {
   }
 
   // Pas d'overflow : applique directement et passe à la suivante
-  _applyAssignmentFor(cls, scope, allSeats, exclSet, available, null);
+  _applyAssignmentFor(cls, modes, allSeats, exclSet, available, null);
   q.summary.combos++;
   _processNextCombination();
 }
 
-// Applique l'assignation pour le scope demandé (dans le contexte cls.activeRoom × cls.activePool)
-function _applyAssignmentFor(cls, scope, allSeats, exclSet, available, keepKeys) {
-  if (scope === 'all') {
-    _assignCEIpads(cls, _ceTargets(cls, allSeats, exclSet, keepKeys), available);
-    _assignGroupIpads(cls, _groupTargets(cls, allSeats, 1, keepKeys), 1, available);
-    _assignGroupIpads(cls, _groupTargets(cls, allSeats, 2, keepKeys), 2, available);
-    _assignGroupIpads(cls, _groupTargets(cls, allSeats, 3, keepKeys), 3, available);
-  } else if (groupFilter === 0) {
-    _assignCEIpads(cls, _ceTargets(cls, allSeats, exclSet, keepKeys), available);
-  } else {
-    _assignGroupIpads(cls, _groupTargets(cls, allSeats, groupFilter, keepKeys), groupFilter, available);
+// Applique l'assignation pour chaque mode coché (dans le contexte cls.activeRoom × cls.activePool)
+function _applyAssignmentFor(cls, modes, allSeats, exclSet, available, keepKeys) {
+  for (const m of modes) {
+    if (m === 0) _assignCEIpads(cls, _ceTargets(cls, allSeats, exclSet, keepKeys), available);
+    else _assignGroupIpads(cls, _groupTargets(cls, allSeats, m, keepKeys), m, available);
   }
 }
 
@@ -21158,7 +21189,7 @@ function _cancelAutoIpadsBatch() {
 // ─── Modal overflow : vue plan visuel pour cocher / décocher les tables ───
 function _openIpovfModal(needed, available) {
   const state = _ipovfState;
-  const { cls, scope, allSeats, exclSet, queueMode } = state;
+  const { cls, modes, allSeats, exclSet, queueMode } = state;
   const ctx = document.getElementById('mipovf-context');
   const info = document.getElementById('mipovf-info');
 
@@ -21182,17 +21213,21 @@ function _openIpovfModal(needed, available) {
     + (state.lotLabel ? ` dans le lot <strong>${_escName(state.lotLabel)}</strong>` : '')
     + `. Choisissez celles à équiper en priorité.`;
 
-  // Détermine la liste des cibles selon le scope
+  // Cibles proposées au clic. Si la classe entière est cochée, ses cibles couvrent
+  // toutes les tables, donc celles des groupes aussi. Sinon on prend l'union des
+  // groupes cochés — disjointe par construction (un élève n'a qu'un groupe).
   let candidates = [];
-  if (scope === 'all' || groupFilter === 0) {
+  if (modes.includes(0)) {
     candidates = _ceTargets(cls, allSeats, exclSet).map(s => ({
       key: s.key, label: s.label, sid: cls.seating[s.key], grp: 0
     }));
   } else {
+    const wanted = new Set(modes);
     candidates = allSeats.filter(s => {
       const sid = cls.seating[s.key];
-      return sid && S.eleves[sid]?.groupe === groupFilter;
-    }).map(s => ({ key: s.key, label: s.label, sid: cls.seating[s.key], grp: groupFilter }));
+      return sid && wanted.has(S.eleves[sid]?.groupe);
+    }).map(s => ({ key: s.key, label: s.label, sid: cls.seating[s.key],
+                   grp: S.eleves[cls.seating[s.key]]?.groupe || 0 }));
   }
 
   state.candidates = candidates;
@@ -21338,7 +21373,7 @@ function ipovfConfirm() {
   delete _modalReturnTo['mipovf'];
   closeMod2('mipovf');
 
-  _applyAssignmentFor(state.cls, state.scope, state.allSeats, state.exclSet, state.available, keepKeys);
+  _applyAssignmentFor(state.cls, state.modes, state.allSeats, state.exclSet, state.available, keepKeys);
   if (_ipovfQueue) _ipovfQueue.summary.combos++;
 
   if (state.queueMode && _ipovfQueue) _processNextCombination();

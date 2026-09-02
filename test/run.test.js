@@ -1470,3 +1470,22 @@ test('Tablettes : l\'affectation auto peut se limiter à un lot de la classe mob
   assert.equal(ev('_ipmSelectedNumbers(S.tabletPools.p1).length'), 30);
   assert.equal(ev('_ipmSelectedLotLabel()'), '3 + 4');
 });
+
+test('Tablettes : l\'affectation auto applique les modes cochés, et eux seuls', () => {
+  setState({
+    classes: { c1: { id: 'c1', activeRoom: 'r1', activePool: 'p1', eleves: ['a', 'b', 'c'],
+      rooms: { r1: { seating: { '0,0': 'a', '0,1': 'b', '0,2': 'c' }, ipadsByPool: {} } } } },
+    eleves: { a: { id: 'a', groupe: 1 }, b: { id: 'b', groupe: 2 }, c: { id: 'c', groupe: 1 } },
+    salles: { r1: { nom: 'S', rows: 1, cols: 3, positions_vides: [] } },
+    tabletPools: { p1: { id: 'p1', nom: 'CM1', count: 10, unavailable: [], lots: [] } },
+  });
+  ev(`const seats = _collectSeats(S.classes.c1);
+      _applyAssignmentFor(S.classes.c1, [0, 1], seats, new Set(), [1,2,3,4,5], null);`);
+  const pool = get('S.classes.c1.rooms.r1.ipadsByPool.p1');
+  assert.equal(Object.keys(pool.ce).length, 3, 'classe entière : une tablette par table');
+  assert.deepEqual(Object.keys(pool.g1).sort(), ['0,0', '0,2'], 'G1 : les deux élèves du groupe');
+  assert.equal(pool.g2 === undefined || Object.keys(pool.g2).length, 0,
+    'G2 non coché ne doit rien recevoir');
+  // Chaque mode repart de 1 : les numérotations sont indépendantes, pas cumulées
+  assert.deepEqual([...new Set(Object.values(pool.g1))].sort(), [1, 2]);
+});
