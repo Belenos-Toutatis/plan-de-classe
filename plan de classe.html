@@ -6490,11 +6490,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.45.5';
+const APP_VERSION    = '2.45.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T15:39:41Z';
+const APP_BUILD_DATE = '2026-09-05T15:44:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -6692,7 +6692,7 @@ let groupFilter = 0; // 0=tous, 1=G1, 2=G2, 3=G3
 
 function activeRoomData(cls) {
   if (!cls || !cls.activeRoom) return null;
-  if (!cls.rooms) cls.rooms = {};
+  if (!_isPlainObj(cls.rooms)) cls.rooms = {};
   if (!cls.rooms[cls.activeRoom]) {
     cls.rooms[cls.activeRoom] = _newRoomTemplate();
   }
@@ -7144,8 +7144,23 @@ function _bulletinWrapAll() {
 }
 
 // À appeler après tout chargement (init, fichier, undo/redo)
+// Un objet « plat » (ni null, ni tableau, ni primitif) — la seule forme acceptable pour les
+// sections dictionnaire de S. Un fuzz de fichiers corrompus (300 mutations) a montré que
+// postLoadHook plantait sur `S.eleves` absent, une entrée d'élève `null` ou `cls.rooms = 'x'` :
+// une exception ici interrompt le chargement et laisse l'app sur un état à moitié migré.
+function _isPlainObj(o) { return !!o && typeof o === 'object' && !Array.isArray(o); }
+function _sanitizeCoreSections() {
+  for (const k of ['classes', 'eleves', 'salles']) if (!_isPlainObj(S[k])) { console.warn(`Section ${k} absente ou invalide — recréée vide`); S[k] = {}; }
+  for (const k of ['classes', 'eleves']) for (const [id, v] of Object.entries(S[k])) {
+    if (!_isPlainObj(v)) { console.warn(`Entrée ${k}.${id} invalide — supprimée`); delete S[k][id]; }
+  }
+  for (const c of Object.values(S.classes)) {
+    if (!_isPlainObj(c.rooms) && c.rooms !== undefined) { console.warn(`Classe ${c.id} : rooms invalide — réinitialisé`); delete c.rooms; }
+    if (!Array.isArray(c.eleves)) c.eleves = [];
+  }
+}
 function postLoadHook() {
-  if (!S.salles) S.salles = {};
+  _sanitizeCoreSections();
   if (!S.snapshots) S.snapshots = {};
   if (!S.attendance) S.attendance = {};
   if (!S.tabletPools) S.tabletPools = {};
