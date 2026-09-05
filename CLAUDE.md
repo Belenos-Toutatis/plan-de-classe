@@ -2417,7 +2417,7 @@ _uiConfirm({
 
 **Clavier** : `_uiConfirm` pose le focus sur le bouton principal (`#mconfirm2-ok`) 60 ms après ouverture → **Entrée confirme** (parité avec `confirm()` natif), Échap annule, et le focus trap de la modale devient effectif (il exige un focus initial à l'intérieur de la modale pour intercepter Tab).
 
-**Auto-focus générique des modales** : `openMod(id)` focalise le premier élément portant l'attribut **`data-autofocus`** dans la modale (60 ms après ouverture, sans voler un focus déjà posé par l'appelant). Posé sur : `nc-id` (mc), `ns-nom` (ms), `es-nom` (me), `nsl-nom` (msalle), `msaveatt-label` (msaveatt). Ces mêmes modales valident à **Entrée** (handlers inline `onkeydown` sur leurs inputs texte/number/date → bouton principal). Pour toute nouvelle modale à formulaire : poser `data-autofocus` sur le premier champ utile + Entrée = action principale.
+**Auto-focus générique des modales** : `openMod(id)` focalise le premier élément portant l'attribut **`data-autofocus`** dans la modale (60 ms après ouverture, sans voler un focus déjà posé par l'appelant). **Sans champ `data-autofocus`, le focus est posé sur la boîte `.mb` elle-même** (`tabindex="-1"`, `.mb:focus{outline:none}`) : l'audit du 2026-09-05 a montré que **85 modales sur 90** laissaient le focus DERRIÈRE la modale — Tab parcourait la page masquée, le focus trap ne s'enclenchait jamais et le lecteur d'écran n'annonçait pas le dialogue. Focaliser la boîte plutôt que le premier bouton évite un bouton « pré-appuyé » à l'ouverture. Vérifié : 90/90 modales reçoivent le focus et se ferment à Échap. Posé sur : `nc-id` (mc), `ns-nom` (ms), `es-nom` (me), `nsl-nom` (msalle), `msaveatt-label` (msaveatt). Ces mêmes modales valident à **Entrée** (handlers inline `onkeydown` sur leurs inputs texte/number/date → bouton principal). Pour toute nouvelle modale à formulaire : poser `data-autofocus` sur le premier champ utile + Entrée = action principale.
 
 **Échap hors modale** : le handler clavier global ignore les sorties de mode (appel, contraintes, sélection) quand le focus est dans un champ HORS modale — cas particulier : Échap dans `#unpl-search` (filtre 🔍 des non-placés) vide le champ et rafraîchit la liste. Échap dans un champ DANS une modale ferme la modale (comportement historique conservé).
 
@@ -2450,6 +2450,14 @@ Plus AUCUN `alert()` / `confirm()` / `prompt()` natif dans l'app (blocables par 
 Bloc en **fin de `<style>`** (doit battre le bloc COMPACTION à spécificité égale) : n'affecte QUE les écrans tactiles (Surface/iPad/Android), rien ne change à la souris. Agrandit : header/nav (annule la compaction), `.btn-sm`/`.gchip`/`.tagchip` des toolbars, contrôles internes des cellules du plan (`.cctr`, `.cell-unplace`, `.isel`, `.cipad`), inputs du tableur d'éval, `.counter-input`, cases à cocher/radios. ⚠️ Ressenti réel à valider sur l'appareil.
 
 **Retard en mode appel — appui long maison** : les cellules du mode appel (buildCell, branche appel) portent un timer `touchstart` 550 ms → `promptLateForStudent` (iOS/iPadOS n'émet JAMAIS `contextmenu` au doigt, contrairement à Windows/Android qui le synthétisent). Garde anti-double-ouverture dans `promptLateForStudent` (modale `mlate` déjà ouverte → no-op) car sur Surface/Android l'appui long déclenche l'OS ET le timer. `touchend` avale le click synthétique après déclenchement (sinon toggle absent par-dessus).
+
+## Audits rejoués le 2026-09-05 — scores de référence
+
+- **Performance à volume de fin d'année** (13 classes · 323 élèves · 160 évals · 858 appels · 1,08 Mo) : `JSON.stringify(S)` 6 ms · `pushUndo` 7 · `save` 13 · changement d'onglet ≤ 64 ms (Bilan des compétences le plus lourd) · glisser-déposer 27 · undo 30 · ouverture du tableur 82 · frappe dans une cellule 8. Rien au-dessus de 100 ms — aucune action nécessaire. À rejouer si une opération dépasse ~150 ms.
+- **Saturation du stockage** : `localStorage.setItem` forcé à lever `QuotaExceededError` → `save()` ne lève pas, la bannière rouge `#save-error-banner` apparaît, les données précédentes restent lisibles, et la bannière disparaît au premier `save()` réussi.
+- **Impression** : 7 chemins audités en contraste (Prof, Élève, Plan vide, Liste élèves, Bilan des classes, Plans QCMCam, Marqueurs ArUco) → **0 écart** < 4,5:1. Non couverts par l'automate : `printSuiviPret`, `doPrintEmptyConfigSalle` (impriment via un état de modale), `printAllClasses`, `_renduPrint`.
+- **Clavier des modales** : 90/90 focalisées à l'ouverture, 90/90 fermées à Échap, 90/90 avec `role=dialog` + `aria-modal`.
+- **Responsive** et **rétrocompatibilité** : cf. sections dédiées ; **fuzz** et **sync** : cf. tests.
 
 ## Responsive — téléphone et tablette (bloc CSS en fin de `<style>`, après le bloc tactile)
 

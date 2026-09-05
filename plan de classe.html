@@ -396,6 +396,7 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .mo.on{display:flex}
 .mb{background:#fff;border-radius:8px;padding:22px;width:420px;max-width:92vw;max-height:82vh;overflow-y:auto}
 .mb h2{margin-bottom:14px;font-size:1.15em}
+.mb:focus{outline:none} /* focus programmatique de la boîte (a11y), pas d'anneau : la boîte n'est pas un contrôle */
 .fg{margin-bottom:12px}
 .fg label{display:block;margin-bottom:3px;font-size:.87em;font-weight:600;color:#444}
 .fg input,.fg textarea,.fg select{width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:4px;font-size:.93em;font-family:inherit}
@@ -6490,11 +6491,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.45.6';
+const APP_VERSION    = '2.45.7';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T15:44:11Z';
+const APP_BUILD_DATE = '2026-09-05T15:48:27Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13523,9 +13524,17 @@ function openMod(id) {
     // il exige un focus initial DANS la modale pour intercepter Tab). Ne vole pas
     // un focus déjà posé par l'appelant (les ~19 sites historiques à setTimeout).
     const af = el.querySelector('[data-autofocus]');
-    if (af) setTimeout(() => {
-      if (el.classList.contains('on') && !el.contains(document.activeElement)) {
-        try { af.focus(); } catch (_) {}
+    setTimeout(() => {
+      if (!el.classList.contains('on') || el.contains(document.activeElement)) return;
+      if (af) { try { af.focus(); } catch (_) {} }
+      // Sans champ à focaliser, le focus reste DERRIÈRE la modale : Tab parcourt la page
+      // masquée et le focus trap ne s'enclenche jamais (audit : 85 modales sur 90). On pose
+      // le focus sur la boîte elle-même (tabindex -1 = focalisable par script seulement, sans
+      // anneau visible ni bouton « pré-appuyé ») — le lecteur d'écran annonce le dialogue et
+      // Tab part du premier contrôle de la modale.
+      if (!el.contains(document.activeElement)) {
+        const mb = el.querySelector('.mb');
+        if (mb) { if (!mb.hasAttribute('tabindex')) mb.setAttribute('tabindex', '-1'); try { mb.focus({ preventScroll: true }); } catch (_) {} }
       }
     }, 60);
   }
