@@ -3268,7 +3268,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </details>
     <div class="ma" style="align-items:center;flex-wrap:wrap;gap:8px">
       <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);margin-right:auto;cursor:pointer">
-        <input type="checkbox" id="imp-skip-dup" checked onchange="_impRefresh()"> Ignorer les élèves déjà présents dans la classe cible
+        <input type="checkbox" id="imp-skip-dup" checked onchange="_impRefresh()"> Ignorer les élèves déjà présents
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);margin-right:auto;cursor:pointer" title="Une classe citée dans la colonne Classe mais absente de l'app est créée à l'import, avec une salle 4×10 par défaut">
+        <input type="checkbox" id="imp-create-cls" checked onchange="_impRefresh()"> Créer les classes inconnues
       </label>
       <button class="btn btn-g" onclick="closeMod2('mi')">Annuler</button>
       <button class="btn btn-s" id="imp-btn-go" onclick="importStudents()" disabled>Importer</button>
@@ -6414,11 +6417,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.42.0';
+const APP_VERSION    = '2.43.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T05:22:50Z';
+const APP_BUILD_DATE = '2026-09-05T06:09:02Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13338,6 +13341,27 @@ function appConfirm(title, message, opts) {
 // ═══════════════════════════════════════════════════════════
 // CLASS MANAGEMENT
 // ═══════════════════════════════════════════════════════════
+// Crée une classe « nue » avec une salle 4×10 neuve — le cas par défaut de createClass,
+// réutilisé par l'import d'élèves quand une classe inconnue apparaît dans le fichier.
+// Sans pushUndo ni save : l'appelant s'en charge.
+function _createClassBare(id, nom, yr) {
+  id = String(id || '').trim().toUpperCase();
+  if (!id || S.classes[id]) return S.classes[id] || null;
+  nom = String(nom || id).trim() || id;
+  const sid = createSalle(`Salle ${nom}`, 4, 10, []);
+  S.classes[id] = { id, nom, année: yr || _defaultSchoolYear(), eleves: [], rooms: { [sid]: _newRoomTemplate() }, activeRoom: sid };
+  setupClassAccessors(S.classes[id]);
+  return S.classes[id];
+}
+// Identifiant de classe à partir d'un libellé libre (« 3ème A » → « 3EMEA », « 3B » → « 3B ») :
+// majuscules, sans accents, alphanumériques seulement, 20 caractères max (règle des ids).
+function _impClassIdFromLabel(label) {
+  const flat = String(label || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9_]/g, '');
+  // Retire l'ordinal collé au niveau (« 3EMEC » → « 3C », « 2NDE3 » → « 23 », « 1ERES2 » → « 1S2 ») :
+  // le libellé complet reste le NOM de la classe, seul l'identifiant est compacté.
+  return flat.replace(/^(\d{1,2})(?:EME|ERE|NDE|ND|ER|E)(?=[A-Z0-9])/, '$1').slice(0, 20);
+}
+
 function createClass() {
   const id  = document.getElementById('nc-id').value.trim().toUpperCase();
   const nom = document.getElementById('nc-nom').value.trim();
@@ -14156,6 +14180,44 @@ function _impNormAmen(v) {
   }
   return out;
 }
+// ── Codes de groupes à la Pronote ──────────────────────────────────────────
+// Une cellule « Groupes » exportée de Pronote ressemble à « 3A-GP1,3A-LATIN,3ABC-CATHO »
+// ou « 3B-BIL-LCE,3B-GP1,3B-NBIL-DNL » : une liste de codes, chacun préfixé par un
+// code de classe. On retire le préfixe, puis GP1 / GP2 / GP3 font le groupe et tout
+// le reste devient un TAG proposé — l'utilisateur corrige dans le panneau de l'aperçu
+// (on ne veut pas forcément « BIL-LCE » comme tag, mais « BIL »).
+function _impSplitCodes(v) {
+  return String(v || '').split(/[,;|\/\n]+/).map(t => t.trim()).filter(Boolean);
+}
+// Retire un préfixe de classe : un id de classe connu (« 3A- »), sinon un motif
+// chiffre(s) + lettres + tiret (« 3ABC-CATHO » → « CATHO »). Renvoie en MAJUSCULES.
+function _impStripClassPrefix(code) {
+  let c = String(code || '').trim().toUpperCase();
+  const ids = Object.keys(S.classes || {}).map(x => x.toUpperCase()).sort((a, b) => b.length - a.length);
+  for (const id of ids) if (c.startsWith(id + '-') && c.length > id.length + 1) return c.slice(id.length + 1);
+  return c.replace(/^\d{1,2}[A-Z]{0,4}-(?=.)/, '');
+}
+// Interprétation par défaut d'un code (après retrait du préfixe) :
+//  GP1 / G1 / GROUPE1 → groupe · tout autre → tag, abrégé au 1er segment avant « - »
+//  (« BIL-LCE » → « BIL », « NBIL-DNL » → « NBIL ») et tronqué à 6 (limite des tags).
+function _impDefaultCodeInterp(code) {
+  const m = String(code).match(/^(?:GP|GR|GRP|G|GROUPE)\s*([123])$/i);
+  if (m) return { kind: 'grp', n: +m[1] };
+  const abbr = String(code).split('-')[0].replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  return abbr ? { kind: 'tag', abbr } : { kind: 'ignore' };
+}
+// Une colonne dont les valeurs sont des listes de codes contenant au moins un GPn.
+function _impLooksLikeGroupCodes(vals) {
+  const v = vals.map(x => String(x || '').trim()).filter(Boolean);
+  if (!v.length) return false;
+  let gp = 0;
+  for (const cell of v) for (const code of _impSplitCodes(cell)) {
+    const i = _impDefaultCodeInterp(_impStripClassPrefix(code));
+    if (i.kind === 'grp') { gp++; break; }
+  }
+  return gp >= Math.ceil(v.length * 0.5);
+}
+
 function _impTruthy(v) { return /^(x|oui|o|yes|y|1|vrai|true|v|✓|✔)$/i.test(String(v || '').trim()); }
 // Date : AAAA-MM-JJ ou JJ/MM/AAAA → AAAA-MM-JJ, sinon null.
 function _impNormDate(v) {
@@ -14236,6 +14298,7 @@ function _impGuessFieldFromValues(vals, taken) {
   const caps = t => t === t.toUpperCase() && /[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜŸŒÆ]/.test(t);
   const capitalised = t => /^[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜŸŒÆ][^\s]*[a-zàâäéèêëîïôùûüÿœæç]/.test(t) && !caps(t);
   if (all(x => _impNormGroupe(x) !== null)) return taken.has('groupe') ? null : 'groupe';
+  if (_impLooksLikeGroupCodes(v))           return taken.has('groupe') ? null : 'groupe';
   if (all(x => _impNormCiv(x) !== null))    return taken.has('civilite') ? null : 'civilite';
   if (all(x => _impResolveClass(x) !== null)) return taken.has('classe') ? null : 'classe';
   if (all(x => _impNormDate(x) !== null))   return taken.has('arrivee') ? null : 'arrivee';
@@ -14282,6 +14345,18 @@ function _impAnalyze(text, opts) {
       }
     }
   }
+  // Codes de groupes / tags rencontrés dans les colonnes « groupe » et « tags », avec
+  // leur interprétation (choix utilisateur via opts.codeMap, sinon défaut).
+  const codeMap = opts.codeMap || {};
+  const codesSeen = {}; // CODE → { count, interp, raw:Set }
+  const interpOf = code => {
+    if (!codesSeen[code]) codesSeen[code] = { count: 0, interp: codeMap[code] || _impDefaultCodeInterp(code), raw: new Set() };
+    return codesSeen[code];
+  };
+  // Classes inconnues : créées à l'import si opts.createClasses (défaut true)
+  const createClasses = opts.createClasses !== false;
+  const newClasses = {}; // id → libellé d'origine
+
   // Construction des enregistrements
   const defaultClassId = opts.defaultClassId || null;
   const seen = new Map(); // dédoublonnage interne au fichier : "classe|nom|prenom"
@@ -14307,10 +14382,34 @@ function _impAnalyze(text, opts) {
         if (!k || k === 'fullname' || k === 'fullname_pn') return;
         if (k === 'nom')      { if (String(v || '').trim()) rec.nom = String(v).trim(); return; }
         if (k === 'prenom')   { if (String(v || '').trim()) rec.prenom = String(v).trim(); return; }
-        if (k === 'classe')   { rec.classeRaw = String(v || '').trim(); rec.classeId = _impResolveClass(v); return; }
-        if (k === 'groupe')   { const g = _impNormGroupe(v); if (String(v || '').trim() && g === null) rec.warnings.push(`groupe « ${String(v).trim()} » non reconnu`); rec.groupe = g; return; }
+        if (k === 'classe')   {
+          rec.classeRaw = String(v || '').trim();
+          rec.classeId = _impResolveClass(v);
+          if (rec.classeRaw && !rec.classeId && createClasses) {
+            const nid = _impClassIdFromLabel(rec.classeRaw);
+            if (nid) { rec.classeId = nid; rec.classeNew = true; newClasses[nid] = newClasses[nid] || rec.classeRaw; }
+          }
+          return;
+        }
+        if (k === 'groupe' || k === 'tags') {
+          // Liste de codes (« 3A-GP1,3A-LATIN ») : chaque code passe par le panneau
+          // d'interprétation. Un nombre nu (« 2 ») reste un groupe direct.
+          const cell = String(v || '').trim();
+          if (!cell) return;
+          if (k === 'groupe' && _impNormGroupe(cell) !== null) { rec.groupe = _impNormGroupe(cell); return; }
+          let any = false;
+          for (const raw of _impSplitCodes(cell)) {
+            const code = _impStripClassPrefix(raw);
+            if (!code) continue;
+            const e = interpOf(code); e.count++; e.raw.add(raw); any = true;
+            const it = e.interp;
+            if (it.kind === 'grp') rec.groupe = it.n;
+            else if (it.kind === 'tag' && it.abbr) { const a = String(it.abbr).toUpperCase(); if (!rec.tagAbbrs.includes(a)) rec.tagAbbrs.push(a); }
+          }
+          if (!any && k === 'groupe') rec.warnings.push(`groupe « ${cell} » non reconnu`);
+          return;
+        }
         if (k === 'civilite') { const cv = _impNormCiv(v); if (String(v || '').trim() && !cv) rec.warnings.push(`civilité « ${String(v).trim()} » non reconnue`); rec.civilite = cv; return; }
-        if (k === 'tags')     { rec.tagAbbrs.push(..._impNormTags(v)); return; }
         if (k === 'amen')     { Object.assign(rec.statuses, _impNormAmen(v)); return; }
         if (_IMP_BOOL_KEYS.includes(k)) { if (_impTruthy(v)) rec.statuses[k] = true; return; }
         if (k === 'arrivee')  { const d = _impNormDate(v); if (String(v || '').trim() && !d) rec.warnings.push(`date « ${String(v).trim()} » non reconnue`); rec.arrivalDate = d; return; }
@@ -14337,15 +14436,18 @@ function _impAnalyze(text, opts) {
     }
     records.push(rec);
   });
-  return { mode: det.mode, sep: det.sep, header: det.header, rows: det.rows, cols, mapping, records };
+  const codes = Object.entries(codesSeen)
+    .map(([code, e]) => ({ code, count: e.count, interp: e.interp, raw: [...e.raw] }))
+    .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+  return { mode: det.mode, sep: det.sep, header: det.header, rows: det.rows, cols, mapping, records, codes, newClasses };
 }
 
 // ── État et rendu ─────────────────────────────────────────────────────────
-let _imp = { sig: '', mapping: null, header: null, timer: null, result: null };
+let _imp = { sig: '', mapping: null, header: null, codeMap: {}, timer: null, result: null };
 
 function openImportStudents() {
   if (!getCls()) return toast('⚠️ Sélectionnez une classe.', 'warn');
-  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.result = null;
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.result = null;
   openMod('mi');
   _impRefresh();
 }
@@ -14365,9 +14467,11 @@ function _impRefresh() {
   const det = _impDetect(text);
   const sig = det.mode === 'table' ? `${det.sep}#${det.rows[0].length}#${det.rows[0].join('|')}` : 'text';
   if (sig !== _imp.sig) { _imp.sig = sig; _imp.mapping = null; _imp.header = null; }
-  const res = _impAnalyze(text, { mode, mapping: _imp.mapping, header: _imp.header, skipDup, defaultClassId: cls?.id || null });
+  const createClasses = document.getElementById('imp-create-cls')?.checked !== false;
+  const res = _impAnalyze(text, { mode, mapping: _imp.mapping, header: _imp.header, codeMap: _imp.codeMap, createClasses, skipDup, defaultClassId: cls?.id || null });
   _imp.result = res;
   _impRenderMapping(res);
+  _impRenderCodes(res);
   _impRenderPreview(res, cls);
 }
 function _impSetMapping(col, key) {
@@ -14417,6 +14521,61 @@ function _impRenderMapping(res) {
       </div>`;
     }).join('') + `</div>`;
 }
+// Panneau d'interprétation des codes de groupes / tags rencontrés dans le fichier.
+function _impSetCode(code, field, value) {
+  const cur = _imp.codeMap[code] || (_imp.result?.codes.find(c => c.code === code)?.interp) || { kind: 'ignore' };
+  const next = { ...cur };
+  if (field === 'kind') {
+    if (value.startsWith('grp')) { next.kind = 'grp'; next.n = +value.slice(3); }
+    else if (value === 'tag') { next.kind = 'tag'; next.abbr = next.abbr || _impDefaultCodeInterp(code).abbr || code.slice(0, 6); }
+    else next.kind = 'ignore';
+  } else if (field === 'abbr') {
+    next.abbr = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  }
+  _imp.codeMap[code] = next;
+  _impRefresh();
+}
+function _impRenderCodes(res) {
+  let box = document.getElementById('imp-codes');
+  const map = document.getElementById('imp-mapping');
+  if (!box) {
+    if (!map) return;
+    box = document.createElement('div'); box.id = 'imp-codes';
+    map.insertAdjacentElement('afterend', box);
+  }
+  const codes = res.codes || [];
+  if (!codes.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const kindSel = (c, it) => `<select onchange="_impSetCode('${_escJsAttr(c)}','kind',this.value)" style="font-size:.85em;padding:2px 4px">
+      <option value="grp1"${it.kind === 'grp' && it.n === 1 ? ' selected' : ''}>🔵 Groupe 1</option>
+      <option value="grp2"${it.kind === 'grp' && it.n === 2 ? ' selected' : ''}>🟠 Groupe 2</option>
+      <option value="grp3"${it.kind === 'grp' && it.n === 3 ? ' selected' : ''}>🟣 Groupe 3</option>
+      <option value="tag"${it.kind === 'tag' ? ' selected' : ''}>🏷 Tag</option>
+      <option value="ignore"${it.kind === 'ignore' ? ' selected' : ''}>— ignorer —</option>
+    </select>`;
+  const rows = codes.map(({ code, count, interp, raw }) => {
+    const exists = interp.kind === 'tag' && interp.abbr && tagByAbbr(interp.abbr);
+    const abbrCell = interp.kind === 'tag'
+      ? `<input value="${_escAttr(interp.abbr || '')}" maxlength="6" onchange="_impSetCode('${_escJsAttr(code)}','abbr',this.value)" style="width:70px;font-family:var(--font-mono);text-transform:uppercase;padding:2px 5px;font-size:.85em" title="Abréviation du tag (6 caractères max)">
+         <span style="font-size:.78em;color:var(--pencil)">${exists ? 'tag existant' : 'nouveau tag'}</span>`
+      : '';
+    return `<tr>
+      <td style="padding:2px 6px;font-family:var(--font-mono)" title="${_escAttr(raw.join(', '))}">${_escName(code)}</td>
+      <td style="padding:2px 6px;color:var(--pencil);text-align:right">${count}</td>
+      <td style="padding:2px 6px">${kindSel(code, interp)}</td>
+      <td style="padding:2px 6px;white-space:nowrap">${abbrCell}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `<div style="font-size:.82em;color:var(--pencil);margin:6px 0 2px">Codes de groupes rencontrés — <code>GP1</code>/<code>GP2</code> font le groupe, le reste devient un tag (préfixe de classe retiré). Corrige l'interprétation ou l'abréviation :</div>
+    <div style="max-height:170px;overflow:auto;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper)">
+      <table style="border-collapse:collapse;font-size:.86em;width:100%">
+        <thead style="position:sticky;top:0;background:var(--paper-warm)"><tr>
+          <th style="padding:3px 6px;text-align:left">Code</th><th style="padding:3px 6px;text-align:right">Élèves</th><th style="padding:3px 6px;text-align:left">Interprétation</th><th style="padding:3px 6px;text-align:left">Tag</th>
+        </tr></thead><tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 function _impRenderPreview(res, cls) {
   const box = document.getElementById('imp-preview');
   const btn = document.getElementById('imp-btn-go');
@@ -14442,7 +14601,8 @@ function _impRenderPreview(res, cls) {
   const td = (t, extra = '') => `<td style="padding:2px 6px;${extra}">${t}</td>`;
   const rowsHtml = shown.map(r => {
     const clsName = r.targetClassId ? _escName(r.targetClassId) : '—';
-    const clsCell = r.classeRaw && !r.classeId ? `<span style="color:var(--warn-fg, #a85312)" title="classe inconnue">${_escName(r.classeRaw)} → ${clsName}</span>` : clsName;
+    const clsCell = r.classeRaw && !r.classeId ? `<span style="color:var(--warn-fg, #a85312)" title="classe inconnue">${_escName(r.classeRaw)} → ${clsName}</span>`
+                  : (r.classeNew ? `<span style="color:#1a7442" title="classe créée à l'import">${clsName} ✚</span>` : clsName);
     const state = r.ok
       ? (r.warnings.length ? `<span style="color:var(--warn-fg, #a85312)" title="${_escAttr(r.warnings.join(' · '))}">⚠ ${_escName(r.warnings[0])}</span>` : '<span style="color:var(--pencil)">✓</span>')
       : `<span style="color:var(--margin-red)" title="${_escAttr(r.warnings.join(' · '))}">✗ ${_escName(r.warnings[0] || 'ignorée')}</span>`;
@@ -14481,7 +14641,8 @@ function _impRenderPreview(res, cls) {
         <tbody>${rowsHtml}</tbody>
       </table>${more}
     </div>
-    ${dupSkipped ? `<div style="font-size:.8em;color:var(--pencil);margin-top:4px">${dupSkipped} élève${dupSkipped > 1 ? 's' : ''} déjà présent${dupSkipped > 1 ? 's' : ''} — décoche « Ignorer les élèves déjà présents » pour les réimporter quand même.</div>` : ''}`;
+    ${dupSkipped ? `<div style="font-size:.8em;color:var(--pencil);margin-top:4px">${dupSkipped} élève${dupSkipped > 1 ? 's' : ''} déjà présent${dupSkipped > 1 ? 's' : ''} — décoche « Ignorer les élèves déjà présents » pour les réimporter quand même.</div>` : ''}
+    ${Object.keys(res.newClasses || {}).length ? `<div style="font-size:.84em;color:#1a7442;margin-top:4px">✚ Classes à créer : ${Object.entries(res.newClasses).map(([id, lab]) => `<strong>${_escName(id)}</strong>${lab !== id ? ` <span style="color:var(--pencil)">(« ${_escName(lab)} »)</span>` : ''}`).join(', ')} — chacune avec une salle 4×10 à ajuster ensuite dans Config Salle.</div>` : ''}`;
   if (btn) {
     btn.disabled = ok.length === 0;
     btn.textContent = ok.length ? `Importer ${ok.length} élève${ok.length > 1 ? 's' : ''}` : 'Importer';
@@ -14522,6 +14683,10 @@ function importStudents() {
   let n = 0;
   const counts = {};
   const createdTags = [];
+  const createdClasses = [];
+  for (const [nid, lab] of Object.entries(res.newClasses || {})) {
+    if (!S.classes[nid] && _createClassBare(nid, lab)) createdClasses.push(nid);
+  }
   for (const r of recs) {
     const targetCls = S.classes[r.targetClassId] || defaultCls;
     const id = uid();
@@ -14552,10 +14717,12 @@ function importStudents() {
   _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.result = null;
   closeMod2('mi');
   save();
+  if (createdClasses.length) refreshSelector();
   renderStudents();
   renderUnplaced();
   const detail = Object.entries(counts).map(([id, c]) => `${c} dans ${id}`).join(', ');
   let msg = `${n} élève(s) importé(s) (${detail}).`;
+  if (createdClasses.length) msg += ` ✚ ${createdClasses.length} classe(s) créée(s) : ${createdClasses.join(', ')}`;
   if (createdTags.length) {
     const uniq = [...new Set(createdTags)];
     msg += ` 🏷 ${uniq.length} nouveau(x) tag(s) créé(s) : ${uniq.join(', ')}`;

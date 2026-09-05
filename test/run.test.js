@@ -1589,9 +1589,10 @@ test('Import : CSV « ; » avec en-têtes → colonnes mappées, classe par id O
   assert.deepEqual(r.records.map(x => [x.nom, x.prenom, x.targetClassId, x.groupe, x.civilite, x.ok]), [
     ['DUPONT', 'Martin', '3A', 1, 'M', true],
     ['MARTIN', 'Sophie', '3A', 2, 'F', true],     // « 3ème A » = nom de la classe 3A
-    ['LEROY',  'Léa',    '3A', 3, 'F', true],     // 5C inconnue → classe courante, avec avertissement
+    ['LEROY',  'Léa',    '5C', 3, 'F', true],     // 5C inconnue → créée à l'import (défaut)
   ]);
-  assert.match(r.records[2].warnings[0], /5C.*inconnue/);
+  assert.equal(r.records[2].classeNew, true);
+  assert.deepEqual(r.newClasses, { '5C': '5C' });
 });
 
 test('Import : TSV SANS en-tête → colonnes devinées d\'après les valeurs', () => {
@@ -1643,4 +1644,64 @@ test('Import : texte libre inchangé, doublons dans le fichier et dans la classe
   assert.equal(_impRun('Nom;Prénom\nDUPONT;Martin').records[0].ok, false);
   const kept = _impRun('Nom;Prénom\nDUPONT;Martin', { skipDup: false }).records[0];
   assert.equal(kept.ok, true); assert.equal(kept.dup, true);
+});
+
+test('Import : codes de groupes Pronote — préfixe de classe retiré, GPn = groupe, le reste = tag abrégé', () => {
+  _impSetup();
+  const strip = c => ev(`_impStripClassPrefix(${JSON.stringify(c)})`);
+  assert.equal(strip('3A-GP1'), 'GP1', 'préfixe = id de classe connu');
+  assert.equal(strip('3ABC-CATHO'), 'CATHO', 'préfixe générique chiffre + lettres');
+  assert.equal(strip('3B-BIL-LCE'), 'BIL-LCE', 'un seul préfixe retiré, le reste du code intact');
+  assert.equal(strip('LATIN'), 'LATIN', 'sans préfixe : inchangé');
+  const d = c => get(`_impDefaultCodeInterp(${JSON.stringify(c)})`);
+  assert.deepEqual(d('GP1'), { kind: 'grp', n: 1 });
+  assert.deepEqual(d('G2'), { kind: 'grp', n: 2 });
+  assert.deepEqual(d('BIL-LCE'), { kind: 'tag', abbr: 'BIL' }, 'abrégé au 1er segment');
+  assert.deepEqual(d('NBIL-DNL'), { kind: 'tag', abbr: 'NBIL' });
+  assert.deepEqual(d('LATIN'), { kind: 'tag', abbr: 'LATIN' });
+});
+
+test('Import : colonne « Groupes » à la Pronote → groupe + tags, panneau des codes, corrections', () => {
+  _impSetup();
+  const csv = 'Nom;Prénom;Groupes\nMARTIN;Léa;3A-GP1,3A-LATIN,3ABC-CATHO\nROUX;Inès;3A-BIL-LCE,3A-GP2,3A-NBIL-DNL\nDURAND;Zoé;2';
+  const r = _impRun(csv);
+  assert.deepEqual(r.mapping, ['nom', 'prenom', 'groupe']);
+  const [lea, ines, zoe] = r.records;
+  assert.equal(lea.groupe, 1);  assert.deepEqual(lea.tagAbbrs, ['LATIN', 'CATHO']);
+  assert.equal(ines.groupe, 2); assert.deepEqual(ines.tagAbbrs, ['BIL', 'NBIL']);
+  assert.equal(zoe.groupe, 2, 'un nombre nu reste un groupe direct');
+  assert.deepEqual(r.codes.map(c => c.code).sort(), ['BIL-LCE', 'CATHO', 'GP1', 'GP2', 'LATIN', 'NBIL-DNL']);
+  // L'utilisateur ignore NBIL-DNL, renomme CATHO en KT, et fait de LATIN un groupe 3
+  const r2 = _impRun(csv, { codeMap: { 'NBIL-DNL': { kind: 'ignore' }, CATHO: { kind: 'tag', abbr: 'KT' }, LATIN: { kind: 'grp', n: 3 } } });
+  assert.deepEqual(r2.records[0].tagAbbrs, ['KT']);
+  assert.equal(r2.records[0].groupe, 3, 'un code peut être reclassé en groupe');
+  assert.deepEqual(r2.records[1].tagAbbrs, ['BIL']);
+});
+
+test('Import : sans en-tête, une colonne de listes de codes est devinée « groupe »', () => {
+  _impSetup();
+  const r = _impRun('DUPONT\tMartin\t3A-GP1,3A-LATIN\nMARTIN\tSophie\t3A-GP2');
+  assert.deepEqual(r.mapping, ['nom', 'prenom', 'groupe']);
+  assert.equal(r.records[0].groupe, 1); assert.deepEqual(r.records[0].tagAbbrs, ['LATIN']);
+});
+
+test('Import : classes inconnues créées à l\'import, id compacté, nom conservé', () => {
+  _impSetup();
+  for (const [lab, id] of [['3B', '3B'], ['3ème C', '3C'], ['3EME C', '3C'], ['2nde 3', '23'], ['1ère S2', '1S2'], ['Terminale', 'TERMINALE']])
+    assert.equal(ev(`_impClassIdFromLabel(${JSON.stringify(lab)})`), id, `id pour « ${lab} »`);
+  const r = _impRun('Nom;Prénom;Classe\nROUX;Inès;3B\nLENOIR;Tom;3ème C\nDUPONT;Zoé;3A');
+  assert.deepEqual(r.newClasses, { '3B': '3B', '3C': '3ème C' });
+  assert.equal(r.records[0].targetClassId, '3B'); assert.equal(r.records[0].classeNew, true);
+  assert.equal(r.records[0].ok, true);
+  assert.equal(r.records[0].warnings.length, 0, 'une classe à créer n\'est pas un avertissement');
+  assert.equal(r.records[2].classeNew, undefined, 'classe existante : rien à créer');
+  // Case décochée → repli sur la classe courante, avec avertissement
+  const off = _impRun('Nom;Prénom;Classe\nROUX;Inès;3B', { createClasses: false });
+  assert.equal(off.records[0].targetClassId, '3A'); assert.match(off.records[0].warnings[0], /inconnue/);
+  assert.deepEqual(off.newClasses, {});
+  // _createClassBare : classe + salle 4×10 + accesseurs
+  ev(`pushUndo = function(){}; save = function(){}; _createClassBare('3C', '3ème C');`);
+  const c = get('S.classes["3C"]');
+  assert.equal(c.nom, '3ème C'); assert.ok(c.activeRoom); assert.deepEqual(c.eleves, []);
+  assert.equal(get('S.salles[S.classes["3C"].activeRoom].rows'), 4);
 });
