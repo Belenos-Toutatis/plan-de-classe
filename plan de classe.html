@@ -2772,6 +2772,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-g btn-sm" onclick="openCollectPatternsModal()" title="Définir l'ordre dans lequel tu ramasses les copies dans cette salle. Plusieurs patterns possibles (par îlot, en serpentin…). Utilisés au tri dans la saisie d'évaluation.">📋 Patterns ramassage</button>
       <button class="btn btn-d btn-sm" onclick="deleteSelectedSalle()">🗑 Supprimer cette salle</button>
     </div>
+    <div id="cfg-salle-classes" style="display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:.85em;padding:6px 10px;margin-bottom:8px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px"></div>
     <div class="al al-i" id="cfg-hint-tables">
       <strong>Tables</strong> — indique le <strong>positionnement physique des tables</strong> dans la salle. Cliquez sur une case (ou clic + glisser sur plusieurs) pour basculer <strong>Avec table ⬜</strong> ↔ <strong>Sans table ✖</strong>. Modifie le catalogue : toutes les classes utilisant cette salle sont impactées.
     </div>
@@ -6417,11 +6418,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.43.2';
+const APP_VERSION    = '2.44.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T06:26:47Z';
+const APP_BUILD_DATE = '2026-09-05T06:37:05Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13344,11 +13345,14 @@ function appConfirm(title, message, opts) {
 // Crée une classe « nue » avec une salle 4×10 neuve — le cas par défaut de createClass,
 // réutilisé par l'import d'élèves quand une classe inconnue apparaît dans le fichier.
 // Sans pushUndo ni save : l'appelant s'en charge.
-function _createClassBare(id, nom, yr) {
+// `salleId` : rattacher une salle EXISTANTE du catalogue plutôt que d'en créer une —
+// plusieurs classes partagent en général la même salle physique, créer une salle
+// par classe importée obligeait ensuite à tout rattacher à la main.
+function _createClassBare(id, nom, yr, salleId) {
   id = String(id || '').trim().toUpperCase();
   if (!id || S.classes[id]) return S.classes[id] || null;
   nom = String(nom || id).trim() || id;
-  const sid = createSalle(`Salle ${nom}`, 4, 10, []);
+  const sid = (salleId && S.salles?.[salleId]) ? salleId : createSalle(`Salle ${nom}`, 4, 10, []);
   S.classes[id] = { id, nom, année: yr || _defaultSchoolYear(), eleves: [], rooms: { [sid]: _newRoomTemplate() }, activeRoom: sid };
   setupClassAccessors(S.classes[id]);
   return S.classes[id];
@@ -14459,14 +14463,14 @@ function _impAnalyze(text, opts) {
 }
 
 // ── État et rendu ─────────────────────────────────────────────────────────
-let _imp = { sig: '', mapping: null, header: null, codeMap: {}, timer: null, result: null };
+let _imp = { sig: '', mapping: null, header: null, codeMap: {}, room: null, timer: null, result: null };
 
 function openImportStudents() {
   // Pas de garde « Sélectionnez une classe » : au premier lancement (ou après un
   // Tout effacer) il n'y a AUCUNE classe, et c'est justement le fichier — colonne
   // Classe — qui doit les créer. Sans classe courante, les lignes sans classe sont
   // simplement rejetées (« aucune classe cible »), l'aperçu le dit.
-  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.result = null;
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.room = null; _imp.result = null;
   openMod('mi');
   _impRefresh();
 }
@@ -14506,7 +14510,7 @@ function _impRefresh() {
   const newCodesBox = document.getElementById('imp-codes-scroll');
   if (newCodesBox) newCodesBox.scrollTop = codesTop;
   if (actCode !== undefined && actField) {
-    const again = document.querySelector(`#imp-codes [data-code="${CSS.escape(actCode)}"][data-field="${actField}"]`);
+    const again = document.querySelector(`#mi [data-code="${CSS.escape(actCode)}"][data-field="${actField}"]`);
     if (again) { try { again.focus({ preventScroll: true }); } catch (_) { again.focus(); } }
   }
 }
@@ -14689,11 +14693,46 @@ function _impRenderPreview(res, cls) {
       </table>${more}
     </div>
     ${dupSkipped ? `<div style="font-size:.8em;color:var(--pencil);margin-top:4px">${dupSkipped} élève${dupSkipped > 1 ? 's' : ''} déjà présent${dupSkipped > 1 ? 's' : ''} — décoche « Ignorer les élèves déjà présents » pour les réimporter quand même.</div>` : ''}
-    ${Object.keys(res.newClasses || {}).length ? `<div style="font-size:.84em;color:#1a7442;margin-top:4px">✚ Classes à créer : ${Object.entries(res.newClasses).map(([id, lab]) => `<strong>${_escName(id)}</strong>${lab !== id ? ` <span style="color:var(--pencil)">(« ${_escName(lab)} »)</span>` : ''}`).join(', ')} — chacune avec une salle 4×10 à ajuster ensuite dans Config Salle.</div>` : ''}`;
+    ${Object.keys(res.newClasses || {}).length ? `<div style="font-size:.84em;color:#1a7442;margin-top:4px">✚ Classes à créer : ${Object.entries(res.newClasses).map(([id, lab]) => `<strong>${_escName(id)}</strong>${lab !== id ? ` <span style="color:var(--pencil)">(« ${_escName(lab)} »)</span>` : ''}`).join(', ')}</div>${_impRoomChoiceHTML(cls)}` : ''}`;
   if (btn) {
     btn.disabled = ok.length === 0;
     btn.textContent = ok.length ? `Importer ${ok.length} élève${ok.length > 1 ? 's' : ''}` : 'Importer';
   }
+}
+
+// Où vont les classes créées à l'import ? Plusieurs classes partagent en général la
+// même salle physique : on propose une salle EXISTANTE (par défaut celle de la classe
+// courante), ou une NOUVELLE salle commune à nommer, ou — l'ancien comportement — une
+// salle par classe. Le choix vit dans _imp.room = { mode:'existing'|'shared'|'each',
+// salleId, name } le temps de la modale.
+function _impDefaultRoomChoice(cls) {
+  const ids = Object.keys(S.salles || {});
+  if (cls?.activeRoom && S.salles?.[cls.activeRoom]) return { mode: 'existing', salleId: cls.activeRoom, name: '' };
+  if (ids.length) return { mode: 'existing', salleId: ids[0], name: '' };
+  return { mode: 'shared', salleId: null, name: 'Salle 1' };
+}
+function _impRoomChoiceHTML(cls) {
+  const ch = _imp.room || (_imp.room = _impDefaultRoomChoice(cls));
+  const salles = Object.entries(S.salles || {});
+  const opts = salles.map(([id, sl]) => `<option value="existing:${_escAttr(id)}"${ch.mode === 'existing' && ch.salleId === id ? ' selected' : ''}>${_escName(sl.nom)} (${sl.rows}×${sl.cols}${classesUsingSalle(id).length ? `, ${classesUsingSalle(id).length} classe${classesUsingSalle(id).length > 1 ? 's' : ''}` : ''})</option>`).join('')
+    + `<option value="shared"${ch.mode === 'shared' ? ' selected' : ''}>➕ Une nouvelle salle commune (4×10)</option>`
+    + `<option value="each"${ch.mode === 'each' ? ' selected' : ''}>Une salle 4×10 par classe</option>`;
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.84em;margin-top:4px">
+      <span style="color:var(--pencil)">🏫 Salle des nouvelles classes :</span>
+      <select data-code="__room" data-field="mode" onchange="_impSetRoom(this.value)" style="font-size:.95em;padding:2px 4px">${opts}</select>
+      ${ch.mode === 'shared' ? `<input data-code="__room" data-field="name" value="${_escAttr(ch.name || '')}" placeholder="nom de la salle" onchange="_impSetRoomName(this.value)" style="width:140px;padding:2px 6px;font-size:.95em">` : ''}
+      <span style="color:var(--pencil)">— dimensions et rattachements réglables ensuite dans <strong>Config Salle</strong>.</span>
+    </div>`;
+}
+function _impSetRoom(v) {
+  const cur = _imp.room || {};
+  if (v === 'shared') _imp.room = { mode: 'shared', salleId: null, name: cur.name || 'Salle 1' };
+  else if (v === 'each') _imp.room = { mode: 'each', salleId: null, name: '' };
+  else if (v.startsWith('existing:')) _imp.room = { mode: 'existing', salleId: v.slice(9), name: '' };
+  _impRefresh();
+}
+function _impSetRoomName(v) {
+  _imp.room = { ...(_imp.room || { mode: 'shared' }), name: String(v || '').trim() };
 }
 
 // Fichier CSV / TSV / TXT → zone de texte. ⚠️ Les exports Pronote / SIECLE sont
@@ -14732,8 +14771,16 @@ function importStudents() {
   const counts = {};
   const createdTags = [];
   const createdClasses = [];
-  for (const [nid, lab] of Object.entries(res.newClasses || {})) {
-    if (!S.classes[nid] && _createClassBare(nid, lab)) createdClasses.push(nid);
+  const newIds = Object.entries(res.newClasses || {}).filter(([nid]) => !S.classes[nid]);
+  let sharedSalleId = null;
+  if (newIds.length) {
+    const ch = _imp.room || _impDefaultRoomChoice(defaultCls);
+    if (ch.mode === 'existing' && S.salles?.[ch.salleId]) sharedSalleId = ch.salleId;
+    else if (ch.mode === 'shared') sharedSalleId = createSalle(ch.name || 'Salle 1', 4, 10, []);
+    // mode 'each' : sharedSalleId reste null → _createClassBare crée une salle par classe
+  }
+  for (const [nid, lab] of newIds) {
+    if (_createClassBare(nid, lab, null, sharedSalleId)) createdClasses.push(nid);
   }
   for (const r of recs) {
     const targetCls = S.classes[r.targetClassId] || defaultCls;
@@ -14763,7 +14810,7 @@ function importStudents() {
   }
 
   document.getElementById('imp-txt').value = '';
-  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.result = null;
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.room = null; _imp.result = null;
   closeMod2('mi');
   save();
   if (createdClasses.length) refreshSelector();
@@ -20547,14 +20594,34 @@ function openAddSalleToClass() {
   openMod('madds');
 }
 
+// Rattache une salle du catalogue à UNE classe donnée (pas forcément la courante).
+// Sans pushUndo ni save : l'appelant s'en charge. Renvoie true si quelque chose a changé.
+function _attachSalleToClass(cls, salleId, makeActive) {
+  if (!cls || !S.salles?.[salleId]) return false;
+  if (!cls.rooms) cls.rooms = {};
+  if (cls.rooms[salleId]) return false;
+  cls.rooms[salleId] = _newRoomTemplate();
+  if (makeActive || !cls.activeRoom || !cls.rooms[cls.activeRoom]) cls.activeRoom = salleId;
+  return true;
+}
+// Détache une salle d'une classe. Refuse si c'est sa dernière salle (une classe doit en
+// garder une). Renvoie { ok, reason, placed } — `placed` = élèves qui y étaient placés,
+// pour que l'appelant puisse demander confirmation AVANT d'appeler.
+function _detachSalleFromClass(cls, salleId) {
+  if (!cls || !cls.rooms || !cls.rooms[salleId]) return { ok: false, reason: 'absente' };
+  if (Object.keys(cls.rooms).length === 1) return { ok: false, reason: 'derniere' };
+  const placed = Object.keys(cls.rooms[salleId].seating || {}).length;
+  delete cls.rooms[salleId];
+  if (cls.activeRoom === salleId) cls.activeRoom = Object.keys(cls.rooms)[0];
+  return { ok: true, placed };
+}
+
 function addSalleToClass(salleId) {
   const cls = getCls();
   if (!cls || !S.salles[salleId]) return;
-  if (!cls.rooms) cls.rooms = {};
-  if (cls.rooms[salleId]) { closeMod2('madds'); return; }
+  if (cls.rooms && cls.rooms[salleId]) { closeMod2('madds'); return; }
   pushUndo();
-  cls.rooms[salleId] = _newRoomTemplate();
-  cls.activeRoom = salleId;
+  _attachSalleToClass(cls, salleId, true);
   closeMod2('madds');
   save();
   const at = document.querySelector('.tab.on');
@@ -20579,10 +20646,7 @@ function confirmRemoveSalleFromClass(salleId) {
     title: '🗑 Retirer la salle', okLabel: '🗑 Retirer', okClass: 'btn-d', message: msg,
     onOk: () => {
       pushUndo();
-      delete cls.rooms[salleId];
-      if (cls.activeRoom === salleId) {
-        cls.activeRoom = Object.keys(cls.rooms)[0];
-      }
+      _detachSalleFromClass(cls, salleId);
       save();
       const at = document.querySelector('.tab.on');
       if (at) renderTab(at.id.replace('tab-',''));
@@ -20668,6 +20732,57 @@ function confirmNewSalle() {
   toast(`🏫 Salle "${nom}" créée${addToClass ? ' et ajoutée à la classe' : ''}.`);
 }
 
+// Config Salle — « Classes utilisant cette salle » : une case par classe, cochée si la
+// classe a cette salle dans ses rooms. C'est le réglage global « quelle classe a quelle
+// salle », là où on nomme la salle : après un import qui a créé plusieurs classes, on
+// coche celles qui partagent la salle physique, sans passer classe par classe.
+function _renderCfgSalleClasses() {
+  const box = document.getElementById('cfg-salle-classes');
+  if (!box) return;
+  const salle = selectedSalle();
+  const classes = Object.values(S.classes || {}).sort((a, b) => String(a.nom || a.id).localeCompare(String(b.nom || b.id), 'fr', { numeric: true }));
+  if (!salle || !classes.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const cur = getCls();
+  box.innerHTML = `<span style="color:var(--pencil);font-weight:600">🏫 Classes utilisant cette salle :</span>` +
+    classes.map(c => {
+      const on = !!(c.rooms && c.rooms[cfgSelectedSalle]);
+      const last = on && Object.keys(c.rooms).length === 1;
+      const placed = on ? Object.keys(c.rooms[cfgSelectedSalle].seating || {}).length : 0;
+      const tip = last ? 'Seule salle de cette classe — ajoute-lui d\'abord une autre salle pour pouvoir retirer celle-ci'
+                : (on && placed ? `${placed} élève${placed > 1 ? 's' : ''} placé${placed > 1 ? 's' : ''} ici — le retrait demandera confirmation` : '');
+      return `<label title="${_escAttr(tip)}" style="display:flex;align-items:center;gap:4px;padding:2px 7px;border:1px solid var(--rule-line);border-radius:4px;background:${on ? 'var(--paper)' : 'transparent'};cursor:${last ? 'not-allowed' : 'pointer'};${last ? 'opacity:.6' : ''}">
+        <input type="checkbox" ${on ? 'checked' : ''} ${last ? 'disabled' : ''} onchange="_cfgToggleSalleClass('${_escJsAttr(c.id)}', this.checked, this)">
+        <span${c === cur ? ' style="font-weight:600"' : ''}>${_escName(c.nom || c.id)}</span>${placed ? `<span style="color:var(--pencil);font-size:.85em">(${placed})</span>` : ''}
+      </label>`;
+    }).join('');
+}
+function _cfgToggleSalleClass(classId, on, cb) {
+  const cls = S.classes?.[classId];
+  const salleId = cfgSelectedSalle;
+  const salle = S.salles?.[salleId];
+  if (!cls || !salle) return;
+  const done = () => { save(); renderConfigGrid(); if (typeof renderTeacherGrid === 'function') renderTeacherGrid(); };
+  if (on) {
+    pushUndo();
+    _attachSalleToClass(cls, salleId, false);
+    done();
+    toast(`🏫 « ${salle.nom} » ajoutée à ${cls.nom}.`);
+    return;
+  }
+  const rooms = Object.keys(cls.rooms || {});
+  if (rooms.length <= 1) { if (cb) cb.checked = true; return toast(`⚠️ ${cls.nom} doit conserver au moins une salle.`, 'warn'); }
+  const placed = Object.keys(cls.rooms[salleId]?.seating || {}).length;
+  const commit = () => { pushUndo(); _detachSalleFromClass(cls, salleId); done(); toast(`🗑 « ${salle.nom} » retirée de ${cls.nom}.`); };
+  if (!placed) return commit();
+  _uiConfirm({
+    title: '🗑 Retirer la salle', okLabel: '🗑 Retirer', okClass: 'btn-d',
+    message: `Retirer « ${salle.nom} » de ${cls.nom} ?\n\n${placed} élève${placed > 1 ? 's' : ''} y ${placed > 1 ? 'sont placés' : 'est placé'} — ce placement sera perdu (annulable via Ctrl+Z).`,
+    onOk: commit,
+    onCancel: () => { if (cb) cb.checked = true; },
+  });
+}
+
 function renameSelectedSalle() {
   const salle = selectedSalle();
   if (!salle) return;
@@ -20714,6 +20829,7 @@ function renderConfigGrid() {
   // Met à jour les inputs (ou les vide)
   const inpRows  = document.getElementById('cfg-rows');
   const inpCols  = document.getElementById('cfg-cols');
+  _renderCfgSalleClasses();
   const inpSalle = document.getElementById('cfg-salle');
   if (salle) {
     if (inpRows)  inpRows.value  = salle.rows;

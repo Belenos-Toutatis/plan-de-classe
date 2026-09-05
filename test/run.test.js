@@ -1740,3 +1740,40 @@ test('Import : sans AUCUNE classe (premier lancement), le fichier crée les clas
   assert.equal(get('S.cur'), '3B', 'la première classe servie devient la classe courante');
   assert.match(ev('__toast'), /3 élève.*2 classe/s);
 });
+
+test('Import : les classes créées partagent une salle existante ou une nouvelle salle commune', () => {
+  setState({ classes: { '3A': { id: '3A', nom: '3A', eleves: [], rooms: { r1: {} }, activeRoom: 'r1' } },
+             eleves: {}, salles: { r1: { nom: 'A101', rows: 5, cols: 8, positions_vides: [] } }, cur: '3A' });
+  // Choix par défaut : la salle de la classe courante
+  assert.deepEqual(get('_impDefaultRoomChoice(S.classes["3A"])'), { mode: 'existing', salleId: 'r1', name: '' });
+  // Sans aucune salle : une nouvelle salle commune à nommer
+  assert.deepEqual(get('(()=>{const k=S.salles; S.salles={}; const r=_impDefaultRoomChoice(null); S.salles=k; return r;})()'),
+    { mode: 'shared', salleId: null, name: 'Salle 1' });
+  // _createClassBare avec une salle existante : pas de salle créée, la classe la partage
+  ev(`pushUndo = function(){}; save = function(){}; _createClassBare('3B', '3B', null, 'r1'); _createClassBare('3C', '3ème C', null, 'r1');`);
+  assert.equal(Object.keys(get('S.salles')).length, 1, 'aucune salle supplémentaire');
+  assert.deepEqual(get('Object.keys(S.classes["3B"].rooms)'), ['r1']);
+  assert.equal(get('S.classes["3C"].activeRoom'), 'r1');
+  assert.deepEqual(get('classesUsingSalle("r1").map(c => c.id).sort()'), ['3A', '3B', '3C']);
+  // Sans salle indiquée : l'ancien comportement, une salle 4×10 par classe
+  ev(`_createClassBare('3D', '3D');`);
+  assert.equal(Object.keys(get('S.salles')).length, 2);
+});
+
+test('Config Salle : rattacher / détacher n\'importe quelle classe, avec garde de la dernière salle', () => {
+  setState({ classes: { '3A': { id: '3A', nom: '3A', eleves: [], rooms: { r1: { seating: {} } }, activeRoom: 'r1' },
+                        '3B': { id: '3B', nom: '3B', eleves: [], rooms: { r2: { seating: {} } }, activeRoom: 'r2' } },
+             eleves: {}, salles: { r1: { nom: 'A101', rows: 4, cols: 10, positions_vides: [] }, r2: { nom: 'B202', rows: 4, cols: 10, positions_vides: [] } }, cur: '3A' });
+  assert.equal(ev('_attachSalleToClass(S.classes["3B"], "r1", false)'), true);
+  assert.deepEqual(get('Object.keys(S.classes["3B"].rooms).sort()'), ['r1', 'r2']);
+  assert.equal(get('S.classes["3B"].activeRoom'), 'r2', 'la salle active ne change pas si on ne le demande pas');
+  assert.equal(ev('_attachSalleToClass(S.classes["3B"], "r1", false)'), false, 'déjà rattachée : rien à faire');
+  // Détacher la dernière salle est refusé
+  assert.deepEqual(get('_detachSalleFromClass(S.classes["3A"], "r1")'), { ok: false, reason: 'derniere' });
+  assert.deepEqual(get('Object.keys(S.classes["3A"].rooms)'), ['r1']);
+  // Détacher une salle active parmi deux : la classe bascule sur l'autre
+  ev(`S.classes["3B"].rooms.r2.seating = { '0,0': 'x' };`);
+  assert.deepEqual(get('_detachSalleFromClass(S.classes["3B"], "r2")'), { ok: true, placed: 1 });
+  assert.deepEqual(get('Object.keys(S.classes["3B"].rooms)'), ['r1']);
+  assert.equal(get('S.classes["3B"].activeRoom'), 'r1');
+});
