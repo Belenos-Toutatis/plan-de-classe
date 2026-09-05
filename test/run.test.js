@@ -1791,7 +1791,8 @@ test('tiers-temps : suffixe +⅓ en miroir de -A, cumulable, pastille seule sino
     const d = { agrandissement: true, tiers_temps: true };
     const e = { pap: true };
     const t = { pap: true }; _setStudentStatusExclusive(t, 'tiers_temps'); // le groupe E doit être connu du setter
-    return [t.tiers_temps && t.pap, _agrSuffix(a,'pap'), _agrSuffix(a,'ppre'), _agrSuffix(b,'ppre'), _agrStandalone(b), _agrStandalone(c), _agrExamSuffix(c), _agrExamSuffix(d), _agrStandalone(d), _agrSuffix(e,'pap'), STUDENT_STATUSES.includes('tiers_temps')];
+    return [t.tiers_temps && t.pap, _agrSuffix(a,'pap',false), _agrSuffix(a,'ppre',false), _agrSuffix(b,'ppre',false), _agrStandalone(b), _agrStandalone(c), _agrExamSuffix(c,false), _agrExamSuffix(d,false), _agrStandalone(d), _agrSuffix(e,'pap',false), STUDENT_STATUSES.includes('tiers_temps'),
+      _agrExamSuffix(c) === '+<span class="frac">⅓</span>', _amenagementsLabel({ pap: true, tiers_temps: true }), _amenagementsLabel(c)];
   })()`);
-  assert.deepEqual(r, [true, '-A+⅓', '', '+⅓', false, true, '+⅓', '-A+⅓', true, '', true]);
+  assert.deepEqual(r, [true, '-A+⅓', '', '+⅓', false, true, '+⅓', '-A+⅓', true, '', true, true, 'PAP+⅓', '+⅓']);
 });

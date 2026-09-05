@@ -1899,6 +1899,8 @@ input[type="text"].meval-niveau-input:focus { background: transparent !important
 .spec-ulis-incl, .spec-upe2a-incl { background: #6f4a8c !important; }
 .spec-pai    { background: #ec4899 !important; color: #fff !important; }
 .spec-agr    { background: #00838f !important; color: #fff !important; }
+/* « ⅓ » (U+2153) : glyphe de fraction minuscule dans la police → agrandi 1,5× sans casser la hauteur de ligne. */
+.frac { font-size: 1.55em; line-height: .6; vertical-align: -.08em; font-weight: 700; }
 /* En sombre --pencil s'éclaircit (#8a9ab0) : le blanc n'y tient que 2,9:1 → texte sombre.
    En clair --pencil vaut #56697f et le blanc y est correct (5,2:1). */
 html[data-theme="dark"] .spec-ulis,
@@ -6441,11 +6443,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.45.0';
+const APP_VERSION    = '2.45.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T07:02:42Z';
+const APP_BUILD_DATE = '2026-09-05T08:27:48Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9097,9 +9099,15 @@ function _agrPrimaryKey(stu) {
 // Le tiers-temps (temps majoré) suit le même mécanisme, avec le suffixe « +⅓ » (U+2153).
 // Cumulés : « PAP-A+⅓ ». Sans pastille principale : « -A », « +⅓ » ou « -A+⅓ » seule.
 // _agrExamSuffix = les deux suffixes d'aménagement d'examen de l'élève, dans cet ordre.
-function _agrExamSuffix(stu) { return (stu?.agrandissement ? '-A' : '') + (stu?.tiers_temps ? '+⅓' : ''); }
+// `html` (défaut true) : le « ⅓ » est un glyphe de fraction, dessiné tout petit dans la police —
+// illisible sur une pastille (signalé en usage réel). En HTML on l'enveloppe dans <span class="frac">
+// pour l'agrandir ; passer false pour du TEXTE BRUT (exports CSV, presse-papier, attributs title).
+const _FRAC13_HTML = '+<span class="frac">⅓</span>';
+function _agrExamSuffix(stu, html = true) {
+  return (stu?.agrandissement ? '-A' : '') + (stu?.tiers_temps ? (html ? _FRAC13_HTML : '+⅓') : '');
+}
 // Suffixes à coller au libellé de la pastille `key` si c'est la pastille principale.
-function _agrSuffix(stu, key) { return (stu && _agrPrimaryKey(stu) === key) ? _agrExamSuffix(stu) : ''; }
+function _agrSuffix(stu, key, html = true) { return (stu && _agrPrimaryKey(stu) === key) ? _agrExamSuffix(stu, html) : ''; }
 // true si un aménagement d'examen est actif mais AUCUNE pastille à suffixer → pastille seule.
 function _agrStandalone(stu) { return !!(stu && (stu.agrandissement || stu.tiers_temps) && !_agrPrimaryKey(stu)); }
 function _agrStandaloneTitle(stu) {
@@ -16975,7 +16983,7 @@ function renderStudents() {
       onclick="toggleStuAgrandissement('${s.id}')" title="${s.agrandissement?'Retirer Agrandissement':'Marquer Agrandissement (photocopies agrandies) — cumulable avec tous les autres statuts'}">📄-A</button>`;
     // Tiers-temps (temps majoré +⅓) — même mécanisme que l'agrandissement. Rendu « PPRE+⅓ » quand cumulé.
     const ttBtn        = `<button class="btn btn-sm" style="${_stSty(s.tiers_temps, '#00838f', 42)}"
-      onclick="toggleStuTiersTemps('${s.id}')" title="${s.tiers_temps?'Retirer Tiers-temps':'Marquer Tiers-temps (temps majoré +⅓ aux évaluations) — cumulable avec tous les autres statuts'}">⏱+⅓</button>`;
+      onclick="toggleStuTiersTemps('${s.id}')" title="${s.tiers_temps?'Retirer Tiers-temps':'Marquer Tiers-temps (temps majoré +⅓ aux évaluations) — cumulable avec tous les autres statuts'}">⏱${_FRAC13_HTML}</button>`;
     const notesBtn   = `<button class="btn btn-sm" style="${_stSty(s.notes, '#5f6f70', 0)}"
       onclick="openStuNotes('${s.id}')" title="${_escAttr(s.notes||'Ajouter une note')}">📋</button>`;
     const sel = selectedEleves.has(s.id) ? ' selected' : '';
@@ -23285,15 +23293,16 @@ let notesSort = _loadPersistedSort('export-pos', { col: 0, dir: 1 }); // col: 0=
 function _amenagementsLabel(stu) {
   if (!stu) return '';
   const parts = [];
-  if (stu.ppre)       parts.push('PPRE'  + _agrSuffix(stu,'ppre'));
-  if (stu.pap)        parts.push('PAP'   + _agrSuffix(stu,'pap'));
-  if (stu.gevasco)    parts.push('PPS'   + _agrSuffix(stu,'gevasco'));
-  if (stu.ulis)       parts.push('ULIS'  + _agrSuffix(stu,'ulis'));
-  if (stu.ulis_incl)  parts.push('ULIS+' + _agrSuffix(stu,'ulis_incl'));
-  if (stu.upe2a)      parts.push('UPE2A' + _agrSuffix(stu,'upe2a'));
-  if (stu.upe2a_incl) parts.push('UPE2A+'+ _agrSuffix(stu,'upe2a_incl'));
-  if (stu.pai)        parts.push('PAI'   + _agrSuffix(stu,'pai'));
-  if (_agrStandalone(stu)) parts.push('-A');
+  // Texte brut (export CSV / presse-papier) : html = false.
+  if (stu.ppre)       parts.push('PPRE'  + _agrSuffix(stu,'ppre', false));
+  if (stu.pap)        parts.push('PAP'   + _agrSuffix(stu,'pap', false));
+  if (stu.gevasco)    parts.push('PPS'   + _agrSuffix(stu,'gevasco', false));
+  if (stu.ulis)       parts.push('ULIS'  + _agrSuffix(stu,'ulis', false));
+  if (stu.ulis_incl)  parts.push('ULIS+' + _agrSuffix(stu,'ulis_incl', false));
+  if (stu.upe2a)      parts.push('UPE2A' + _agrSuffix(stu,'upe2a', false));
+  if (stu.upe2a_incl) parts.push('UPE2A+'+ _agrSuffix(stu,'upe2a_incl', false));
+  if (stu.pai)        parts.push('PAI'   + _agrSuffix(stu,'pai', false));
+  if (_agrStandalone(stu)) parts.push(_agrExamSuffix(stu, false));
   return parts.join(' + ');
 }
 
