@@ -1575,6 +1575,11 @@ test('Import : valeurs — groupe GP1, civilités, aménagements, dates', () => 
   assert.deepEqual(get(`_impNormAmen('ULIS+')`), { ulis_incl: true }, 'ULIS+ = inclusion, pas ULIS hors inclusion');
   assert.deepEqual(get(`_impNormAmen('ULIS')`), { ulis: true });
   assert.deepEqual(get(`_impNormAmen('PPRE, -A')`), { ppre: true, agrandissement: true });
+  // Tiers-temps : « 1/3 » contient le séparateur « / », « +⅓ » le « + » — ramenés à un jeton avant découpe.
+  assert.deepEqual(get(`_impNormAmen('PAP + tiers temps')`), { pap: true, tiers_temps: true });
+  assert.deepEqual(get(`_impNormAmen('PAP-A+⅓')`), { pap: true, agrandissement: true, tiers_temps: true });
+  assert.deepEqual(get(`_impNormAmen('1/3 temps, PAI')`), { tiers_temps: true, pai: true });
+  assert.deepEqual(get(`_impNormAmen('TT')`), { tiers_temps: true });
   assert.equal(ev(`_impNormDate('12/01/2026')`), '2026-01-12');
   assert.equal(ev(`_impNormDate('2026-01-12')`), '2026-01-12');
   assert.equal(ev(`_impNormDate('janvier')`), null);
@@ -1776,4 +1781,17 @@ test('Config Salle : rattacher / détacher n\'importe quelle classe, avec garde 
   assert.deepEqual(get('_detachSalleFromClass(S.classes["3B"], "r2")'), { ok: true, placed: 1 });
   assert.deepEqual(get('Object.keys(S.classes["3B"].rooms)'), ['r1']);
   assert.equal(get('S.classes["3B"].activeRoom'), 'r1');
+});
+
+test('tiers-temps : suffixe +⅓ en miroir de -A, cumulable, pastille seule sinon', () => {
+  const r = get(`(() => {
+    const a = { pap: true, agrandissement: true, tiers_temps: true };
+    const b = { ppre: true, tiers_temps: true };
+    const c = { tiers_temps: true };
+    const d = { agrandissement: true, tiers_temps: true };
+    const e = { pap: true };
+    const t = { pap: true }; _setStudentStatusExclusive(t, 'tiers_temps'); // le groupe E doit être connu du setter
+    return [t.tiers_temps && t.pap, _agrSuffix(a,'pap'), _agrSuffix(a,'ppre'), _agrSuffix(b,'ppre'), _agrStandalone(b), _agrStandalone(c), _agrExamSuffix(c), _agrExamSuffix(d), _agrStandalone(d), _agrSuffix(e,'pap'), STUDENT_STATUSES.includes('tiers_temps')];
+  })()`);
+  assert.deepEqual(r, [true, '-A+⅓', '', '+⅓', false, true, '+⅓', '-A+⅓', true, '', true]);
 });

@@ -480,6 +480,7 @@ Un élève transféré (via la modale Modifier → champ « Classe ») garde tou
 - **PPRE** : badge orange
 - **Gevasco / PPS** : badge bleu
 - **PAI** : badge rose `#ec4899` (Projet d'Accueil Individualisé — médical : allergies, asthme, diabète, etc.). **Cumulable avec TOUT le reste** (PPRE, PPS, ULIS, UPE2A…), contrairement aux autres statuts pédagogiques qui sont exclusifs intra-groupe. `STATUS_GROUP_C = ['pai']` (seul dans son groupe). Toggle `toggleStuPai(id)` / `ctxTogglePai()` avec icône ⚕️. Visible dans le tableau Élèves (bouton dédié rose), sur la cellule du plan (badge `.spec-pai`), dans le menu contextuel (sous-menu Aménagements), et dans la modale d'édition élève (checkbox dédiée). Comptabilisé dans le compteur "aménagement" du bilan classe et dans l'impression de la liste.
+- **Agrandissement** (`stu.agrandissement`) et **Tiers-temps** (`stu.tiers_temps`) : deux **aménagements d'examen** cumulables avec tout, chacun seul dans son groupe (`STATUS_GROUP_D` / `STATUS_GROUP_E`). Rendus en **SUFFIXE** sur la pastille principale (`_agrPrimaryKey`) : `-A` et `+⅓` (U+2153), dans cet ordre — « PAP-A », « PPRE+⅓ », « PPS-A+⅓ » (`_agrExamSuffix`, `_agrSuffix`). Sans pastille à suffixer, pastille sarcelle `.spec-agr` seule portant le(s) suffixe(s) (`_agrStandalone`, `_agrStandaloneTitle`). Surfaces : cellule du plan, non placés, liste imprimée (`_amBadges`), boutons `📄-A` / `⏱+⅓` de l'onglet Élèves, menu contextuel, modale d'édition, carte de classe (puces `📄 N agrandissements` / `⏱ N tiers-temps` via `_classCounts`), import (colonne « Tiers-temps » ou valeurs `tiers temps` / `1/3` / `+⅓` / `TT` dans « Aménagements » — `_impNormAmen` ramène ces graphies à un jeton unique avant de découper, car `/` et `+` sont des séparateurs ; la forme collée « PAP-A » est aussi acceptée). ⚠️ **Tout nouveau groupe de statut doit être ajouté à `_statusGroup`** : une clé qu'il ne connaît pas est silencieusement ignorée par `_setStudentStatusExclusive`, donc le toggle ne fait rien (vu au premier essai du tiers-temps).
 - **Groupes** : G1 (bleu), G2 (orange), G3 (violet) pour demi/tiers-groupes
 - **Civilité** : `'M'` ou `'F'` (utilisée pour le mode couleur "genre")
 - **Tags cumulables** (`stu.tags = [tagId, ...]`) : DF, DNL, etc. — un élève peut en avoir plusieurs. Définis globalement dans `S.tags` (id, abbr, name, color). Affichés en chips colorés dans Plan Prof. Un tag peut aussi être affecté à une PLACE (`room.posTagId`) — mutuellement exclusif avec `room.groupes` au niveau de la place (une place est soit dans une zone G1/G2/G3, soit dans une zone de tag).
@@ -2307,12 +2308,19 @@ CSS : les classes colorées `.cell.oc.cg1`, `.cell.oc.cgen-m`, etc. portent tout
 
 Persistance : `localStorage.planClasse_planColorMode`. Setter : `setPlanColorMode(mode)` qui appelle `renderTeacherGrid()`.
 
+## 🪪 Fiche complète d'un élève (modale `mfiche`)
+
+Clic droit sur une place → **🪪 Fiche complète** (`ctxOpenFiche` → `openFiche(sid)` → `renderFiche`). Tout ce que l'app sait de l'élève sur un écran, en **lecture seule**, pour un rendez-vous parents ou un conseil sans sauter d'onglet en onglet : identité et scolarité (classe, classes recomposées « aussi dans », groupe, tags, dates d'arrivée/départ, classes précédentes), aménagements (mêmes pastilles `.spec-*` via `_ficheSpecBadges`) et notes, place & matériel (salle active, n° QCM, tablette du pool actif, AESH liée), compteurs 📦/📝 et cumul appel toutes classes (détail par classe si plusieurs), rappels, et par discipline × période : moyenne /20 (`_computeStudentMeanForPeriod`), mentions de conseil, remarque bulletin. Les sections suivent les `featureFlags` (tablettes, appel, évaluations).
+
+Les boutons du pied (✏️ Modifier · 🕓 Historique · 🔔 Rappels · 📋 Notes, `_ficheGo`) ferment la fiche, ouvrent la modale existante et posent `_modalReturnTo[cible]` pour **rouvrir la fiche à la fermeture** — une parenthèse, pas une destination (même convention que ⚙ Motifs… / ⚙ Bibliothèque…). Colonne des libellés en `width:1%` sinon le tableau la gonfle à la moitié de la largeur.
+
 ## Menu contextuel cellule (clic droit)
 
 `showCtxMenu(e, cls, key, sid)` populate les libellés dynamiques + positionne le menu pour ne pas déborder.
 
 **Items conditionnels** :
 - ⚠️ **Contraintes non respectées (N)** : visible UNIQUEMENT si `getPlacementViolations(cls, sid, key)` renvoie ≥ 1. Handler `ctxShowViolations()` → ouvre `showViolationsModal(cls)` (modale `mviolations`).
+- 🪪 Fiche complète : ouvre `mfiche` (cf. section dédiée).
 - 🔔 Rappels (N) : libellé enrichi avec compteur si > 0 actifs.
 - 📦 / 📝 −1 : grisés si compteur à 0.
 - ↩ Annuler : grisé si `undoStack` vide.

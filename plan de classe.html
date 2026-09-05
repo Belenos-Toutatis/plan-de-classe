@@ -3335,6 +3335,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <input type="checkbox" id="es-agrandissement" style="width:16px;height:16px;flex-shrink:0"> 📄 Agrandissement (photocopies agrandies)
       </label>
     </div>
+    <div style="font-size:.78em;color:var(--pencil);margin-bottom:6px">Tiers-temps — l'élève dispose d'un temps majoré (⅓ en plus) aux évaluations (cumulable avec tout)</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--agr-fg)">
+        <input type="checkbox" id="es-tierstemps" style="width:16px;height:16px;flex-shrink:0"> ⏱ Tiers-temps (temps majoré +⅓)
+      </label>
+    </div>
     <div class="fg"><label>Notes (affichées au survol de la place)</label>
       <textarea id="es-notes" rows="3" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em;resize:vertical" placeholder="Aménagements, PAP, observations…"></textarea>
     </div>
@@ -3431,6 +3437,21 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="ma" style="display:flex;gap:8px">
       <button class="btn btn-d btn-sm" id="mhist-clear-btn" onclick="clearHistEntries()">🗑 Tout effacer</button>
       <button class="btn btn-g" onclick="closeMod2('mhist')" style="margin-left:auto">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fiche complète d'un élève (clic droit sur sa place → 🪪 Fiche complète) -->
+<div id="mfiche" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:780px;width:100%">
+    <h2 id="mfiche-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">🪪 Fiche élève</h2>
+    <div id="mfiche-body" style="max-height:70vh;overflow-y:auto;padding-right:4px"></div>
+    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="_ficheGo('edit')" title="Ouvrir la modale Modifier — la fiche se rouvre à la fermeture">✏️ Modifier</button>
+      <button class="btn btn-sm" onclick="_ficheGo('hist')" title="Historique détaillé (incidents, notes, absences)">🕓 Historique</button>
+      <button class="btn btn-sm" onclick="_ficheGo('rem')" title="Rappels / À vérifier">🔔 Rappels</button>
+      <button class="btn btn-sm" onclick="_ficheGo('notes')" title="Notes libres">📋 Notes</button>
+      <button class="btn btn-g" onclick="closeMod2('mfiche')" style="margin-left:auto">Fermer</button>
     </div>
   </div>
 </div>
@@ -6235,8 +6256,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div class="ctx-sep"></div>
       <div class="ctx-item" id="ctx-pai"     onclick="ctxTogglePai()">⚕️ <span id="ctx-pai-lbl"></span></div>
       <div class="ctx-item" id="ctx-agr"     onclick="ctxToggleAgrandissement()">📄 <span id="ctx-agr-lbl"></span></div>
+      <div class="ctx-item" id="ctx-tt"      onclick="ctxToggleTiersTemps()">⏱ <span id="ctx-tt-lbl"></span></div>
     </div>
   </div>
+  <div class="ctx-item" id="ctx-fiche"    onclick="ctxOpenFiche()">🪪 Fiche complète</div>
   <div class="ctx-item" id="ctx-notes"    onclick="ctxEditNotes()">📋 Notes</div>
   <div class="ctx-item" id="ctx-rem"      onclick="ctxOpenReminders()">🔔 <span id="ctx-rem-lbl">Rappels / À vérifier…</span></div>
   <div class="ctx-item" id="ctx-violations" onclick="ctxShowViolations()" style="display:none;color:var(--margin-red);font-weight:600">⚠️ <span id="ctx-violations-lbl">Contraintes non respectées</span></div>
@@ -6418,11 +6441,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.44.1';
+const APP_VERSION    = '2.45.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T06:43:55Z';
+const APP_BUILD_DATE = '2026-09-05T07:02:42Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7260,6 +7283,7 @@ function postLoadHook() {
     if (typeof stu.civilite === 'undefined') stu.civilite = null; // 'M' | 'F' | null
     if (typeof stu.pap === 'undefined') stu.pap = false; // Plan d'Accompagnement Personnalisé (dispositif scolarité)
     if (typeof stu.agrandissement === 'undefined') stu.agrandissement = false; // photocopies agrandies (cumulable)
+    if (typeof stu.tiers_temps === 'undefined') stu.tiers_temps = false; // temps majoré +⅓ aux évaluations (cumulable)
     // Arrivées/départs en cours d'année : null = présent par défaut
     if (typeof stu.arrivalDate   === 'undefined') stu.arrivalDate   = null;
     if (typeof stu.departureDate === 'undefined') stu.departureDate = null;
@@ -9058,7 +9082,8 @@ const STATUS_GROUP_A = ['ppre', 'pap', 'gevasco', 'ulis', 'ulis_incl'];
 const STATUS_GROUP_B = ['upe2a', 'upe2a_incl'];
 const STATUS_GROUP_C = ['pai'];  // PAI (médical) — seul dans son groupe, cumulable avec tout le reste
 const STATUS_GROUP_D = ['agrandissement']; // Agrandissement (photocopies agrandies) — seul, cumulable avec tout
-const STUDENT_STATUSES = [...STATUS_GROUP_A, ...STATUS_GROUP_B, ...STATUS_GROUP_C, ...STATUS_GROUP_D];
+const STATUS_GROUP_E = ['tiers_temps'];    // Tiers-temps (temps majoré +⅓) — seul, cumulable avec tout
+const STUDENT_STATUSES = [...STATUS_GROUP_A, ...STATUS_GROUP_B, ...STATUS_GROUP_C, ...STATUS_GROUP_D, ...STATUS_GROUP_E];
 
 // Agrandissement (photocopies agrandies) : rendu comme SUFFIXE « -A » sur la pastille
 // d'aménagement principale de l'élève (ex. « PPRE-A », « PAP-A », « PPS-A »), et non comme
@@ -9069,10 +9094,17 @@ function _agrPrimaryKey(stu) {
   for (const k of _AGR_PRIMARY_ORDER) if (stu[k]) return k;
   return null;
 }
-// Suffixe '-A' à coller au libellé de la pastille `key` si c'est la pastille principale ET agrandissement actif.
-function _agrSuffix(stu, key) { return (stu && stu.agrandissement && _agrPrimaryKey(stu) === key) ? '-A' : ''; }
-// true si agrandissement actif mais AUCUNE pastille d'aménagement à suffixer → on affiche une pastille « -A » seule.
-function _agrStandalone(stu) { return !!(stu && stu.agrandissement && !_agrPrimaryKey(stu)); }
+// Le tiers-temps (temps majoré) suit le même mécanisme, avec le suffixe « +⅓ » (U+2153).
+// Cumulés : « PAP-A+⅓ ». Sans pastille principale : « -A », « +⅓ » ou « -A+⅓ » seule.
+// _agrExamSuffix = les deux suffixes d'aménagement d'examen de l'élève, dans cet ordre.
+function _agrExamSuffix(stu) { return (stu?.agrandissement ? '-A' : '') + (stu?.tiers_temps ? '+⅓' : ''); }
+// Suffixes à coller au libellé de la pastille `key` si c'est la pastille principale.
+function _agrSuffix(stu, key) { return (stu && _agrPrimaryKey(stu) === key) ? _agrExamSuffix(stu) : ''; }
+// true si un aménagement d'examen est actif mais AUCUNE pastille à suffixer → pastille seule.
+function _agrStandalone(stu) { return !!(stu && (stu.agrandissement || stu.tiers_temps) && !_agrPrimaryKey(stu)); }
+function _agrStandaloneTitle(stu) {
+  return [stu?.agrandissement ? 'Agrandissement (photocopies agrandies)' : '', stu?.tiers_temps ? 'Tiers-temps (temps majoré +⅓)' : ''].filter(Boolean).join(' · ');
+}
 
 // Mapping clé interne ↔ suffixe DOM (les clés `_incl` deviennent `-incl` dans les ids HTML).
 const _STATUS_DOM_SUFFIX = { ulis_incl: 'ulis-incl', upe2a_incl: 'upe2a-incl' };
@@ -9084,7 +9116,8 @@ function _statusGroup(statusKey) {
   if (STATUS_GROUP_B.includes(statusKey)) return STATUS_GROUP_B;
   if (STATUS_GROUP_C.includes(statusKey)) return STATUS_GROUP_C;
   if (STATUS_GROUP_D.includes(statusKey)) return STATUS_GROUP_D;
-  return null;
+  if (STATUS_GROUP_E.includes(statusKey)) return STATUS_GROUP_E;
+  return null; // ⚠️ une clé absente d'ici est IGNORÉE par _setStudentStatusExclusive — tout nouveau groupe s'ajoute là
 }
 
 // Active un statut sur un élève EN SUPPRIMANT UNIQUEMENT les autres du même groupe.
@@ -9160,6 +9193,7 @@ function showCtxMenu(e, cls, key, sid) {
   document.getElementById('ctx-upe2aincl-lbl').textContent = s?.upe2a_incl ? 'Retirer UPE2A inclusion' : 'Marquer UPE2A inclusion';
   document.getElementById('ctx-pai-lbl').textContent       = s?.pai        ? 'Retirer PAI (médical)'  : 'Marquer PAI (médical — cumulable)';
   document.getElementById('ctx-agr-lbl').textContent       = s?.agrandissement ? 'Retirer Agrandissement' : 'Marquer Agrandissement (photocopies agrandies)';
+  document.getElementById('ctx-tt-lbl').textContent        = s?.tiers_temps ? 'Retirer Tiers-temps' : 'Marquer Tiers-temps (temps majoré +⅓)';
   // Compteur de rappels actifs
   const remN = Array.isArray(s?.reminders) ? s.reminders.length : 0;
   document.getElementById('ctx-rem-lbl').textContent =
@@ -9254,6 +9288,7 @@ function toggleStuUpe2a(id)     { _toggleStuStatus(id, 'upe2a',      'UPE2A',   
 function toggleStuUpe2aIncl(id) { _toggleStuStatus(id, 'upe2a_incl', 'UPE2A inclusion', '🟥'); }
 function toggleStuPai(id)       { _toggleStuStatus(id, 'pai',        'PAI',             '⚕️'); }
 function toggleStuAgrandissement(id) { _toggleStuStatus(id, 'agrandissement', 'Agrandissement', '📄'); }
+function toggleStuTiersTemps(id)     { _toggleStuStatus(id, 'tiers_temps',    'Tiers-temps',    '⏱'); }
 
 // Boutons cycliques (onglet Élèves — compacité). Un seul bouton parcourt les 3 états.
 // ULIS : Aucun → ULIS (hors classe) → ULIS+ (inclusion) → Aucun.
@@ -9308,6 +9343,7 @@ function ctxTogglePap()       { _ctxToggleStatus('pap',        'PAP',           
 function ctxToggleGEVAsco()   { _ctxToggleStatus('gevasco',    'GEVAsco/PPS',     '🔵'); }
 function ctxTogglePai()       { _ctxToggleStatus('pai',        'PAI',             '⚕️'); }
 function ctxToggleAgrandissement() { _ctxToggleStatus('agrandissement', 'Agrandissement', '📄'); }
+function ctxToggleTiersTemps()     { _ctxToggleStatus('tiers_temps',    'Tiers-temps',    '⏱'); }
 function ctxToggleUlis()      { _ctxToggleStatus('ulis',       'ULIS',            '🟢'); }
 function ctxToggleUlisIncl()  { _ctxToggleStatus('ulis_incl',  'ULIS inclusion',  '🟣'); }
 function ctxToggleUpe2a()     { _ctxToggleStatus('upe2a',      'UPE2A',           '🟦'); }
@@ -9451,6 +9487,174 @@ function _safeColor(c) {
   if (/^#[0-9a-f]{3,8}$/i.test(s) && (s.length === 4 || s.length === 5 || s.length === 7 || s.length === 9)) return s;
   if (/^[a-z]{1,30}$/i.test(s)) return s;
   return '#7f8c8d';
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🪪 FICHE COMPLÈTE D'UN ÉLÈVE — tout ce que l'app sait de lui, sur un seul écran.
+// Ouverte par le menu contextuel du plan (clic droit → 🪪 Fiche complète). Lecture seule :
+// les boutons du pied renvoient vers les modales d'édition existantes (Modifier, Historique,
+// Rappels, Notes) et la fiche se ROUVRE à leur fermeture via _modalReturnTo — c'est une
+// parenthèse, pas une destination (même convention que ⚙ Motifs… / ⚙ Bibliothèque…).
+// Cas d'usage : un rendez-vous parents ou un conseil, sans sauter d'onglet en onglet.
+// ═══════════════════════════════════════════════════════════
+let _ficheSid = null;
+function openFiche(sid) {
+  if (!S.eleves[sid]) return;
+  _ficheSid = sid;
+  renderFiche();
+  openMod('mfiche');
+}
+function ctxOpenFiche() {
+  if (!ctxTarget) return;
+  const sid = ctxTarget.sid;
+  closeCtxMenu();
+  openFiche(sid);
+}
+function _ficheGo(what) {
+  const sid = _ficheSid;
+  if (!sid || !S.eleves[sid]) return;
+  const target = { edit: 'me', hist: 'mhist', rem: 'mreminders', notes: 'mnotes' }[what];
+  if (!target) return;
+  closeMod2('mfiche');
+  _modalReturnTo[target] = () => { if (S.eleves[sid]) openFiche(sid); };
+  if (what === 'edit') openEdit(sid);
+  else if (what === 'hist') openHist(sid);
+  else if (what === 'rem') openReminders(sid);
+  else openStuNotes(sid);
+}
+function _ficheSpecBadges(s) {
+  const b = (cls, title, txt) => `<span class="spec-badge ${cls}" style="margin-right:3px" title="${_escAttr(title)}">${txt}</span>`;
+  const out = [];
+  if (s.ppre)       out.push(b('spec-ppre',       'PPRE — Programme Personnalisé de Réussite Éducative', 'PPRE'  + _agrSuffix(s,'ppre')));
+  if (s.pap)        out.push(b('spec-pap',        "PAP — Plan d'Accompagnement Personnalisé",           'PAP'   + _agrSuffix(s,'pap')));
+  if (s.gevasco)    out.push(b('spec-gev',        'PPS / GEVAsco',                                       'PPS'   + _agrSuffix(s,'gevasco')));
+  if (s.ulis)       out.push(b('spec-ulis',       'ULIS hors inclusion',                                 'ULIS'  + _agrSuffix(s,'ulis')));
+  if (s.ulis_incl)  out.push(b('spec-ulis-incl',  'ULIS inclusion',                                      'ULIS+' + _agrSuffix(s,'ulis_incl')));
+  if (s.upe2a)      out.push(b('spec-upe2a',      'UPE2A hors inclusion (allophone)',                    'UPE2A' + _agrSuffix(s,'upe2a')));
+  if (s.upe2a_incl) out.push(b('spec-upe2a-incl', 'UPE2A inclusion (allophone)',                         'UPE2A+'+ _agrSuffix(s,'upe2a_incl')));
+  if (s.pai)        out.push(b('spec-pai',        "PAI — Projet d'Accueil Individualisé (médical)",     'PAI'   + _agrSuffix(s,'pai')));
+  if (_agrStandalone(s)) out.push(b('spec-agr',   _agrStandaloneTitle(s), _agrExamSuffix(s)));
+  return out.join('');
+}
+function renderFiche() {
+  const s = S.eleves[_ficheSid];
+  const body = document.getElementById('mfiche-body');
+  const ttl = document.getElementById('mfiche-title');
+  if (!s || !body) return;
+  const cls = S.classes?.[s.classe_id] || null;
+  const otherCls = Object.values(S.classes || {}).filter(c => c !== cls && Array.isArray(c.eleves) && c.eleves.includes(s.id));
+  const dash = '<span style="color:var(--pencil-soft)">—</span>';
+  const row = (k, v) => `<tr><th style="text-align:left;padding:3px 14px 3px 0;color:var(--pencil);font-weight:600;white-space:nowrap;vertical-align:top;font-size:.9em;width:1%">${k}</th><td style="padding:3px 0;vertical-align:top">${v}</td></tr>`;
+  const sec = (title, inner) => `<div class="about-section" style="margin-bottom:10px;padding:8px 12px"><h3 style="margin:0 0 6px;font-size:.95em">${title}</h3><table style="border-collapse:collapse;width:100%">${inner}</table></div>`;
+
+  // ── En-tête
+  const civ = s.civilite === 'M' ? '<span style="color:var(--civ-m)">♂</span>' : s.civilite === 'F' ? '<span style="color:var(--civ-f)">♀</span>' : '';
+  const active = _stuActiveOn(s);
+  const stateBdg = !active
+    ? (s.departureDate && _stuDepartedOn(s) ? `<span class="spec-badge" style="background:var(--pencil);color:#fff">🚪 parti·e le ${_fmtDateFr(s.departureDate)}</span>`
+                                              : `<span class="spec-badge" style="background:var(--pencil);color:#fff">📅 arrive le ${_fmtDateFr(s.arrivalDate)}</span>`)
+    : '';
+  ttl.innerHTML = `🪪 <span>${_escName(s.prenom)} <strong>${_escName(s.nom)}</strong></span> ${civ}
+    ${cls ? `<span style="font-size:.7em;font-weight:400;color:var(--pencil)">${_escName(cls.nom)}</span>` : ''} ${stateBdg}`;
+
+  // ── Identité & scolarité
+  const tags = (Array.isArray(s.tags) ? s.tags : []).map(tid => S.tags?.[tid]).filter(Boolean)
+    .map(t => { const bg = _safeColor(t.color); return `<span class="spec-badge" style="margin-right:3px;background:${bg};color:${_contrastTextColor(bg)}" title="${_escAttr(t.name || t.abbr)}">${_escName(t.abbr)}</span>`; }).join('');
+  const dates = [s.arrivalDate ? `arrivée le ${_fmtDateFr(s.arrivalDate)}` : '', s.departureDate ? `départ le ${_fmtDateFr(s.departureDate)}` : ''].filter(Boolean).join(' · ');
+  const prev = Array.isArray(s.previousClasses) && s.previousClasses.length
+    ? s.previousClasses.map(p => `${_escName(S.classes?.[p.classId]?.nom || p.classId)} (jusqu'au ${_fmtDateFr(p.leftOn)})`).join(', ') : '';
+  const identite = sec('👤 Identité & scolarité',
+    row('Classe', cls ? _escName(cls.nom) : dash) +
+    (otherCls.length ? row('Aussi dans', otherCls.map(c => `<span class="spec-badge" style="margin-right:3px;background:var(--disc-accent, #6f4a8c);color:#fff">🔀 ${_escName(c.nom)}</span>`).join('')) : '') +
+    row('Groupe', s.groupe ? `<span class="gbdg g${s.groupe}">G${s.groupe}</span>` : dash) +
+    row('Tags', tags || dash) +
+    (dates ? row('Dates', dates) : '') +
+    (prev ? row('Classes précédentes', prev) : ''));
+
+  // ── Aménagements
+  const badges = _ficheSpecBadges(s);
+  const amen = sec('🎓 Aménagements',
+    row('Dispositifs', badges || '<span style="color:var(--pencil)">aucun</span>') +
+    row('Notes', s.notes ? `<span style="white-space:pre-line">${_escName(s.notes)}</span>` : dash));
+
+  // ── Place, tablette, AESH (salle active de la classe réelle)
+  let place = '';
+  if (cls) {
+    const room = activeRoomData(cls);
+    const salle = S.salles?.[cls.activeRoom];
+    const pos = room && cls.seating ? getPos(s.id, cls) : null;
+    const posLbl = pos ? `n° ${_qcmDisplayLabel(cls, pos.r, pos.c, salle?.cols || 10)}` : '<span style="color:var(--warn-fg, #92400e)">non placé·e</span>';
+    const pool = S.tabletPools?.[cls.activePool];
+    const ip = pos ? ipadGet(cls, pos.k, 0) : 0;
+    const ipLbl = pool ? (ip ? `${_escName(pool.nom)} — ${_escName(poolLabel(pool, ip))}` : dash) : dash;
+    const aIdx = aeshHelpingSid(cls, s.id);
+    const aLbl = aIdx >= 0 ? `🤝 ${aeshLabel(aIdx, aeshIndices(room).length)}` : dash;
+    const nbRooms = Object.keys(cls.rooms || {}).length;
+    place = sec('📍 Place & matériel',
+      row('Salle', salle ? `${_escName(salle.nom)}${nbRooms > 1 ? ` <span style="color:var(--pencil);font-size:.85em">(salle active, ${nbRooms} au total)</span>` : ''}` : dash) +
+      row('Place', posLbl) +
+      (_featureEnabled('tablettes') ? row('Tablette', ipLbl) : '') +
+      row('AESH', aLbl));
+  }
+
+  // ── Incidents & appel
+  const hist = Array.isArray(s.history) ? s.history : [];
+  const lastInc = hist.length ? hist.reduce((a, b) => (a.ts > b.ts ? a : b)) : null;
+  const lastIncLbl = lastInc ? `dernier : ${lastInc.type === 'oubli' ? '📦' : '📝'} ${new Date(lastInc.ts).toLocaleDateString('fr-FR')}` : '';
+  const pill = (n, icon, title) => `<span title="${title}" style="display:inline-block;padding:1px 8px;border-radius:9px;font-weight:700;background:${oubliColor(n || 0)};color:${_contrastTextColor(oubliColor(n || 0))}">${icon} ${n || 0}</span>`;
+  let attRows = '';
+  if (_featureEnabled('appel')) {
+    let totAbs = 0, totRet = 0;
+    const per = [];
+    for (const [cid, recs] of Object.entries(S.attendance || {})) {
+      let a = 0, r = 0;
+      for (const rec of Object.values(recs || {})) {
+        if ((rec.absents || []).includes(s.id)) a++;
+        if (rec.retards && Object.prototype.hasOwnProperty.call(rec.retards, s.id)) r++;
+      }
+      if (a || r) { per.push({ cid, a, r }); totAbs += a; totRet += r; }
+    }
+    const detail = per.length > 1 ? ` <span style="color:var(--pencil);font-size:.85em">(${per.map(p => `${_escName(S.classes?.[p.cid]?.nom || p.cid)} : 🚫 ${p.a} · ⏰ ${p.r}`).join(' ; ')})</span>` : '';
+    attRows = row('Appel', `${pill(totAbs, '🚫', 'Absences cumulées (tous appels enregistrés)')} ${pill(totRet, '⏰', 'Retards cumulés')}${detail}`);
+  }
+  const incidents = sec('📦 Incidents & appel',
+    row('Compteurs', `${pill(s.oublis, '📦', 'Matériel oublié')} ${pill(s.non_travail, '📝', 'Travail non fait')} <span style="color:var(--pencil);font-size:.85em">${lastIncLbl}</span>`) +
+    attRows);
+
+  // ── Rappels
+  const rems = Array.isArray(s.reminders) ? s.reminders : [];
+  const rappels = sec('🔔 Rappels / À vérifier',
+    row(`${rems.length || 'Aucun'}`, rems.length
+      ? `<ul style="margin:0;padding-left:18px">${rems.map(r => `<li>${_escName(r.label)} <span style="color:var(--pencil);font-size:.85em">(${new Date(r.ts).toLocaleDateString('fr-FR')})</span></li>`).join('')}</ul>`
+      : '<span style="color:var(--pencil)">rien à vérifier</span>'));
+
+  // ── Évaluations : moyenne, mentions de conseil et remarque bulletin par période et par discipline
+  let evals = '';
+  if (_featureEnabled('evaluation') && cls) {
+    const discIds = _clsDisciplineIds(cls);
+    const pers = _periodeOptions();
+    const cur = _currentPeriode();
+    const blocks = discIds.map(did => {
+      const trs = pers.map(p => {
+        const mean = _computeStudentMeanForPeriod(cls.id, s.id, p.code, did);
+        const ment = [..._getConseilActive(cls.id, s.id, p.code, did)].map(id => S.conseilMentions[id])
+          .map(m => `<span class="spec-badge" style="margin-right:3px;background:${_safeColor(m.color)};color:${_contrastTextColor(_safeColor(m.color))}" title="${_escAttr(m.nom)}">${_escName(m.abbr)}</span>`).join('');
+        const rem = _getBulletinRemarque(cls.id, s.id, p.code, did);
+        const isCur = p.code === cur;
+        return `<tr style="${isCur ? 'font-weight:600' : ''}">
+          <td style="padding:3px 8px 3px 0;white-space:nowrap;color:var(--pencil)">${p.code}${isCur ? ' <span title="Période en cours">●</span>' : ''}</td>
+          <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono)">${mean == null ? dash : `<strong>${_fmtNote(mean)}</strong><span style="color:var(--pencil);font-size:.8em">/20</span>`}</td>
+          <td style="padding:3px 8px">${ment || dash}</td>
+          <td style="padding:3px 0;font-size:.88em;white-space:pre-line">${rem ? _escName(rem) : dash}</td>
+        </tr>`;
+      }).join('');
+      return `${discIds.length > 1 ? `<tr><td colspan="4" style="padding:6px 0 2px;font-weight:600;color:var(--ink-blue)">🎓 ${_escName(_disciplineLabel(did))}</td></tr>` : ''}
+        <tr style="font-size:.8em;color:var(--pencil)"><th style="text-align:left;padding:2px 8px 2px 0">Période</th><th style="text-align:right;padding:2px 8px">Moyenne</th><th style="text-align:left;padding:2px 8px">Conseil</th><th style="text-align:left">Remarque bulletin</th></tr>${trs}`;
+    }).join('');
+    evals = sec('📊 Évaluations', blocks);
+  }
+
+  body.innerHTML = identite + amen + place + incidents + rappels + evals;
 }
 
 function openReminders(sid) {
@@ -13662,7 +13866,7 @@ function _levelLabel(order) {
 // - amenagement : élèves avec PPRE / PPS (gevasco) / ULIS+ (inclusion) parmi les présents
 // - ulisOut : ULIS hors classe (info — pas dans le total photocopies)
 function _classCounts(cls) {
-  let total = 0, present = 0, amenagement = 0, ulisOut = 0, upe2aOut = 0, agrandissement = 0;
+  let total = 0, present = 0, amenagement = 0, ulisOut = 0, upe2aOut = 0, agrandissement = 0, tiersTemps = 0;
   let m = 0, f = 0, civUnk = 0;
   for (const sid of cls.eleves || []) {
     const s = S.eleves[sid];
@@ -13675,6 +13879,7 @@ function _classCounts(cls) {
     // Agrandissement (photocopies agrandies) : compté sur TOUS les inscrits actifs, indépendamment
     // de l'inclusion (un ULIS/UPE2A hors classe peut aussi avoir besoin d'un agrandissement quand il vient).
     if (s.agrandissement) agrandissement++;
+    if (s.tiers_temps) tiersTemps++;   // même règle : compté sur tous les inscrits
     // ULIS hors classe et UPE2A hors classe ne sont jamais en classe → exclus du "normalement présent"
     if (s.ulis)  { ulisOut++;  continue; }
     if (s.upe2a) { upe2aOut++; continue; }
@@ -13684,7 +13889,7 @@ function _classCounts(cls) {
   }
   // outClass = ULIS hors + UPE2A hors → libellé combiné dans l'UI
   const outClass = ulisOut + upe2aOut;
-  return { total, present, amenagement, ulisOut, upe2aOut, outClass, agrandissement, m, f, civUnk };
+  return { total, present, amenagement, ulisOut, upe2aOut, outClass, agrandissement, tiersTemps, m, f, civUnk };
 }
 
 function sortedClasses() {
@@ -13743,7 +13948,8 @@ function renderClasses() {
     const civDetail = (c.m + c.f + c.civUnk) > 0
       ? ` <span class="cc-chip cc-chip-m">♂ ${c.m}</span> <span class="cc-chip cc-chip-f">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="opacity:.75" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
       : '';
-    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
+    const agrLbl = (c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '')
+                 + (c.tiersTemps > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves disposant d'un tiers-temps (temps majoré +⅓)">⏱ ${c.tiersTemps} tiers-temps</span>` : '');
     const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
     const _discIds = _clsDisciplineIds(cls);
     const _discLine = _discIds.length >= 2
@@ -14125,12 +14331,13 @@ const _IMP_FIELDS = [
   { key: 'upe2a_incl', label: 'UPE2A inclusion (oui / non)',      syn: ['upe2a+','upe2a inclusion','upe2a incl'] },
   { key: 'pai',        label: 'PAI (oui / non)',        syn: ['pai'] },
   { key: 'agrandissement', label: 'Agrandissement (oui / non)', syn: ['agrandissement','agrandissements','a3','photocopies agrandies'] },
+  { key: 'tiers_temps', label: 'Tiers-temps (oui / non)', syn: ['tiers temps','tiers-temps','tierstemps','1/3 temps','temps majore','temps majoré','tt'] },
   { key: 'arrivee',  label: "Date d'arrivée",
     syn: ['arrivee','date arrivee','date d arrivee','entree','date entree','date d entree','arrival','arrivee le'] },
   { key: 'notes',    label: 'Notes / remarques',
     syn: ['notes','note','remarque','remarques','commentaire','commentaires','observation','observations'] },
 ];
-const _IMP_BOOL_KEYS = ['ppre','pap','gevasco','ulis','ulis_incl','upe2a','upe2a_incl','pai','agrandissement'];
+const _IMP_BOOL_KEYS = ['ppre','pap','gevasco','ulis','ulis_incl','upe2a','upe2a_incl','pai','agrandissement','tiers_temps'];
 
 function _impNormHeader(h) {
   return String(h || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -14168,10 +14375,15 @@ function _impNormAmen(v) {
   // ⚠️ Le « + » est à la fois SÉPARATEUR (« PAP + PAI ») et MARQUEUR d'inclusion
   // (« ULIS+ »). On protège d'abord ce second usage, sinon le découpage l'avale et
   // ULIS+ retombe sur ULIS hors inclusion — constaté au premier essai.
-  const src = String(v || '').toUpperCase().replace(/(ULIS|UPE2A)\s*\+/g, '$1_INCL');
+  // Même précaution pour le tiers-temps : « 1/3 » contient le séparateur « / », « +⅓ » le « + »,
+  // et « TIERS TEMPS » un espace. On les ramène d'abord à un jeton unique.
+  const src = String(v || '').toUpperCase().replace(/(ULIS|UPE2A)\s*\+/g, '$1_INCL')
+    .replace(/\+?\s*(⅓|1\s*\/\s*3)(\s*TEMPS)?|TIERS[\s-]*TEMPS|TEMPS\s+MAJORE?/g, ' TIERS_TEMPS ');
   for (const tok of src.split(/[\s,;\/|+]+/)) {
-    const t = tok.replace(/[^A-Z0-9_-]/g, '');
+    let t = tok.replace(/[^A-Z0-9_-]/g, '');
     if (!t) continue;
+    // « PAP-A », « PPRE-A » : la forme collée que l'app affiche elle-même — on détache le suffixe.
+    if (t.length > 2 && /^[A-Z0-9_]+-A$/.test(t)) { out.agrandissement = true; t = t.slice(0, -2); }
     if (t === 'PPRE') out.ppre = true;
     else if (t === 'PAP') out.pap = true;
     else if (t === 'PPS' || t === 'GEVASCO' || t === 'GEVA-SCO') out.gevasco = true;
@@ -14181,6 +14393,7 @@ function _impNormAmen(v) {
     else if (t === 'UPE2A') out.upe2a = true;
     else if (t === 'PAI') out.pai = true;
     else if (t === '-A' || t === 'AGRANDISSEMENT' || t === 'A3') out.agrandissement = true;
+    else if (t === 'TIERS_TEMPS' || t === 'TT') out.tiers_temps = true;
   }
   return out;
 }
@@ -14638,7 +14851,7 @@ function _impRenderPreview(res, cls) {
   const ko = recs.filter(r => !r.ok);
   const dupSkipped = ko.filter(r => r.dup && r.warnings.some(w => w.startsWith('déjà présent'))).length;
   const civ = c => c === 'M' ? '♂' : c === 'F' ? '♀' : '';
-  const stLab = st => Object.keys(st).filter(k => st[k]).map(k => ({ ppre: 'PPRE', pap: 'PAP', gevasco: 'PPS', ulis: 'ULIS', ulis_incl: 'ULIS+', upe2a: 'UPE2A', upe2a_incl: 'UPE2A+', pai: 'PAI', agrandissement: '-A' }[k] || k)).join(' + ');
+  const stLab = st => Object.keys(st).filter(k => st[k]).map(k => ({ ppre: 'PPRE', pap: 'PAP', gevasco: 'PPS', ulis: 'ULIS', ulis_incl: 'ULIS+', upe2a: 'UPE2A', upe2a_incl: 'UPE2A+', pai: 'PAI', agrandissement: '-A', tiers_temps: '+⅓' }[k] || k)).join(' + ');
   const N = 8;
   const shown = recs.slice(0, N);
   const hasCol = fn => recs.some(fn);
@@ -14801,6 +15014,7 @@ function importStudents() {
     for (const k of Object.keys(r.statuses)) {
       if (!r.statuses[k]) continue;
       if (k === 'agrandissement') stu.agrandissement = true;
+      else if (k === 'tiers_temps') stu.tiers_temps = true;
       else _setStudentStatusExclusive(stu, k);
     }
     S.eleves[id] = stu;
@@ -15106,6 +15320,7 @@ function openEdit(id) {
   document.getElementById('es-upe2a-incl').checked  = !!s.upe2a_incl;
   document.getElementById('es-pai').checked         = !!s.pai;
   document.getElementById('es-agrandissement').checked = !!s.agrandissement;
+  document.getElementById('es-tierstemps').checked  = !!s.tiers_temps;
   document.getElementById('es-notes').value         = s.notes || '';
   document.getElementById('es-arrival').value       = s.arrivalDate   || '';
   document.getElementById('es-departure').value     = s.departureDate || '';
@@ -15128,6 +15343,7 @@ function saveEdit() {
   s.pai       = !!document.getElementById('es-pai').checked;
   // Agrandissement (photocopies agrandies) — cumulable, lecture directe
   s.agrandissement = !!document.getElementById('es-agrandissement').checked;
+  s.tiers_temps    = !!document.getElementById('es-tierstemps').checked;
   s.notes     = document.getElementById('es-notes').value.trim();
   // Arrivée / départ en cours d'année (premier jour d'absence pour le départ)
   const _arr = (document.getElementById('es-arrival').value || '').trim();
@@ -16757,6 +16973,9 @@ function renderStudents() {
     // Agrandissement (photocopies agrandies) — cumulable avec tous les autres statuts. Rendu « PPRE-A » quand cumulé.
     const agrBtn       = `<button class="btn btn-sm" style="${_stSty(s.agrandissement, '#00838f', 42)}"
       onclick="toggleStuAgrandissement('${s.id}')" title="${s.agrandissement?'Retirer Agrandissement':'Marquer Agrandissement (photocopies agrandies) — cumulable avec tous les autres statuts'}">📄-A</button>`;
+    // Tiers-temps (temps majoré +⅓) — même mécanisme que l'agrandissement. Rendu « PPRE+⅓ » quand cumulé.
+    const ttBtn        = `<button class="btn btn-sm" style="${_stSty(s.tiers_temps, '#00838f', 42)}"
+      onclick="toggleStuTiersTemps('${s.id}')" title="${s.tiers_temps?'Retirer Tiers-temps':'Marquer Tiers-temps (temps majoré +⅓ aux évaluations) — cumulable avec tous les autres statuts'}">⏱+⅓</button>`;
     const notesBtn   = `<button class="btn btn-sm" style="${_stSty(s.notes, '#5f6f70', 0)}"
       onclick="openStuNotes('${s.id}')" title="${_escAttr(s.notes||'Ajouter une note')}">📋</button>`;
     const sel = selectedEleves.has(s.id) ? ' selected' : '';
@@ -16816,7 +17035,7 @@ function renderStudents() {
         <td class="ff-appel" style="text-align:center" title="Cumul de retards sur tous les appels enregistrés">
           <span class="badge" style="background:${oubliColor(stats.ret)};color:#222">${stats.ret}</span>
         </td>
-        <td style="white-space:nowrap">${ppreBtn} ${papBtn} ${gevascoBtn} ${ulisBtn} ${upe2aBtn} ${paiBtn} ${agrBtn} ${notesBtn}</td>
+        <td style="white-space:nowrap">${ppreBtn} ${papBtn} ${gevascoBtn} ${ulisBtn} ${upe2aBtn} ${paiBtn} ${agrBtn} ${ttBtn} ${notesBtn}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-g btn-sm" onclick="openEdit('${s.id}')" title="Modifier">✏️</button>
           <button class="btn btn-g btn-sm" onclick="openHist('${s.id}')" title="Historique : incidents, notes, absences, retards">🕓</button>
@@ -16842,7 +17061,7 @@ function renderStudents() {
         <th onclick="sortEleves('nt')">📝 Travail non fait${arrow('nt')}</th>
         <th class="ff-appel" onclick="sortEleves('abs')" title="Cumul absences sur tous les appels enregistrés">🚫 Absences${arrow('abs')}</th>
         <th class="ff-appel" onclick="sortEleves('ret')" title="Cumul retards sur tous les appels enregistrés">⏰ Retards${arrow('ret')}</th>
-        <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PAP / PPS / ULIS / UPE2A — boutons exclusifs intra-groupe), médicaux (PAI — cumulable) et 📄-A = agrandissement (photocopies agrandies — cumulable, affiché en suffixe « PPRE-A », « PAP-A »…). Notes libres en dernier.">Aménagements (PPRE · PAP · PPS · ULIS · UPE2A · PAI · 📄-A) / Notes</th>
+        <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PAP / PPS / ULIS / UPE2A — boutons exclusifs intra-groupe), médicaux (PAI — cumulable) et 📄-A = agrandissement (photocopies agrandies) et ⏱+⅓ = tiers-temps (temps majoré) — cumulables, affichés en suffixe « PPRE-A », « PAP+⅓ », « PPS-A+⅓ »…. Notes libres en dernier.">Aménagements (PPRE · PAP · PPS · ULIS · UPE2A · PAI · 📄-A · ⏱+⅓) / Notes</th>
         <th style="cursor:default">Actions</th>
       </tr></thead>
       <tbody>${rows}</tbody>
@@ -18305,7 +18524,7 @@ function buildCell(cls, row, col) {
       stu.upe2a       ? `<span class="spec-badge spec-upe2a"     title="${_escAttr(stu.notes||'UPE2A hors classe')}">UPE2A${_agrSuffix(stu,'upe2a')}</span>` : '',
       stu.upe2a_incl  ? `<span class="spec-badge spec-upe2a-incl" title="${_escAttr(stu.notes||'UPE2A inclusion')}">UPE2A+${_agrSuffix(stu,'upe2a_incl')}</span>` : '',
       stu.pai         ? `<span class="spec-badge spec-pai"        title="${_escAttr(stu.notes||'PAI — Projet d’Accueil Individualisé (médical)')}">PAI${_agrSuffix(stu,'pai')}</span>` : '',
-      _agrStandalone(stu) ? `<span class="spec-badge spec-agr"   title="Agrandissement — photocopies à agrandir">-A</span>` : '',
+      _agrStandalone(stu) ? `<span class="spec-badge spec-agr"   title="${_escAttr(_agrStandaloneTitle(stu))}">${_agrExamSuffix(stu)}</span>` : '',
       stu.notes       ? `<span class="spec-badge" style="background:#7f8c8d;color:#fff" title="${_escAttr(stu.notes)}">📋</span>` : '',
     ].filter(Boolean);
     const specBadges = specList.length ? `<div class="spec-badges">${specList.join('')}</div>` : '';
@@ -18339,7 +18558,7 @@ function buildCell(cls, row, col) {
                       style="${_style}">${_label}</span>`;
       })()}
     `;
-    const specTitle = [stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':''].filter(Boolean).join(' · ');
+    const specTitle = [stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':'', stu.tiers_temps?'Tiers-temps (+⅓)':''].filter(Boolean).join(' · ');
     const notesTitle = stu.notes ? `\n📋 ${stu.notes}` : '';
     let postTitle = '';
     if (_postAppel) {
@@ -18928,7 +19147,7 @@ function renderUnplaced() {
     if (s.ppre)       specBdgs.push(_sb('spec-ppre',       'PPRE',                                    'PPRE'  + _agrSuffix(s,'ppre')));
     if (s.pap)        specBdgs.push(_sb('spec-pap',        "PAP (Plan d'Accompagnement Personnalisé)", 'PAP'   + _agrSuffix(s,'pap')));
     if (s.pai)        specBdgs.push(_sb('spec-pai',        'PAI (médical)',                           'PAI'   + _agrSuffix(s,'pai')));
-    if (_agrStandalone(s)) specBdgs.push(_sb('spec-agr',   'Agrandissement (photocopies agrandies)',  '-A'));
+    if (_agrStandalone(s)) specBdgs.push(_sb('spec-agr',   _agrStandaloneTitle(s), _agrExamSuffix(s)));
     return `<div class="us" draggable="true"
       data-sid="${_escAttr(s.id)}"
       ondragstart="startDragUnplaced(event,'${_escAttr(s.id)}')"
@@ -26664,6 +26883,7 @@ function printElevesList() {
         upe2a_incl: !!live?.upe2a_incl,
         pai:        !!live?.pai,
         agrandissement: !!live?.agrandissement,
+        tiers_temps: !!live?.tiers_temps,
         _archived:  !live,
       };
     });
@@ -26686,6 +26906,7 @@ function printElevesList() {
       upe2a_incl: !!s.upe2a_incl,
       pai:        !!s.pai,
       agrandissement: !!s.agrandissement,
+      tiers_temps: !!s.tiers_temps,
       _archived: false,
     }));
   }
@@ -26736,7 +26957,7 @@ function printElevesList() {
     // _contrastTextColor). Conservée telle quelle par fidélité à l'écran, où elle est déjà
     // acceptée à 3,53:1 — le papier est donc MEILLEUR que l'écran sur ce point.
     if (s.pai)        badges.push({ txt: 'PAI'   + _agrSuffix(s,'pai'),        bg: '#ec4899' });
-    if (_agrStandalone(s)) badges.push({ txt: '-A', bg: '#00838f' });
+    if (_agrStandalone(s)) badges.push({ txt: _agrExamSuffix(s), bg: '#00838f' });
     if (!badges.length) return '<span style="color:#606f86">—</span>';
     const baseStyle = 'display:inline-block;border-radius:3px;padding:0 4px;font-size:.75em;font-weight:700;margin:1px 1px 1px 0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
     return badges.map(b => {
@@ -30335,6 +30556,7 @@ function createDemo(opts) {
   const ppreSamples       = [3, 22, 14];   // PPRE — l'index 14 cumule aussi UPE2A+
   const papSamples        = [5, 8];        // PAP — l'index 8 cumule agrandissement (démontre « PAP-A »)
   const agrSamples        = [3, 8];        // Agrandissement — index 3 = PPRE-A, index 8 = PAP-A
+  const ttSamples         = [8, 12];       // Tiers-temps — index 8 cumule (PAP-A+⅓), index 12 seul (+⅓)
   const ppsSamples        = [7, 19];       // PPS (gevasco)
   const ulisIncSamples    = [11];          // ULIS+ (inclusion)
   const upe2aIncSamples   = [14, 19];      // UPE2A+ (inclusion) — l'index 19 cumule aussi PPS
@@ -30384,6 +30606,7 @@ function createDemo(opts) {
         ppre:       ppreSamples.includes(i),
         pap:        papSamples.includes(i),
         agrandissement: agrSamples.includes(i),
+        tiers_temps: ttSamples.includes(i),
         gevasco:    ppsSamples.includes(i),
         ulis:       isUlisOut,
         ulis_incl:  !isUlisOut && ulisIncSamples.includes(i),
