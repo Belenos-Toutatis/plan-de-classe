@@ -6417,11 +6417,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.43.0';
+const APP_VERSION    = '2.43.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T06:09:02Z';
+const APP_BUILD_DATE = '2026-09-05T06:15:14Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14446,7 +14446,10 @@ function _impAnalyze(text, opts) {
 let _imp = { sig: '', mapping: null, header: null, codeMap: {}, timer: null, result: null };
 
 function openImportStudents() {
-  if (!getCls()) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  // Pas de garde « Sélectionnez une classe » : au premier lancement (ou après un
+  // Tout effacer) il n'y a AUCUNE classe, et c'est justement le fichier — colonne
+  // Classe — qui doit les créer. Sans classe courante, les lignes sans classe sont
+  // simplement rejetées (« aucune classe cible »), l'aperçu le dit.
   _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.result = null;
   openMod('mi');
   _impRefresh();
@@ -14627,8 +14630,12 @@ function _impRenderPreview(res, cls) {
   const reasonsHtml = Object.entries(reasons).map(([k, n]) => `${n} × ${_escName(k)}`).join(' · ');
   const perClass = {};
   ok.forEach(r => { perClass[r.targetClassId] = (perClass[r.targetClassId] || 0) + 1; });
+  const noCur = !cls;
+  const noCurHtml = noCur
+    ? `<div style="font-size:.84em;color:var(--pencil);margin:4px 0">ℹ️ Aucune classe sélectionnée : chaque élève ira dans la classe indiquée par la colonne <strong>Classe</strong>${Object.keys(res.newClasses || {}).length ? ' (créée si besoin)' : ''} ; les lignes sans classe sont ignorées.</div>`
+    : '';
   const perClassHtml = Object.entries(perClass).map(([id, n]) => `${n} dans ${_escName(id)}`).join(', ');
-  box.innerHTML = `
+  box.innerHTML = `${noCurHtml}
     <div style="font-size:.88em;margin:6px 0 4px">
       <strong>${recs.length} ligne${recs.length > 1 ? 's' : ''}</strong> · <span style="color:#1a7442">✓ ${ok.length} à importer</span>${perClassHtml ? ` <span style="color:var(--pencil)">(${perClassHtml})</span>` : ''}
       ${ko.length ? ` · <span style="color:var(--margin-red)">✗ ${ko.length} ignorée${ko.length > 1 ? 's' : ''}</span> <span style="color:var(--pencil);font-size:.9em">— ${reasonsHtml}</span>` : ''}
@@ -14672,8 +14679,9 @@ function _impFileSelected(input) {
 }
 
 function importStudents() {
+  // Une classe courante n'est PAS requise : sans elle, seuls les élèves dont la
+  // colonne Classe désigne (ou crée) une classe passent — l'analyse a déjà trié.
   const defaultCls = getCls();
-  if (!defaultCls) return toast('⚠️ Sélectionnez une classe.', 'warn');
   _impRefresh(); // recalcul avec l'état exact des cases et du mappage
   const res = _imp.result;
   const recs = (res?.records || []).filter(r => r.ok);
@@ -14689,6 +14697,7 @@ function importStudents() {
   }
   for (const r of recs) {
     const targetCls = S.classes[r.targetClassId] || defaultCls;
+    if (!targetCls) continue; // ne peut arriver que si l'analyse et l'état ont divergé
     const id = uid();
     const tagIds = [];
     for (const abbr of r.tagAbbrs) {
@@ -14718,6 +14727,13 @@ function importStudents() {
   closeMod2('mi');
   save();
   if (createdClasses.length) refreshSelector();
+  // Aucune classe n'était sélectionnée (premier lancement, après un Tout effacer) :
+  // on atterrit sur la première classe servie, sinon l'onglet resterait vide alors
+  // que l'import a réussi.
+  if (!getCls()) {
+    const first = Object.keys(counts)[0];
+    if (first && S.classes[first]) switchClass(first);
+  }
   renderStudents();
   renderUnplaced();
   const detail = Object.entries(counts).map(([id, c]) => `${c} dans ${id}`).join(', ');

@@ -1705,3 +1705,28 @@ test('Import : classes inconnues créées à l\'import, id compacté, nom conser
   assert.equal(c.nom, '3ème C'); assert.ok(c.activeRoom); assert.deepEqual(c.eleves, []);
   assert.equal(get('S.salles[S.classes["3C"].activeRoom].rows'), 4);
 });
+
+test('Import : sans AUCUNE classe (premier lancement), le fichier crée les classes et la 1re est sélectionnée', () => {
+  setState({ classes: {}, eleves: {}, tags: {}, salles: {}, cur: null });
+  const csv = 'Nom;Prénom;Classe;Groupes\nROUX;Inès;3B;3B-GP1\nPETIT;Noé;3B;3B-GP2\nLENOIR;Tom;3ème C;3C-GP1\nSANS;Classe;;';
+  // L'analyse seule : 3 élèves à importer, 1 rejeté (aucune classe cible), 2 classes à créer
+  const r = _impRun(csv, { defaultClassId: null });
+  assert.equal(r.records.filter(x => x.ok).length, 3);
+  assert.match(r.records[3].warnings[0], /aucune classe cible/);
+  assert.deepEqual(r.newClasses, { '3B': '3B', '3C': '3ème C' });
+  // Le parcours complet du bouton, avec le DOM minimal dont importStudents a besoin
+  ev(`globalThis.__toast = null; toast = m => { globalThis.__toast = m; };
+      pushUndo = function(){}; save = function(){}; renderStudents = function(){}; renderUnplaced = function(){};
+      refreshSelector = function(){}; closeMod2 = function(){}; renderTab = function(){}; renderTeacherGrid = function(){};
+      _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {};
+      const __els = { 'imp-txt': { value: ${JSON.stringify(csv)} }, 'imp-mode': { value: 'auto' },
+                      'imp-skip-dup': { checked: true }, 'imp-create-cls': { checked: true } };
+      document.getElementById = id => __els[id] || { value: '', checked: false, style: {}, innerHTML: '', classList: { add(){}, remove(){}, toggle(){} }, textContent: '' };
+      importStudents();`);
+  assert.deepEqual(Object.keys(get('S.classes')).sort(), ['3B', '3C'], 'les deux classes ont été créées');
+  assert.equal(get('S.classes["3C"].nom'), '3ème C');
+  assert.equal(Object.keys(get('S.eleves')).length, 3);
+  assert.equal(get('S.classes["3B"].eleves.length'), 2);
+  assert.equal(get('S.cur'), '3B', 'la première classe servie devient la classe courante');
+  assert.match(ev('__toast'), /3 élève.*2 classe/s);
+});
