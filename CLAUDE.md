@@ -924,6 +924,25 @@ Vue cross-élèves filtrable par période, accessible depuis la modal **📅 App
 - `closeMod`, `closeMod2`, et le handler Esc déclenchent `_afterModalClose(id)` qui invoque le callback enregistré et le supprime. Le handler Esc appelle directement `closeMod2(id)` (plutôt qu'une fermeture manuelle dupliquée) — garantit que le focus trap (`_modalTeardownA11y`) est démonté sur les 3 voies de fermeture (bouton, backdrop, Échap) sans divergence.
 - Utilisé pour : à la fermeture de mhist depuis la vue d'ensemble, rafraîchir `renderOverview()` (au cas où l'historique a été modifié)
 
+## Import d'élèves (modale `mi`) — tableau ou texte libre, avec aperçu
+
+Une seule zone de texte, deux formats détectés automatiquement (`_impDetect`), un sélecteur `#imp-mode` pour forcer :
+
+- **Tableau** (CSV / TSV / copie d'un tableur) — séparateur = le premier de TAB / `;` / `,` qui donne ≥ 2 colonnes sur ≥ 80 % des lignes ; guillemets doubles respectés (`_impSplitLine`). **En-tête** reconnu si ≥ 1 titre matche un synonyme ET au moins un tiers des colonnes (sinon un « DUPONT » en 1re ligne passerait pour un titre). Sans en-tête, les colonnes sont **devinées d'après leurs valeurs** (`_impGuessFieldFromValues` : tout-majuscules → Nom, Capitalisé → Prénom, 1/G1/GP1 → Groupe, M/F → Civilité, id ou nom de classe → Classe, dates → Arrivée).
+- **Texte libre** — une ligne par élève, `parseStudentLine` inchangé.
+
+**Champs cibles** (`_IMP_FIELDS`, titres normalisés par `_impNormHeader` — sans accents, minuscules, ponctuation → espace, **le `+` est conservé** pour distinguer `ULIS+` de `ULIS`) : `fullname` (NOM Prénom) · `fullname_pn` (Prénom NOM) · `nom` · `prenom` · `classe` (aussi `Division`) · `groupe` · `civilite` (aussi `Sexe`, `Genre`) · `tags` · `amen` (une colonne « Aménagements » à valeurs `PPRE`, `PAP + PAI`, `ULIS+`…) · une clé booléenne par dispositif (`ppre`, `pap`, `gevasco`/`PPS`, `ulis`, `ulis_incl`, `upe2a`, `upe2a_incl`, `pai`, `agrandissement` ; vrai si `x`/`oui`/`1`/`vrai`/`✓`) · `arrivee` · `notes`. **Toute nouvelle colonne s'ajoute là**, avec ses synonymes.
+
+**Valeurs** : `_impNormGroupe` accepte `1`, `G1`, `GP1`, `Gr1`, `Grp1`, `Groupe 1` ; `_impNormCiv` = `_normalizeCivilite` + `Masculin`/`Féminin`, `Garçon`/`Fille`, `Male`/`Female` et le **code INSEE `1` = M, `2` = F** (SIECLE) ; `_impNormDate` lit `AAAA-MM-JJ` et `JJ/MM/AAAA` ; `_impResolveClass` matche l'**id puis le nom** de classe, insensible à la casse. `_impSplitFullName` : les mots tout en majuscules font le nom **quel que soit l'ordre** (« Marie DUBOIS » et « DE LA TOUR Jean » passent) ; sans majuscules pour trancher, on suit l'ordre annoncé par la colonne.
+
+⚠️ **`_impNormAmen` protège le `+` d'inclusion avant de découper** (`(ULIS|UPE2A)\s*\+` → `_INCL`) : le `+` est aussi séparateur (« PAP + PAI »), et sans cette étape `ULIS+` retombait sur ULIS hors inclusion — vu au premier essai. Les dispositifs sont ensuite posés par `_setStudentStatusExclusive` (un seul par groupe exclusif, comme la modale d'édition).
+
+**Analyse pure** `_impAnalyze(text, { mode, mapping, skipDup, defaultClassId })` → `{ mode, sep, header, rows, cols, mapping, records }`. Ne touche pas au DOM (testable) ; `records[]` = `{ line, nom, prenom, groupe, classeId, classeRaw, targetClassId, civilite, tagAbbrs, statuses, arrivalDate, notes, ok, dup, warnings[] }`. Une classe inconnue → classe courante **avec avertissement** (pas de rejet). Doublons : dans le fichier (nom+prénom+classe, sans accents ni casse) → 2ᵉ ligne rejetée ; déjà présent dans la classe → rejeté si la case « Ignorer les élèves déjà présents » est cochée (défaut), sinon importé et signalé.
+
+**Aperçu** (`_impRefresh`, débounce 250 ms sur la frappe) : badge du format détecté, **une carte par colonne** avec titre, exemple et `<select>` de correction (`_impSetMapping` — un champ à valeur unique ne peut venir que d'une colonne, l'autre est libérée), puis tableau des **8 premières lignes** (colonnes facultatives n'apparaissant que si renseignées), motifs de rejet agrégés, compte par classe. Le bouton annonce « Importer N élèves » et est désactivé à 0. ⚠️ Le mappage choisi à la main ne survit qu'à un tableau de **même signature** (séparateur, nombre de colonnes, 1re ligne) — si le texte change de nature, on redevine. Une case **« La 1re ligne est un en-tête »** (`_impSetHeader`, `opts.header`) permet de trancher quand la détection se trompe : des titres dans une langue inconnue (« Nome;Cognome ») ne matchent aucun synonyme, la ligne passerait pour un élève. Basculer l'en-tête **réinitialise le mappage** (les titres changent de rôle, on redevine).
+
+**Fichier** (`_impFileSelected`) : lu en `ArrayBuffer`, décodé en **UTF-8 strict** puis, si un octet ne passe pas, en **Windows-1252** — les exports Pronote / SIECLE le sont souvent, et lus en UTF-8 « Léa » devient « LÃ©a ». BOM retiré. Le contenu atterrit dans la zone de texte : même pipeline, même aperçu.
+
 ## Onglet Élèves — historique enrichi
 
 Le modal **🕓 Historique** d'un élève a deux onglets :

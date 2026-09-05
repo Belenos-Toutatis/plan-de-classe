@@ -2581,7 +2581,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="sh">
       <h2>👥 Élèves</h2>
       <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
-      <button class="btn btn-s" onclick="openMod('mi')">⬆ Importer</button>
+      <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
       <button class="btn btn-p btn-sm" onclick="startSeatingEntry()">📍 Saisir les positions</button>
       <button class="btn btn-w btn-sm" onclick="resetAll()">↺ Réinitialiser compteurs</button>
       <button class="btn btn-g btn-sm" onclick="openTagsModal()" title="Gérer les tags cumulables (DF, DNL, etc.) — partagés entre toutes les classes">🏷 Tags</button>
@@ -3232,24 +3232,46 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Import students -->
 <div id="mi" class="mo" onclick="closeMod(this,event)">
-  <div class="mb">
+  <div class="mb" style="max-width:900px;width:100%;max-height:92vh;overflow-y:auto">
     <h2>Importer des Élèves</h2>
-    <div class="al al-i">
-      Un élève par ligne. <strong>Tout en majuscules = nom de famille</strong>, première lettre majuscule = prénom.<br>
-      Le numéro de groupe (<code>1</code>, <code>2</code>, <code>3</code>, <code>G1</code>, <code>G2</code>, <code>G3</code>) peut être placé n'importe où.<br>
-      Tags cumulables (DF, DNL…) : entre crochets <code>[DF]</code> pour auto-création, ou nom seul (ex. <code>DF</code>) pour réutiliser un tag existant.<br>
-      Civilité (optionnel) : <code>M</code>, <code>F</code>, <code>M.</code>, <code>Mme</code>, <code>Mlle</code>, <code>Mr</code> — en <strong>début de ligne</strong> ou après l'ID de classe.<br>
-      Civilité <strong>entre parenthèses</strong> (format Pronote/SIECLE) : <code>(M.)</code>, <code>(Mme)</code>, <code>(Mlle)</code> — acceptée <strong>n'importe où</strong> sur la ligne.<br>
-      Si l'identifiant d'une classe existante est présent dans la ligne, l'élève est importé dans cette classe.<br>
-      Ex : <code>M. DURAND Lucas G1 [DF]</code> &nbsp;|&nbsp; <code>LEROY Antoine (M.) 4A</code> &nbsp;|&nbsp; <code>MOREL Camille (Mme) 4A</code>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <button class="btn btn-g btn-sm" onclick="document.getElementById('imp-file-csv').click()" title="Fichier CSV / TSV / TXT — l'encodage Windows (Pronote) est reconnu automatiquement">📂 Ouvrir un fichier…</button>
+      <input type="file" id="imp-file-csv" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" style="display:none" onchange="_impFileSelected(this)">
+      <label style="font-size:.85em;color:var(--pencil);display:flex;align-items:center;gap:6px">Format
+        <select id="imp-mode" onchange="_impRefresh()" style="padding:3px 6px;font-size:.95em">
+          <option value="auto">Détection automatique</option>
+          <option value="table">Tableau (colonnes)</option>
+          <option value="text">Texte libre (une ligne par élève)</option>
+        </select>
+      </label>
+      <span id="imp-mode-badge" style="font-size:.82em;color:var(--pencil)"></span>
     </div>
     <div class="fg">
-      <label>Liste des élèves</label>
-      <textarea id="imp-txt" placeholder="DUPONT Martin 1&#10;MARTIN Sophie 1&#10;BERNARD Lucas 2 3A&#10;LEFEVRE Anne-Sophie 2 4B"></textarea>
+      <label>Liste des élèves <span style="font-weight:400;font-size:.82em;color:var(--pencil)">— collée depuis Pronote ou un tableur, ou chargée d'un fichier. L'aperçu se met à jour pendant la frappe.</span></label>
+      <textarea id="imp-txt" data-autofocus oninput="_impSchedule()" placeholder="Nom;Prénom;Classe;Groupe;Sexe&#10;DUPONT;Martin;3A;GP1;M&#10;MARTIN;Sophie;3A;GP2;F&#10;&#10;— ou, en texte libre :&#10;DUPONT Martin 1&#10;BERNARD Lucas 2 3A"></textarea>
     </div>
-    <div class="ma">
+    <div id="imp-mapping" style="display:none"></div>
+    <div id="imp-preview" style="margin-top:6px"></div>
+    <details style="margin-top:10px;font-size:.85em">
+      <summary style="cursor:pointer;color:var(--pencil)">Ce qui est reconnu</summary>
+      <div class="al al-i" style="margin-top:6px">
+        <strong>Tableau avec en-têtes</strong> (CSV, TSV, copie d'un tableur) — colonnes reconnues d'après leur titre :
+        <code>Nom</code>, <code>Prénom</code>, <code>Élève</code> / <code>Nom Prénom</code>, <code>Classe</code> / <code>Division</code>,
+        <code>Groupe</code>, <code>Sexe</code> / <code>Genre</code> / <code>Civilité</code>, <code>Tags</code>, <code>Aménagements</code>
+        (ou une colonne par dispositif : <code>PPRE</code>, <code>PAP</code>, <code>PPS</code>, <code>ULIS</code>, <code>UPE2A</code>, <code>PAI</code>, remplie par <code>x</code> / <code>oui</code> / <code>1</code>),
+        <code>Date d'arrivée</code>, <code>Remarques</code>. Une colonne mal reconnue se corrige dans la liste déroulante au-dessus de l'aperçu.<br>
+        Groupe : <code>1</code>, <code>G1</code>, <code>GP1</code>, <code>Gr1</code>, <code>Groupe 1</code>. Sexe : <code>M</code>/<code>F</code>, <code>Masculin</code>/<code>Féminin</code>, <code>Garçon</code>/<code>Fille</code>, <code>Mme</code>/<code>M.</code>, <code>1</code>/<code>2</code> (code INSEE).<br>
+        <strong>Texte libre</strong> — un élève par ligne : <strong>tout en majuscules = nom</strong>, première lettre majuscule = prénom ;
+        groupe (<code>1</code>, <code>G1</code>…), identifiant de classe, civilité (<code>M.</code>, <code>Mme</code>, ou entre parenthèses) et tags (<code>[DF]</code>) n'importe où sur la ligne.
+        Ex : <code>M. DURAND Lucas G1 [DF]</code> · <code>LEROY Antoine (M.) 4A</code>
+      </div>
+    </details>
+    <div class="ma" style="align-items:center;flex-wrap:wrap;gap:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);margin-right:auto;cursor:pointer">
+        <input type="checkbox" id="imp-skip-dup" checked onchange="_impRefresh()"> Ignorer les élèves déjà présents dans la classe cible
+      </label>
       <button class="btn btn-g" onclick="closeMod2('mi')">Annuler</button>
-      <button class="btn btn-s" onclick="importStudents()">Importer</button>
+      <button class="btn btn-s" id="imp-btn-go" onclick="importStudents()" disabled>Importer</button>
     </div>
   </div>
 </div>
@@ -6392,11 +6414,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.41.1';
+const APP_VERSION    = '2.42.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-02T22:34:07Z';
+const APP_BUILD_DATE = '2026-09-05T05:22:50Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14032,38 +14054,502 @@ function parseStudentLine(line) {
   return { nom: noms.join(' '), prenom: prenoms.join(' '), groupe, classeId, tagAbbrs, civilite };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPORT D'ÉLÈVES — tableau (colonnes) OU texte libre, avec aperçu corrigible
+// ═══════════════════════════════════════════════════════════════════════════
+// Deux formats d'entrée dans la même zone de texte :
+//  · TABLEAU — CSV / TSV / copie d'un tableur. Le séparateur est déduit du contenu
+//    (TAB, « ; », « , »), l'en-tête est reconnu par ses titres (synonymes ci-dessous),
+//    et chaque colonne peut être réaffectée à la main dans l'aperçu. Sans en-tête,
+//    les colonnes sont devinées d'après leurs VALEURS (tout en majuscules → Nom, etc.).
+//  · TEXTE LIBRE — une ligne par élève, parsée par parseStudentLine (inchangé).
+// Dans les deux cas l'aperçu montre les premiers élèves tels qu'ils seront créés, et
+// le bouton d'import annonce le nombre exact — plus d'import à l'aveugle.
+
+// Champs cibles. `syn` = titres de colonne reconnus, comparés après _impNormHeader
+// (sans accents, minuscules, ponctuation → espace ; le « + » est conservé pour
+// distinguer « ULIS+ » de « ULIS »).
+const _IMP_FIELDS = [
+  { key: 'fullname',    label: 'Nom + Prénom (NOM en majuscules)',
+    syn: ['eleve','eleves','nom prenom','nom et prenom','nom complet','identite','student','participant','nom prenom eleve'] },
+  { key: 'fullname_pn', label: 'Prénom + Nom',
+    syn: ['prenom nom','prenom et nom'] },
+  { key: 'nom',      label: 'Nom',
+    syn: ['nom','nom de famille','nom famille','nom eleve','nom de l eleve','name','lastname','last name','surname','patronyme','nom d usage','nom usage'] },
+  { key: 'prenom',   label: 'Prénom',
+    syn: ['prenom','prenoms','prenom eleve','prenom de l eleve','firstname','first name','given name','prenom usuel'] },
+  { key: 'classe',   label: 'Classe',
+    syn: ['classe','class','division','classe eleve','classe de l eleve'] },
+  { key: 'groupe',   label: 'Groupe (1 / 2 / 3)',
+    syn: ['groupe','groupes','grp','gr','group','demi groupe','groupe tp','tp','groupe de tp'] },
+  { key: 'civilite', label: 'Civilité / Sexe',
+    syn: ['civilite','sexe','genre','gender','sex','civ','m f','h f'] },
+  { key: 'tags',     label: 'Tags (DF, DNL…)',
+    syn: ['tag','tags','etiquette','etiquettes','option','options'] },
+  { key: 'amen',     label: 'Aménagements (PPRE, PAP, PPS…)',
+    syn: ['amenagement','amenagements','dispositif','dispositifs','statut','statuts','besoins','besoins particuliers','ebep'] },
+  { key: 'ppre',       label: 'PPRE (oui / non)',       syn: ['ppre'] },
+  { key: 'pap',        label: 'PAP (oui / non)',        syn: ['pap'] },
+  { key: 'gevasco',    label: 'PPS / GEVASCO (oui / non)', syn: ['pps','gevasco','geva sco'] },
+  { key: 'ulis',       label: 'ULIS hors inclusion (oui / non)', syn: ['ulis'] },
+  { key: 'ulis_incl',  label: 'ULIS inclusion (oui / non)',      syn: ['ulis+','ulis inclusion','ulis incl'] },
+  { key: 'upe2a',      label: 'UPE2A hors inclusion (oui / non)', syn: ['upe2a'] },
+  { key: 'upe2a_incl', label: 'UPE2A inclusion (oui / non)',      syn: ['upe2a+','upe2a inclusion','upe2a incl'] },
+  { key: 'pai',        label: 'PAI (oui / non)',        syn: ['pai'] },
+  { key: 'agrandissement', label: 'Agrandissement (oui / non)', syn: ['agrandissement','agrandissements','a3','photocopies agrandies'] },
+  { key: 'arrivee',  label: "Date d'arrivée",
+    syn: ['arrivee','date arrivee','date d arrivee','entree','date entree','date d entree','arrival','arrivee le'] },
+  { key: 'notes',    label: 'Notes / remarques',
+    syn: ['notes','note','remarque','remarques','commentaire','commentaires','observation','observations'] },
+];
+const _IMP_BOOL_KEYS = ['ppre','pap','gevasco','ulis','ulis_incl','upe2a','upe2a_incl','pai','agrandissement'];
+
+function _impNormHeader(h) {
+  return String(h || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9+]+/g, ' ').trim();
+}
+// Titre de colonne → clé de champ, ou null.
+function _impGuessField(header) {
+  const h = _impNormHeader(header);
+  if (!h) return null;
+  for (const f of _IMP_FIELDS) if (f.syn.some(sy => _impNormHeader(sy) === h)) return f.key;
+  return null;
+}
+
+// ── Normalisation des VALEURS ─────────────────────────────────────────────
+// Groupe : 1, G1, GP1, Gr1, Grp1, Groupe 1, groupe1 → 1 (idem 2, 3).
+function _impNormGroupe(v) {
+  const m = String(v || '').trim().match(/^(?:g|gp|gr|grp|groupe|group)?\s*\.?\s*([123])$/i);
+  return m ? +m[1] : null;
+}
+// Civilité : tout ce que _normalizeCivilite connaît, plus les écritures de tableur
+// (Masculin/Féminin, Garçon/Fille, Male/Female) et le code INSEE 1 = M, 2 = F (SIECLE).
+function _impNormCiv(v) {
+  const t = String(v || '').trim();
+  if (!t) return null;
+  const n = _normalizeCivilite(t.replace(/^\((.*)\)$/, '$1'));
+  if (n) return n;
+  const u = t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\.$/, '');
+  if (['MASCULIN', 'MALE', 'BOY', 'G', '1'].includes(u)) return 'M';
+  if (['FEMININ', 'FEMALE', 'GIRL', '2'].includes(u)) return 'F';
+  return null;
+}
+// Aménagements : « PPRE », « PAP + PAI », « ULIS+ / PAI », « PPS,PAI »… → drapeaux.
+function _impNormAmen(v) {
+  const out = {};
+  // ⚠️ Le « + » est à la fois SÉPARATEUR (« PAP + PAI ») et MARQUEUR d'inclusion
+  // (« ULIS+ »). On protège d'abord ce second usage, sinon le découpage l'avale et
+  // ULIS+ retombe sur ULIS hors inclusion — constaté au premier essai.
+  const src = String(v || '').toUpperCase().replace(/(ULIS|UPE2A)\s*\+/g, '$1_INCL');
+  for (const tok of src.split(/[\s,;\/|+]+/)) {
+    const t = tok.replace(/[^A-Z0-9_-]/g, '');
+    if (!t) continue;
+    if (t === 'PPRE') out.ppre = true;
+    else if (t === 'PAP') out.pap = true;
+    else if (t === 'PPS' || t === 'GEVASCO' || t === 'GEVA-SCO') out.gevasco = true;
+    else if (t === 'ULIS_INCL' || t === 'ULIS-I' || t === 'ULISI' || t === 'ULISINCL') out.ulis_incl = true;
+    else if (t === 'ULIS') out.ulis = true;
+    else if (t === 'UPE2A_INCL' || t === 'UPE2A-I' || t === 'UPE2AI' || t === 'UPE2AINCL') out.upe2a_incl = true;
+    else if (t === 'UPE2A') out.upe2a = true;
+    else if (t === 'PAI') out.pai = true;
+    else if (t === '-A' || t === 'AGRANDISSEMENT' || t === 'A3') out.agrandissement = true;
+  }
+  return out;
+}
+function _impTruthy(v) { return /^(x|oui|o|yes|y|1|vrai|true|v|✓|✔)$/i.test(String(v || '').trim()); }
+// Date : AAAA-MM-JJ ou JJ/MM/AAAA → AAAA-MM-JJ, sinon null.
+function _impNormDate(v) {
+  const t = String(v || '').trim();
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = t.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+function _impNormTags(v) {
+  return String(v || '').split(/[\s,;\/|+]+/)
+    .map(t => t.replace(/^\[|\]$/g, '').toUpperCase())
+    .filter(t => /^[A-Z0-9]{1,6}$/.test(t));
+}
+// Classe : par identifiant puis par nom, insensible à la casse. Renvoie l'id ou null.
+function _impResolveClass(v) {
+  const t = String(v || '').trim().toLowerCase();
+  if (!t) return null;
+  for (const c of Object.values(S.classes || {})) {
+    if (String(c.id || '').toLowerCase() === t || String(c.nom || '').toLowerCase() === t) return c.id;
+  }
+  return null;
+}
+// « DUPONT Marie », « Marie DUPONT », « DE LA TOUR Jean » : les mots tout en majuscules
+// font le nom, les autres le prénom — quel que soit l'ordre. Sans majuscules pour
+// trancher, on suppose l'ordre annoncé par la colonne (NOM Prénom, ou Prénom NOM).
+function _impSplitFullName(v, order) {
+  const toks = String(v || '').trim().split(/\s+/).filter(Boolean);
+  if (!toks.length) return { nom: '', prenom: '' };
+  const caps = t => t === t.toUpperCase() && /[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜŸŒÆ]/.test(t);
+  if (toks.some(caps) && toks.some(t => !caps(t))) {
+    return { nom: toks.filter(caps).join(' '), prenom: toks.filter(t => !caps(t)).join(' ') };
+  }
+  if (toks.length === 1) return order === 'pn' ? { nom: '', prenom: toks[0] } : { nom: toks[0], prenom: '' };
+  return order === 'pn'
+    ? { prenom: toks[0], nom: toks.slice(1).join(' ') }
+    : { nom: toks[0], prenom: toks.slice(1).join(' ') };
+}
+
+// ── Découpage ─────────────────────────────────────────────────────────────
+// Découpe une ligne CSV en respectant les guillemets doubles (« "Dupont, Jean" »).
+function _impSplitLine(line, sep) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; continue; }
+    if (ch === sep && !q) { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map(c => c.trim());
+}
+// Détecte le format : séparateur donnant ≥ 2 colonnes sur ≥ 80 % des lignes (TAB
+// prioritaire, puis « ; », puis « , »), puis présence d'un en-tête (≥ 1 titre reconnu,
+// et au moins un tiers des colonnes). Sinon : texte libre.
+function _impDetect(text) {
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n').filter(l => l.trim());
+  if (!lines.length) return { mode: 'text', sep: null, rows: [], header: false };
+  let sep = null;
+  for (const cand of ['\t', ';', ',']) {
+    const multi = lines.filter(l => _impSplitLine(l, cand).length >= 2).length;
+    if (multi >= Math.ceil(lines.length * 0.8)) { sep = cand; break; }
+  }
+  if (!sep) return { mode: 'text', sep: null, rows: lines.map(l => [l]), header: false };
+  const rows = lines.map(l => _impSplitLine(l, sep));
+  const hits = rows[0].filter(c => _impGuessField(c)).length;
+  const header = hits >= 1 && hits >= Math.ceil(rows[0].length / 3);
+  return { mode: 'table', sep, rows, header };
+}
+// Sans en-tête : devine le champ d'une colonne d'après ses valeurs. `taken` évite
+// deux colonnes « Nom ».
+function _impGuessFieldFromValues(vals, taken) {
+  const v = vals.map(x => String(x || '').trim()).filter(Boolean);
+  if (!v.length) return null;
+  const all = fn => v.every(fn);
+  const most = fn => v.filter(fn).length >= Math.ceil(v.length * 0.8);
+  const caps = t => t === t.toUpperCase() && /[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜŸŒÆ]/.test(t);
+  const capitalised = t => /^[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜŸŒÆ][^\s]*[a-zàâäéèêëîïôùûüÿœæç]/.test(t) && !caps(t);
+  if (all(x => _impNormGroupe(x) !== null)) return taken.has('groupe') ? null : 'groupe';
+  if (all(x => _impNormCiv(x) !== null))    return taken.has('civilite') ? null : 'civilite';
+  if (all(x => _impResolveClass(x) !== null)) return taken.has('classe') ? null : 'classe';
+  if (all(x => _impNormDate(x) !== null))   return taken.has('arrivee') ? null : 'arrivee';
+  const tok = x => x.split(/\s+/);
+  if (most(x => tok(x).every(caps)))        return taken.has('nom') ? null : 'nom';
+  if (most(x => tok(x).every(capitalised))) return taken.has('prenom') ? null : 'prenom';
+  if (most(x => tok(x).some(caps) && tok(x).some(t => !caps(t)))) return taken.has('fullname') ? null : 'fullname';
+  return null;
+}
+
+// ── Analyse complète (pure : ne lit ni n'écrit le DOM) ────────────────────
+// opts : { mode:'auto'|'table'|'text', mapping:[clé|null] (choix utilisateur, facultatif),
+//          skipDup:bool, defaultClassId }
+function _impAnalyze(text, opts) {
+  opts = opts || {};
+  let det = _impDetect(text);
+  if (opts.mode === 'text' && det.mode === 'table') {
+    det = { mode: 'text', sep: null, header: false,
+            rows: String(text || '').replace(/\r\n?/g, '\n').split('\n').filter(l => l.trim()).map(l => [l]) };
+  }
+  // La détection d'en-tête repose sur des titres CONNUS : un fichier titré dans une
+  // autre langue (« Cognome;Nome ») passe pour sans en-tête et sa 1re ligne devient
+  // un élève. L'utilisateur peut trancher lui-même (case « 1re ligne = en-tête »).
+  if (det.mode === 'table' && typeof opts.header === 'boolean') det.header = opts.header;
+  const cols = det.mode === 'table' ? Math.max(...det.rows.map(r => r.length)) : 1;
+  // Mappage des colonnes : choix utilisateur s'il existe, sinon en-tête, sinon valeurs
+  let mapping = [];
+  if (det.mode === 'table') {
+    if (Array.isArray(opts.mapping) && opts.mapping.length === cols) {
+      mapping = opts.mapping.slice();
+    } else {
+      const taken = new Set();
+      for (let c = 0; c < cols; c++) {
+        let k = det.header ? _impGuessField(det.rows[0][c]) : null;
+        if (k && taken.has(k)) k = null;
+        mapping.push(k); if (k) taken.add(k);
+      }
+      // Colonnes sans titre reconnu : deviner sur les valeurs
+      const body = det.rows.slice(det.header ? 1 : 0);
+      for (let c = 0; c < cols; c++) {
+        if (mapping[c]) continue;
+        const k = _impGuessFieldFromValues(body.map(r => r[c]), taken);
+        if (k) { mapping[c] = k; taken.add(k); }
+      }
+    }
+  }
+  // Construction des enregistrements
+  const defaultClassId = opts.defaultClassId || null;
+  const seen = new Map(); // dédoublonnage interne au fichier : "classe|nom|prenom"
+  const norm = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const existing = new Set(Object.values(S.eleves || {}).map(e => `${e.classe_id}|${norm(e.nom)}|${norm(e.prenom)}`));
+  const records = [];
+  const body = det.mode === 'table' && det.header ? det.rows.slice(1) : det.rows;
+  body.forEach((row, i) => {
+    const lineNo = i + 1 + (det.header ? 1 : 0);
+    if (row.every(c => !String(c || '').trim())) return; // ligne vide
+    const rec = { line: lineNo, nom: '', prenom: '', groupe: null, classeId: null, classeRaw: '', civilite: null,
+                  tagAbbrs: [], statuses: {}, arrivalDate: null, notes: '', warnings: [], ok: true, dup: false };
+    if (det.mode === 'table') {
+      // 1) nom complet d'abord, 2) Nom / Prénom explicites par-dessus
+      mapping.forEach((k, c) => {
+        if (k !== 'fullname' && k !== 'fullname_pn') return;
+        const sp = _impSplitFullName(row[c], k === 'fullname_pn' ? 'pn' : 'np');
+        if (sp.nom) rec.nom = sp.nom;
+        if (sp.prenom) rec.prenom = sp.prenom;
+      });
+      mapping.forEach((k, c) => {
+        const v = row[c];
+        if (!k || k === 'fullname' || k === 'fullname_pn') return;
+        if (k === 'nom')      { if (String(v || '').trim()) rec.nom = String(v).trim(); return; }
+        if (k === 'prenom')   { if (String(v || '').trim()) rec.prenom = String(v).trim(); return; }
+        if (k === 'classe')   { rec.classeRaw = String(v || '').trim(); rec.classeId = _impResolveClass(v); return; }
+        if (k === 'groupe')   { const g = _impNormGroupe(v); if (String(v || '').trim() && g === null) rec.warnings.push(`groupe « ${String(v).trim()} » non reconnu`); rec.groupe = g; return; }
+        if (k === 'civilite') { const cv = _impNormCiv(v); if (String(v || '').trim() && !cv) rec.warnings.push(`civilité « ${String(v).trim()} » non reconnue`); rec.civilite = cv; return; }
+        if (k === 'tags')     { rec.tagAbbrs.push(..._impNormTags(v)); return; }
+        if (k === 'amen')     { Object.assign(rec.statuses, _impNormAmen(v)); return; }
+        if (_IMP_BOOL_KEYS.includes(k)) { if (_impTruthy(v)) rec.statuses[k] = true; return; }
+        if (k === 'arrivee')  { const d = _impNormDate(v); if (String(v || '').trim() && !d) rec.warnings.push(`date « ${String(v).trim()} » non reconnue`); rec.arrivalDate = d; return; }
+        if (k === 'notes')    { rec.notes = String(v || '').trim(); return; }
+      });
+      if (rec.classeRaw && !rec.classeId) rec.warnings.push(`classe « ${rec.classeRaw} » inconnue → classe courante`);
+    } else {
+      const parsed = parseStudentLine(row[0]);
+      if (!parsed) { rec.ok = false; rec.warnings.push('nom ou prénom non reconnu (nom = tout en majuscules)'); }
+      else Object.assign(rec, { nom: parsed.nom, prenom: parsed.prenom, groupe: parsed.groupe, classeId: parsed.classeId,
+                                civilite: parsed.civilite, tagAbbrs: parsed.tagAbbrs || [] });
+    }
+    if (rec.ok && (!rec.nom || !rec.prenom)) {
+      rec.ok = false;
+      rec.warnings.unshift(!rec.nom && !rec.prenom ? 'nom et prénom manquants' : (!rec.nom ? 'nom manquant' : 'prénom manquant'));
+    }
+    rec.targetClassId = rec.classeId || defaultClassId;
+    if (rec.ok && !rec.targetClassId) { rec.ok = false; rec.warnings.push('aucune classe cible'); }
+    if (rec.ok) {
+      const sig = `${rec.targetClassId}|${norm(rec.nom)}|${norm(rec.prenom)}`;
+      if (existing.has(sig)) { rec.dup = true; rec.warnings.push('déjà présent dans la classe'); if (opts.skipDup) rec.ok = false; }
+      else if (seen.has(sig)) { rec.dup = true; rec.ok = false; rec.warnings.push(`doublon de la ligne ${seen.get(sig)}`); }
+      else seen.set(sig, lineNo);
+    }
+    records.push(rec);
+  });
+  return { mode: det.mode, sep: det.sep, header: det.header, rows: det.rows, cols, mapping, records };
+}
+
+// ── État et rendu ─────────────────────────────────────────────────────────
+let _imp = { sig: '', mapping: null, header: null, timer: null, result: null };
+
+function openImportStudents() {
+  if (!getCls()) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.result = null;
+  openMod('mi');
+  _impRefresh();
+}
+function _impSchedule() {
+  clearTimeout(_imp.timer);
+  _imp.timer = setTimeout(_impRefresh, 250);
+}
+function _impRefresh() {
+  const ta = document.getElementById('imp-txt');
+  if (!ta) return;
+  const text = ta.value;
+  const mode = document.getElementById('imp-mode')?.value || 'auto';
+  const skipDup = !!document.getElementById('imp-skip-dup')?.checked;
+  const cls = getCls();
+  // Le mappage choisi à la main ne survit qu'à un tableau de MÊME forme (même nombre
+  // de colonnes, même 1re ligne) : si le texte change de nature, on redevine.
+  const det = _impDetect(text);
+  const sig = det.mode === 'table' ? `${det.sep}#${det.rows[0].length}#${det.rows[0].join('|')}` : 'text';
+  if (sig !== _imp.sig) { _imp.sig = sig; _imp.mapping = null; _imp.header = null; }
+  const res = _impAnalyze(text, { mode, mapping: _imp.mapping, header: _imp.header, skipDup, defaultClassId: cls?.id || null });
+  _imp.result = res;
+  _impRenderMapping(res);
+  _impRenderPreview(res, cls);
+}
+function _impSetMapping(col, key) {
+  if (!_imp.result) return;
+  const m = _imp.result.mapping.slice();
+  m[col] = key || null;
+  // Un champ à valeur unique ne peut pas venir de deux colonnes : on libère l'autre
+  if (key && !['tags', 'amen'].includes(key)) m.forEach((k, i) => { if (i !== col && k === key) m[i] = null; });
+  _imp.mapping = m;
+  _impRefresh();
+}
+function _impSetHeader(on) {
+  _imp.header = !!on;
+  _imp.mapping = null; // les titres changent de rôle → on redevine les colonnes
+  _impRefresh();
+}
+function _impRenderMapping(res) {
+  const box = document.getElementById('imp-mapping');
+  const badge = document.getElementById('imp-mode-badge');
+  if (!box) return;
+  if (badge) {
+    const sepName = { '\t': 'tabulations', ';': 'points-virgules', ',': 'virgules' }[res.sep] || '';
+    badge.textContent = res.mode === 'table'
+      ? `→ tableau détecté (${res.cols} colonnes, ${sepName}${res.header ? ', en-tête reconnu' : ', sans en-tête — colonnes devinées d’après les valeurs'})`
+      : (res.rows.length ? '→ texte libre, une ligne par élève' : '');
+  }
+  if (res.mode !== 'table' || !res.rows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const body = res.header ? res.rows.slice(1) : res.rows;
+  const opts = key => `<option value="">— ignorer —</option>` + _IMP_FIELDS.map(f =>
+    `<option value="${f.key}"${f.key === key ? ' selected' : ''}>${_escName(f.label)}</option>`).join('');
+  box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0">
+      <span style="font-size:.82em;color:var(--pencil)">Colonnes — corrige ici ce qui a été mal reconnu :</span>
+      <label style="font-size:.82em;color:var(--pencil);display:flex;align-items:center;gap:5px;cursor:pointer" title="Décoche si la première ligne est déjà un élève ; coche si c'est une ligne de titres que la détection n'a pas reconnue">
+        <input type="checkbox" ${res.header ? 'checked' : ''} onchange="_impSetHeader(this.checked)"> La 1re ligne est un en-tête
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">` +
+    Array.from({ length: res.cols }, (_, c) => {
+      const title = res.header ? (res.rows[0][c] || `Colonne ${c + 1}`) : `Colonne ${c + 1}`;
+      const sample = (body.find(r => String(r[c] || '').trim()) || [])[c] || '';
+      const k = res.mapping[c];
+      return `<div style="border:1px solid var(--rule-line);border-radius:4px;padding:5px 8px;background:${k ? 'var(--paper)' : 'var(--paper-warm)'};min-width:150px;flex:1 1 150px">
+        <div style="font-size:.8em;font-weight:600;color:var(--ink-deep);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escAttr(title)}">${_escName(title)}</div>
+        <div style="font-size:.76em;color:var(--pencil);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escAttr(sample)}">${sample ? 'ex. ' + _escName(sample) : '&nbsp;'}</div>
+        <select onchange="_impSetMapping(${c}, this.value)" style="width:100%;margin-top:3px;font-size:.85em;padding:2px 4px">${opts(k)}</select>
+      </div>`;
+    }).join('') + `</div>`;
+}
+function _impRenderPreview(res, cls) {
+  const box = document.getElementById('imp-preview');
+  const btn = document.getElementById('imp-btn-go');
+  if (!box) return;
+  const recs = res.records;
+  if (!recs.length) {
+    box.innerHTML = res.rows.length
+      ? '<div style="font-size:.85em;color:var(--pencil)">Aucune ligne exploitable.</div>' : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Importer'; }
+    return;
+  }
+  const ok = recs.filter(r => r.ok);
+  const ko = recs.filter(r => !r.ok);
+  const dupSkipped = ko.filter(r => r.dup && r.warnings.some(w => w.startsWith('déjà présent'))).length;
+  const civ = c => c === 'M' ? '♂' : c === 'F' ? '♀' : '';
+  const stLab = st => Object.keys(st).filter(k => st[k]).map(k => ({ ppre: 'PPRE', pap: 'PAP', gevasco: 'PPS', ulis: 'ULIS', ulis_incl: 'ULIS+', upe2a: 'UPE2A', upe2a_incl: 'UPE2A+', pai: 'PAI', agrandissement: '-A' }[k] || k)).join(' + ');
+  const N = 8;
+  const shown = recs.slice(0, N);
+  const hasCol = fn => recs.some(fn);
+  const showGrp = hasCol(r => r.groupe), showCiv = hasCol(r => r.civilite), showTags = hasCol(r => r.tagAbbrs.length),
+        showSt = hasCol(r => Object.keys(r.statuses).length), showArr = hasCol(r => r.arrivalDate), showNotes = hasCol(r => r.notes);
+  const th = (t, extra = '') => `<th style="padding:3px 6px;text-align:left;font-weight:600;white-space:nowrap;${extra}">${t}</th>`;
+  const td = (t, extra = '') => `<td style="padding:2px 6px;${extra}">${t}</td>`;
+  const rowsHtml = shown.map(r => {
+    const clsName = r.targetClassId ? _escName(r.targetClassId) : '—';
+    const clsCell = r.classeRaw && !r.classeId ? `<span style="color:var(--warn-fg, #a85312)" title="classe inconnue">${_escName(r.classeRaw)} → ${clsName}</span>` : clsName;
+    const state = r.ok
+      ? (r.warnings.length ? `<span style="color:var(--warn-fg, #a85312)" title="${_escAttr(r.warnings.join(' · '))}">⚠ ${_escName(r.warnings[0])}</span>` : '<span style="color:var(--pencil)">✓</span>')
+      : `<span style="color:var(--margin-red)" title="${_escAttr(r.warnings.join(' · '))}">✗ ${_escName(r.warnings[0] || 'ignorée')}</span>`;
+    return `<tr style="${r.ok ? '' : 'opacity:.6'}">
+      ${td(r.line, 'color:var(--pencil);font-family:var(--font-mono);font-size:.85em')}
+      ${td(`<strong>${_escName(r.nom) || '<span style="color:var(--margin-red)">?</span>'}</strong>`)}
+      ${td(_escName(r.prenom) || '<span style="color:var(--margin-red)">?</span>')}
+      ${td(clsCell)}
+      ${showGrp ? td(r.groupe ? 'G' + r.groupe : '') : ''}
+      ${showCiv ? td(civ(r.civilite)) : ''}
+      ${showTags ? td(_escName(r.tagAbbrs.join(' '))) : ''}
+      ${showSt ? td(_escName(stLab(r.statuses))) : ''}
+      ${showArr ? td(r.arrivalDate ? _escName(_fmtDateFr ? _fmtDateFr(r.arrivalDate) : r.arrivalDate) : '') : ''}
+      ${showNotes ? td(`<span style="color:var(--pencil);font-size:.85em" title="${_escAttr(r.notes)}">${_escName(r.notes.length > 30 ? r.notes.slice(0, 30) + '…' : r.notes)}</span>`) : ''}
+      ${td(state, 'font-size:.85em')}
+    </tr>`;
+  }).join('');
+  const more = recs.length > N ? `<div style="font-size:.8em;color:var(--pencil);padding:4px 6px">… et ${recs.length - N} autre${recs.length - N > 1 ? 's' : ''} ligne${recs.length - N > 1 ? 's' : ''}</div>` : '';
+  // Motifs d'exclusion, agrégés
+  const reasons = {};
+  ko.forEach(r => { const k = (r.warnings[0] || 'ignorée').replace(/«.*?»/g, '…'); reasons[k] = (reasons[k] || 0) + 1; });
+  const reasonsHtml = Object.entries(reasons).map(([k, n]) => `${n} × ${_escName(k)}`).join(' · ');
+  const perClass = {};
+  ok.forEach(r => { perClass[r.targetClassId] = (perClass[r.targetClassId] || 0) + 1; });
+  const perClassHtml = Object.entries(perClass).map(([id, n]) => `${n} dans ${_escName(id)}`).join(', ');
+  box.innerHTML = `
+    <div style="font-size:.88em;margin:6px 0 4px">
+      <strong>${recs.length} ligne${recs.length > 1 ? 's' : ''}</strong> · <span style="color:#1a7442">✓ ${ok.length} à importer</span>${perClassHtml ? ` <span style="color:var(--pencil)">(${perClassHtml})</span>` : ''}
+      ${ko.length ? ` · <span style="color:var(--margin-red)">✗ ${ko.length} ignorée${ko.length > 1 ? 's' : ''}</span> <span style="color:var(--pencil);font-size:.9em">— ${reasonsHtml}</span>` : ''}
+    </div>
+    <div style="max-height:260px;overflow:auto;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper)">
+      <table style="width:100%;border-collapse:collapse;font-size:.86em">
+        <thead style="position:sticky;top:0;background:var(--paper-warm);border-bottom:1px solid var(--rule-line)"><tr>
+          ${th('#')}${th('Nom')}${th('Prénom')}${th('Classe')}${showGrp ? th('Grp') : ''}${showCiv ? th('Civ.') : ''}${showTags ? th('Tags') : ''}${showSt ? th('Aménag.') : ''}${showArr ? th('Arrivée') : ''}${showNotes ? th('Notes') : ''}${th('')}
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>${more}
+    </div>
+    ${dupSkipped ? `<div style="font-size:.8em;color:var(--pencil);margin-top:4px">${dupSkipped} élève${dupSkipped > 1 ? 's' : ''} déjà présent${dupSkipped > 1 ? 's' : ''} — décoche « Ignorer les élèves déjà présents » pour les réimporter quand même.</div>` : ''}`;
+  if (btn) {
+    btn.disabled = ok.length === 0;
+    btn.textContent = ok.length ? `Importer ${ok.length} élève${ok.length > 1 ? 's' : ''}` : 'Importer';
+  }
+}
+
+// Fichier CSV / TSV / TXT → zone de texte. ⚠️ Les exports Pronote / SIECLE sont
+// souvent en Windows-1252, pas en UTF-8 : lus tels quels, « Léa » devient « LÃ©a ».
+// On tente UTF-8 strict, et on retombe sur Windows-1252 si un octet ne passe pas.
+function _impFileSelected(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const buf = e.target.result;
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+    catch (_) { text = new TextDecoder('windows-1252').decode(buf); }
+    text = text.replace(/^﻿/, '');
+    const ta = document.getElementById('imp-txt');
+    if (ta) { ta.value = text; _imp.sig = ''; _imp.mapping = null; _imp.header = null; _impRefresh(); }
+    toast(`📂 ${file.name} chargé`);
+    input.value = '';
+  };
+  reader.onerror = () => toast('⚠️ Lecture du fichier impossible', 'warn');
+  reader.readAsArrayBuffer(file);
+}
+
 function importStudents() {
   const defaultCls = getCls();
   if (!defaultCls) return toast('⚠️ Sélectionnez une classe.', 'warn');
-  const text = document.getElementById('imp-txt').value.trim();
-  if (!text) return;
+  _impRefresh(); // recalcul avec l'état exact des cases et du mappage
+  const res = _imp.result;
+  const recs = (res?.records || []).filter(r => r.ok);
+  if (!recs.length) return toast('⚠️ Aucun élève à importer.', 'warn');
 
   pushUndo();
   let n = 0;
   const counts = {};
-  const createdTags = []; // abréviations des tags auto-créés (pour le toast)
-  text.split('\n').forEach(line => {
-    line = line.trim();
-    if (!line) return;
-    const parsed = parseStudentLine(line);
-    if (!parsed) return;
-    const { nom, prenom: prn, groupe: grp, classeId, tagAbbrs, civilite } = parsed;
-    const targetCls = (classeId && S.classes[classeId]) ? S.classes[classeId] : defaultCls;
+  const createdTags = [];
+  for (const r of recs) {
+    const targetCls = S.classes[r.targetClassId] || defaultCls;
     const id = uid();
-    // Résout les tags : crée à la volée ceux qui n'existent pas encore
     const tagIds = [];
-    for (const abbr of (tagAbbrs || [])) {
+    for (const abbr of r.tagAbbrs) {
       let t = tagByAbbr(abbr);
       if (!t) { t = createTag(abbr, abbr); createdTags.push(abbr); }
       if (t && !tagIds.includes(t.id)) tagIds.push(t.id);
     }
-    S.eleves[id] = { id, nom, prenom: prn, classe_id: targetCls.id, oublis: 0, non_travail: 0, groupe: grp, civilite: civilite || null, tags: tagIds };
+    const stu = { id, nom: r.nom, prenom: r.prenom, classe_id: targetCls.id, oublis: 0, non_travail: 0,
+                  groupe: r.groupe, civilite: r.civilite || null, tags: tagIds,
+                  arrivalDate: r.arrivalDate || null, departureDate: null };
+    if (r.notes) stu.notes = r.notes;
+    // Aménagements : un seul par groupe exclusif (PPRE / PAP / PPS / ULIS…), le dernier
+    // écrit l'emporte — même règle que la modale d'édition.
+    for (const k of Object.keys(r.statuses)) {
+      if (!r.statuses[k]) continue;
+      if (k === 'agrandissement') stu.agrandissement = true;
+      else _setStudentStatusExclusive(stu, k);
+    }
+    S.eleves[id] = stu;
     targetCls.eleves.push(id);
     counts[targetCls.id] = (counts[targetCls.id] || 0) + 1;
     n++;
-  });
+  }
 
   document.getElementById('imp-txt').value = '';
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.result = null;
   closeMod2('mi');
   save();
   renderStudents();

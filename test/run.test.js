@@ -1539,3 +1539,108 @@ test('Tablettes CE : tables choisies à la main → distribution à la suite', (
   assert.deepEqual(Object.keys(r).sort(), ['0,0', '0,1']);
   assert.deepEqual(Object.values(r).sort((a, b) => a - b), [1, 2]);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Import d'élèves — tableau à colonnes, en-têtes, valeurs, aperçu
+// ─────────────────────────────────────────────────────────────────────────────
+function _impSetup() {
+  setState({
+    classes: { '3A': { id: '3A', nom: '3ème A', eleves: [] }, '4B': { id: '4B', nom: '4B', eleves: [] } },
+    eleves: {}, tags: {},
+  });
+}
+const _impRun = (txt, o = {}) => get(`_impAnalyze(${JSON.stringify(txt)}, ${JSON.stringify({ mode: 'auto', skipDup: true, defaultClassId: '3A', ...o })})`);
+
+test('Import : en-têtes reconnus (synonymes, accents, casse) → bon champ', () => {
+  const g = h => ev(`_impGuessField(${JSON.stringify(h)})`);
+  assert.equal(g('Nom'), 'nom');            assert.equal(g('NOM DE FAMILLE'), 'nom');
+  assert.equal(g('Prénom'), 'prenom');      assert.equal(g('prenom'), 'prenom');
+  assert.equal(g('Classe'), 'classe');      assert.equal(g('Division'), 'classe');
+  assert.equal(g('Groupes'), 'groupe');     assert.equal(g('Groupe TP'), 'groupe');
+  assert.equal(g('Sexe'), 'civilite');      assert.equal(g('Genre'), 'civilite'); assert.equal(g('Civilité'), 'civilite');
+  assert.equal(g('Élève'), 'fullname');     assert.equal(g('Nom Prénom'), 'fullname');
+  assert.equal(g('Prénom Nom'), 'fullname_pn');
+  assert.equal(g('Aménagements'), 'amen');  assert.equal(g('PPRE'), 'ppre'); assert.equal(g('ULIS+'), 'ulis_incl');
+  assert.equal(g("Date d'arrivée"), 'arrivee'); assert.equal(g('Remarques'), 'notes');
+  assert.equal(g('DUPONT'), null, 'un nom de famille ne doit pas passer pour un titre');
+});
+
+test('Import : valeurs — groupe GP1, civilités, aménagements, dates', () => {
+  for (const [v, exp] of [['1', 1], ['G2', 2], ['GP3', 3], ['Gr1', 1], ['groupe 2', 2], ['Groupe3', 3], ['4', null], ['A', null]])
+    assert.equal(ev(`_impNormGroupe(${JSON.stringify(v)})`), exp, `groupe ${v}`);
+  for (const [v, exp] of [['M', 'M'], ['F', 'F'], ['Masculin', 'M'], ['Féminin', 'F'], ['Garçon', 'M'], ['Fille', 'F'],
+                          ['Mme', 'F'], ['M.', 'M'], ['(Mlle)', 'F'], ['1', 'M'], ['2', 'F'], ['?', null]])
+    assert.equal(ev(`_impNormCiv(${JSON.stringify(v)})`), exp, `civilité ${v}`);
+  assert.deepEqual(get(`_impNormAmen('PAP + PAI')`), { pap: true, pai: true });
+  assert.deepEqual(get(`_impNormAmen('ULIS+')`), { ulis_incl: true }, 'ULIS+ = inclusion, pas ULIS hors inclusion');
+  assert.deepEqual(get(`_impNormAmen('ULIS')`), { ulis: true });
+  assert.deepEqual(get(`_impNormAmen('PPRE, -A')`), { ppre: true, agrandissement: true });
+  assert.equal(ev(`_impNormDate('12/01/2026')`), '2026-01-12');
+  assert.equal(ev(`_impNormDate('2026-01-12')`), '2026-01-12');
+  assert.equal(ev(`_impNormDate('janvier')`), null);
+});
+
+test('Import : CSV « ; » avec en-têtes → colonnes mappées, classe par id OU par nom', () => {
+  _impSetup();
+  const r = _impRun('Nom;Prénom;Classe;Groupes;Sexe\nDUPONT;Martin;3A;GP1;M\nMARTIN;Sophie;3ème A;GP2;Féminin\nLEROY;Léa;5C;groupe 3;2');
+  assert.equal(r.mode, 'table'); assert.equal(r.sep, ';'); assert.equal(r.header, true);
+  assert.deepEqual(r.mapping, ['nom', 'prenom', 'classe', 'groupe', 'civilite']);
+  assert.equal(r.records.length, 3);
+  assert.deepEqual(r.records.map(x => [x.nom, x.prenom, x.targetClassId, x.groupe, x.civilite, x.ok]), [
+    ['DUPONT', 'Martin', '3A', 1, 'M', true],
+    ['MARTIN', 'Sophie', '3A', 2, 'F', true],     // « 3ème A » = nom de la classe 3A
+    ['LEROY',  'Léa',    '3A', 3, 'F', true],     // 5C inconnue → classe courante, avec avertissement
+  ]);
+  assert.match(r.records[2].warnings[0], /5C.*inconnue/);
+});
+
+test('Import : TSV SANS en-tête → colonnes devinées d\'après les valeurs', () => {
+  _impSetup();
+  const r = _impRun('DUPONT\tMartin\t1\nMARTIN\tSophie\t2\nBERNARD\tLucas\t2');
+  assert.equal(r.header, false);
+  assert.deepEqual(r.mapping, ['nom', 'prenom', 'groupe']);
+  assert.equal(r.records.filter(x => x.ok).length, 3);
+});
+
+test('Import : « Élève » en une colonne → nom = mots en majuscules, quel que soit l\'ordre', () => {
+  _impSetup();
+  const r = _impRun('Élève,Aménagements,PAI,Date d\'arrivée\n"DE LA TOUR Jean",PAP + -A,x,12/01/2026\n"Marie DUBOIS",ULIS+,,\nDURAND,,,');
+  assert.deepEqual(r.mapping, ['fullname', 'amen', 'pai', 'arrivee']);
+  const [a, b, c] = r.records;
+  assert.deepEqual([a.nom, a.prenom], ['DE LA TOUR', 'Jean'], 'nom composé en majuscules');
+  assert.deepEqual(a.statuses, { pap: true, agrandissement: true, pai: true });
+  assert.equal(a.arrivalDate, '2026-01-12');
+  assert.deepEqual([b.nom, b.prenom], ['DUBOIS', 'Marie'], 'ordre Prénom NOM accepté grâce aux majuscules');
+  assert.deepEqual(b.statuses, { ulis_incl: true });
+  assert.equal(c.ok, false); assert.match(c.warnings[0], /prénom manquant/);
+});
+
+test('Import : mappage corrigé à la main → pris en compte, et un champ unique ne vient que d\'une colonne', () => {
+  _impSetup();
+  // Titres dans une langue inconnue : la détection ne voit PAS d'en-tête, la 1re ligne
+  // deviendrait un élève. L'utilisateur coche « 1re ligne = en-tête » et corrige les colonnes.
+  const auto = _impRun('Nome;Cognome\nMartin;DUPONT\nSophie;MARTIN');
+  assert.equal(auto.header, false, 'titres inconnus → pas d\'en-tête détecté');
+  assert.equal(auto.records.length, 3, 'sans correction, la ligne de titres passe pour un élève');
+  const r = _impRun('Nome;Cognome\nMartin;DUPONT\nSophie;MARTIN', { header: true, mapping: ['prenom', 'nom'] });
+  assert.equal(r.header, true);
+  assert.deepEqual(r.mapping, ['prenom', 'nom']);
+  assert.equal(r.records.length, 2);
+  assert.deepEqual([r.records[0].nom, r.records[0].prenom], ['DUPONT', 'Martin']);
+});
+
+test('Import : texte libre inchangé, doublons dans le fichier et dans la classe', () => {
+  _impSetup();
+  const t = _impRun('M. DURAND Lucas G1 [DF]\nLEROY Antoine (M.) 4B\nlucas');
+  assert.equal(t.mode, 'text');
+  assert.deepEqual(t.records.map(x => [x.ok, x.targetClassId, x.groupe, x.civilite]), [[true, '3A', 1, 'M'], [true, '4B', null, 'M'], [false, '3A', null, null]]);
+  assert.deepEqual(t.records[0].tagAbbrs, ['DF']);
+  // doublon interne (casse et accents ignorés)
+  const d = _impRun('Nom;Prénom\nDUPONT;Martin\nDupont;martin');
+  assert.equal(d.records[1].ok, false); assert.match(d.records[1].warnings[0], /doublon de la ligne 2/);
+  // déjà présent dans la classe : ignoré si skipDup, gardé (mais signalé) sinon
+  ev(`S.eleves.e1 = { id: 'e1', nom: 'DUPONT', prenom: 'Martin', classe_id: '3A' }; S.classes['3A'].eleves.push('e1');`);
+  assert.equal(_impRun('Nom;Prénom\nDUPONT;Martin').records[0].ok, false);
+  const kept = _impRun('Nom;Prénom\nDUPONT;Martin', { skipDup: false }).records[0];
+  assert.equal(kept.ok, true); assert.equal(kept.dup, true);
+});
