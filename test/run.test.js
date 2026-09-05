@@ -1796,3 +1796,17 @@ test('tiers-temps : suffixe +⅓ en miroir de -A, cumulable, pastille seule sino
   })()`);
   assert.deepEqual(r, [true, '-A+⅓', '', '+⅓', false, true, '+⅓', '-A+⅓', true, '', true, true, 'PAP+⅓', '+⅓']);
 });
+
+test('raccourcis clavier : Ctrl+Z laissé au navigateur seulement dans une SAISIE de texte', () => {
+  const r = get(`(() => {
+    const mk = (tag, type) => ({ tagName: tag, type, isContentEditable: false });
+    return [
+      _isTextEntryTarget(mk('INPUT', 'text')), _isTextEntryTarget(mk('INPUT', 'number')), _isTextEntryTarget(mk('INPUT', 'date')),
+      _isTextEntryTarget(mk('INPUT', undefined)), _isTextEntryTarget(mk('TEXTAREA')), _isTextEntryTarget({ tagName: 'DIV', isContentEditable: true }),
+      _isTextEntryTarget(mk('INPUT', 'checkbox')), _isTextEntryTarget(mk('INPUT', 'radio')), _isTextEntryTarget(mk('INPUT', 'range')),
+      _isTextEntryTarget(mk('SELECT')), _isTextEntryTarget(mk('BUTTON')), _isTextEntryTarget(null),
+      Object.keys(_MODAL_RERENDER).every(id => typeof _MODAL_RERENDER[id] === 'function'),
+    ];
+  })()`);
+  assert.deepEqual(r, [true, true, true, true, true, true, false, false, false, false, false, false, true]);
+});

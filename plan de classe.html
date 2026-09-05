@@ -6443,11 +6443,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.45.2';
+const APP_VERSION    = '2.45.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T08:36:17Z';
+const APP_BUILD_DATE = '2026-09-05T11:00:34Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9027,6 +9027,45 @@ function _refreshOpenEvalModals() {
   }
 }
 
+// true si la cible du clavier est un champ de SAISIE (texte, nombre, date, zone de texte, éditable) —
+// là où les raccourcis globaux doivent laisser la main au navigateur. Cases, radios, curseurs,
+// boutons et <select> ne sont PAS des saisies : les raccourcis s'y appliquent.
+function _isTextEntryTarget(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = (el.tagName || '').toUpperCase();
+  if (tag === 'TEXTAREA') return true;
+  if (tag !== 'INPUT') return false;
+  const t = (el.type || 'text').toLowerCase();
+  return !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'].includes(t);
+}
+
+// Modales de CONSULTATION (sans formulaire en cours) à re-rendre après undo/redo : sans ça, le
+// modèle est bien restauré mais la fenêtre ouverte reste figée sur l'ancien état — l'enseignant
+// croit l'annulation sans effet. Les modales à formulaire (me, ms, meval-new…) n'y figurent pas :
+// les re-rendre effacerait la saisie en cours. Tout nouveau panneau de consultation s'ajoute ici.
+const _MODAL_RERENDER = {
+  'mfiche':            () => renderFiche(),
+  'mhist':             () => renderHist(),
+  'mreminders':        () => renderRemindersModal(),
+  'mtags':             () => renderTagsModal(),
+  'mtagbulk':          () => renderTagBulkModal(),
+  'mlinks':            () => renderUserLinks(),
+  'moverview':         () => renderOverview(),
+  'mattStats':         () => renderAttStats(),
+  'matt':              () => renderAttendanceList(),
+  'msnap':             () => renderSnapshotsList(),
+  'mconseil-mentions': () => renderConseilMentions(),
+  'mdisciplines':      () => _renderDisciplinesList(),
+  'mcompmgr':          () => _renderCompMgrList(),
+};
+function _refreshOpenConsultModals() {
+  for (const [id, fn] of Object.entries(_MODAL_RERENDER)) {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('on')) { try { fn(); } catch (err) { console.warn('re-render après undo :', id, err); } }
+  }
+}
+
 function undoLast() {
   closeCtxMenu();
   if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
@@ -9047,6 +9086,7 @@ function undoLast() {
   const at = document.querySelector('.tab.on');
   if (at) renderTab(at.id.replace('tab-',''));
   _refreshOpenEvalModals();
+  _refreshOpenConsultModals();
   toast('✅ Annulation effectuée.');
 }
 
@@ -9070,6 +9110,7 @@ function redoLast() {
   const at = document.querySelector('.tab.on');
   if (at) renderTab(at.id.replace('tab-',''));
   _refreshOpenEvalModals();
+  _refreshOpenConsultModals();
   toast('↪ Action refaite.');
 }
 
@@ -9551,7 +9592,9 @@ function renderFiche() {
   if (!s || !body) return;
   const cls = S.classes?.[s.classe_id] || null;
   const otherCls = Object.values(S.classes || {}).filter(c => c !== cls && Array.isArray(c.eleves) && c.eleves.includes(s.id));
-  const dash = '<span style="color:var(--pencil-soft)">—</span>';
+  // --pencil (5,2:1 sur paper-warm) et non --pencil-soft (4,26:1 mesuré à l'audit) : le tiret est
+  // ici une information (« rien de saisi »), pas un ornement.
+  const dash = '<span style="color:var(--pencil)">—</span>';
   const row = (k, v) => `<tr><th style="text-align:left;padding:3px 14px 3px 0;color:var(--pencil);font-weight:600;white-space:nowrap;vertical-align:top;font-size:.9em;width:1%">${k}</th><td style="padding:3px 0;vertical-align:top">${v}</td></tr>`;
   const sec = (title, inner) => `<div class="about-section" style="margin-bottom:10px;padding:8px 12px"><h3 style="margin:0 0 6px;font-size:.95em">${title}</h3><table style="border-collapse:collapse;width:100%">${inner}</table></div>`;
 
@@ -32903,9 +32946,11 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // Ne pas intercepter quand on tape dans un champ
-  const tag = (e.target.tagName || '').toUpperCase();
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
+  // Ne pas intercepter quand on TAPE dans un champ : Ctrl+Z y est l'annulation native de la frappe.
+  // ⚠️ Mais seulement pour les champs de texte : une case à cocher, un bouton radio ou un curseur
+  // gardent le focus après le clic, et Ctrl+Z n'y a aucun sens natif — sans cette distinction,
+  // cocher un aménagement dans la modale Modifier puis Ctrl+Z ne faisait RIEN (signalé à l'audit).
+  if (_isTextEntryTarget(e.target)) return;
 
   const tabEl  = document.querySelector('.tab.on');
   const curTab = tabEl ? tabEl.id.replace('tab-', '') : '';
