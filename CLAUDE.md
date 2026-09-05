@@ -315,7 +315,8 @@ stu = {
   id, nom, prenom, classe_id, oublis, non_travail,
   groupe,        // 1 (G1), 2 (G2), 3 (G3) ou null
   civilite,      // 'M' | 'F' | null
-  ppre, gevasco, ulis, ulis_incl, upe2a, upe2a_incl, notes,
+  ppre, pap, gevasco, ulis, ulis_incl, upe2a, upe2a_incl, pai, notes,
+  agrandissement, tiers_temps,     // aménagements d'examen, cumulables (suffixes -A / +⅓, cf. Attributs spéciaux)
   tags: [tagId, ...],              // tags cumulables (DF, DNL, etc.)
   history: [{ ts, type: 'oubli' | 'nt' }],
   reminders: [{ id, label, ts }]   // rappels « à vérifier » (cf. section dédiée)
