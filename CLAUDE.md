@@ -2448,6 +2448,16 @@ Bloc en **fin de `<style>`** (doit battre le bloc COMPACTION à spécificité é
 
 **Retard en mode appel — appui long maison** : les cellules du mode appel (buildCell, branche appel) portent un timer `touchstart` 550 ms → `promptLateForStudent` (iOS/iPadOS n'émet JAMAIS `contextmenu` au doigt, contrairement à Windows/Android qui le synthétisent). Garde anti-double-ouverture dans `promptLateForStudent` (modale `mlate` déjà ouverte → no-op) car sur Surface/Android l'appui long déclenche l'OS ET le timer. `touchend` avale le click synthétique après déclenchement (sinon toggle absent par-dessus).
 
+## Responsive — téléphone et tablette (bloc CSS en fin de `<style>`, après le bloc tactile)
+
+Audit du 2026-09-05 sur 4 gabarits (375×812, 812×375, 768×1024, 1024×768), via un auditeur injecté qui mesure `scrollWidth − clientWidth` et liste les éléments dont le bord droit dépasse l'écran sans ancêtre défilant. **Invariant : aucun élément ne doit élargir la page.** Sur un téléphone, un seul débordement (le bandeau d'onglets, 403 px : `.tab-group` est un flex sans `wrap`) faisait grandir le viewport de mise en page à 778 px — et **tout** se dimensionnait alors sur cette largeur fantôme, les modales `position:fixed` comprises (`.mb` de 778 px sur un écran de 375). Corriger le débordement racine a réglé les modales sans les toucher.
+
+- **Conteneurs qui défilent en interne** (toutes tailles, `overflow-x:auto`) : `#stl` (table Élèves, 1 218 px — débordait même sur tablette paysage), `.recap-photocopies` (bilan des classes), `#cfg-slots-list` (horaires), `.qcm-plan-wrap`, `#tg-zoom-wrap` / `#sv-zoom-wrap`.
+- **`@media (max-width: 760px)`** : `.tab-group` et `#hdr-right` passent à la ligne · `.sh > div/span` perdent leur `margin-left:auto` et wrappent · `.cc > div`, chips de Config Salle, `.bsg-row` wrappent · `.mb` bornée à `calc(100vw − 12px)` · `.tp{align-items:stretch}` + `.tp-main{width:100%}` (sinon, en colonne, le plan prend sa largeur de contenu et ne peut pas défiler dans son conteneur) · `#tg-count` en `white-space:normal !important` (posé en ligne) · **`#topbar` en `position:static`** : header + nav dépliés font ~520 px des 812 px d'un téléphone, collés ils ne laisseraient qu'un tiers d'écran.
+- **Cibles tactiles** ajoutées au bloc `pointer: coarse` : mentions de conseil du Bilan des notes, croix ✕ des modes d'emploi, icônes 📋 de copie de colonne (mesurées 24×20, 24×19, 26×18).
+- 💡 `window.innerWidth` **ment** dès que la page déborde (il suit le viewport de mise en page élargi) : mesurer avec `document.documentElement.clientWidth`. Un premier passage de l'auditeur avec `innerWidth` sous-détectait tous les débordements sauf le plus large.
+- Score après la passe : **0 débordement sur les 9 onglets × 4 gabarits**, 11 modales à 363 px de large sur un écran de 375. Non vérifié : le ressenti au doigt sur l'appareil réel.
+
 ## Garde-fous destructifs
 
 - **`setCfgDimensions`** (Config Salle, champs Rangées/Colonnes) : une RÉDUCTION qui détruirait des places occupées (élèves ou AESH, toutes classes de la salle confondues) affiche un `_uiConfirm` chiffré par classe AVANT d'appliquer ; Annuler restaure les valeurs des champs. Zone vide → application directe sans friction. `pushUndo` déplacé dans le worker `_apply` (plus de pushUndo sur no-op).
