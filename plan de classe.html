@@ -6490,11 +6490,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.45.4';
+const APP_VERSION    = '2.45.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T11:25:58Z';
+const APP_BUILD_DATE = '2026-09-05T15:39:41Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -6967,7 +6967,12 @@ function createSalle(nom, rows = 4, cols = 10, positions_vides = [], schedule = 
   const id = 's' + i;
   S.salles[id] = {
     nom, rows, cols, positions_vides: [...positions_vides],
-    schedule: schedule ? JSON.parse(JSON.stringify(schedule)) : defaultSchedule()
+    schedule: schedule ? JSON.parse(JSON.stringify(schedule)) : defaultSchedule(),
+    // Posés ici et non seulement par la migration de postLoadHook : une salle créée PENDANT
+    // postLoadHook (migrateToRooms, fichier pré-rooms) passait APRÈS cette migration et ne
+    // recevait ces champs qu'au chargement suivant — postLoadHook n'était pas idempotent
+    // (trouvé par test/compat.test.js).
+    ilots: {}, collectPatterns: [],
   };
   return id;
 }

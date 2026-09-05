@@ -47,15 +47,20 @@ function makeDoc() {
     createElementNS() { return makeEl(); },
     createTextNode() { return makeEl(); },
     addEventListener() {}, removeEventListener() {},
-    documentElement: { dataset: {}, style: {}, classList: { add() {}, remove() {}, contains() { return false; } } },
+    documentElement: { dataset: {}, style: {}, classList: { add() {}, remove() {}, contains() { return false; } },
+                       getAttribute() { return null; }, setAttribute() {}, removeAttribute() {}, hasAttribute() { return false; },
+                       clientWidth: 1280, clientHeight: 800, scrollWidth: 1280, scrollHeight: 800 },
     body: makeEl(), head: makeEl(),
     fonts: { ready: Promise.resolve(), forEach() {}, add() {}, *[Symbol.iterator]() {} },
     title: '', cookie: '',
   };
 }
 
-function loadApp() {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+function loadApp(htmlPath) {
+  // htmlPath (optionnel) : charger une AUTRE version du fichier — sert au générateur de
+  // fixtures de rétrocompatibilité (scripts/gen-compat-fixture.js) qui rejoue createDemo()
+  // d'une version historique pour en exporter le JSON.
+  const html = fs.readFileSync(htmlPath || path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
   const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
   let code = blocks[blocks.length - 1]; // le gros script applicatif
 
@@ -89,6 +94,7 @@ function loadApp() {
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {} }),
     confirm: () => true, alert() {}, prompt: () => null,
+    getComputedStyle: () => ({ getPropertyValue: () => '', display: 'block', opacity: '1', color: 'rgb(0,0,0)', backgroundColor: 'rgba(0,0,0,0)' }),
     fetch: async () => ({ ok: false, status: 0, json: async () => ({}), text: async () => '' }),
     indexedDB: undefined, AudioContext: undefined, webkitAudioContext: undefined,
     speechSynthesis: undefined, documentPictureInPicture: undefined,
