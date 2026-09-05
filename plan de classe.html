@@ -6417,11 +6417,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.43.1';
+const APP_VERSION    = '2.43.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-05T06:15:14Z';
+const APP_BUILD_DATE = '2026-09-05T06:26:47Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14204,7 +14204,23 @@ function _impDefaultCodeInterp(code) {
   const m = String(code).match(/^(?:GP|GR|GRP|G|GROUPE)\s*([123])$/i);
   if (m) return { kind: 'grp', n: +m[1] };
   const abbr = String(code).split('-')[0].replace(/[^A-Z0-9]/g, '').slice(0, 6);
-  return abbr ? { kind: 'tag', abbr } : { kind: 'ignore' };
+  return abbr ? { kind: 'tag', abbrs: [abbr] } : { kind: 'ignore' };
+}
+// Liste d'abréviations saisie à la main : « BIL LCE », « BIL, LCE », « BIL+LCE » →
+// ['BIL','LCE']. Chaque abréviation suit la règle des tags (1 à 6 alphanumériques).
+function _impParseAbbrs(text) {
+  const out = [];
+  for (const t of String(text || '').toUpperCase().split(/[\s,;+\/|]+/)) {
+    const a = t.replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    if (a && !out.includes(a)) out.push(a);
+  }
+  return out;
+}
+// Tolère l'ancienne forme { abbr } au cas où (codeMap mémorisé avant ce changement).
+function _impInterpAbbrs(it) {
+  if (!it || it.kind !== 'tag') return [];
+  if (Array.isArray(it.abbrs)) return it.abbrs;
+  return it.abbr ? [String(it.abbr).toUpperCase()] : [];
 }
 // Une colonne dont les valeurs sont des listes de codes contenant au moins un GPn.
 function _impLooksLikeGroupCodes(vals) {
@@ -14404,7 +14420,7 @@ function _impAnalyze(text, opts) {
             const e = interpOf(code); e.count++; e.raw.add(raw); any = true;
             const it = e.interp;
             if (it.kind === 'grp') rec.groupe = it.n;
-            else if (it.kind === 'tag' && it.abbr) { const a = String(it.abbr).toUpperCase(); if (!rec.tagAbbrs.includes(a)) rec.tagAbbrs.push(a); }
+            else if (it.kind === 'tag') for (const a of _impInterpAbbrs(it)) { if (!rec.tagAbbrs.includes(a)) rec.tagAbbrs.push(a); }
           }
           if (!any && k === 'groupe') rec.warnings.push(`groupe « ${cell} » non reconnu`);
           return;
@@ -14473,9 +14489,26 @@ function _impRefresh() {
   const createClasses = document.getElementById('imp-create-cls')?.checked !== false;
   const res = _impAnalyze(text, { mode, mapping: _imp.mapping, header: _imp.header, codeMap: _imp.codeMap, createClasses, skipDup, defaultClassId: cls?.id || null });
   _imp.result = res;
+  // Le re-rendu reconstruit les panneaux par innerHTML : sans précaution, la modale
+  // remonte en haut et le contrôle qu'on vient de toucher disparaît sous le doigt —
+  // pénible quand on règle un code de groupe en bas de la liste. On mémorise donc le
+  // défilement (modale + liste des codes) et le contrôle actif, puis on les remet.
+  const modalBody = document.querySelector('#mi .mb');
+  const codesBox  = document.getElementById('imp-codes-scroll');
+  const scrollTop = modalBody ? modalBody.scrollTop : 0;
+  const codesTop  = codesBox ? codesBox.scrollTop : 0;
+  const act = document.activeElement;
+  const actCode = act?.dataset?.code, actField = act?.dataset?.field;
   _impRenderMapping(res);
   _impRenderCodes(res);
   _impRenderPreview(res, cls);
+  if (modalBody) modalBody.scrollTop = scrollTop;
+  const newCodesBox = document.getElementById('imp-codes-scroll');
+  if (newCodesBox) newCodesBox.scrollTop = codesTop;
+  if (actCode !== undefined && actField) {
+    const again = document.querySelector(`#imp-codes [data-code="${CSS.escape(actCode)}"][data-field="${actField}"]`);
+    if (again) { try { again.focus({ preventScroll: true }); } catch (_) { again.focus(); } }
+  }
 }
 function _impSetMapping(col, key) {
   if (!_imp.result) return;
@@ -14530,10 +14563,16 @@ function _impSetCode(code, field, value) {
   const next = { ...cur };
   if (field === 'kind') {
     if (value.startsWith('grp')) { next.kind = 'grp'; next.n = +value.slice(3); }
-    else if (value === 'tag') { next.kind = 'tag'; next.abbr = next.abbr || _impDefaultCodeInterp(code).abbr || code.slice(0, 6); }
+    else if (value === 'tag') {
+      next.kind = 'tag';
+      const keep = _impInterpAbbrs(next);
+      next.abbrs = keep.length ? keep : (_impDefaultCodeInterp(code).abbrs || [code.replace(/[^A-Z0-9]/g, '').slice(0, 6)]);
+    }
     else next.kind = 'ignore';
   } else if (field === 'abbr') {
-    next.abbr = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    // Plusieurs tags possibles pour un même code : « BIL LCE » en crée deux.
+    next.abbrs = _impParseAbbrs(value);
+    delete next.abbr;
   }
   _imp.codeMap[code] = next;
   _impRefresh();
@@ -14549,7 +14588,7 @@ function _impRenderCodes(res) {
   const codes = res.codes || [];
   if (!codes.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = '';
-  const kindSel = (c, it) => `<select onchange="_impSetCode('${_escJsAttr(c)}','kind',this.value)" style="font-size:.85em;padding:2px 4px">
+  const kindSel = (c, it) => `<select data-code="${_escAttr(c)}" data-field="kind" onchange="_impSetCode('${_escJsAttr(c)}','kind',this.value)" style="font-size:.85em;padding:2px 4px">
       <option value="grp1"${it.kind === 'grp' && it.n === 1 ? ' selected' : ''}>🔵 Groupe 1</option>
       <option value="grp2"${it.kind === 'grp' && it.n === 2 ? ' selected' : ''}>🟠 Groupe 2</option>
       <option value="grp3"${it.kind === 'grp' && it.n === 3 ? ' selected' : ''}>🟣 Groupe 3</option>
@@ -14557,10 +14596,11 @@ function _impRenderCodes(res) {
       <option value="ignore"${it.kind === 'ignore' ? ' selected' : ''}>— ignorer —</option>
     </select>`;
   const rows = codes.map(({ code, count, interp, raw }) => {
-    const exists = interp.kind === 'tag' && interp.abbr && tagByAbbr(interp.abbr);
+    const abbrs = _impInterpAbbrs(interp);
+    const hint = abbrs.map(a => `${_escName(a)}${tagByAbbr(a) ? '' : ' <span style="color:#1a7442">✚</span>'}`).join(' · ');
     const abbrCell = interp.kind === 'tag'
-      ? `<input value="${_escAttr(interp.abbr || '')}" maxlength="6" onchange="_impSetCode('${_escJsAttr(code)}','abbr',this.value)" style="width:70px;font-family:var(--font-mono);text-transform:uppercase;padding:2px 5px;font-size:.85em" title="Abréviation du tag (6 caractères max)">
-         <span style="font-size:.78em;color:var(--pencil)">${exists ? 'tag existant' : 'nouveau tag'}</span>`
+      ? `<input data-code="${_escAttr(code)}" data-field="abbr" value="${_escAttr(abbrs.join(' '))}" maxlength="40" onchange="_impSetCode('${_escJsAttr(code)}','abbr',this.value)" style="width:110px;font-family:var(--font-mono);text-transform:uppercase;padding:2px 5px;font-size:.85em" title="Un ou plusieurs tags, séparés par un espace : « BIL LCE » en crée deux (6 caractères max chacun)">
+         <span style="font-size:.78em;color:var(--pencil)">${hint || '<span style="color:var(--margin-red)">aucun tag</span>'}</span>`
       : '';
     return `<tr>
       <td style="padding:2px 6px;font-family:var(--font-mono)" title="${_escAttr(raw.join(', '))}">${_escName(code)}</td>
@@ -14569,8 +14609,8 @@ function _impRenderCodes(res) {
       <td style="padding:2px 6px;white-space:nowrap">${abbrCell}</td>
     </tr>`;
   }).join('');
-  box.innerHTML = `<div style="font-size:.82em;color:var(--pencil);margin:6px 0 2px">Codes de groupes rencontrés — <code>GP1</code>/<code>GP2</code> font le groupe, le reste devient un tag (préfixe de classe retiré). Corrige l'interprétation ou l'abréviation :</div>
-    <div style="max-height:170px;overflow:auto;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper)">
+  box.innerHTML = `<div style="font-size:.82em;color:var(--pencil);margin:6px 0 2px">Codes de groupes rencontrés — <code>GP1</code>/<code>GP2</code> font le groupe, le reste devient un tag (préfixe de classe retiré). Corrige l'interprétation ou les tags (plusieurs possibles, séparés par un espace ; ✚ = tag qui sera créé) :</div>
+    <div id="imp-codes-scroll" style="max-height:170px;overflow:auto;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper)">
       <table style="border-collapse:collapse;font-size:.86em;width:100%">
         <thead style="position:sticky;top:0;background:var(--paper-warm)"><tr>
           <th style="padding:3px 6px;text-align:left">Code</th><th style="padding:3px 6px;text-align:right">Élèves</th><th style="padding:3px 6px;text-align:left">Interprétation</th><th style="padding:3px 6px;text-align:left">Tag</th>

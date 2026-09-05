@@ -1656,9 +1656,9 @@ test('Import : codes de groupes Pronote — préfixe de classe retiré, GPn = gr
   const d = c => get(`_impDefaultCodeInterp(${JSON.stringify(c)})`);
   assert.deepEqual(d('GP1'), { kind: 'grp', n: 1 });
   assert.deepEqual(d('G2'), { kind: 'grp', n: 2 });
-  assert.deepEqual(d('BIL-LCE'), { kind: 'tag', abbr: 'BIL' }, 'abrégé au 1er segment');
-  assert.deepEqual(d('NBIL-DNL'), { kind: 'tag', abbr: 'NBIL' });
-  assert.deepEqual(d('LATIN'), { kind: 'tag', abbr: 'LATIN' });
+  assert.deepEqual(d('BIL-LCE'), { kind: 'tag', abbrs: ['BIL'] }, 'abrégé au 1er segment');
+  assert.deepEqual(d('NBIL-DNL'), { kind: 'tag', abbrs: ['NBIL'] });
+  assert.deepEqual(d('LATIN'), { kind: 'tag', abbrs: ['LATIN'] });
 });
 
 test('Import : colonne « Groupes » à la Pronote → groupe + tags, panneau des codes, corrections', () => {
@@ -1672,10 +1672,20 @@ test('Import : colonne « Groupes » à la Pronote → groupe + tags, panneau de
   assert.equal(zoe.groupe, 2, 'un nombre nu reste un groupe direct');
   assert.deepEqual(r.codes.map(c => c.code).sort(), ['BIL-LCE', 'CATHO', 'GP1', 'GP2', 'LATIN', 'NBIL-DNL']);
   // L'utilisateur ignore NBIL-DNL, renomme CATHO en KT, et fait de LATIN un groupe 3
-  const r2 = _impRun(csv, { codeMap: { 'NBIL-DNL': { kind: 'ignore' }, CATHO: { kind: 'tag', abbr: 'KT' }, LATIN: { kind: 'grp', n: 3 } } });
+  const r2 = _impRun(csv, { codeMap: { 'NBIL-DNL': { kind: 'ignore' }, CATHO: { kind: 'tag', abbrs: ['KT'] }, LATIN: { kind: 'grp', n: 3 } } });
   assert.deepEqual(r2.records[0].tagAbbrs, ['KT']);
   assert.equal(r2.records[0].groupe, 3, 'un code peut être reclassé en groupe');
   assert.deepEqual(r2.records[1].tagAbbrs, ['BIL']);
+  // Un même code peut poser DEUX tags : « BIL-LCE » → BIL et LCE
+  const r3 = _impRun(csv, { codeMap: { 'BIL-LCE': { kind: 'tag', abbrs: ['BIL', 'LCE'] } } });
+  assert.deepEqual(r3.records[1].tagAbbrs, ['BIL', 'LCE', 'NBIL']);
+  // Saisie libre de la liste : espace, virgule ou + ; casse et doublons neutralisés ; 6 car. max
+  assert.deepEqual(get(`_impParseAbbrs('bil lce')`), ['BIL', 'LCE']);
+  assert.deepEqual(get(`_impParseAbbrs('BIL, LCE+bil')`), ['BIL', 'LCE']);
+  assert.deepEqual(get(`_impParseAbbrs('BILINGUE')`), ['BILING']);
+  // L'ancienne forme { abbr } reste comprise
+  const r4 = _impRun(csv, { codeMap: { CATHO: { kind: 'tag', abbr: 'kt' } } });
+  assert.deepEqual(r4.records[0].tagAbbrs, ['LATIN', 'KT']);
 });
 
 test('Import : sans en-tête, une colonne de listes de codes est devinée « groupe »', () => {
