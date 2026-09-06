@@ -1837,3 +1837,39 @@ test('Bilan de compétences : toute cellule calculée passe par _compPillHTML', 
     'Cellule de bilan de compétences sans _compPillHTML (aplat sur le <td> ?) :\n' + offenders.join('\n'),
   );
 });
+
+// ─── Lint contraste : pas de blanc figé sur une couleur de niveau ─────────────
+// « Texte sur fond coloré → toujours _contrastTextColor(bg), jamais color:#fff »
+// (cf. CLAUDE.md). Le blanc tient sur le bleu du niveau 4, pas sur l'orange du
+// niveau 2 (2,15:1 mesuré) ni sur le vert du niveau 3 (3,30) — et la palette est
+// réglable, donc aucune valeur figée ne peut être sûre. Défaut trouvé dans
+// l'onglet Bilan des compétences, invisible aux tests qui ne lisent que le modèle.
+test('Contraste : aucune couleur de texte figée sur un fond de palette de niveaux', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const lines = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8').split(/\r?\n/);
+  const offenders = [];
+  lines.forEach((l, i) => {
+    // fond pris dans la palette de niveaux (colors[...] / maitriseColors[...])
+    if (!/background:\$\{(colors|colorsB|_?maitriseColors)\[/.test(l)) return;
+    const m = l.match(/color:\s*(#[0-9a-fA-F]{3,6}|white|black)\b/);
+    if (!m) return;
+    offenders.push(`ligne ${i + 1} : ${m[1]} figé — ${l.trim().slice(0, 120)}`);
+  });
+  assert.deepStrictEqual(
+    offenders, [],
+    'Couleur de texte figée sur un fond de palette (utiliser _contrastTextColor) :\n' + offenders.join('\n'),
+  );
+});
+
+// Les index de palette ne doivent pas être figés à 4 niveaux : nbLevels va de 2 à 6.
+test('Palette de niveaux : aucun index figé à 4 (clamp sur colors.length)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const bad = src.split(/\r?\n/)
+    .map((l, i) => ({ l, i }))
+    .filter(({ l }) => /Math\.min\(\s*[34]\s*,\s*Math\.round\(/.test(l))
+    .map(({ l, i }) => `ligne ${i + 1} : ${l.trim().slice(0, 120)}`);
+  assert.deepStrictEqual(bad, [], 'Clamp de palette figé :\n' + bad.join('\n'));
+});

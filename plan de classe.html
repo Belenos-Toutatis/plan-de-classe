@@ -6491,11 +6491,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.45.8';
+const APP_VERSION    = '2.45.9';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-06T21:19:00Z';
+const APP_BUILD_DATE = '2026-09-06T21:32:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -16802,7 +16802,7 @@ function _evalShowNoteDetail(evalId, sid) {
       if (niv == null) {
         nivCell = `<span style="color:var(--pencil);font-style:italic">non atteint</span>`;
       } else {
-        const lvlInt = Math.max(1, Math.min(4, Math.round(niv)));
+        const lvlInt = Math.max(1, Math.min(colors.length, Math.round(niv)));
         const bg = colors[lvlInt - 1] || 'var(--paper-warm)';
         const col = _contrastTextColor(bg);
         const dec = (Math.abs(niv - Math.round(niv)) > 0.05) ? ` <span style="opacity:.75;font-size:.85em">(${niv.toFixed(2).replace('.', ',')})</span>` : '';
@@ -46103,7 +46103,7 @@ function renderCompetencesTab() {
       // Domaine = moyenne des compétences qu'il regroupe, arrondie à l'entier comme elles.
       const lvl = Math.round(levels.reduce((s, v) => s + v, 0) / levels.length);
       sumMean += lvl; nbMean++;
-      const lvlIdx = Math.max(1, Math.min(4, Math.round(lvl))) - 1;
+      const lvlIdx = Math.max(1, Math.min(colors.length, Math.round(lvl))) - 1;
       // Détail dans le tooltip : si plusieurs compétences (mode domaine), on liste les sous-moyennes
       let tipDetail;
       if (col.compIds.length > 1) {
@@ -46122,7 +46122,7 @@ function renderCompetencesTab() {
         : `${dispLvl} / 4 — moyenne sur ${aggs[0].entries.length} évaluation${aggs[0].entries.length > 1 ? 's' : ''}`;
       const tip = `${headerLine}\n\n${tipDetail}`;
       html += `<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="${_esc(tip)}">
-        <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${dispLvl}</span>
+        <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:${_contrastTextColor(colors[lvlIdx])};border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${dispLvl}</span>
       </td>`;
     }
     // Moyenne(s) : skip si col masquée
@@ -46141,8 +46141,8 @@ function renderCompetencesTab() {
         if (nbMean > 0) perMoy = sumMean / nbMean;
       }
       if (perMoy != null) {
-        const moyIdx = Math.max(1, Math.min(4, Math.round(perMoy))) - 1;
-        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${sep}"><span style="display:inline-block;padding:2px 8px;background:${colors[moyIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(perMoy)}</span></td>`;
+        const moyIdx = Math.max(1, Math.min(colors.length, Math.round(perMoy))) - 1;
+        html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;${sep}"><span style="display:inline-block;padding:2px 8px;background:${colors[moyIdx]};color:${_contrastTextColor(colors[moyIdx])};border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(perMoy)}</span></td>`;
       } else {
         html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
       }
@@ -46219,9 +46219,9 @@ function renderCompetencesTab() {
     if (m.mean == null) {
       html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">—</td>`;
     } else {
-      const mIdx = Math.max(1, Math.min(4, Math.round(m.mean))) - 1;
+      const mIdx = Math.max(1, Math.min(colors.length, Math.round(m.mean))) - 1;
       html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tip)}">
-        <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m.mean)}</span>
+        <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:${_contrastTextColor(colors[mIdx])};border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m.mean)}</span>
       </td>`;
     }
   });
@@ -46250,9 +46250,9 @@ function renderCompetencesTab() {
         `Min : ${_fmtNote(sG.min)} · Max : ${_fmtNote(sG.max)}`,
         `Écart-type : ${_fmtNote(sG.std)}`,
       ].join('\n');
-      const mIdx = Math.max(1, Math.min(4, Math.round(sG.avg))) - 1;
+      const mIdx = Math.max(1, Math.min(colors.length, Math.round(sG.avg))) - 1;
       html += `<td style="padding:6px 10px;text-align:center;background:var(--paper-warm);cursor:help;${sep}" title="${_esc(tipG)}">
-        <span style="display:inline-block;padding:2px 8px;background:${colors[mIdx]};color:#fff;border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(sG.avg)}</span>
+        <span style="display:inline-block;padding:2px 8px;background:${colors[mIdx]};color:${_contrastTextColor(colors[mIdx])};border-radius:10px;font-family:var(--font-mono);font-weight:700">${_fmtNote(sG.avg)}</span>
       </td>`;
     }
   });
