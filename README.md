@@ -29,7 +29,7 @@
 
 ### Plan Prof — placement drag & drop, mode appel, snapshots
 
-Vue principale du quotidien : grille de la salle, élèves avec leur prénom/nom, badges G1/G2, n° de tablette « Tab. X », allée centrale visible (cases grisées), panneau des élèves non placés à droite, compteur en haut (placés/G1/G2/classe mobile active).
+Vue principale du quotidien : grille de la salle, élèves avec leur prénom/nom, badges de groupe, de tag et d'aménagement (PPRE, PAP-A+⅓…), compteurs 📦/📝, n° de tablette « Tab. X », allée centrale visible, rappels en orange, panneau des élèves non placés à droite, compteur en haut (placés / G1 / G2 / hors classe).
 
 ![Plan Prof — vue principale](./docs/screenshots/plan-prof.png)
 
@@ -44,6 +44,12 @@ Mode épuré pour vidéoprojeter aux élèves : juste les prénoms en grand, san
 Tri par nom, par 📦 matériel oublié, par 📝 travail non fait, par 🚫 absences cumulées, par ⏰ retards cumulés. Édition de position en ligne (Tab pour passer au suivant), saisie directe des compteurs par input numérique (focus auto-sélectionne pour remplacer), badges PPRE / PPS / ULIS, bouton 🕓 pour l'historique détaillé par élève, sélection multiple par clic & glisser pour des actions en lot.
 
 ![Onglet Élèves — tableau triable](./docs/screenshots/onglet-eleves.png)
+
+### Bilan des notes — synthèse de la période pour le bulletin
+
+Une colonne par évaluation (note /20 colorée selon le barème), moyenne pondérée, rang, remarque de bulletin par élève et mentions de conseil de classe. Sélecteurs de discipline et de période, comparaison entre classes, copie ou export CSV.
+
+![Bilan des notes](./docs/screenshots/bilan-notes.png)
 
 ---
 
@@ -190,8 +196,8 @@ Plan prof, plan élève, plan vide, liste des élèves, bilan des classes (photo
 | 📱 **Tablettes**    | Récap par mode, paramétrage des classes mobiles, désaffectation                                        |
 | 📷 **QCMCam**       | Export CSV de tous les élèves au format QCMcam                                                         |
 | 📊 **Devoirs**      | Création/édition d'évaluations Type A/B/C, saisie tableur ou fiche par élève, multi-classes            |
-| 🎯 **Bilan par compétences** | Vue transverse classe : niveau moyen par élève sur chaque compétence évaluée                  |
-| 📜 **Bilan des évaluations** | Agrégation période : moyenne /20, rang, remarque bulletin — prêt à coller dans le bulletin     |
+| 🎯 **Bilan des compétences** | Vue transverse classe : niveau moyen par élève sur chaque compétence évaluée                  |
+| 📜 **Bilan des notes** | Agrégation période : moyenne /20, rang, remarque bulletin — prêt à coller dans le bulletin     |
 
 Onglets accessibles via boutons (sortis de la nav principale) :
 
@@ -395,15 +401,15 @@ Améliorations envisagées (pas de calendrier) :
 
 ### Volet Évaluation — état
 
-- [x] Onglets **Devoirs · Bilan par compétences · Bilan des évaluations**
+- [x] Onglets **Devoirs · Bilan des compétences · Bilan des notes**
 - [x] Référentiel de compétences personnalisable avec codes courts (C1..C8 pré-installés, modifiables), 8 domaines du socle
 - [x] **Type A** : mini-notes pondérées sur une note finale (souvent /20)
 - [x] **Type B** : passations de compétences par niveaux de maîtrise configurables 2 à 6 (+ 0 non évalué, A absent)
 - [x] **Type C** : sommative avec exercices, questions, compétences inline par question
 - [x] Saisie en **tableur** (sélection multi-cellules, copier-coller multi-colonnes Excel-like) et en **fiche par élève**
 - [x] Multi-classes par évaluation (dates et créneaux par classe)
-- [x] **Bilan par compétences** : niveau moyen par élève × compétence évaluée
-- [x] **Bilan des évaluations** : moyenne /20 par élève, rang, remarque bulletin (par élève × période), remarque classe + éléments travaillés synchronisés, sticky thead/tfoot, masquage de colonnes en multi-période
+- [x] **Bilan des compétences** : niveau moyen par élève × compétence évaluée
+- [x] **Bilan des notes** : moyenne /20 par élève, rang, remarque bulletin (par élève × période), remarque classe + éléments travaillés synchronisés, sticky thead/tfoot, masquage de colonnes en multi-période
 - [x] **Sauvegarde tableur XLSX / ODS** (un fichier par classe, mis en forme avec couleurs) — accessible depuis le menu Données
 - [ ] **Type D** : sommative par compétence sans questions intermédiaires
 - [ ] Export PDF du bilan par élève (à coller dans le bulletin)
