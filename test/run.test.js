@@ -1873,3 +1873,33 @@ test('Palette de niveaux : aucun index figé à 4 (clamp sur colors.length)', ()
     .map(({ l, i }) => `ligne ${i + 1} : ${l.trim().slice(0, 120)}`);
   assert.deepStrictEqual(bad, [], 'Clamp de palette figé :\n' + bad.join('\n'));
 });
+
+// ─── Le papier est blanc : tout token redéfini en thème sombre doit être neutralisé ──
+// Règle du design system : le bloc `@media print { html[data-theme="dark"] { … } }`
+// rétablit les valeurs du thème clair. Un token ajouté au mode nuit et oublié là
+// s'imprimerait en couleurs de nuit sur du papier blanc (244 écarts mesurés en 2026-07).
+test('Impression : tout token du thème sombre est neutralisé dans le bloc @media print', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const grab = (startRe) => {
+    const i = src.search(startRe);
+    assert.ok(i >= 0, 'bloc introuvable : ' + startRe);
+    // du '{' ouvrant jusqu'à son '}' fermant
+    const open = src.indexOf('{', i);
+    let depth = 0, j = open;
+    for (; j < src.length; j++) {
+      if (src[j] === '{') depth++;
+      else if (src[j] === '}') { depth--; if (depth === 0) break; }
+    }
+    return src.slice(open, j);
+  };
+  const names = blk => new Set([...blk.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(m => m[1]));
+  const dark  = names(grab(/^html\[data-theme="dark"\] \{/m));
+  const print = names(grab(/@media print \{\s*\n\s*html\[data-theme="dark"\] \{/));
+  const oublies = [...dark].filter(n => !print.has(n)).sort();
+  assert.deepStrictEqual(
+    oublies, [],
+    'Token(s) du thème sombre absent(s) de la neutralisation @media print :\n' + oublies.join(', '),
+  );
+});
