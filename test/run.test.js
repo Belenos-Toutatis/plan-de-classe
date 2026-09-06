@@ -1810,3 +1810,30 @@ test('raccourcis clavier : Ctrl+Z laissé au navigateur seulement dans une SAISI
   })()`);
   assert.deepEqual(r, [true, true, true, true, true, true, false, false, false, false, false, false, true]);
 });
+
+// ─── Cohérence des colonnes de bilan de compétences (tableurs B / C / D) ─────
+// Le rendu initial et le rafraîchissement en place ciblent les mêmes cellules :
+// ils doivent produire le MÊME balisage, sinon la colonne change d'apparence
+// entre la saisie et la réouverture du tableur (défaut vu en usage réel sur le
+// Type B, qui peignait le fond du <td> là où le rafraîchissement posait une
+// pastille). La couleur doit vivre dans .comp-pill — c'est ce que neutralise le
+// mode Sobriété.
+test('Bilan de compétences : toute cellule calculée passe par _compPillHTML', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const lines = src.split(/\r?\n/);
+  // Marqueurs des cellules de bilan calculé, tous types confondus.
+  const MARK = /data-row-comp=|class="d-comp-cell"|class="d-exocomp"|data-cid="\$\{_esc\(c\.id\)\}"/;
+  const offenders = [];
+  lines.forEach((l, i) => {
+    if (!MARK.test(l)) return;
+    if (!/<td\b/.test(l)) return;          // seulement les fabrications de cellule
+    if (l.includes('_compPillHTML')) return;
+    offenders.push(`ligne ${i + 1} : ${l.trim().slice(0, 140)}`);
+  });
+  assert.deepStrictEqual(
+    offenders, [],
+    'Cellule de bilan de compétences sans _compPillHTML (aplat sur le <td> ?) :\n' + offenders.join('\n'),
+  );
+});
