@@ -14,41 +14,14 @@
 
 ## ✨ En bref
 
-- 🎨 **Design "Carnet du prof"** : papier bleuté, filet rouge de marge, lignes Seyès en arrière-plan, typographie soignée (Fraunces serif + IBM Plex Sans + JetBrains Mono pour les chiffres) — polices embarquées, **mode sombre "veillée"** pour le soir et l'usage projeté en classe
-- 🪑 **Placement drag & drop** des élèves dans la salle de classe
-- 🏫 **Multi-salles par classe** (cours, demi-groupes, salle informatique…)
-- 🧑‍🏫 **AESH** : 1 à 6 AESH par couple (classe, salle), placement libre ou auto, élèves accompagnés liés et placés en priorité à côté lors du mélange, présence pointable au quotidien
-- 🎯 **Contraintes de placement** : places autorisées par élève + paires d'élèves à séparer (4 niveaux de strictness, du même groupe de tables au chevauchement de rangées)
-- 🔀 **Mélange aléatoire intelligent** : remplit d'avant en arrière, espace les élèves dans les groupes de tables, respecte automatiquement toutes les contraintes (G1/G2/G3, places autorisées, paires à séparer, AESH au milieu jamais en extrémité)
-- 💡 **Surlignage rose des derniers déplacements** (persistant, traverse les sessions et les machines)
-- 📱 **Gestion multi-classes mobiles de tablettes** : auto-affectation, fiche de prêt PDF, indispos, lots. **Picker unifié** — un clic sur "Tab. N" (dans le plan ou le récap Tablettes) ouvre une modale listant toutes les tablettes avec leur statut (libre / utilisée par X / indispo) — échange automatique avec confirmation si swap entre élèves.
-- 🙋 **Mode appel** : clic = absent, clic droit = retard avec heure d'arrivée
-- 📊 **Vue d'ensemble** cross-classes des absences, retards, oublis et travail non fait
-- 📸 **Snapshots datés** des plans de classe et des incidents (consultables / restaurables)
-- 📅 **Horaires configurables** par salle / par jour de la semaine
-- 📷 **QCMcam intégré** : 3 stratégies de numérotation automatiques (lisible pas 10 / pas 20 / séquentielle selon dimensions), **plan visuel vue prof** au-dessus de la liste élèves, export CSV multi-salles prêt à importer dans [qcmcam.net](https://q2.qcmcam.net/), **impression du plan par salle** (sans noms — utilisable comme repère au bureau du prof), **exclusion interactive de places** au-delà de 157 (clic sur le plan pour choisir quelles tables n'auront pas de marqueur), **import des résultats** (QCMcam 2 ou v1) dans une évaluation
-- 🎯 **Générateur de marqueurs ArUco intégré** : impression recto-verso A4 (1, 2 ou 4 par page) des marqueurs de la salle active uniquement, avec lettres A/B/C/D et numéro en taille anti-triche. Un jeu réutilisable par salle, réimpression de cartes perdues à la demande.
-- 🎲 **Interroger un élève au hasard** : carte flottante animée qui surgit de la cellule de l'élève (effet "écho visuel" avec traits connecteurs) — le tirage est immédiatement repérable sur le plan, même de loin
-- 🎙 **Sonomètre de classe** : bouton dans le header (disponible sur tous les onglets) qui surveille le niveau sonore via le micro et **alerte** quand c'est trop fort de façon soutenue — **alerte visuelle** (widget qui passe au rouge) **+ sonore**. **Plusieurs sonneries au choix** (cloche, bip, carillon, alarme deux tons, bips numériques, gong, coucou + thèmes rétro **Pac-Man / Mario / Tetris** joués jusqu'au bout de leur couplet) avec **volume réglable** (le maximum atteint la limite de saturation) et aperçu immédiat (re-cliquer sur Tester coupe le son). Widget flottant à 3 zones 🟢 calme / 🟠 animé / 🔴 trop fort, seuil **calibrable** (niveau relatif, pas des décibels), durée de déclenchement et temporisation réglables. **Fenêtre flottante toujours au premier plan** (Picture-in-Picture, Chrome/Edge) à poser sur un 2e écran / vidéoprojecteur, avec boutons compact / agrandir (remplir l'écran) / couper le son. **Analyse 100 % locale — aucun son enregistré ni transmis.**
-- ⏲ **Compte à rebours / minuteur** : bouton dans le header (sur tous les onglets) ouvrant une fenêtre de réglages — **durées prédéfinies** (5 à 55 min) ou **durée libre**, **annonce vocale** du temps restant à des moments choisis (15 min, 10 min… 30 s, 10 s), et **sonnerie de fin** au choix (mêmes sons que le sonomètre, dont les thèmes rétro). Une fois lancé, le minuteur s'affiche dans une **fenêtre flottante déplaçable, toujours au premier plan** (Picture-in-Picture, Chrome/Edge ; widget de secours sinon) : **un clic sur le décompte met en pause / reprend**, et des boutons permettent de couper la voix, la sonnerie, ou rouvrir les réglages. Fermer la fenêtre coupe le son. **100 % local, hors-ligne.**
-- 🚪 **Arrivées & départs en cours d'année** : date d'arrivée / de départ par élève. Un élève **parti libère sa place** sur le plan (la chaise redevient disponible, réutilisable au mélange) tout en **restant dans la classe** pour ses notes, bilans et historique ; un élève **pas encore arrivé** garde au contraire sa place réservée.
-- 🔄 **Sync auto** vers un dossier (Nextcloud, Drive…) avec backups horodatés en rotation
-- 🖨 **Impressions intelligentes** : Plan Prof / Plan Élève / Plan vide / Liste Élèves / Fiche de prêt / Plan QCMCam — orientation imposée selon le type
-- 📊 **Volet Évaluation** : onglets **Devoirs · Bilan par compétences · Bilan des évaluations**. 3 types d'évaluations (A = mini-notes /20, B = passations de compétences par niveaux de maîtrise **configurables (2 à 6 niveaux)**, C = sommative avec exercices et compétences inline), saisie en tableur ou en fiche par élève, valeurs A/NN, commentaires, exclusions, dates de rattrapage individuelles, coefficients et noteMax variés, multi-classes, multi-périodes (S1+S2 ou T1+T2+T3), **évaluations diagnostiques** (exclues des moyennes et des bilans de compétences, comme un simple point d'étape). Vues d'agrégation avec sticky thead/tfoot, remarque bulletin par élève × période, remarque générale classe et éléments travaillés synchronisés entre les deux onglets bilan, masquage individuel de colonnes en multi-période, paste multi-lignes depuis tableur. **Type D** (sommative par compétence sans questions intermédiaires) à venir.
-- 📤 **Sauvegarde des notes au format tableur** : menu **💾 Données ▾** → **Exporter les notes** → choix XLSX ou ODS, sélection multi-classes, un fichier par classe. Chaque classeur contient une feuille Synthèse, une feuille Bilan par période (S1/S2 ou T1/T2/T3) avec moyenne /20 colorée + rang + remarque + conseil de classe, une feuille Compétences (niveaux de maîtrise), et une feuille par évaluation (mini-notes Type A/C, passations × compétences Type B). Mise en forme complète (couleurs notes/niveaux, en-têtes bleu marine, codes A/NN préservés). Zéro dépendance externe — générateur ZIP+XML intégré.
-- 🔠 **Noms abrégés automatiquement** dans les tableaux d'éval (tableur de saisie, Bilan évaluations, Bilan compétences) : **clic gauche sur l'en-tête « Élève »** bascule entre nom complet et nom abrégé. En mode abrégé, l'app calcule le **nombre minimum d'initiales** nécessaires pour distinguer les élèves qui partagent le même prénom (ex. 3 « Léo MARTIN / MERCIER / MARCHAND » deviennent « Léo MART. / Léo MERC. / Léo MARC. »). Prénoms uniques → juste le prénom. Persisté entre sessions.
-- 📂 **Import direct de notes QCMcam** dans une éval Type A/C : bouton 📂 dans le tableur → liste les fichiers `resultats.csv` du dossier mémorisé (triable par date ou par nom, **champ de filtre 🔍 par nom de fichier** pour retrouver vite « 5a », « DST3 », etc.), matching élève par prénom complet (gère les prénoms composés type `Lou-Anna` sans les confondre avec `Louanne`) puis désambiguïsation par préfixe du nom de famille. **Picker de désambiguïsation** pour les lignes ambigües ou inconnues : `<select>` dédié par ligne avec « candidats détectés » + « autres élèves de la classe » + option « ✗ Ignorer cette ligne ». Détection automatique du barème (= nb de questions effectivement posées) avec 3 choix (mettre à jour la mini-note / créer une nouvelle mini-note / garder), détection des absents (Q* toutes vides → code `A`), de la **date** (`AAAA-MM-JJ`) **et du créneau horaire** (M1, M2, S1… si présent en suffixe du nom de fichier après la date — ex. `resultats_2026-05-26_M2.csv`).
-- 🚫 **Auto-fill des absents quand on change la date/le créneau d'un devoir** : si l'appel a déjà été enregistré ce jour-là à ce créneau, les cellules vides des élèves marqués absents sont automatiquement pré-remplies avec le code `A`. Toast récap pour informer. N'écrase jamais une note déjà saisie. Fonctionne depuis la modale Réglages, depuis la toolbar du tableur, depuis l'inline header de mini-note/passation, et au moment d'un import CSV QCMcam.
-- 🕓 **Clic sur le nom d'un élève dans les bilans** (Bilan des notes / Bilan des compétences) → ouvre directement la modale Historique 🕓 (incidents · notes · absences/retards) sans devoir naviguer vers l'onglet Élèves.
-- 🧮 **Mini-calculatrice dans les cellules du tableur** (Type A/C) : tape `1+2+4` puis Tab/Entrée → la cellule affiche `7`. Supporte `+ - * /`, parenthèses, signes unaires, virgule ou point décimal, `=` initial style tableur. Pratique pour additionner des sous-points sans calcul mental. Parser sécurisé sans `eval` — liste blanche stricte de caractères, expression invalide → toast non bloquant sans écrasement de la saisie.
-- 🎓 **Préparation du conseil de classe** : dans le Bilan des évaluations, une colonne par période avec des boutons-pastilles cliquables — mentions **entièrement configurables** (Réglages → 🎓 Conseil de classe) : nom, abréviation, couleur et incompatibilités par paire. Par défaut **F** (félicitations) / **E** (encouragements) / **AT** (avertissement travail) / **AC** (avertissement comportement), avec F et E exclusifs et AT/AC cumulables. Totaux par période en pied de tableau.
-- 🎓 **Disciplines multiples par classe** : catalogue global de disciplines (SVT, Option DP3, Bilingue, Devoir Fait…) géré depuis Classes → 🎓 Disciplines ou Devoirs → 🎓 Disciplines. Chaque classe peut être enseignée dans 1 ou plusieurs disciplines, chaque évaluation est rattachée à une discipline. Bilans, compétences, remarques et conseils de classe **séparés par discipline** — le sélecteur de flux apparaît automatiquement quand la classe a ≥ 2 disciplines. Migration douce des fichiers existants (tout reste sur la discipline principale par défaut).
-- 🔀 **Classes recomposées** (groupes DNL multi-classes, Bilingue, Option DP3, Devoir Fait, etc.) : créer depuis Classes → + Nouvelle classe recomposée OU depuis Élèves → sélection multi → bouton 🔀. Roster cross-classes, salle/plan/disciplines/bilans indépendants. **Mode avancé pliable** pour gérer l'appartenance par période quand le roster évolue (S1 → S2) : sélecteurs de période par élève + barre d'action en lot. Adapté tactile (Surface/iPad).
-- 💾 **Stratégie de sauvegarde configurable** : menu Données → ⚙ Sauvegarde auto. 4 presets — Désactivée / Légère (1/h, 7 jours) / Standard (≈ 80 backups sur 4 mois — défaut) / Étendue (≈ 130 backups sur 1 an). Choix persisté dans le fichier (suit entre machines via sync).
-- 📅 **Dates et créneaux par classe et par groupe** : pour les évaluations multi-classes, chaque classe a sa propre date / créneau (mode auto = dernière mini-note ou passation, ou manuel). Pour chaque mini-note (Type A) ou passation (Type B), possibilité de spécifier date + créneau différents par groupe G1/G2/G3 dans la même classe — utile pour les demi-groupes qui passent l'évaluation à des moments différents.
-- ⭐ **Évaluations facultatives** : 3 modes (compte si améliore la moyenne / bonus au-dessus de 10/20 / compte uniquement si > 10/20). Dans le Bilan, les cellules **non comptées** pour un élève apparaissent **hachurées** au-dessus de leur couleur de barème pour ne pas se mélanger avec celles qui comptent.
-- 🎯 **Affectation de compétences en lot** (Type C) : depuis la modale 🎯 Compétences d'une question, section « Aussi appliquer à » qui liste les autres questions de l'éval (groupées par exercice) avec checkbox + Tout cocher / Tout décocher. Une seule action propage les compétences sur plusieurs questions.
-- 🌐 **Aucune dépendance externe**, aucun CDN, aucune connexion réseau requise après ouverture
+- 🪑 **Placer ses élèves** en glisser-déposer, dans plusieurs salles par classe, avec des contraintes (places autorisées, élèves à séparer) et un mélange aléatoire qui les respecte.
+- 🙋 **Faire l'appel** en un clic par élève, garder l'historique, repérer les absences récurrentes.
+- 📊 **Noter et évaluer** : quatre types d'évaluation, compétences, bilans par période, préparation du conseil de classe, export tableur.
+- 📱 **Gérer les tablettes** : affectation automatique par salle, fiche de prêt à imprimer.
+- 📷 **QCMcam** : numérotation des places, marqueurs à imprimer, import des résultats dans une évaluation.
+- 🎙 **Outils de classe** : sonomètre, minuteur, tirage au sort d'un élève.
+- 🔒 **Vos données restent chez vous** : un seul fichier HTML, hors ligne, sauvegarde dans le dossier de votre choix, synchronisable via Nextcloud.
+- 📖 Le détail : [Fonctionnalités](#-fonctionnalités) · [Guide d'utilisation](#-guide-dutilisation).
 
 ---
 
@@ -142,6 +115,65 @@ Le dépôt fournit trois scripts qui démarrent un mini-serveur Python local et 
 ```
 
 Les fichiers `plan-classe-*.json` (sauvegardes manuelles, sync auto, backups horodatés) ne sont **pas** versionnés — ils contiennent vos données utilisateur.
+
+---
+
+## 🧰 Fonctionnalités
+
+### Plan de classe
+- **Placement** en glisser-déposer (souris, doigt, stylet), **plusieurs salles par classe**, zoom, filtres par groupe G1/G2/G3, couleur des places par groupe, tag ou genre.
+- **Contraintes** : places autorisées par élève, paires d'élèves à séparer — éditables en Config Salle ou directement sur le plan pendant le cours.
+- **Mélange aléatoire** qui remplit d'avant en arrière, espace les élèves dans les groupes de tables et respecte toutes les contraintes.
+- **AESH** : jusqu'à 6 par salle, élèves accompagnés placés à côté d'elles, présence pointable.
+- **Surlignage rose** des derniers déplacements, persistant d'une session à l'autre.
+- **Snapshots** datés des plans et des compteurs d'incidents, consultables et restaurables.
+- **Fiche complète d'un élève** au clic droit : scolarité, aménagements, place, incidents, appel, rappels, moyennes et remarques.
+- **Rappels** attachés à un élève, visibles sur sa place (mot à faire signer, document à rendre…).
+- 🚪 **Arrivées et départs en cours d'année** : un élève parti libère sa place mais garde ses notes ; un élève à venir garde sa place réservée.
+
+### Élèves
+- **Import** depuis un tableur ou un export Pronote : reconnaissance des colonnes (nom, prénom, classe, groupes, sexe, aménagements…), aperçu corrigeable, codes de groupes `3A-GP1` interprétés, classes créées à la volée et rattachées à une salle commune.
+- **Aménagements** : PPRE, PAP, PPS, ULIS, UPE2A, PAI, agrandissement (`-A`) et tiers-temps (`+⅓`), cumulables, visibles sur le plan et sur la liste imprimée.
+- **Compteurs** matériel oublié / travail non fait, historique, vue d'ensemble toutes classes, tags cumulables.
+- **Classes recomposées** (DNL, bilingue, option, Devoir Fait) : élèves de plusieurs classes, plan et bilans propres, appartenance par période.
+
+### Appel
+- Clic = absent, clic droit ou appui long = retard avec heure d'arrivée ; pré-marquage des élèves hors inclusion et non placés.
+- Appels enregistrés par créneau horaire, liste filtrable, statistiques par élève et par période, plan de l'appel consultable.
+- Les absents de l'appel sont **pré-remplis** dans une évaluation passée le même jour.
+
+### Évaluations
+- **Quatre types** : A (mini-notes), B (passations de compétences), C (sommative par exercices), D (sommative par compétences, chaque question évaluée par un niveau).
+- Saisie en tableur ou en fiche par élève, codes absent / non noté, commentaires par cellule, ajustement de la note finale avec motif (triche, retard, bonus), mini-calculatrice dans les cellules, noms abrégés automatiques.
+- **Multi-classes, multi-périodes** (semestres ou trimestres), dates et créneaux par classe et par groupe, évaluations facultatives et diagnostiques, coefficients, barèmes variés.
+- **Bilan des notes** et **Bilan des compétences** par période et par discipline, remarques de bulletin, éléments travaillés, **mentions de conseil de classe** configurables, comparaison entre classes.
+- **Disciplines multiples** par classe, bilans séparés par discipline.
+- **Export tableur** XLSX ou ODS, un classeur par classe, mis en forme ; export vers l'ENT.
+- **Import des résultats QCMcam** (v1 et v2) avec appariement des élèves et détection du barème, de la date et du créneau.
+
+### Tablettes
+- Plusieurs **classes mobiles** (chariots), lots, tablettes indisponibles.
+- **Affectation automatique** par salle, en classe entière ou par groupe, restreinte à un ou plusieurs lots, avec choix des tables à équiper quand il en manque.
+- Changement d'une tablette en deux clics, récap par salle, **fiche de prêt** PDF (registre nominatif de séance).
+
+### QCMcam
+- Numérotation automatique des places (lisible ou séquentielle selon la salle), plan visuel, export de la liste d'élèves reconnu par [QCMcam 2](https://q2.qcmcam.net/).
+- **Générateur de marqueurs ArUco** intégré : recto-verso, 1, 2 ou 4 par page, orientations tirées pour que deux voisins ne se copient pas, réimpression d'une carte perdue à l'identique.
+
+### Outils de classe
+- 🎙 **Sonomètre** : alerte visuelle et sonore quand le niveau reste trop élevé, seuil calibrable, fenêtre toujours au premier plan pour le vidéoprojecteur. Analyse locale, rien n'est enregistré.
+- ⏲ **Minuteur** : durées prédéfinies ou libres, annonces vocales, sonneries au choix, fenêtre flottante.
+- 🎲 **Interroger** un élève au hasard, avec une carte qui surgit de sa place.
+
+### Impressions
+Plan prof, plan élève, plan vide, liste des élèves, bilan des classes (photocopies), fiche de prêt, plans QCMcam, marqueurs ArUco — orientation et couleurs adaptées, mode noir et blanc.
+
+### Données et sauvegarde
+- **Un seul fichier HTML**, aucune dépendance, fonctionne hors ligne, installable comme application.
+- Sauvegarde dans le navigateur et dans un dossier de votre choix ; **synchronisation automatique** (Nextcloud, Drive…) avec détection des conflits entre postes et backups horodatés en rotation.
+- Versions nommées, historique, comparaison avant restauration ; réinitialisation de fin d'année qui conserve salles et réglages.
+- Fonctions activables une à une (tablettes, QCMcam, appel, évaluations) pour n'afficher que ce qui vous sert.
+- Mode sombre, design « carnet du prof », tactile (Surface, iPad), téléphone et tablette.
 
 ---
 
