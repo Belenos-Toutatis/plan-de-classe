@@ -6597,11 +6597,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.47.1';
+const APP_VERSION    = '2.48.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-07T20:15:00Z';
+const APP_BUILD_DATE = '2026-09-07T20:28:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10331,7 +10331,10 @@ function renderTagsModal() {
   list.innerHTML = tags.map(t => {
     const n = usage[t.id] || 0;
     return `<div class="mtags-row" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;margin-bottom:4px">
-      <span class="tagbdg" style="background:${_safeColor(t.color)};color:${_contrastTextColor(_safeColor(t.color))};font-size:.8em;padding:2px 8px">${_escAttr(t.abbr)}</span>
+      <input type="text" value="${_escAttr(t.abbr)}" maxlength="6" onchange="renameTagAbbr('${_esc(t.id)}',this.value)"
+             title="Abréviation affichée sur le plan et les listes (1 à 6 lettres ou chiffres)"
+             aria-label="Abréviation du tag ${_escAttr(t.abbr)}"
+             style="width:68px;text-align:center;text-transform:uppercase;font-family:var(--font-mono);font-weight:700;font-size:.82em;padding:4px 3px;border:1px solid var(--rule-line);border-radius:9px;background:${_safeColor(t.color)};color:${_contrastTextColor(_safeColor(t.color))}">
       <span style="flex:1;min-width:0">
         <input type="text" value="${_escAttr(t.name)}" onchange="renameTagFull('${t.id}',this.value)" style="width:100%;border:1px solid transparent;background:transparent;padding:2px 4px;font-size:.9em" onfocus="this.style.borderColor='#ccc';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">
       </span>
@@ -10359,9 +10362,42 @@ function mtagsAdd() {
   document.getElementById('mtags-name').value = '';
   document.getElementById('mtags-color').value = _nextTagColor();
   document.getElementById('mtags-abbr').focus();
-  // Re-render du contexte si besoin
+  _tagsRefreshSurfaces();
+}
+
+// Renommer l'ABRÉVIATION d'un tag. Sans risque : rien dans le modèle ne s'appuie
+// dessus — les élèves (stu.tags) comme les places (room.posTagId) référencent l'id.
+// Elle ne sert qu'à l'affichage et à la reconnaissance des colonnes à l'import.
+// ⚠️ En cas de saisie refusée, on RE-REND la liste : le champ doit revenir à la
+// valeur du modèle, sinon il affiche une abréviation qui n'existe pas.
+function renameTagAbbr(id, val) {
+  const t = tagById(id); if (!t) return;
+  const v = (val || '').trim().toUpperCase();
+  if (v === (t.abbr || '').toUpperCase()) { renderTagsModal(); return; }
+  if (!/^[A-Z0-9]{1,6}$/.test(v)) {
+    toast('⚠️ Abréviation invalide : 1 à 6 lettres ou chiffres (ex. DF, DNL, LV2).', 'warn');
+    renderTagsModal(); return;
+  }
+  const other = tagByAbbr(v);
+  if (other && other.id !== id) {
+    toast(`⚠️ Le tag « ${v} » existe déjà.`, 'warn');
+    renderTagsModal(); return;
+  }
+  pushUndo();
+  t.abbr = v;
+  save();
+  renderTagsModal();
+  _tagsRefreshSurfaces();
+}
+
+// Surfaces qui affichent une abréviation de tag : plan, liste des élèves, et la
+// barre d'action + la grille de Config Salle (mode Tags).
+function _tagsRefreshSurfaces() {
   if (typeof renderStudents === 'function') renderStudents();
   if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
+  if (typeof _renderCfgBulkBar === 'function') _renderCfgBulkBar();
+  const cfg = document.getElementById('tab-config');
+  if (cfg && cfg.classList.contains('on') && typeof renderConfigGrid === 'function') renderConfigGrid();
 }
 
 function renameTagFull(id, val) {
@@ -10380,8 +10416,7 @@ function changeTagColor(id, val) {
   t.color = val;
   save();
   renderTagsModal();
-  if (typeof renderStudents === 'function') renderStudents();
-  if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
+  _tagsRefreshSurfaces();
 }
 
 function deleteTagConfirm(id) {
@@ -10416,8 +10451,7 @@ function deleteTagConfirm(id) {
       _tagFilter.delete(id);
       save();
       renderTagsModal();
-      if (typeof renderStudents === 'function') renderStudents();
-      if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
+      _tagsRefreshSurfaces();
     },
   });
 }
@@ -10969,9 +11003,9 @@ function renderMvcFilterPanel() {
     } else {
       tagsWrap.innerHTML = tagList.map(t => {
         const on = _mvcFilters.tagIds.has(t.id);
-        const bg = on ? _safeColor(t.color) : '#fff';
-        const fg = on ? '#fff' : '#444';
-        const bd = on ? _safeColor(t.color) : '#ccc';
+        const bg = on ? _safeColor(t.color) : 'var(--paper)';
+        const fg = on ? _contrastTextColor(_safeColor(t.color)) : 'var(--pencil)';
+        const bd = on ? _safeColor(t.color) : 'var(--rule-line)';
         return `<button type="button" class="btn btn-sm" onclick="mvcToggleFilterTag('${t.id}')" style="padding:1px 8px;font-size:.78em;background:${bg};color:${fg};border:1px solid ${bd};border-radius:10px" title="${_escAttr(t.name)}">${_escAttr(t.abbr)}</button>`;
       }).join('');
     }
@@ -19951,7 +19985,7 @@ function _renderCfgBulkBar() {
       return;
     }
     acts.innerHTML = tags.map(t =>
-      `<button class="btn btn-sm" style="background:${_safeColor(t.color)};color:#fff" onclick="cfgApplyToSelection('tag','${t.id}')" title="${_escAttr(t.name)}">${_escAttr(t.abbr)}</button>`
+      `<button class="btn btn-sm" style="background:${_safeColor(t.color)};color:${_contrastTextColor(_safeColor(t.color))}" onclick="cfgApplyToSelection('tag','${t.id}')" title="${_escAttr(t.name)}">${_escAttr(t.abbr)}</button>`
     ).join('') + ' <button class="btn btn-g btn-sm" onclick="cfgApplyToSelection(\'tag\',null)">— Aucun</button>';
   } else if (cfgMode === 'contraintes') {
     const sid = document.getElementById('cfg-contraintes-stu')?.value;
