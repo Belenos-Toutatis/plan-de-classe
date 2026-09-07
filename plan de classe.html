@@ -632,14 +632,26 @@ body.noise-widget-on #toast{bottom:112px}
 .cell.appel-mode.oc{cursor:pointer}
 .cell.appel-mode.oc:hover{outline:2px solid #3b82f6;outline-offset:1px}
 /* Chips filtre groupe */
-.gchip{padding:4px 12px;border-radius:12px;border:2px solid transparent;cursor:pointer;font-size:.82em;font-weight:600;background:var(--paper-warm);color:var(--pencil);transition:all .15s}
+.gchip,.amchip{padding:4px 12px;border-radius:12px;border:2px solid transparent;cursor:pointer;font-size:.82em;font-weight:600;background:var(--paper-warm);color:var(--pencil);transition:all .15s}
 /* Tooltip global pour [data-tip] (positionné en JS — clamp viewport, délai 0.5s) */
 #gtip{position:fixed;z-index:9999;background:#2c3e50;color:#fff;padding:9px 13px;border-radius:6px;font-size:13.5px;font-weight:400;line-height:1.45;max-width:340px;box-shadow:0 3px 12px rgba(0,0,0,.3);pointer-events:none;opacity:0;transition:opacity .15s;display:none;text-align:left}
 #gtip.show{opacity:1}
-.gchip:hover{background:var(--paper-deep)}
+.gchip:hover,.amchip:hover{background:var(--paper-deep)}
 /* Fond par défaut de l'état actif : sans lui, une puce .on sans variante gc-*
    (onglets de jour de Config Salle) affichait du blanc sur --paper-warm. */
 .gchip.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
+.amchip.am-agr.on{background:var(--agr-fg);border-color:var(--agr-fg);color:#fff}
+.amchip.am-tt.on{background:var(--tt-fg);border-color:var(--tt-fg);color:#fff}
+html[data-theme="dark"] .amchip.am-agr.on,
+html[data-theme="dark"] .amchip.am-tt.on{color:#1a252f}
+/* Surlignage des aménagements d'examen (Plan Prof) : les concernés gardent leur
+   pleine intensité et prennent un liseré ; les autres s'estompent SANS devenir
+   inertes (à la différence de .ghost, qui coupe aussi les événements). */
+.cell.am-dim{opacity:.32}
+.cell.am-hl-agr{outline:3px solid var(--agr-fg);outline-offset:-1px;z-index:6}
+.cell.am-hl-tt{outline:3px solid var(--tt-fg);outline-offset:-1px;z-index:6}
+.cell.am-hl-agr.am-hl-tt{outline-color:var(--agr-fg);box-shadow:inset 0 0 0 3px var(--tt-fg)}
+@media print{.cell.am-dim{opacity:1}.cell.am-hl-agr,.cell.am-hl-tt{outline:none;box-shadow:none}}
 .gchip.gc-all.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg)}
 .gchip.gc-1.on{background:var(--g1);border-color:var(--g1)}
 .gchip.gc-2.on{background:var(--g2);border-color:var(--g2)}
@@ -827,6 +839,7 @@ body.rendu-projecting body::before{display:none}
   --civ-m:           #1c6ea4;   /* ♂ garçons */
   --civ-f:           #b3123f;   /* ♀ filles */
   --agr-fg:          #00707d;   /* 📄 agrandissements */
+  --tt-fg:           #6d28d9;   /* ⏱ tiers-temps */
   --warn-fg:         #92400e;   /* alertes ambre (élève sans tablette…) */
   --maitrise-1:      #b03d2e;
   --maitrise-2:      #e67e22;
@@ -906,6 +919,7 @@ html[data-theme="dark"] {
   --civ-m:            #7ec3f0;
   --civ-f:            #f296b6;
   --agr-fg:           #63c9d4;
+  --tt-fg:            #b69bf5;
   --warn-fg:          #e0a06a;
   --shadow-card: 0 1px 0 rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.3);
   --shadow-pop:  0 4px 16px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3);
@@ -971,7 +985,7 @@ html[data-theme="dark"] {
     --margin-red:       #b03d2e;  --margin-red-soft: rgba(176, 61, 46, 0.14);
     --highlighter:      #f5d76e;  --chip-on-bg:   #263545;
     --civ-m:            #1c6ea4;  --civ-f:        #b3123f;
-    --agr-fg:           #00707d;  --warn-fg:      #92400e;
+    --agr-fg:           #00707d;  --tt-fg:        #6d28d9;  --warn-fg:      #92400e;
     --disc-accent:      #5b21b6;  --disc-accent-soft: #ede9fe;  --disc-accent-mid: #c4b5fd;
     --maitrise-1:       #b03d2e;  --maitrise-2:   #e67e22;
     --maitrise-3:       #27ae60;  --maitrise-4:   #1e6091;
@@ -2354,7 +2368,20 @@ body.timer-widget-on #toast{bottom:112px}
 .tw-ic{background:transparent;border:none;cursor:pointer;font-size:.92em;padding:2px 4px;border-radius:3px;color:var(--pencil);line-height:1}
 .tw-ic:hover{background:var(--paper-deep);color:var(--ink-deep)}
 .tw-time{font-family:var(--font-mono);font-weight:800;font-size:2.2em;text-align:center;color:var(--ink-deep);line-height:1.1;letter-spacing:1px;cursor:pointer}
-.timer-widget.tw-finished .tw-time{color:#e74c3c}
+.timer-widget.tw-finished .tw-time{color:var(--danger-fg)}
+/* Second décompte (tiers-temps) : plus petit que le principal, dans l'accent violet
+   déjà utilisé pour cet aménagement sur le plan. Quand le temps de la classe est
+   écoulé, c'est LUI qui devient l'information principale — d'où l'inversion des tailles. */
+.tw-tt{font-family:var(--font-mono);font-weight:700;font-size:1.15em;text-align:center;
+  color:var(--tt-fg);line-height:1.2;letter-spacing:.5px;margin-top:2px}
+.tw-tt-lbl{font-size:.8em;opacity:.85}
+.timer-widget.tw-main-done .tw-time{color:var(--danger-fg);font-size:1.3em;opacity:.75}
+.timer-widget.tw-main-done .tw-tt{font-size:2.2em}
+.timer-widget.tw-finished .tw-tt{color:var(--danger-fg)}
+/* ⚠️ --tt-fg est un violet FONCÉ en clair et CLAIR en nuit : l'encre de la puce
+   active s'inverse avec le thème (cf. .spec-ppre). */
+#timer-w-tt-btn.on{background:var(--tt-fg);color:#fff}
+html[data-theme="dark"] #timer-w-tt-btn.on{color:#1a252f}
 .tw-bar-wrap{position:relative;height:7px;background:var(--paper-deep);border-radius:6px;overflow:hidden;margin-top:5px}
 .tw-bar{height:100%;width:100%;border-radius:6px;background:var(--ink-blue);transition:width .25s linear}
 .timer-widget.tw-finished .tw-bar{background:#e74c3c}
@@ -2628,12 +2655,16 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <span class="tw-actions">
       <button class="tw-ic" id="timer-w-speech" onclick="timerToggleSpeech()" title="Couper / activer l'annonce vocale" aria-label="Couper ou activer l'annonce vocale">🗣</button>
       <button class="tw-ic" id="timer-w-sound" onclick="timerToggleSound()" title="Couper / activer la sonnerie finale" aria-label="Couper ou activer la sonnerie finale">🔔</button>
+      <button class="tw-ic" id="timer-w-tt-btn" onclick="timerToggleTt()" title="Afficher le décompte du tiers-temps (+⅓)" aria-label="Décompte du tiers-temps">+<span class="frac">⅓</span></button>
       <button class="tw-ic" onclick="openTimerSettings()" title="Réglages (annonce vocale, sonnerie)" aria-label="Réglages du minuteur">⚙</button>
       <button class="tw-ic" onclick="timerOpenWindow()" title="Ouvrir dans une fenêtre flottante toujours au premier plan" aria-label="Fenêtre flottante">🪟</button>
       <button class="tw-ic" onclick="timerStop()" title="Arrêter le minuteur" aria-label="Arrêter le minuteur">✕</button>
     </span>
   </div>
   <div class="tw-time" id="timer-w-time" onclick="timerTogglePause()" title="Cliquer pour mettre en pause / reprendre">00:00</div>
+  <div class="tw-tt" id="timer-w-tt" style="display:none" title="Temps restant pour les élèves qui ont un tiers-temps">
+    <span class="tw-tt-lbl">+<span class="frac">⅓</span></span> <span id="timer-w-tt-time">00:00</span>
+  </div>
   <div class="tw-bar-wrap"><div class="tw-bar" id="timer-w-bar"></div></div>
   <div class="tw-foot"><span id="timer-w-state">En cours</span><span id="timer-w-total"></span></div>
 </div>
@@ -2777,6 +2808,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span class="gchip gc-2"      onclick="setGroupFilter(2,this)" title="Groupe 2 (touche 2)">🟠 G2</span>
       <span class="gchip gc-3"      onclick="setGroupFilter(3,this)" title="Groupe 3 (touche 3)">🟣 G3</span>
       <span id="tg-tagchips" class="tag-chips-wrap" style="display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap"></span>
+      <span id="tg-amchips" style="display:inline-flex;gap:4px;align-items:center;border-left:1px solid var(--rule-line);padding-left:8px;margin-left:2px">
+        <span class="amchip am-agr" id="am-chip-agr" onclick="toggleAmHighlight('agr')"
+              title="Mettre en évidence les élèves qui reçoivent un sujet agrandi — les autres s'estompent (touche D)">📄 Agrandissement</span>
+        <span class="amchip am-tt" id="am-chip-tt" onclick="toggleAmHighlight('tt')"
+              title="Mettre en évidence les élèves qui ont un tiers-temps — les autres s'estompent (touche T)">⏱ Tiers-temps</span>
+      </span>
       <select id="tg-color-mode" onchange="setPlanColorMode(this.value)" title="Choisir comment les cases sont colorées" style="font-size:.82em;padding:2px 4px;border:1px solid #ccc;border-radius:3px">
         <option value="groupe">🎨 Couleur : Groupe</option>
         <option value="tag">🎨 Couleur : Tag (place)</option>
@@ -4103,6 +4140,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <tr><td><kbd>+</kbd> / <kbd>−</kbd> / <kbd>=</kbd></td><td>Zoom + / Zoom − / 100% (en Plan Prof)</td></tr>
         <tr><td><kbd>0</kbd> / <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td><td>Filtre groupe : Tous / G1 / G2 / G3</td></tr>
         <tr><td><kbd>A</kbd></td><td>Bascule mode appel (en Plan Prof)</td></tr>
+        <tr><td><kbd>D</kbd></td><td>Surligne les élèves qui reçoivent un sujet agrandi (en Plan Prof)</td></tr>
+        <tr><td><kbd>T</kbd></td><td>Surligne les élèves qui ont un tiers-temps (en Plan Prof)</td></tr>
       </table>
     </div>
 
@@ -4254,6 +4293,18 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div style="margin-top:8px">
         <button class="btn btn-g btn-sm" onclick="_timerSpeak('Il reste 5 minutes')">▶ Tester la voix</button>
         <span id="timer-speech-warn" style="display:none;font-size:.82em;color:var(--danger-fg)">⚠ Synthèse vocale indisponible dans ce navigateur.</span>
+      </div>
+    </fieldset>
+
+    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
+      <legend style="font-size:.88em;font-weight:600;padding:0 6px">⏱ Tiers-temps</legend>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.9em">
+        <input type="checkbox" id="timer-tt-on" onchange="timerSetTtOn(this.checked)"> Afficher aussi le décompte du <strong>tiers-temps</strong> (+⅓)
+      </label>
+      <div style="font-size:.82em;color:var(--pencil);margin-top:6px;line-height:1.4">
+        Un second décompte s'affiche à côté du premier, allongé d'un tiers de la durée. Le minuteur sonne
+        <strong>deux fois</strong> : à la fin du temps de la classe, puis à la fin du tiers-temps.
+        Se règle aussi en cours de route, par le bouton <strong>+⅓</strong> du minuteur.
       </div>
     </fieldset>
 
@@ -6544,11 +6595,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.46.0';
+const APP_VERSION    = '2.47.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-06T23:06:00Z';
+const APP_BUILD_DATE = '2026-09-07T20:07:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12982,6 +13033,41 @@ function toggleTagFilter(tagId) {
   if (typeof renderUnplaced === 'function') renderUnplaced();
 }
 
+// ─── Surlignage des aménagements d'examen (Plan Prof) ───────────────────────
+// Deux moments distincts dans une évaluation : distribuer les sujets agrandis, puis
+// accorder le temps supplémentaire. Les deux surlignages sont donc INDÉPENDANTS et
+// cumulables, et non un mode unique « aménagements ».
+// Persisté comme le filtre de groupe : une épreuve dure une heure, un F5 ne doit pas
+// faire perdre le repère.
+let _amHighlight = { agr: false, tt: false };
+(function () {
+  try {
+    const v = localStorage.getItem('planClasse_amHighlight') || '';
+    _amHighlight.agr = v.includes('agr');
+    _amHighlight.tt  = v.includes('tt');
+  } catch (_) {}
+})();
+
+function _amHighlightOn() { return _amHighlight.agr || _amHighlight.tt; }
+
+function toggleAmHighlight(kind) {
+  if (kind !== 'agr' && kind !== 'tt') return;
+  _amHighlight[kind] = !_amHighlight[kind];
+  try {
+    const v = [_amHighlight.agr ? 'agr' : '', _amHighlight.tt ? 'tt' : ''].filter(Boolean).join('+');
+    localStorage.setItem('planClasse_amHighlight', v);
+  } catch (_) {}
+  _updateAmChipsUI();
+  renderTeacherGrid();
+}
+
+function _updateAmChipsUI() {
+  const a = document.getElementById('am-chip-agr');
+  const t = document.getElementById('am-chip-tt');
+  if (a) a.classList.toggle('on', _amHighlight.agr);
+  if (t) t.classList.toggle('on', _amHighlight.tt);
+}
+
 function setGroupFilter(g, chip) {
   // Sécurité (au cas où) : ignore les clics sur un chip masqué — normalement les chips G1/G2/G3
   // sont retirés du DOM si le groupe est vide, donc ce cas ne devrait pas se produire.
@@ -17727,6 +17813,8 @@ function decNT(id) {
 function renderTeacherGrid() {
   // Met à jour l'état des chips G1/G2 selon la classe courante (avant tout rendu)
   _updateGroupChipsState();
+  // Pastilles de surlignage des aménagements (état restauré du localStorage au démarrage)
+  _updateAmChipsUI();
   // Synchronise le sélecteur de mode de coloration avec _planColorMode (utile au démarrage
   // ou quand le mode est changé par programme via setPlanColorMode)
   const colorSel = document.getElementById('tg-color-mode');
@@ -17840,6 +17928,17 @@ function renderTeacherGrid() {
     }
     if (ulisOut > 0)  parts.push(`${ulisOut} ULIS hors classe`);
     if (upe2aOut > 0) parts.push(`${upe2aOut} UPE2A hors classe`);
+    // Aménagements d'examen : le compte sert à préparer le bon nombre de sujets agrandis.
+    // Compté sur les élèves du filtre courant, placés ou non — un élève encore debout
+    // a droit à son sujet.
+    if (_amHighlight.agr) {
+      const _nAgr = inFilter.filter(s => s.agrandissement).length;
+      parts.push(`📄 ${_nAgr} agrandissement${_nAgr > 1 ? 's' : ''}`);
+    }
+    if (_amHighlight.tt) {
+      const _nTt = inFilter.filter(s => s.tiers_temps).length;
+      parts.push(`⏱ ${_nTt} tiers-temps`);
+    }
     // Compteur AESH (Phase 1+2+4) : N AESH placée(s) sur M configurées + nb d'absentes en mode appel/post-appel.
     // Filtre groupe (Phase 4) : on ne compte que les AESH présentes pour le filtre actif
     // (une AESH dont aucun élève accompagné n'est dans le groupe filtré n'est pas en salle).
@@ -18467,6 +18566,7 @@ function buildCell(cls, row, col) {
     const _isAeshAbs = _aeshIsAbsent(cls, cls.activeRoom, aeshIdxHere);
     cell.classList.add('aesh');
     if (_aeshGhost) cell.classList.add('ghost');
+    if (_amHighlightOn() && !_aeshGhost) cell.classList.add('am-dim');
     if (_isAeshAbs && !_aeshGhost) cell.classList.add('absent'); // réutilise le style hachuré gris
     cell.draggable = !_appelMode && !_aeshGhost; // pas de drag en mode appel ni si fantôme
     cell.dataset.aeshIdx = String(aeshIdxHere);
@@ -18601,6 +18701,17 @@ function buildCell(cls, row, col) {
     const isGhost = (groupFilter !== 0 && stu.groupe !== groupFilter)
                  || (_tagFilter.size > 0 && !studentHasAllTags(stu, _tagFilter));
     if (isGhost) cell.classList.add('ghost');
+
+    // Surlignage des aménagements d'examen. Les concernés prennent un liseré, les
+    // autres s'estompent — c'est l'estompage qui fait ressortir les concernés d'un
+    // coup d'œil, le liseré seul se perd dans un plan déjà coloré.
+    if (_amHighlightOn() && !isGhost) {
+      const hitA = _amHighlight.agr && !!stu.agrandissement;
+      const hitT = _amHighlight.tt  && !!stu.tiers_temps;
+      if (hitA) cell.classList.add('am-hl-agr');
+      if (hitT) cell.classList.add('am-hl-tt');
+      if (!hitA && !hitT) cell.classList.add('am-dim');
+    }
 
     // Mode appel : applique la classe d'absent/retard, et installe le clic toggle
     if (_appelMode) {
@@ -32526,7 +32637,7 @@ window.addEventListener('beforeunload', () => { try { if (_noise.popup && !_nois
 // mises à jour vers le widget replié ET la fenêtre flottante (PiP / window.open).
 // État éphémère (ne survit pas à un reload) ; seuls les réglages persistent.
 // ═══════════════════════════════════════════════════════════
-const TIMER_DEFAULTS = { soundOn: true, soundType: 'mario', volume: 80, speechOn: false, announces: [600, 300, 60], lastDurationS: 600 };
+const TIMER_DEFAULTS = { soundOn: true, soundType: 'mario', volume: 80, speechOn: false, announces: [600, 300, 60], lastDurationS: 600, ttOn: false };
 let _timerSettings = { ...TIMER_DEFAULTS };
 let _timer = {
   running: false, paused: false, finished: false,
@@ -32554,6 +32665,34 @@ function _timerFmt(ms) {
   const pad = n => String(n).padStart(2, '0');
   return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (pad(m) + ':' + pad(s));
 }
+// ── Tiers-temps : second décompte, un tiers de temps en plus ────────────────
+// ⚠️ Il se DÉRIVE de endTime, il n'a pas d'échéance propre : la pause décale
+// endTime, donc les deux décomptes restent d'eux-mêmes synchronisés.
+function _timerTtExtraMs() { return Math.round(_timer.totalMs / 3); }
+function _timerTtRemainingMs() {
+  const base = _timer.paused ? _timer.remainingMs : (_timer.endTime - Date.now());
+  return base + _timerTtExtraMs();
+}
+function timerSetTtOn(on) {
+  const wasOn = !!_timerSettings.ttOn;
+  _timerSettings.ttOn = !!on;
+  _timerSaveSettings();
+  // ⚠️ Désarmer PENDANT que le tiers-temps court : le minuteur n'a plus aucune
+  // échéance à attendre. Sans ce cas, il continuait de tourner sans rien afficher,
+  // puis sonnait à l'heure d'un tiers-temps que l'enseignant venait d'annuler.
+  // Pas de seconde sonnerie ici : elle n'a plus lieu d'être.
+  if (wasOn && !_timerSettings.ttOn && _timer.running && _timer.mainDone && !_timer.finished) {
+    if (_timer.interval) { clearInterval(_timer.interval); _timer.interval = null; }
+    _timer.finished = true;
+    const w = document.getElementById('timer-widget');
+    if (w) { w.classList.remove('tw-main-done'); w.classList.add('tw-finished'); }
+    _timerUpdateBtn();
+  }
+  _timerSyncToggleUI();
+  _timerRender();
+}
+function timerToggleTt() { timerSetTtOn(!_timerSettings.ttOn); }
+
 function _timerAnnounceText(secs) {
   if (secs >= 60) { const m = Math.round(secs / 60); return 'Il reste ' + m + (m > 1 ? ' minutes' : ' minute'); }
   return 'Il reste ' + secs + ' secondes';
@@ -32566,6 +32705,7 @@ function openTimerSettings() {
   set('timer-min', Math.floor(last / 60)); set('timer-sec', last % 60);
   const sp = document.getElementById('timer-speech-on'); if (sp) sp.checked = _timerSettings.speechOn;
   const so = document.getElementById('timer-sound-on'); if (so) so.checked = _timerSettings.soundOn;
+  const tt = document.getElementById('timer-tt-on'); if (tt) tt.checked = !!_timerSettings.ttOn;
   set('timer-sound-type', _timerSettings.soundType);
   set('timer-vol-range', _timerSettings.volume);
   const vv = document.getElementById('timer-vol-val'); if (vv) vv.textContent = _timerSettings.volume;
@@ -32608,7 +32748,7 @@ function timerStartFromInputs() {
 function timerStart(totalSec) {
   totalSec = Math.max(1, Math.round(totalSec));
   _timerStopInternals();
-  _timer.running = true; _timer.paused = false; _timer.finished = false;
+  _timer.running = true; _timer.paused = false; _timer.finished = false; _timer.mainDone = false;
   _timer.totalMs = totalSec * 1000;
   _timer.endTime = Date.now() + _timer.totalMs;
   _timer.remainingMs = _timer.totalMs;
@@ -32625,7 +32765,8 @@ function timerStart(totalSec) {
   if (_timer.interval) clearInterval(_timer.interval);
   _timer.interval = setInterval(_timerTick, 250);
   timerOpenWindow(); // fenêtre flottante toujours au premier plan (geste utilisateur actif)
-  toast('⏲ Minuteur lancé : ' + _timerFmt(_timer.totalMs));
+  toast('⏲ Minuteur lancé : ' + _timerFmt(_timer.totalMs)
+        + (_timerSettings.ttOn ? ' · tiers-temps ' + _timerFmt(_timer.totalMs + _timerTtExtraMs()) : ''));
 }
 function _timerStopFinalSound() {
   if (_timer.finalTimer) { clearTimeout(_timer.finalTimer); _timer.finalTimer = null; }
@@ -32638,9 +32779,9 @@ function _timerStopInternals() {
 }
 function timerStop() {
   _timerStopInternals();
-  _timer.running = false; _timer.paused = false; _timer.finished = false;
+  _timer.running = false; _timer.paused = false; _timer.finished = false; _timer.mainDone = false;
   const w = document.getElementById('timer-widget');
-  if (w) { w.style.display = 'none'; w.classList.remove('tw-finished'); }
+  if (w) { w.style.display = 'none'; w.classList.remove('tw-finished', 'tw-main-done'); }
   document.body.classList.remove('timer-widget-on');
   try { if (_timer.popup && !_timer.popup.closed) _timer.popup.close(); } catch (_) {}
   _timer.popup = null;
@@ -32656,6 +32797,12 @@ function timerTogglePause() {
 function _timerTick() {
   if (!_timer.running || _timer.paused) return;
   _timer.remainingMs = _timer.endTime - Date.now();
+  // Après la fin du temps principal, le minuteur continue de tourner tant que le
+  // tiers-temps n'est pas écoulé : les annonces vocales, elles, s'arrêtent là.
+  if (_timer.mainDone) {
+    if (_timerTtRemainingMs() <= 0) { _timerRender(); _timerFinishTt(); return; }
+    _timerRender(); return;
+  }
   if (_timer.remainingMs <= 0) { _timer.remainingMs = 0; _timerRender(); _timerFinish(); return; }
   const remS = Math.ceil(_timer.remainingMs / 1000);
   // Si plusieurs seuils sont franchis dans le même tick (onglet longtemps en arrière-plan),
@@ -32672,11 +32819,32 @@ function _timerTick() {
   _timerRender();
 }
 function _timerFinish() {
+  _timer.mainDone = true; _timer.paused = false;
+  // Tiers-temps armé : on sonne pour la classe, mais on NE coupe PAS le minuteur —
+  // les élèves qui en bénéficient continuent, et le second décompte prend le relais.
+  if (_timerSettings.ttOn) {
+    const w = document.getElementById('timer-widget'); if (w) w.classList.add('tw-main-done');
+    _timerRender(); _timerUpdateBtn(); _timerSyncToggleUI();
+    if (_timerSettings.speechOn) _timerSpeak('Temps écoulé. Tiers-temps en cours.');
+    if (_timerSettings.soundOn) _timerPlayFinal();
+    return;
+  }
   _timerStopInternals();
-  _timer.finished = true; _timer.paused = false;
+  _timer.finished = true;
   const w = document.getElementById('timer-widget'); if (w) w.classList.add('tw-finished');
   _timerRender(); _timerUpdateBtn(); _timerSyncToggleUI();
   if (_timerSettings.speechOn) _timerSpeak('Temps écoulé');
+  if (_timerSettings.soundOn) _timerPlayFinal();
+}
+function _timerFinishTt() {
+  // ⚠️ On coupe l'intervalle SANS passer par _timerStopInternals, qui arrêterait au
+  // passage la sonnerie du temps principal si elle jouait encore.
+  if (_timer.interval) { clearInterval(_timer.interval); _timer.interval = null; }
+  _timer.finished = true; _timer.paused = false;
+  const w = document.getElementById('timer-widget');
+  if (w) { w.classList.remove('tw-main-done'); w.classList.add('tw-finished'); }
+  _timerRender(); _timerUpdateBtn(); _timerSyncToggleUI();
+  if (_timerSettings.speechOn) _timerSpeak('Fin du tiers-temps');
   if (_timerSettings.soundOn) _timerPlayFinal();
 }
 
@@ -32686,18 +32854,35 @@ function _timerRender() {
               : (_timer.running ? Math.max(0, _timer.endTime - Date.now()) : _timer.remainingMs);
   const txt = _timerFmt(remMs);
   const frac = _timer.totalMs > 0 ? Math.max(0, Math.min(1, remMs / _timer.totalMs)) : 0;
-  const state = _timer.finished ? '⏰ Terminé !' : (_timer.paused ? '⏸ En pause' : 'En cours');
+  const ttOn  = !!_timerSettings.ttOn;
+  const ttTxt = ttOn ? _timerFmt(Math.max(0, _timerTtRemainingMs())) : '';
+  const state = _timer.finished ? '⏰ Terminé !'
+              : (_timer.mainDone ? '⏰ Temps écoulé — tiers-temps en cours'
+              : (_timer.paused ? '⏸ En pause' : 'En cours'));
   const t = document.getElementById('timer-w-time'); if (t) t.textContent = txt;
   const b = document.getElementById('timer-w-bar'); if (b) b.style.width = (frac * 100) + '%';
   const s = document.getElementById('timer-w-state'); if (s) s.textContent = state;
   const tot = document.getElementById('timer-w-total'); if (tot) tot.textContent = 'sur ' + _timerFmt(_timer.totalMs);
+  const ttBox = document.getElementById('timer-w-tt');
+  if (ttBox) {
+    ttBox.style.display = ttOn ? '' : 'none';
+    const tv = document.getElementById('timer-w-tt-time'); if (tv) tv.textContent = ttTxt;
+  }
   if (_timer.popup && !_timer.popup.closed) {
     try {
       const d = _timer.popup.document;
       const nt = d.getElementById('tpw-time'); if (nt) nt.textContent = txt;
       const nf = d.getElementById('tpw-fill'); if (nf) nf.style.width = (frac * 100) + '%';
       const nm = d.getElementById('tpw-msg'); if (nm) nm.textContent = state;
-      if (d.body) d.body.classList.toggle('finished', _timer.finished);
+      const nb = d.getElementById('tpw-tt');
+      if (nb) {
+        nb.style.display = ttOn ? '' : 'none';
+        const nv = d.getElementById('tpw-tt-time'); if (nv) nv.textContent = ttTxt;
+      }
+      if (d.body) {
+        d.body.classList.toggle('finished', _timer.finished);
+        d.body.classList.toggle('main-done', !!_timer.mainDone && !_timer.finished);
+      }
     } catch (_) {}
   }
 }
@@ -32715,8 +32900,12 @@ function _timerSyncToggleUI() {
   if (sb) { sb.textContent = _timerSettings.soundOn ? '🔔' : '🔕'; sb.title = (_timerSettings.soundOn ? 'Couper' : 'Activer') + ' la sonnerie finale'; }
   const vb = document.getElementById('timer-w-speech');
   if (vb) { vb.textContent = _timerSettings.speechOn ? '🗣' : '🔇'; vb.title = (_timerSettings.speechOn ? 'Couper' : 'Activer') + " l'annonce vocale"; }
+  const tb = document.getElementById('timer-w-tt-btn');
+  if (tb) { tb.classList.toggle('on', !!_timerSettings.ttOn);
+            tb.title = (_timerSettings.ttOn ? 'Masquer' : 'Afficher') + ' le décompte du tiers-temps (+⅓)'; }
   const mso = document.getElementById('timer-sound-on'); if (mso) mso.checked = _timerSettings.soundOn;
   const msp = document.getElementById('timer-speech-on'); if (msp) msp.checked = _timerSettings.speechOn;
+  const mtt = document.getElementById('timer-tt-on'); if (mtt) mtt.checked = !!_timerSettings.ttOn;
   if (_timer.popup && !_timer.popup.closed) _timerUpdatePopupButtons(_timer.popup);
 }
 
@@ -32925,6 +33114,14 @@ body.finished{animation:tflash .7s ease-in-out infinite}
 #tpw-msg{font-size:5vh;font-weight:700;color:#56697f}
 body.finished #tpw-msg{color:#e74c3c}
 #tpw-time{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:30vh;line-height:1;letter-spacing:2px}
+/* Second décompte : discret tant que la classe compose, il devient le chiffre
+   principal dès que le temps commun est écoulé (body.main-done). */
+#tpw-tt{display:flex;align-items:baseline;gap:2vh;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-weight:800;font-size:11vh;line-height:1;color:#5b21b6}
+#tpw-tt-lbl{font-size:.5em;font-weight:700;opacity:.8}
+body.main-done #tpw-time{font-size:11vh;color:#b03d2e;opacity:.7}
+body.main-done #tpw-tt{font-size:30vh}
+body.finished #tpw-tt{color:#b03d2e}
 body{cursor:pointer}#tpw-ctrl .tpw-btn{cursor:pointer}
 body.finished #tpw-time{color:#e74c3c}
 #tpw-wrap{width:86vw;height:6vh;min-height:18px;background:#d6dde6;border-radius:99px;overflow:hidden;border:2px solid #c8d2e0}
@@ -32933,12 +33130,14 @@ body.finished #tpw-fill{background:#e74c3c}`;
   const body = `<div id="tpw-ctrl">`
     + `<button class="tpw-btn" id="tpw-speech" title="Couper / activer l'annonce vocale" aria-label="Annonce vocale">🗣</button>`
     + `<button class="tpw-btn" id="tpw-sound" title="Couper / activer la sonnerie finale" aria-label="Sonnerie finale">🔔</button>`
+    + `<button class="tpw-btn" id="tpw-tt-btn" title="Afficher le décompte du tiers-temps (+⅓)" aria-label="Décompte du tiers-temps">+⅓</button>`
     + `<button class="tpw-btn" id="tpw-settings" title="Réglages (voix, sonnerie)" aria-label="Réglages">⚙</button>`
     + `<button class="tpw-btn" id="tpw-max" title="Remplir l'écran (re-cliquer pour rétablir)" aria-label="Remplir l'écran">⛶</button>`
     + `<button class="tpw-btn" id="tpw-close" title="Arrêter le minuteur" aria-label="Arrêter">✕</button>`
     + `</div>`
     + `<div id="tpw-msg">En cours</div>`
     + `<div id="tpw-time">00:00</div>`
+    + `<div id="tpw-tt" style="display:none"><span id="tpw-tt-lbl">+⅓</span><span id="tpw-tt-time">00:00</span></div>`
     + `<div id="tpw-wrap"><div id="tpw-fill"></div></div>`;
   try {
     const d = win.document;
@@ -32952,6 +33151,7 @@ body.finished #tpw-fill{background:#e74c3c}`;
     d.body.addEventListener('click', e => { if (e.target.closest('#tpw-ctrl')) return; timerTogglePause(); });
     bind('tpw-speech', () => timerToggleSpeech());
     bind('tpw-sound', () => timerToggleSound());
+    bind('tpw-tt-btn', () => timerToggleTt());
     bind('tpw-settings', () => { try { window.focus(); } catch (_) {} openTimerSettings(); });
     bind('tpw-max', () => _timerPopupToggleMax(win));
     bind('tpw-close', () => timerStop());
@@ -32963,6 +33163,12 @@ function _timerUpdatePopupButtons(win) {
     const d = win.document;
     const sb = d.getElementById('tpw-sound'); if (sb) sb.textContent = _timerSettings.soundOn ? '🔔' : '🔕';
     const vb = d.getElementById('tpw-speech'); if (vb) vb.textContent = _timerSettings.speechOn ? '🗣' : '🔇';
+    const tb = d.getElementById('tpw-tt-btn');
+    if (tb) {
+      tb.style.background = _timerSettings.ttOn ? '#5b21b6' : 'rgba(255,255,255,.78)';
+      tb.style.color      = _timerSettings.ttOn ? '#fff' : '#1a252f';
+      tb.title = (_timerSettings.ttOn ? 'Masquer' : 'Afficher') + ' le décompte du tiers-temps (+⅓)';
+    }
   } catch (_) {}
 }
 function _timerPopupSetSize(win, mode) {
@@ -33129,6 +33335,14 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       if (typeof toggleAppelMode === 'function') toggleAppelMode();
       return;
+    }
+    // 'D' (document agrandi) et 'T' (tiers-temps) : surlignage des aménagements
+    // d'examen. Plan Prof seulement — ces informations ne sont pas projetées.
+    if (isPlan && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault(); toggleAmHighlight('agr'); return;
+    }
+    if (isPlan && (e.key === 't' || e.key === 'T')) {
+      e.preventDefault(); toggleAmHighlight('tt'); return;
     }
   }
 });

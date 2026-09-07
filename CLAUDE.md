@@ -1263,6 +1263,17 @@ Bouton **⏲** dans le header (à gauche du sonomètre, id `#btn-timer`, `openTi
 - L'`AudioContext` est mémorisé dans `_timer.finalCtx` → `_timerStopFinalSound()` le ferme pour **couper le son** (fermeture de la fenêtre via `_timerOnPopupClosed`, ✕ via `timerStop`/`_timerStopInternals`). `_timerPlayFinal` coupe une sonnerie précédente avant d'en lancer une nouvelle.
 - `_timerMakeBlip(ctx, master, t0, off)` : fabrique un `blip` décalé de `off` (permet de séquencer les répétitions des sons non-thématiques).
 
+### Tiers-temps — second décompte (v2.47.0)
+
+Pendant une évaluation, deux échéances : celle de la classe, puis celle des élèves qui ont un tiers-temps. Le bouton **+⅓** (widget, fenêtre flottante, et case dans les réglages) affiche un **second décompte** allongé d'un tiers, à côté du premier.
+
+- **Réglage persisté** `_timerSettings.ttOn` (défaut `false`), armable avant le départ ou **en cours de route**.
+- ⚠️ **Le second décompte n'a PAS d'échéance propre** : `_timerTtRemainingMs()` se dérive de `endTime` (`+ totalMs/3`). La pause décale `endTime`, donc les deux restent synchronisés sans code supplémentaire — un second `endTime` aurait dû être décalé à la main à chaque pause.
+- **Deux sonneries** : `_timerFinish()` sonne pour la classe puis, si `ttOn`, **ne coupe pas l'intervalle** (`_timer.mainDone`) ; `_timerFinishTt()` sonne à la fin du tiers-temps. ⚠️ Ce dernier vide l'intervalle **à la main** plutôt que par `_timerStopInternals()`, qui couperait au passage la sonnerie du temps principal si elle jouait encore.
+- **Inversion des tailles** : tant que la classe compose, le décompte principal est en gros et le tiers-temps en petit ; dès `mainDone`, ils échangent leurs tailles (`.tw-main-done`, `body.main-done` côté fenêtre) — c'est le tiers-temps qui devient l'information utile.
+- ⚠️ **Désarmer pendant que le tiers-temps court termine le minuteur sur-le-champ**, sans seconde sonnerie. Sans ce cas (dans `timerSetTtOn`, dont `timerToggleTt` n'est qu'une enveloppe), il continuait de tourner sans rien afficher puis sonnait à l'heure d'un tiers-temps annulé.
+- Les **annonces vocales** s'arrêtent à la fin du temps principal : elles décrivent l'épreuve commune. La voix dit « Temps écoulé. Tiers-temps en cours. » puis « Fin du tiers-temps ».
+
 ### Surfaces d'affichage
 - **Widget replié** (`#timer-widget`, bas-droite, z 986) : titre déplaçable (`_timerInitWidgetDrag`, glisser par `.tw-head`), grand chiffre `MM:SS` (ou `H:MM:SS`) **cliquable = pause/reprise** (`timerTogglePause`, pas de bouton pause dédié), barre de progression, état (« En cours » / « ⏸ En pause » / « ⏰ Terminé ! »). Boutons : 🗣 voix · 🔔 son · ⚙ réglages · 🪟 fenêtre flottante · ✕.
 - **Fenêtre flottante** (`timerOpenWindow`, `_timerFillWindow`) : Picture-in-Picture prioritaire (toujours au premier plan, Chromium/Edge) ; repli `window.open` sinon ; le widget reste comme secours. Ouverte automatiquement au démarrage (geste utilisateur actif). Contrôles dans la fenêtre (`#tpw-ctrl`) : 🗣 · 🔔 · ⚙ (focus fenêtre principale + `openTimerSettings`) · ⛶ (remplir l'écran via `resizeTo`) · ✕. **Clic n'importe où dans la fenêtre (hors `#tpw-ctrl`) = pause/reprise**. L'analyse/le décompte tournent dans la fenêtre principale ; `_timerRender` pousse les mises à jour vers le document de la fenêtre à chaque tick.
@@ -1404,6 +1415,7 @@ XLSX testé avec openpyxl + LibreOffice headless conversion PDF — aucune erreu
 Le zoom du Plan Prof et de la Vue Élève est **persisté** (`localStorage.planClasse_tgZoom` / `planClasse_svZoom`, restauré au chargement via `svApplyZoom()`/`tgApplyZoom()` appelés en fin de définition du module zoom) — un F5 en classe ne remet plus le plan à 100 %.
 | `0` / `1` / `2` / `3` | Filtre groupe : Tous / G1 / G2 / G3 |
 | `A` | Toggle mode appel (en Plan Prof) |
+| `D` / `T` | Surligne les élèves à sujet agrandi / à tiers-temps (en Plan Prof) |
 
 ## Onglet Élèves — fonctionnalités spécifiques
 - **Tri par colonne** : Nom, 📦 Matériel oublié, 📝 Travail non fait, 🚫 Absences cumulées, ⏰ Retards cumulés
@@ -2330,6 +2342,18 @@ Sélection multi-élèves (clic & glisser) dans l'onglet Élèves → barre d'ac
 ### Appartenance per-période (`cls.membership`)
 
 Pour les classes recomposées dont le roster évolue entre périodes (typique : Devoir Fait), chaque élève peut avoir un intervalle d'appartenance restreint : `cls.membership[sid] = { fromPer, toPer }`. Codes période (S1/S2 ou T1/T2/T3) ou null pour ouvert. Géré dans le mode avancé (sélecteurs « de [..] à [..] » par élève + barre bulk violette). Cf. section *Appartenance per-période* dans le bloc Disciplines pour les détails.
+
+## Surlignage des aménagements d'examen (Plan Prof)
+
+Deux pastilles dans la barre du Plan Prof — **📄 Agrandissement** et **⏱ Tiers-temps** (raccourcis `D` et `T`) — mettent en évidence les élèves concernés. Deux moments distincts d'une évaluation : distribuer les sujets agrandis, puis accorder le temps supplémentaire. Les deux surlignages sont donc **indépendants et cumulables**, et non un mode unique « aménagements ».
+
+- **`_amHighlight = { agr, tt }`**, persisté dans `localStorage.planClasse_amHighlight` (`'agr'` / `'tt'` / `'agr+tt'`) — même raisonnement que le filtre de groupe : une épreuve dure une heure, un F5 ne doit pas faire perdre le repère. Bascule par `toggleAmHighlight(kind)`, état des puces remis par `_updateAmChipsUI()` en tête de `renderTeacherGrid`.
+- ⚠️ **Les puces portent la classe `.amchip`, PAS `.gchip`** : `setGroupFilter` fait un `querySelectorAll('.gchip')` puis retire `.on` de toutes — réutiliser la classe éteindrait le surlignage à chaque changement de filtre de groupe.
+- **C'est l'estompage qui fait le travail**, pas le liseré : les concernés prennent un contour (`--agr-fg` sarcelle, `--tt-fg` violet, les deux → double anneau), les autres passent à `opacity:.32` (`.am-dim`). Un liseré seul se perd dans un plan déjà coloré. ⚠️ `.am-dim` **n'est pas `.ghost`** : ce dernier coupe aussi `pointer-events`, or les cases estompées doivent rester manipulables (on continue de déplacer un élève, de compter un oubli).
+- Les cellules **AESH** sont estompées comme les autres : elles n'ont pas d'aménagement d'examen.
+- Le compteur `tg-count` annonce `📄 N agrandissements` / `⏱ N tiers-temps` quand le surlignage correspondant est actif — compté sur les élèves du **filtre courant, placés ou non** : un élève encore debout a droit à son sujet.
+- **Plan Prof seulement.** Ni Vue Élève (projetée à la classe) ni impression — c'est une information privée à l'enseignant, comme les rappels. Un bloc `@media print` neutralise estompage et liserés au cas où.
+- ⚠️ `.moved-cell` (surlignage rose des places qui viennent de bouger) porte `outline … !important` et `z-index:10` : sur une case à la fois déplacée et concernée, **le rose gagne**. Voulu — l'information la plus fraîche prime.
 
 ## Mode de coloration des cellules (Plan Prof)
 
