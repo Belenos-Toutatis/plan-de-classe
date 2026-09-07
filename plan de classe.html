@@ -2369,14 +2369,16 @@ body.timer-widget-on #toast{bottom:112px}
 .tw-ic:hover{background:var(--paper-deep);color:var(--ink-deep)}
 .tw-time{font-family:var(--font-mono);font-weight:800;font-size:2.2em;text-align:center;color:var(--ink-deep);line-height:1.1;letter-spacing:1px;cursor:pointer}
 .timer-widget.tw-finished .tw-time{color:var(--danger-fg)}
-/* Second décompte (tiers-temps) : plus petit que le principal, dans l'accent violet
-   déjà utilisé pour cet aménagement sur le plan. Quand le temps de la classe est
-   écoulé, c'est LUI qui devient l'information principale — d'où l'inversion des tailles. */
-.tw-tt{font-family:var(--font-mono);font-weight:700;font-size:1.15em;text-align:center;
-  color:var(--tt-fg);line-height:1.2;letter-spacing:.5px;margin-top:2px}
-.tw-tt-lbl{font-size:.8em;opacity:.85}
-.timer-widget.tw-main-done .tw-time{color:var(--danger-fg);font-size:1.3em;opacity:.75}
-.timer-widget.tw-main-done .tw-tt{font-size:2.2em}
+/* Second décompte (tiers-temps), dans l'accent violet de cet aménagement.
+   ⚠️ JAMAIS plus petit que le décompte principal : les élèves qui ont droit à un
+   tiers-temps sont très souvent ceux à qui il faut de GRANDS caractères, et ce
+   décompte-ci est justement celui qu'ils lisent. Les deux sont donc à la même
+   taille tant que la classe compose ; une fois le temps commun écoulé, c'est le
+   principal qui s'efface (il est figé à 00:00) et le tiers-temps qui reste grand. */
+.tw-tt{font-family:var(--font-mono);font-weight:800;font-size:2.2em;text-align:center;
+  color:var(--tt-fg);line-height:1.1;letter-spacing:1px;margin-top:1px}
+.tw-tt-lbl{font-size:.42em;font-weight:700;opacity:.9;vertical-align:.42em;letter-spacing:0}
+.timer-widget.tw-main-done .tw-time{color:var(--danger-fg);font-size:1.1em;opacity:.7}
 .timer-widget.tw-finished .tw-tt{color:var(--danger-fg)}
 /* ⚠️ --tt-fg est un violet FONCÉ en clair et CLAIR en nuit : l'encre de la puce
    active s'inverse avec le thème (cf. .spec-ppre). */
@@ -6595,11 +6597,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.47.0';
+const APP_VERSION    = '2.47.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-07T20:07:00Z';
+const APP_BUILD_DATE = '2026-09-07T20:15:00Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32874,12 +32876,10 @@ function _timerRender() {
       const nt = d.getElementById('tpw-time'); if (nt) nt.textContent = txt;
       const nf = d.getElementById('tpw-fill'); if (nf) nf.style.width = (frac * 100) + '%';
       const nm = d.getElementById('tpw-msg'); if (nm) nm.textContent = state;
-      const nb = d.getElementById('tpw-tt');
-      if (nb) {
-        nb.style.display = ttOn ? '' : 'none';
-        const nv = d.getElementById('tpw-tt-time'); if (nv) nv.textContent = ttTxt;
-      }
+      d.querySelectorAll('.tpw-tt-part').forEach(el => { el.style.display = ttOn ? '' : 'none'; });
+      const nv = d.getElementById('tpw-tt-val'); if (nv) nv.textContent = ttTxt;
       if (d.body) {
+        d.body.classList.toggle('tt-on', ttOn);
         d.body.classList.toggle('finished', _timer.finished);
         d.body.classList.toggle('main-done', !!_timer.mainDone && !_timer.finished);
       }
@@ -33113,15 +33113,28 @@ body.finished{animation:tflash .7s ease-in-out infinite}
 .tpw-btn:hover{background:#fff}
 #tpw-msg{font-size:5vh;font-weight:700;color:#56697f}
 body.finished #tpw-msg{color:#e74c3c}
-#tpw-time{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:30vh;line-height:1;letter-spacing:2px}
-/* Second décompte : discret tant que la classe compose, il devient le chiffre
-   principal dès que le temps commun est écoulé (body.main-done). */
-#tpw-tt{display:flex;align-items:baseline;gap:2vh;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-weight:800;font-size:11vh;line-height:1;color:#5b21b6}
-#tpw-tt-lbl{font-size:.5em;font-weight:700;opacity:.8}
-body.main-done #tpw-time{font-size:11vh;color:#b03d2e;opacity:.7}
-body.main-done #tpw-tt{font-size:30vh}
-body.finished #tpw-tt{color:#b03d2e}
+/* Les deux décomptes, alignés sur leurs chiffres (grille étiquette | valeur).
+   ⚠️ Le tiers-temps n'est JAMAIS écrit plus petit que le temps de la classe : ceux
+   qui en bénéficient sont le plus souvent ceux à qui il faut de grands caractères.
+   Quand le tiers-temps est affiché, les DEUX rétrécissent d'autant, jamais lui seul.
+   La taille est bornée en vw autant qu'en vh : sur un vidéoprojecteur large, c'est
+   la largeur qui contraint, et 30vh de chiffres déborderaient de l'écran. */
+#tpw-times{display:grid;grid-template-columns:auto auto;align-items:baseline;
+  column-gap:2vw;row-gap:1.5vh;justify-content:center}
+.tpw-val{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;
+  line-height:1;letter-spacing:2px;font-size:min(30vh,18vw)}
+.tpw-lbl{font-family:inherit;font-weight:700;font-size:min(5vh,3.2vw);color:#56697f;
+  text-align:right;white-space:nowrap;letter-spacing:.02em}
+body:not(.tt-on) .tpw-lbl{display:none}
+body:not(.tt-on) #tpw-times{grid-template-columns:auto}
+/* Mesuré : à 1920×1080 la place verticale libre absorbe la seconde ligne, les deux
+   décomptes tiennent donc à 324 px — la MÊME taille qu'un décompte seul. Afficher
+   le tiers-temps ne coûte rien en lisibilité sur un vidéoprojecteur 16:9. */
+body.tt-on .tpw-val{font-size:min(30vh,17vw)}
+#tpw-tt-val{color:#5b21b6}
+body.tt-on.main-done #tpw-time{font-size:min(9vh,6vw);color:#b03d2e;opacity:.72}
+body.tt-on.main-done #tpw-tt-val{font-size:min(30vh,18vw)}
+body.finished #tpw-tt-val{color:#b03d2e}
 body{cursor:pointer}#tpw-ctrl .tpw-btn{cursor:pointer}
 body.finished #tpw-time{color:#e74c3c}
 #tpw-wrap{width:86vw;height:6vh;min-height:18px;background:#d6dde6;border-radius:99px;overflow:hidden;border:2px solid #c8d2e0}
@@ -33136,8 +33149,11 @@ body.finished #tpw-fill{background:#e74c3c}`;
     + `<button class="tpw-btn" id="tpw-close" title="Arrêter le minuteur" aria-label="Arrêter">✕</button>`
     + `</div>`
     + `<div id="tpw-msg">En cours</div>`
-    + `<div id="tpw-time">00:00</div>`
-    + `<div id="tpw-tt" style="display:none"><span id="tpw-tt-lbl">+⅓</span><span id="tpw-tt-time">00:00</span></div>`
+    + `<div id="tpw-times">`
+    +   `<span class="tpw-lbl">Classe</span><span class="tpw-val" id="tpw-time">00:00</span>`
+    +   `<span class="tpw-lbl tpw-tt-part" id="tpw-tt" style="display:none">Tiers-temps</span>`
+    +   `<span class="tpw-val tpw-tt-part" id="tpw-tt-val" style="display:none">00:00</span>`
+    + `</div>`
     + `<div id="tpw-wrap"><div id="tpw-fill"></div></div>`;
   try {
     const d = win.document;
