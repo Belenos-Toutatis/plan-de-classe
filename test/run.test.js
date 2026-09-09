@@ -2010,3 +2010,60 @@ test('date auto : une classe en mode MANUEL ne voit ni sa date ni son créneau r
   assert.equal(get(`_evalDateFor(S.evaluations.e1, 'c1')`), '2026-01-05');
   assert.equal(get(`_evalSlotIdFor(S.evaluations.e1, 'c1')`), 'M1');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pattern de ramassage et CHANGEMENT DE SALLE (2.49.0).
+// Une photo de placement n'a de sens qu'avec la géométrie où elle a été prise :
+// deux salles se recouvrent largement en coordonnées 'r,c', donc une photo prise
+// ailleurs produit un ordre plausible mais faux, sans un mot.
+// ─────────────────────────────────────────────────────────────────────────────
+function _twoRoomFixture(recordRoom) {
+  setState({
+    salles: {
+      sA: { nom: '102', rows: 5, cols: 8, positions_vides: [], schedule: {}, collectPatterns: [] },
+      sB: { nom: '105', rows: 4, cols: 9, positions_vides: [], schedule: {},
+            collectPatterns: [{ id: 'pB', nom: 'B', order: ['0,0', '0,1'] }] },
+    },
+    classes: { c1: { id: 'c1', nom: '5C', eleves: ['s1', 's2'], activeRoom: 'sB', rooms: {
+      sA: { seating: { '4,0': 's1', '0,1': 's2' }, groupes: {}, ipadsByPool: {}, posTagId: {},
+            allowedFor: {}, aeshCount: 0, aeshSeating: {}, aeshLinks: {} },
+      sB: { seating: { '0,0': 's2', '0,1': 's1' }, groupes: {}, ipadsByPool: {}, posTagId: {},
+            allowedFor: {}, aeshCount: 0, aeshSeating: {}, aeshLinks: {} } } } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'Un', classe_id: 'c1' },
+              s2: { id: 's2', nom: 'B', prenom: 'Deux', classe_id: 'c1' } },
+    evaluations: {}, attendance: {}, seatingSnapshots: {}, cur: 'c1',
+  });
+  // Photo prise EN SALLE A (clé '4,0' hors des 4 rangées de la salle B).
+  const hash = ev(`_registerSeatingSnapshot({ '4,0': 's1', '0,1': 's2' })`);
+  const rid = recordRoom ? `, seatingRoomIds: { c1: 'sA' }` : '';
+  ev(`S.evaluations.e1 = { id:'e1', type:'B', nomCourt:'É', classIds:['c1'], passations: [],
+        notes:{}, periode:'S1', noteMax:20, coef:1, dates:{ c1:'2020-01-06' },
+        seatingHashes: { c1: ${JSON.stringify(hash)} }${rid} };`);
+}
+
+test('pattern : une photo prise dans une AUTRE salle est écartée (salle mémorisée)', () => {
+  _twoRoomFixture(true);
+  assert.equal(get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`), null,
+    'salle enregistrée ≠ salle courante → on retombe sur le placement courant');
+});
+
+test('pattern : fichier ancien sans salle mémorisée — une clé hors bornes trahit la photo', () => {
+  _twoRoomFixture(false);
+  assert.equal(get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`), null,
+    "'4,0' est hors des 4 rangées de la salle B → photo d'ailleurs");
+});
+
+test('pattern : une photo de la BONNE salle reste utilisée', () => {
+  _twoRoomFixture(false);
+  const h = ev(`_registerSeatingSnapshot({ '0,0': 's1', '0,1': 's2' })`);
+  ev(`S.evaluations.e1.seatingHashes.c1 = ${JSON.stringify(h)};`);
+  assert.deepEqual(get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`),
+    { '0,0': 's1', '0,1': 's2' });
+});
+
+test('renommage/purge de classe : seatingRoomIds suit les autres maps per-classe', () => {
+  const keys = get(`(function(){ const seen=[]; _forEachEvalPerClassMap(
+      { dates:{}, slotIds:{}, datesManual:{}, seatingHashes:{}, seatingRoomIds:{} },
+      m => seen.push(m)); return seen.length; })()`);
+  assert.equal(keys, 5, 'les 5 maps per-classe de niveau éval sont visitées');
+});

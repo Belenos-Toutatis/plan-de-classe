@@ -6597,11 +6597,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.49.0';
+const APP_VERSION    = '2.50.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-09T16:08:46Z';
+const APP_BUILD_DATE = '2026-09-09T16:20:13Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13939,7 +13939,7 @@ function createClass() {
 // étaient perdus silencieusement (ou restaient orphelins à la suppression).
 function _forEachEvalPerClassMap(ev, fn) {
   if (!ev || typeof ev !== 'object') return;
-  for (const k of ['dates', 'slotIds', 'datesManual', 'seatingHashes']) {
+  for (const k of ['dates', 'slotIds', 'datesManual', 'seatingHashes', 'seatingRoomIds']) {
     if (ev[k] && typeof ev[k] === 'object') fn(ev[k]);
   }
   const subs = [
@@ -31948,6 +31948,8 @@ function _seedDemoEvaluations() {
       const hash = _registerSeatingSnapshot(c.rooms?.[c.activeRoom]?.seating || {});
       if (hash) {
         ev.seatingHashes[cid] = hash;
+        ev.seatingRoomIds = ev.seatingRoomIds || {};
+        if (c.activeRoom) ev.seatingRoomIds[cid] = c.activeRoom;
         if (!ev.seatingHash && cid === (ev.classId || classIds[0])) ev.seatingHash = hash;
       }
     }
@@ -35879,7 +35881,12 @@ function _evalNewSave() {
   evObj.seatingHashes = { [primaryCls.id]: primarySeatingHash };
   for (const cid of validIds.slice(1)) {
     const c = S.classes[cid];
-    if (c) evObj.seatingHashes[cid] = _registerSeatingSnapshot(c.seating || {});
+    if (c) {
+      evObj.seatingHashes[cid] = _registerSeatingSnapshot(c.seating || {});
+      // La salle avec la photo : les clés 'r,c' n'ont de sens que dans SA géométrie.
+      evObj.seatingRoomIds = evObj.seatingRoomIds || {};
+      if (c.activeRoom) evObj.seatingRoomIds[cid] = c.activeRoom;
+    }
   }
   // Canonicalisation finale (sécurise — supprime tout résidu ev.date legacy)
   _evalNormalizeDates(evObj);
@@ -36240,6 +36247,8 @@ function _evalEditToggleClass(checkbox) {
       if (hash) {
         ev.seatingHashes = ev.seatingHashes || {};
         ev.seatingHashes[cid] = hash;
+        ev.seatingRoomIds = ev.seatingRoomIds || {};
+        if (cls.activeRoom) ev.seatingRoomIds[cid] = cls.activeRoom;
       }
     }
     // Initialise la date pour cette classe au niveau de la date globale si pas définie
@@ -43001,15 +43010,44 @@ function _evalPatternSeatingFor(ev, classId) {
     });
     for (const r of cands) {
       const snap = _getSeatingSnapshot(r.seatingHash);
-      if (snap && Object.keys(snap).length) return snap;
+      // Même exigence de géométrie que pour la photo de création : un appel ancien
+      // ne porte pas sa salle (aeshSalleIdSnap absent), le contrôle des bornes le
+      // rattrape. Le 4e argument, pas ev : l'appel n'a pas de seatingRoomIds.
+      if (snap && Object.keys(snap).length && _seatingFitsRoom(snap, null, classId, roomId)) return snap;
     }
   }
   // 2. Seating figé à la création de l'éval.
   const hash = _evalSeatingHashFor(ev, classId);
   const snap = hash ? _getSeatingSnapshot(hash) : null;
-  if (snap && Object.keys(snap).length) return snap;
+  if (snap && Object.keys(snap).length && _seatingFitsRoom(snap, ev, classId, roomId)) return snap;
   // 3. Caller retombe sur le seating courant.
   return null;
+}
+
+// Une photo de placement n'est utilisable avec un pattern QUE si elle vient de la
+// salle à laquelle ce pattern appartient : les clés 'r,c' sont des coordonnées dans
+// une géométrie donnée, elles ne veulent rien dire ailleurs.
+// ⚠️ Le danger n'est pas l'erreur bruyante mais l'ordre PLAUSIBLE : deux salles se
+// recouvrent largement en coordonnées (mesuré sur la démo, 26 des 30 clés du pattern
+// de la 105 existent aussi dans une photo prise en 102), donc le tri sortait un ordre
+// qui n'était ni celui d'une salle ni celui de l'autre, sans un mot.
+// Deux garde-fous, du plus sûr au plus faible :
+//   a. la salle mémorisée avec la photo (ev.seatingRoomIds[cid], depuis la 2.49.0) ;
+//   b. pour les fichiers antérieurs qui ne l'ont pas : une clé hors des dimensions de
+//      la salle courante prouve que la photo vient d'ailleurs. Sens unique — une photo
+//      d'une salle plus petite passe le test — mais aucun faux rejet.
+function _seatingFitsRoom(snap, ev, classId, roomId) {
+  if (!roomId) return true;
+  const known = ev?.seatingRoomIds?.[classId];
+  if (known) return known === roomId;
+  const salle = S.salles?.[roomId];
+  const rows = +salle?.rows, cols = +salle?.cols;
+  if (!Number.isFinite(rows) || !Number.isFinite(cols)) return true;
+  for (const key of Object.keys(snap)) {
+    const [r, c] = String(key).split(',').map(Number);
+    if (!Number.isFinite(r) || !Number.isFinite(c) || r >= rows || c >= cols) return false;
+  }
+  return true;
 }
 
 // Date d'une éval pour une classe donnée.
