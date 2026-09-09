@@ -2018,6 +2018,18 @@ Corrigé sur 3 plans :
 2. Migration : `migrateEvalDefaults()` parcourt `S.evaluations[*].notes[*].comments` et ré-emballe les strings en tableaux à chaque chargement (idempotent)
 3. Garde-fou dans `_evalCommentsGetList` (compat live)
 
+### Tri « pattern de ramassage » — quel placement fait foi (corrigé en 2.49.0)
+
+`salle.collectPatterns = [{ id, nom, order: ['r,c', …] }]` est une suite de **TABLES**, pas d'élèves : c'est l'ordre dans lequel on circule. C'est `_evalPatternSeatingFor(ev, classId)` qui dit **quel placement** convertit ces tables en élèves, et là est tout le sujet.
+
+Un devoir sur copies se ramasse un jour et se corrige un autre : l'ordre de la pile suit le plan **du jour du devoir**, d'où une reconstitution par photos — l'appel enregistré ce jour-là (le plus fidèle), puis le seating figé à la création de l'éval.
+
+⚠️ **Mais ces photos ne valent QUE pour une éval déjà PASSÉE.** Une éval **datée d'aujourd'hui, sans date, ou à venir** se saisit pendant qu'on circule dans les rangs : le placement en vigueur, c'est celui qu'on a sous les yeux, et **toute photo est par construction plus ancienne que lui**. `_evalPatternSeatingFor` sort donc immédiatement (`return null` → le seating courant) dès que `!date || date >= todayKey()`.
+
+Sans cette garde, la photo prise à la **création** de l'éval gagnait — c'est-à-dire un plan qui n'a aucun rapport avec le jour du devoir (une éval créée en septembre pour un contrôle de décembre). Déplacer des élèves ensuite laissait le tri sur l'ancien plan : **on saisissait le niveau d'un élève sur la ligne de son voisin.** Signalé en usage réel le 2026-09-09, Type B en saisie au fil des rangs. Trois tests fixent les trois cas (aujourd'hui, sans date, passée).
+
+💡 Ce défaut ne pouvait pas se voir sur l'écran : les deux ordres sont plausibles, et rien ne signale que la liste suit un plan périmé. **Le seul indice était le décalage entre l'écran et la salle** — donc uniquement détectable en classe. Quand une fonction choisit entre plusieurs sources de vérité, écrire un test par source.
+
 ### Modèle de dates 100 % per-classe
 
 Plus de date globale sur l'éval. Toutes les dates et créneaux passent par des maps per-classe :
@@ -2027,7 +2039,11 @@ Plus de date globale sur l'éval. Toutes les dates et créneaux passent par des 
 
 **Helpers** :
 - `_evalNormalizeDates(ev)` — canonicaliseur : propage les legacy `ev.date` / `ev.dateManual` vers les maps per-classe, nettoie les entrées orphelines (classes plus dans `classIds`). Appelé dans `postLoadHook`, `_evalEditToggleClass`, `_evalEditSave`, `_evalNewSave`.
-- `_evalAutoUpdateDate(ev)` — itère sur les classes, skip celles `datesManual`, écrit `ev.dates[cid] = max(sous-dates per-classe)`. Pour Type A : `mn.dates[cid] || mn.date`. Pour Type B : idem passations.
+- `_evalAutoUpdateDate(ev)` — itère sur les classes, skip celles `datesManual`, écrit `ev.dates[cid] = max(sous-dates per-classe)` **et le créneau qui va avec**. Pour Type A : `mn.dates[cid] || mn.date`. Pour Type B : idem passations.
+  - ⚠️ **Le créneau ne se calcule PAS de son côté** : « M1 … S3 » n'est pas une échelle de grandeur, un `max` n'y voudrait rien dire. C'est celui de la mini-note ou de la passation **dont la date a été retenue** — à égalité de date, la dernière. La fonction interne renvoie donc `{ date, slot }`, pas une date.
+  - ⚠️ **Avant la 2.49.0, seule la date était dérivée** : l'éval passait à la date du jour tout en gardant le créneau d'un réglage antérieur. Deux conséquences silencieuses — l'auto-remplissage des absents lisait le **mauvais appel**, et `_evalPatternSeatingFor` écartait le bon (il compare les créneaux). Signalé en usage réel le 2026-09-09.
+  - ⚠️ **On n'écrit le créneau QUE si l'élément retenu en porte un — jamais de suppression.** Un créneau posé à la main au niveau de l'éval, sur un fichier antérieur à cette correction, n'est pas marqué manuel : l'effacer le ferait disparaître sans un mot.
+  - **Choisir un créneau à la main vaut reprise en main de la paire (date, créneau)** : `_evalEditPerClass` pose désormais `datesManual[cid]` sur le champ `slot` comme sur le champ `date`, sinon le mode auto le réécrirait à la passation suivante. Le hint « (auto) » bascule en bouton « ↻ Auto » dans la foulée, pour que l'écran dise ce qui est vrai.
 - `_evalDateFor(ev, classId, group?)` / `_evalSlotIdFor(ev, classId)` — cascade per-groupe → per-classe → fallback sub-dates (mn/passations) → ancien `ev.date`.
 
 **UI Réglages** : champ « Date » global toujours masqué (`_evalEditAdjustGlobalDateVisibility` est un masque inconditionnel). Dans la section « Classes concernées », chaque classe cochée affiche son input date + bouton **↻ Auto** (si manuel) ou hint **(auto)** (si auto). Éditer le champ bascule en manuel ; cliquer Auto efface le flag et recalcule.

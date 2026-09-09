@@ -6597,11 +6597,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.48.0';
+const APP_VERSION    = '2.49.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-07T20:28:00Z';
+const APP_BUILD_DATE = '2026-09-09T16:08:46Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -35583,8 +35583,8 @@ function _evalNewClassRowHTML(c) {
   let modeBtn = '';
   if (_autoAllowed) {
     modeBtn = isAuto
-      ? `<span style="font-size:.78em;color:var(--pencil);font-style:italic;padding:0 4px" title="Mode auto : la date sera prise sur la 1re mini-note / passation ajoutée">(auto)</span>`
-      : `<button type="button" class="btn btn-g btn-sm" onclick="_evalNewSetClassAuto('${_esc(c.id)}')" style="padding:2px 6px;font-size:.78em" title="Repasser cette classe en mode automatique (date dérivée de la 1re mini-note / passation)">↻ Auto</button>`;
+      ? `<span style="font-size:.78em;color:var(--pencil);font-style:italic;padding:0 4px" title="Mode auto : la date ET le créneau seront pris sur la dernière mini-note / passation datée">(auto)</span>`
+      : `<button type="button" class="btn btn-g btn-sm" onclick="_evalNewSetClassAuto('${_esc(c.id)}')" style="padding:2px 6px;font-size:.78em" title="Repasser cette classe en mode automatique (date et créneau dérivés de la dernière mini-note / passation datée)">↻ Auto</button>`;
   }
   return `<div data-cid="${_esc(c.id)}" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 8px;border-radius:3px;background:var(--paper);border:1px solid var(--rule-line)">
     <strong style="font-size:.92em">${_esc(c.nom)}</strong>
@@ -36021,8 +36021,8 @@ function _evalEditRenderClasses(ev) {
       let autoCtl = '';
       if (_autoAllowed) {
         autoCtl = isManual
-          ? `<button type="button" class="btn btn-g btn-sm" data-cid="${_esc(c.id)}" onclick="_evalEditPerClassResetAuto('${_esc(c.id)}')" title="Repasser cette classe en mode automatique (date = dernière mini-note / passation)" style="padding:1px 6px;font-size:.78em">↻ Auto</button>`
-          : `<span style="font-size:.78em;color:var(--pencil);font-style:italic" title="Date calculée automatiquement depuis la dernière mini-note (Type A) ou passation (Type B). Édite le champ pour passer en mode manuel.">(auto)</span>`;
+          ? `<button type="button" class="btn btn-g btn-sm" data-cid="${_esc(c.id)}" onclick="_evalEditPerClassResetAuto('${_esc(c.id)}')" title="Repasser cette classe en mode automatique (date et créneau = dernière mini-note / passation datée)" style="padding:1px 6px;font-size:.78em">↻ Auto</button>`
+          : `<span style="font-size:.78em;color:var(--pencil);font-style:italic" title="Date et créneau calculés automatiquement depuis la dernière mini-note (Type A) ou passation (Type B) datée. Édite l'un ou l'autre pour passer en mode manuel.">(auto)</span>`;
       }
       html += `<span style="font-size:.85em;color:var(--pencil);margin-left:auto">📅</span>
         <input type="date" value="${_esc(dateCur)}" data-cid="${_esc(c.id)}" data-field="date" onchange="_evalEditPerClass(this)"
@@ -36133,7 +36133,14 @@ function _evalEditPerClass(inputEl) {
     // Bascule le hint "(auto)" en bouton "↻ Auto" pour cette classe
     _evalEditRefreshDateAutoCtl(ev, cid);
   } else if (field === 'slot') {
+    // Choisir un créneau à la main vaut reprise en main de la paire (date, créneau) :
+    // depuis que le mode auto dérive AUSSI le créneau, le laisser en auto le ferait
+    // réécrire à la prochaine passation ajoutée. Le hint « (auto) » bascule donc en
+    // bouton « ↻ Auto », pour que l'écran dise ce qui est vrai.
+    ev.datesManual = ev.datesManual || {};
+    ev.datesManual[cid] = true;
     _evalSetSlotIdFor(ev, cid, inputEl.value);
+    _evalEditRefreshDateAutoCtl(ev, cid);
   }
   ev.updatedAt = Date.now();
   _evalEditDirty = true;
@@ -42956,36 +42963,45 @@ function _evalSeatingHashFor(ev, classId) {
 //      si connu, même salle) → photo exacte du placement au moment du ramassage.
 //   2. Le seating capturé à la CRÉATION de l'éval (ev.seatingHashes[classId]).
 //   3. null → le caller (_sidsOrderedByPattern) retombe sur le seating courant.
+//
+// ⚠️ Ces deux photos ne valent QUE pour une éval déjà PASSÉE. Une éval datée
+// d'aujourd'hui (ou sans date, ou à venir) est saisie pendant qu'on circule dans
+// les rangs : le placement en vigueur ce jour-là, c'est celui qu'on a sous les
+// yeux, donc le seating COURANT — et toute photo antérieure est forcément plus
+// vieille que lui. Sans cette garde, le snapshot pris à la création de l'éval
+// gagnait, et déplacer des élèves après coup laissait le tri « pattern de
+// ramassage » sur l'ancien plan : on saisissait les niveaux du voisin.
+// Signalé en usage réel (2026-09-09), Type B en saisie au fil des rangs.
 function _evalPatternSeatingFor(ev, classId) {
-  // 1. Appel enregistré à la date (et créneau) de l'éval pour cette classe.
   const date = _evalDateFor(ev, classId);
-  if (date) {
-    const slot   = _evalSlotIdFor(ev, classId);
-    const roomId = S.classes?.[classId]?.activeRoom || null;
-    const records = S.attendance?.[classId];
-    if (records) {
-      const cands = [];
-      for (const r of Object.values(records)) {
-        if (!r || r.date !== date || !r.seatingHash) continue;
-        // Les clés 'r,c' du seating et du pattern sont relatives à une salle donnée :
-        // un appel pris dans une autre salle donnerait un ordre faux. Si l'appel
-        // connaît sa salle (records récents), elle doit correspondre à la salle de réf.
-        if (r.aeshSalleIdSnap && roomId && r.aeshSalleIdSnap !== roomId) continue;
-        // Créneau : si les deux sont connus et diffèrent → on écarte.
-        if (slot && r.slotId && r.slotId !== slot) continue;
-        cands.push(r);
-      }
-      // Priorité : créneau exact d'abord, puis appel le plus récent.
-      cands.sort((a, b) => {
-        const sa = (slot && a.slotId === slot) ? 1 : 0;
-        const sb = (slot && b.slotId === slot) ? 1 : 0;
-        if (sa !== sb) return sb - sa;
-        return (b.ts || 0) - (a.ts || 0);
-      });
-      for (const r of cands) {
-        const snap = _getSeatingSnapshot(r.seatingHash);
-        if (snap && Object.keys(snap).length) return snap;
-      }
+  // Pas de date, ou date >= aujourd'hui → le placement courant fait foi.
+  if (!date || date >= todayKey()) return null;
+  // 1. Appel enregistré à la date (et créneau) de l'éval pour cette classe.
+  const slot   = _evalSlotIdFor(ev, classId);
+  const roomId = S.classes?.[classId]?.activeRoom || null;
+  const records = S.attendance?.[classId];
+  if (records) {
+    const cands = [];
+    for (const r of Object.values(records)) {
+      if (!r || r.date !== date || !r.seatingHash) continue;
+      // Les clés 'r,c' du seating et du pattern sont relatives à une salle donnée :
+      // un appel pris dans une autre salle donnerait un ordre faux. Si l'appel
+      // connaît sa salle (records récents), elle doit correspondre à la salle de réf.
+      if (r.aeshSalleIdSnap && roomId && r.aeshSalleIdSnap !== roomId) continue;
+      // Créneau : si les deux sont connus et diffèrent → on écarte.
+      if (slot && r.slotId && r.slotId !== slot) continue;
+      cands.push(r);
+    }
+    // Priorité : créneau exact d'abord, puis appel le plus récent.
+    cands.sort((a, b) => {
+      const sa = (slot && a.slotId === slot) ? 1 : 0;
+      const sb = (slot && b.slotId === slot) ? 1 : 0;
+      if (sa !== sb) return sb - sa;
+      return (b.ts || 0) - (a.ts || 0);
+    });
+    for (const r of cands) {
+      const snap = _getSeatingSnapshot(r.seatingHash);
+      if (snap && Object.keys(snap).length) return snap;
     }
   }
   // 2. Seating figé à la création de l'éval.
@@ -43068,28 +43084,47 @@ function _evalAutoUpdateDate(ev) {
   if (!ev) return;
   const ids = _evalClassIds(ev);
   if (ids.length === 0) return;
+  // Renvoie { date, slot } : la date retenue pour la classe, ET le créneau de
+  // l'élément qui la porte.
+  // ⚠️ Le créneau ne se calcule PAS de son côté : « M1 … S3 » n'est pas une échelle
+  // de grandeur, un max n'y voudrait rien dire. C'est celui de la mini-note ou de
+  // la passation dont la date a été retenue — à égalité de date, la dernière.
   const collectFor = (cid) => {
+    let pool = null;
     if (ev.type === 'A' || ev.type === 'C') {
       // N'agréger que les mini-notes effectivement passées par la classe (≥1 note
       // saisie). Fallback : si AUCUNE mini-note n'a de note (éval pas encore
       // commencée), on garde l'ensemble pour conserver la date planifiée.
       const all  = (ev.miniNotes || []);
       const done = all.filter(m => _mnHasAnyNoteForClass(ev, m, cid));
-      const pool = done.length ? done : all;
-      const dates = pool.map(m => (cid && m.dates?.[cid]) || m.date).filter(Boolean);
-      return dates.length ? dates.reduce((m, d) => d > m ? d : m, '') : null;
+      pool = done.length ? done : all;
+    } else if (ev.type === 'B') {
+      pool = (ev.passations || []);
     }
-    if (ev.type === 'B') {
-      const dates = (ev.passations || []).map(p => (cid && p.dates?.[cid]) || p.date).filter(Boolean);
-      return dates.length ? dates.reduce((m, d) => d > m ? d : m, '') : null;
+    if (!pool) return null;
+    let best = null, bestDate = '';
+    for (const it of pool) {
+      const d = (cid && it.dates?.[cid]) || it.date;
+      if (!d) continue;
+      if (d >= bestDate) { bestDate = d; best = it; }
     }
-    return null;
+    if (!best) return null;
+    return { date: bestDate, slot: (cid && best.slotIds?.[cid]) || best.slotId || null };
   };
   ev.dates = ev.dates || {};
   for (const cid of ids) {
     if (ev.datesManual?.[cid]) continue;  // classe en mode manuel → on ne touche pas
     const auto = collectFor(cid);
-    if (auto) ev.dates[cid] = auto;
+    if (!auto) continue;
+    ev.dates[cid] = auto.date;
+    // Le créneau suit la date. Sans lui, une éval passait en mode auto à la date
+    // du jour tout en gardant le créneau d'un réglage antérieur : l'auto-remplissage
+    // des absents lisait alors le mauvais appel, et le tri « pattern de ramassage »
+    // écartait le bon (il compare les créneaux). Signalé en usage réel (2026-09-09).
+    // ⚠️ On n'écrit QUE si l'élément retenu porte un créneau — jamais de suppression :
+    // un créneau posé à la main au niveau de l'éval, sur un fichier antérieur à cette
+    // correction, n'est pas marqué manuel et serait effacé sans un mot.
+    if (auto.slot) _evalSetSlotIdFor(ev, cid, auto.slot);
   }
   // Toujours en mode per-classe : pas de ev.date globale.
   delete ev.date;

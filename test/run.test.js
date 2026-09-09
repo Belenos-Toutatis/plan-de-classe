@@ -1903,3 +1903,110 @@ test('Impression : tout token du thème sombre est neutralisé dans le bloc @med
     'Token(s) du thème sombre absent(s) de la neutralisation @media print :\n' + oublies.join(', '),
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tri « pattern de ramassage » — quel placement fait foi ?
+// Régression du 2026-09-09, signalée en usage réel : une éval Type B saisie au
+// fil des rangs le jour même retombait sur le seating figé à la CRÉATION de
+// l'éval, donc sur le plan d'avant les derniers déplacements d'élèves. On
+// saisissait le niveau d'un élève sur la ligne de son voisin.
+// ─────────────────────────────────────────────────────────────────────────────
+function _patternFixture(evalDate) {
+  // seating « d'avant » figé à la création, seating « courant » différent.
+  setState({
+    salles: { sa: { nom: 'S1', rows: 1, cols: 2, positions_vides: [], schedule: {},
+                    collectPatterns: [{ id: 'p1', nom: 'Rang', order: ['0,0', '0,1'] }] } },
+    classes: { c1: { id: 'c1', nom: '5C', année: '2025-26', eleves: ['s1', 's2'],
+                     activeRoom: 'sa',
+                     rooms: { sa: { seating: { '0,0': 's2', '0,1': 's1' }, groupes: {},
+                                    ipadsByPool: {}, posTagId: {}, allowedFor: {},
+                                    aeshCount: 0, aeshSeating: {}, aeshLinks: {} } } } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'Un', classe_id: 'c1' },
+              s2: { id: 's2', nom: 'B', prenom: 'Deux', classe_id: 'c1' } },
+    evaluations: {}, attendance: {}, seatingSnapshots: {}, cur: 'c1',
+  });
+  // Photo « à la création » : l'ordre inverse du placement courant.
+  const hash = ev(`_registerSeatingSnapshot({ '0,0': 's1', '0,1': 's2' })`);
+  ev(`S.evaluations.e1 = { id:'e1', type:'B', nomCourt:'Éval', classIds:['c1'],
+        passations: [], notes: {}, periode: 'S1', noteMax: 20, coef: 1,
+        dates: { c1: ${JSON.stringify(evalDate)} },
+        seatingHashes: { c1: ${JSON.stringify(hash)} } };`);
+  return hash;
+}
+
+test('pattern de ramassage : une éval du JOUR suit le placement courant, pas la photo de création', () => {
+  _patternFixture(ev('todayKey()'));
+  const snap = get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`);
+  assert.equal(snap, null, 'doit retomber sur le seating courant (null = le caller le prend)');
+  const order = get(`_sidsOrderedByPattern(S.classes.c1, 'p1', null)`);
+  assert.deepEqual(order, ['s2', 's1'], 'ordre du plan COURANT');
+});
+
+test('pattern de ramassage : une éval sans date suit aussi le placement courant', () => {
+  _patternFixture('');
+  assert.equal(get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`), null);
+});
+
+test('pattern de ramassage : une éval PASSÉE garde la photo d\'alors', () => {
+  _patternFixture('2020-01-06');
+  const snap = get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`);
+  assert.deepEqual(snap, { '0,0': 's1', '0,1': 's2' }, 'photo figée à la création');
+  const order = get(`_sidsOrderedByPattern(S.classes.c1, 'p1', ${JSON.stringify(snap)})`);
+  assert.deepEqual(order, ['s1', 's2'], 'ordre du plan de CE jour-là');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mode auto : le créneau doit suivre la date.
+// Régression du 2026-09-09 : _evalAutoUpdateDate ne dérivait que la date, donc
+// l'éval restait rattachée au créneau d'un réglage antérieur — l'auto-remplissage
+// des absents lisait le mauvais appel.
+// ─────────────────────────────────────────────────────────────────────────────
+function _autoSlotFixture(passations, extra) {
+  setState({
+    salles: {}, eleves: {}, attendance: {}, seatingSnapshots: {},
+    classes: { c1: { id: 'c1', nom: '5C', eleves: [], activeRoom: null, rooms: {} } },
+    evaluations: { e1: Object.assign({
+      id: 'e1', type: 'B', nomCourt: 'Éval', classIds: ['c1'],
+      passations, notes: {}, periode: 'S1', noteMax: 20, coef: 1,
+    }, extra || {}) },
+    cur: 'c1',
+  });
+}
+
+test('date auto : le créneau est repris de la passation qui porte la date retenue', () => {
+  _autoSlotFixture([
+    { id: 'p1', code: 'P1', dates: { c1: '2026-03-02' }, slotIds: { c1: 'M1' }, competenceIds: [], niveaux: {} },
+    { id: 'p2', code: 'P2', dates: { c1: '2026-03-09' }, slotIds: { c1: 'S2' }, competenceIds: [], niveaux: {} },
+  ]);
+  ev('_evalAutoUpdateDate(S.evaluations.e1)');
+  assert.equal(get(`_evalDateFor(S.evaluations.e1, 'c1')`), '2026-03-09');
+  assert.equal(get(`_evalSlotIdFor(S.evaluations.e1, 'c1')`), 'S2',
+    'le créneau suit la date retenue, il ne se calcule pas de son côté');
+});
+
+test('date auto : à égalité de date, le créneau de la DERNIÈRE passation gagne', () => {
+  _autoSlotFixture([
+    { id: 'p1', code: 'P1', dates: { c1: '2026-03-09' }, slotIds: { c1: 'M1' }, competenceIds: [], niveaux: {} },
+    { id: 'p2', code: 'P2', dates: { c1: '2026-03-09' }, slotIds: { c1: 'S2' }, competenceIds: [], niveaux: {} },
+  ]);
+  ev('_evalAutoUpdateDate(S.evaluations.e1)');
+  assert.equal(get(`_evalSlotIdFor(S.evaluations.e1, 'c1')`), 'S2');
+});
+
+test('date auto : une passation sans créneau n\'EFFACE pas le créneau de l\'éval', () => {
+  _autoSlotFixture(
+    [{ id: 'p1', code: 'P1', dates: { c1: '2026-03-09' }, competenceIds: [], niveaux: {} }],
+    { slotIds: { c1: 'M3' } });
+  ev('_evalAutoUpdateDate(S.evaluations.e1)');
+  assert.equal(get(`_evalSlotIdFor(S.evaluations.e1, 'c1')`), 'M3',
+    'un créneau posé à la main sur un fichier antérieur ne doit pas disparaître sans un mot');
+});
+
+test('date auto : une classe en mode MANUEL ne voit ni sa date ni son créneau réécrits', () => {
+  _autoSlotFixture(
+    [{ id: 'p1', code: 'P1', dates: { c1: '2026-03-09' }, slotIds: { c1: 'S2' }, competenceIds: [], niveaux: {} }],
+    { dates: { c1: '2026-01-05' }, slotIds: { c1: 'M1' }, datesManual: { c1: true } });
+  ev('_evalAutoUpdateDate(S.evaluations.e1)');
+  assert.equal(get(`_evalDateFor(S.evaluations.e1, 'c1')`), '2026-01-05');
+  assert.equal(get(`_evalSlotIdFor(S.evaluations.e1, 'c1')`), 'M1');
+});
