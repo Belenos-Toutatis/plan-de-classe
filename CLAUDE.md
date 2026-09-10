@@ -2037,6 +2037,13 @@ Sans cette garde, la photo prise à la **création** de l'éval gagnait — c'es
 
 ⚠️ **`seatingRoomIds` est une map d'éval keyée par classId : elle est donc dans `_forEachEvalPerClassMap`** (renommage et purge de classe en héritent), comme l'exige l'invariant plus bas. Un test vérifie que les 5 maps de niveau éval y sont visitées.
 
+**La photo est prise LE JOUR de l'éval** (`_evalCaptureTodaySeating`, 2.51.0), depuis `_evalTableurRender` — donc pour les quatre types, et aussi au changement de classe d'une éval multi-classes. Motif : sans appel enregistré, la seule photo d'une éval passée était celle de sa **création**, un plan sans rapport avec le jour du devoir. L'appel donne mieux, mais **on oublie de le prendre** — c'est exactement ce qui s'était produit le 2026-09-09. On saisit donc la vérité au seul moment où elle est disponible : le jour même. Ramasser les copies jeudi et corriger mardi retrouve alors le bon ordre.
+
+- ⚠️ **STRICTEMENT aujourd'hui**, ni hier ni demain : c'est le seul jour où « plan courant » et « plan en vigueur à la date de l'éval » désignent le même objet. Une éval datée de la semaine prochaine verrait son plan changer d'ici là.
+- ⚠️ **Une salle VIDE ne remplace jamais une photo existante** — ouvrir le tableur depuis une salle où personne n'est placé effacerait une photo correcte.
+- ⚠️ **Pas de `pushUndo()`** : c'est de la tenue de registre, pas un geste de l'utilisateur ; une entrée d'annulation pour avoir ouvert un tableur serait incompréhensible. La fonction renvoie `true` seulement si quelque chose a changé, et **l'appelant seul sauvegarde** — à photo identique on ne réécrit rien. Mesuré : 1 sauvegarde à la première ouverture après un changement de plan, 0 aux suivantes, 0 sur un re-rendu.
+- 💡 L'ordre des sources est donc, du meilleur au moins bon : appel du jour → photo prise le jour même à l'ouverture du tableur → photo de création. La dernière ne sert plus que pour une éval passée jamais ouverte le jour J.
+
 **Les deux seuls points d'entrée du pattern** sont le sélecteur de tri du tableur (`_evalTableurSortedSids`) et celui de l'export ENT (`_evalExportBuildRows`). Tous deux passent par `_evalPatternSeatingFor`, donc une correction faite là les couvre ensemble — avec, dans le sillage du premier, `_evalTableurRender`, `_evalTableurRenderB`, `_evalRenderBilanComps`, `_evalBilanCopy`, `_evalNoteTipD` et `_evalPasteOpen`. ⚠️ **Tout nouvel écran qui propose un tri par pattern doit résoudre son placement par `_evalPatternSeatingFor`, jamais lire `cls.seating` directement.**
 
 ### Modèle de dates 100 % per-classe

@@ -2067,3 +2067,74 @@ test('renommage/purge de classe : seatingRoomIds suit les autres maps per-classe
       m => seen.push(m)); return seen.length; })()`);
   assert.equal(keys, 5, 'les 5 maps per-classe de niveau éval sont visitées');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Photo du plan prise LE JOUR de l'éval (2.51.0).
+// Sans appel enregistré, la seule photo d'une éval passée était celle de sa
+// création. On la remplace le jour même, tant que la vérité est disponible.
+// ─────────────────────────────────────────────────────────────────────────────
+function _captureFixture(evalDate, seatingNow) {
+  setState({
+    salles: { sa: { nom: 'S1', rows: 2, cols: 2, positions_vides: [], schedule: {},
+                    collectPatterns: [{ id: 'p1', nom: 'Rang', order: ['0,0', '0,1'] }] } },
+    classes: { c1: { id: 'c1', nom: '5C', eleves: ['s1', 's2'], activeRoom: 'sa',
+                     rooms: { sa: { seating: seatingNow, groupes: {}, ipadsByPool: {},
+                                    posTagId: {}, allowedFor: {}, aeshCount: 0,
+                                    aeshSeating: {}, aeshLinks: {} } } } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'Un', classe_id: 'c1' },
+              s2: { id: 's2', nom: 'B', prenom: 'Deux', classe_id: 'c1' } },
+    evaluations: {}, attendance: {}, seatingSnapshots: {}, cur: 'c1',
+  });
+  const old = ev(`_registerSeatingSnapshot({ '0,0': 's1', '0,1': 's2' })`);
+  ev(`S.evaluations.e1 = { id:'e1', type:'B', nomCourt:'É', classIds:['c1'], passations: [],
+        notes:{}, periode:'S1', noteMax:20, coef:1,
+        dates: { c1: ${JSON.stringify(evalDate)} },
+        seatingHashes: { c1: ${JSON.stringify(old)} }, seatingRoomIds: { c1: 'sa' } };`);
+  return old;
+}
+const _capture = () => ev(`_evalCaptureTodaySeating(S.evaluations.e1, S.classes.c1)`);
+
+test('photo du jour : une éval datée d\'AUJOURD\'HUI fige le plan courant', () => {
+  const old = _captureFixture(ev('todayKey()'), { '0,0': 's2', '0,1': 's1' });
+  assert.equal(_capture(), true, 'la photo doit être remplacée');
+  const h = get(`S.evaluations.e1.seatingHashes.c1`);
+  assert.notEqual(h, old);
+  assert.deepEqual(get(`_getSeatingSnapshot(${JSON.stringify(h)})`), { '0,0': 's2', '0,1': 's1' });
+  assert.equal(get(`S.evaluations.e1.seatingRoomIds.c1`), 'sa');
+});
+
+test('photo du jour : une éval PASSÉE garde la sienne', () => {
+  const old = _captureFixture('2020-01-06', { '0,0': 's2', '0,1': 's1' });
+  assert.equal(_capture(), false);
+  assert.equal(get(`S.evaluations.e1.seatingHashes.c1`), old);
+});
+
+test('photo du jour : une éval à VENIR n\'est pas photographiée', () => {
+  const old = _captureFixture('2099-06-01', { '0,0': 's2', '0,1': 's1' });
+  assert.equal(_capture(), false);
+  assert.equal(get(`S.evaluations.e1.seatingHashes.c1`), old);
+});
+
+test('photo du jour : une salle VIDE ne remplace pas une photo existante', () => {
+  const old = _captureFixture(ev('todayKey()'), {});
+  assert.equal(_capture(), false, 'sinon ouvrir depuis une salle non placée effacerait la photo');
+  assert.equal(get(`S.evaluations.e1.seatingHashes.c1`), old);
+});
+
+test('photo du jour : à plan inchangé, aucune réécriture (donc aucun save)', () => {
+  _captureFixture(ev('todayKey()'), { '0,0': 's1', '0,1': 's2' });
+  assert.equal(_capture(), false, 'même contenu → même hash → rien à faire');
+});
+
+test('photo du jour : le tri par pattern retrouve l\'ordre du jour une semaine après', () => {
+  // Jour J : l'éval est datée d'aujourd'hui, on ouvre le tableur → photo prise.
+  _captureFixture(ev('todayKey()'), { '0,0': 's2', '0,1': 's1' });
+  assert.equal(_capture(), true);
+  // Plus tard : la date est passée ET le plan a changé depuis.
+  ev(`S.evaluations.e1.dates.c1 = '2020-01-06';
+      S.classes.c1.rooms.sa.seating = { '0,0': 's1', '0,1': 's2' };`);
+  const snap = get(`_evalPatternSeatingFor(S.evaluations.e1, 'c1')`);
+  assert.deepEqual(snap, { '0,0': 's2', '0,1': 's1' }, 'la photo du jour J fait foi');
+  assert.deepEqual(get(`_sidsOrderedByPattern(S.classes.c1, 'p1', ${JSON.stringify(snap)})`),
+    ['s2', 's1'], 'ordre de la pile de copies, pas du plan actuel');
+});

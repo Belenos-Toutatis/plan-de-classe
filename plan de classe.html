@@ -6597,11 +6597,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.50.0';
+const APP_VERSION    = '2.51.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-09T16:20:13Z';
+const APP_BUILD_DATE = '2026-09-10T16:55:39Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -38403,6 +38403,9 @@ function _evalTableurRender() {
   if (!ev) return;
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
+  // Ouvrir le tableur d'une éval du jour fige le plan en vigueur (cf.
+  // _evalCaptureTodaySeating). Placé avant les branches de type : vaut pour A/B/C/D.
+  if (_evalCaptureTodaySeating(ev, cls)) save();
   _evalTableurRenderClassPicker(ev, cls);
   _evalTableurSobrRestore();
   _evalTableurUpdateHelpForType(ev);
@@ -43022,6 +43025,41 @@ function _evalPatternSeatingFor(ev, classId) {
   if (snap && Object.keys(snap).length && _seatingFitsRoom(snap, ev, classId, roomId)) return snap;
   // 3. Caller retombe sur le seating courant.
   return null;
+}
+
+// Photographie le plan du JOUR pour une éval datée d'aujourd'hui.
+//
+// Sans ça, la seule photo disponible pour une éval passée est celle prise à sa
+// CRÉATION — un plan qui n'a aucun rapport avec le jour du devoir. L'appel
+// enregistré donne mieux, mais on oublie de le prendre : signalé en usage réel
+// le 2026-09-09, et c'est précisément ce qui avait fait dérailler le tri.
+// On saisit donc la vérité au seul moment où on la connaît : le jour même.
+// Ramasser les copies jeudi et corriger mardi retrouve alors le bon ordre.
+//
+// ⚠️ STRICTEMENT aujourd'hui — ni hier ni demain. C'est le seul jour où « le plan
+// courant » et « le plan en vigueur à la date de l'éval » sont le même objet ;
+// une éval datée de la semaine prochaine verrait son plan changer d'ici là.
+// ⚠️ Une salle VIDE ne remplace jamais une photo existante : ouvrir le tableur
+// depuis une salle où personne n'est placé effacerait une photo correcte.
+// ⚠️ Pas de pushUndo : c'est de la tenue de registre, pas un geste de l'utilisateur
+// — une entrée d'annulation pour avoir ouvert un tableur serait incompréhensible.
+// Renvoie true si quelque chose a changé (l'appelant sauvegarde alors, et lui seul :
+// à photo identique on ne réécrit rien, donc ouvrir deux fois ne coûte rien).
+function _evalCaptureTodaySeating(ev, cls) {
+  if (!ev || !cls) return false;
+  if (_evalDateFor(ev, cls.id) !== todayKey()) return false;
+  const roomId = cls.activeRoom;
+  if (!roomId) return false;
+  const seating = cls.rooms?.[roomId]?.seating;
+  if (!seating || !Object.keys(seating).length) return false;
+  const hash = _registerSeatingSnapshot(seating);
+  if (!hash) return false;
+  if (ev.seatingHashes?.[cls.id] === hash && ev.seatingRoomIds?.[cls.id] === roomId) return false;
+  ev.seatingHashes  = ev.seatingHashes  || {};
+  ev.seatingRoomIds = ev.seatingRoomIds || {};
+  ev.seatingHashes[cls.id]  = hash;
+  ev.seatingRoomIds[cls.id] = roomId;
+  return true;
 }
 
 // Une photo de placement n'est utilisable avec un pattern QUE si elle vient de la
