@@ -1793,7 +1793,11 @@ Règle arrêtée avec l'utilisateur (2026-07-30), **rétroactive** : chaque éva
 - `entries` de `_aggregateStudentCompetence` reste la liste détaillée des saisies — pour l'infobulle uniquement, plus pour le calcul.
 
 ### Multi-classes
-`ev.classIds[]` (liste) prime sur `ev.classId` (legacy). Dates et créneaux peuvent être par classe : `ev.dates[classId]`, `ev.slotIds[classId]` (de même `mn.dates[classId]`, `pass.dates[classId]`). Helpers :
+`ev.classIds[]` (liste) prime sur `ev.classId` (legacy). Dates et créneaux peuvent être par classe : `ev.dates[classId]`, `ev.slotIds[classId]` (de même `mn.dates[classId]`, `pass.dates[classId]`).
+
+**Cinq maps per-classe au niveau de l'éval** — `dates`, `slotIds`, `datesManual`, et le couple **`seatingHashes[cid]` / `seatingRoomIds[cid]`** : la photo du plan de la classe au jour du devoir (un hash dans `S.seatingSnapshots`) et la salle où elle a été prise. Elles servent à l'infobulle « où était l'élève ce jour-là » et au tri « pattern de ramassage » (cf. sa section, qui explique **quand** cette photo est prise — ce n'est pas à la création). ⚠️ Toutes les cinq passent par `_forEachEvalPerClassMap` : purge et renommage de classe en héritent, **tout nouveau champ d'éval keyé par classId s'ajoute là**.
+
+Helpers :
 - `_evalClassIds(ev)` — renvoie toujours un tableau, fallback `[ev.classId]`
 - `_evalIncludesClass(ev, classId)` — appartenance
 - **`_evalPrimaryAliveClassId(ev)`** — 1re classe encore présente dans `S.classes`. À utiliser à la place de `S.classes?.[ev.classId]` direct (évite undefined si la classe primaire a été supprimée)
@@ -2018,11 +2022,17 @@ Corrigé sur 3 plans :
 2. Migration : `migrateEvalDefaults()` parcourt `S.evaluations[*].notes[*].comments` et ré-emballe les strings en tableaux à chaque chargement (idempotent)
 3. Garde-fou dans `_evalCommentsGetList` (compat live)
 
-### Tri « pattern de ramassage » — quel placement fait foi (corrigé en 2.49.0)
+### Tri « pattern de ramassage » — quel placement fait foi (2.49.0 → 2.51.0)
 
 `salle.collectPatterns = [{ id, nom, order: ['r,c', …] }]` est une suite de **TABLES**, pas d'élèves : c'est l'ordre dans lequel on circule. C'est `_evalPatternSeatingFor(ev, classId)` qui dit **quel placement** convertit ces tables en élèves, et là est tout le sujet.
 
-Un devoir sur copies se ramasse un jour et se corrige un autre : l'ordre de la pile suit le plan **du jour du devoir**, d'où une reconstitution par photos — l'appel enregistré ce jour-là (le plus fidèle), puis le seating figé à la création de l'éval.
+Un devoir sur copies se ramasse un jour et se corrige un autre : l'ordre de la pile suit le plan **du jour du devoir**, qu'il faut donc reconstituer. **Trois sources, de la meilleure à la moins bonne** :
+
+1. **l'appel enregistré ce jour-là** (même date, même créneau, même salle) — la photo la plus fidèle ;
+2. **la photo prise le jour même** à l'ouverture du tableur (`_evalCaptureTodaySeating`, cf. plus bas) ;
+3. **le seating enregistré sur l'éval** — à défaut de mieux, celui figé à sa création.
+
+La suite de cette section raconte comment chacune de ces trois marches a été posée, et pourquoi les deux premières manquaient.
 
 ⚠️ **Mais ces photos ne valent QUE pour une éval déjà PASSÉE.** Une éval **datée d'aujourd'hui, sans date, ou à venir** se saisit pendant qu'on circule dans les rangs : le placement en vigueur, c'est celui qu'on a sous les yeux, et **toute photo est par construction plus ancienne que lui**. `_evalPatternSeatingFor` sort donc immédiatement (`return null` → le seating courant) dès que `!date || date >= todayKey()`.
 
@@ -2030,9 +2040,9 @@ Sans cette garde, la photo prise à la **création** de l'éval gagnait — c'es
 
 💡 Ce défaut ne pouvait pas se voir sur l'écran : les deux ordres sont plausibles, et rien ne signale que la liste suit un plan périmé. **Le seul indice était le décalage entre l'écran et la salle** — donc uniquement détectable en classe. Quand une fonction choisit entre plusieurs sources de vérité, écrire un test par source.
 
-**Deuxième source du même défaut : le CHANGEMENT DE SALLE** (corrigé en 2.50.0, trouvé en vérifiant les autres consommateurs). Le pattern est cherché dans la salle **active** de la classe, la photo pouvait venir d'une **autre**. Or `'r,c'` est une coordonnée dans une géométrie : mesuré sur la démo, **26 des 30 clés du pattern de la Salle 105 (4 × 9) existent aussi dans une photo prise en Salle 102 (5 × 8)**. Le tri ne plantait donc pas — il sortait un ordre qui n'était **ni celui d'une salle ni celui de l'autre**. Deux garde-fous dans `_seatingFitsRoom(snap, ev, classId, roomId)`, appliqué aux DEUX photos (appel et création) :
+**Deuxième source du même défaut : le CHANGEMENT DE SALLE** (corrigé en 2.50.0, trouvé en vérifiant les autres consommateurs). Le pattern est cherché dans la salle **active** de la classe, la photo pouvait venir d'une **autre**. Or `'r,c'` est une coordonnée dans une géométrie : mesuré sur la démo, **26 des 30 clés du pattern de la Salle 105 (4 × 9) existent aussi dans une photo prise en Salle 102 (5 × 8)**. Le tri ne plantait donc pas — il sortait un ordre qui n'était **ni celui d'une salle ni celui de l'autre**. Deux garde-fous dans `_seatingFitsRoom(snap, ev, classId, roomId)`, appliqué aux DEUX photos consultées (celle de l'appel et celle enregistrée sur l'éval) :
 
-- **`ev.seatingRoomIds[cid]`**, écrit en même temps que `seatingHashes[cid]` aux **trois** sites (création, ajout d'une classe dans Réglages, seed de démo). Si la salle mémorisée diffère de la salle courante → photo écartée.
+- **`ev.seatingRoomIds[cid]`**, écrit en même temps que `seatingHashes[cid]` — **quatre** sites depuis la 2.51.0 : création de l'éval, ajout d'une classe dans Réglages, seed de démo, et la capture du jour. Si la salle mémorisée diffère de la salle courante → photo écartée. ⚠️ **Les deux champs DOIVENT s'écrire ensemble** : un hash posé sans sa salle retombe sur le seul contrôle des bornes, qui ne rattrape pas tout (une photo d'une salle plus petite y passe). Aucun des quatre ne pose de hash orphelin : les trois premiers gardent l'écriture par `if (activeRoom)`, et la capture du jour sort avant si la salle manque.
 - **Contrôle des bornes** pour les fichiers antérieurs, qui n'ont pas ce champ : une clé hors des `rows`/`cols` de la salle courante prouve que la photo vient d'ailleurs. ⚠️ **Sens unique** — une photo prise dans une salle plus petite passe le test — mais **aucun faux rejet**, ce qui est la propriété qui compte pour un repli.
 
 ⚠️ **`seatingRoomIds` est une map d'éval keyée par classId : elle est donc dans `_forEachEvalPerClassMap`** (renommage et purge de classe en héritent), comme l'exige l'invariant plus bas. Un test vérifie que les 5 maps de niveau éval y sont visitées.
