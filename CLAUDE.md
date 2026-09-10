@@ -147,9 +147,64 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - `LICENSE` — double licence : MIT (code de l'app, layout d'impression des marqueurs compris) + Apache 2.0 (dictionnaire ArUco `QCMCAM_4X4_157h3`, repris du dépôt de QCMcam 2 par Sébastien COGEZ). ⚠️ La partie 2 était CC BY-NC-SA 4.0 jusqu'à la 2.38.0, du temps de l'ancien dictionnaire de 125 motifs de qcmcam.net v1 ; celui-ci a été retiré en 2.39.0.
 - `CREDITS.md` — remerciements détaillés à Sébastien COGEZ (QCMcam), à la communauté enseignante, et aux polices embarquées (Fraunces, IBM Plex Sans, JetBrains Mono — toutes sous SIL Open Font License)
 - `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`, `*.bak`, `*.tmp`)
+- `.sync-exclude.lst` — **retire ce dossier de la synchronisation Nextcloud** (cf. section suivante). Versionné exprès.
+⚠️ **Les fichiers de données ne sont PAS dans ce dossier** — ils vivent dans le dossier
+VOISIN `../Plan de classe json/` (88 fichiers au 2026-09-10). La distinction n'est pas
+cosmétique : c'est elle qui rend possible l'exclusion Nextcloud ci-dessous. Le code est
+transporté par git, les données par Nextcloud, et les deux ne se croisent jamais.
+Les motifs restent dans `.gitignore` par sécurité, au cas où un export atterrirait ici.
 - `plan-classe-AAAA-MM-JJ-HHhMMmSS.json` — exports manuels horodatés (non versionnés)
 - `plan-classe-auto.json` — fichier de sync auto (écrasé en continu, non versionné)
 - `plan-classe-bk-AAAA-MM-JJ-HHhMMm.json` — backups horodatés (rétention par paliers, non versionnés)
+
+## ⚠️ Ce dossier ne doit PAS être synchronisé par Nextcloud
+
+Il est dans une arborescence Nextcloud, mais c'est un **dépôt git**, et git assure déjà le
+transport entre les machines via `github.com/Belenos-Toutatis/plan-de-classe`. Confier le
+même transport à deux mécanismes qui ne savent rien l'un de l'autre finit toujours mal.
+
+**Ce n'est pas une précaution théorique : la collision a déjà eu lieu ici, trois fois.**
+
+1. Une copie de conflit Nextcloud a été **commitée par erreur** — d'où la règle
+   `*.sync-conflict-*` du `.gitignore` (commit `e4798e6`).
+2. Le **2026-06-19, entre 17h15 et 17h21**, cinq fichiers **internes de git** sont entrés en
+   conflit : `.git/index`, `COMMIT_EDITMSG`, `logs/HEAD`, `logs/refs/heads/main`,
+   `logs/refs/remotes/origin/main`. Nextcloud a livré le `.git` d'une machine pendant que git
+   écrivait sur l'autre.
+3. Le même jour, une copie de conflit de `plan de classe.html` lui-même.
+
+Ce jour-là on s'en est tirés : la collision a touché l'index et les **journaux** de
+références. Si elle avait touché `refs/heads/main` ou un fichier d'objet, la perte aurait été
+réelle — et découverte des semaines plus tard. `git fsck` ne montre d'ailleurs **aucune
+corruption** aujourd'hui : les « objets fantômes » qu'il liste sont le résidu normal de
+`git stash` et de `commit --amend`, datés de mai et juin, sans rapport avec le 19 juin.
+⚠️ Ne pas confondre les deux — un fantôme n'est pas un dégât.
+
+**Mesuré avant exclusion** (journal du client, `~/Nextcloud/.sync_*.db`) : **800 entrées** de
+ce projet suivies par Nextcloud, dont **620 dans `.git`**.
+
+**Le dispositif** : `.sync-exclude.lst` à la racine, contenant `*` et `.*`. Vérifié sur le
+client 4.0.6 — la chaîne `.sync-exclude.lst` est bien dans le binaire, et il n'existe pas de
+marqueur `.nosync`.
+
+⚠️ **Le fichier est VERSIONNÉ, exprès.** Il arrive donc sur les autres machines par
+`git pull`, et l'exclusion s'y applique sans que personne y pense. C'est le seul chemin
+possible : une fois l'exclusion active, Nextcloud ne peut plus le livrer lui-même.
+
+⚠️ **Marche à suivre sur une autre machine**, après le `git pull` :
+1. **Redémarrer le client Nextcloud** — la liste d'exclusion est lue au démarrage.
+2. **Vérifier plutôt que supposer** :
+   `sqlite3 "file:$HOME/Nextcloud/.sync_*.db?mode=ro&immutable=1" "SELECT count(*) FROM metadata WHERE path LIKE '%Plan de classe/%';"`
+   → doit tomber à **0** (800 avant).
+3. **Ne rien supprimer côté serveur** si le client le propose : une copie périmée là-bas ne
+   gêne personne, et GitHub fait autorité.
+
+⚠️ **Corollaire** : ce dossier n'est plus sauvegardé par Nextcloud. Le filet, c'est GitHub —
+donc **le travail non commité n'est protégé par rien**. Commiter devient le geste de
+sauvegarde, pas une formalité de fin de tâche. (`plan de classe.html.bak`, la copie manuelle
+avant modification lourde, reste évidemment locale et non sauvegardée : c'est son rôle.)
+
+💡 Le même dispositif est en place sur le projet voisin **Suivi PP**, pour la même raison.
 
 ## Données de démo (1er lancement)
 `createDemo()` (fin du fichier, juste avant `init()`) génère des données fictives au tout premier lancement, conditionné par `localStorage.planClasse_demoInstalled !== '1'` :
