@@ -147,6 +147,7 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - `LICENSE` — double licence : MIT (code de l'app, layout d'impression des marqueurs compris) + Apache 2.0 (dictionnaire ArUco `QCMCAM_4X4_157h3`, repris du dépôt de QCMcam 2 par Sébastien COGEZ). ⚠️ La partie 2 était CC BY-NC-SA 4.0 jusqu'à la 2.38.0, du temps de l'ancien dictionnaire de 125 motifs de qcmcam.net v1 ; celui-ci a été retiré en 2.39.0.
 - `CREDITS.md` — remerciements détaillés à Sébastien COGEZ (QCMcam), à la communauté enseignante, et aux polices embarquées (Fraunces, IBM Plex Sans, JetBrains Mono — toutes sous SIL Open Font License)
 - `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`, `*.bak`, `*.tmp`)
+- `docs/` — audits et notes de conception, **versionnés** : `audit-ergonomie-2026-07-29.md` (catalogue Top 12 / six axes / lots A–F sur la v2.20.0 — l'essentiel réalisé depuis, projection et accessibilité clavier écartées ; restent ouverts : saisie de rentrée, couleurs de groupe en Vue Élève, `thead` sticky de l'onglet Élèves), `audit-type-d-2026-08-02.md`, `screenshots/`. Toute note d'audit va là, pas dans un worktree.
 ⚠️ **Les fichiers de données ne sont PAS dans ce dossier** — ils vivent dans le dossier
 VOISIN `../Plan de classe json/` (88 fichiers au 2026-09-10). La distinction n'est pas
 cosmétique : c'est elle qui rend possible l'exclusion Nextcloud ci-dessous. Le code est
@@ -217,6 +218,24 @@ manuelle avant modification lourde, reste locale et non sauvegardée : c'est son
 
 💡 Le même dispositif couvre le projet voisin **Suivi PP**, par un second motif dans le même
 fichier racine.
+
+## Git — branches, worktrees, fins de ligne
+
+État de référence au **2026-09-11** : une seule branche locale, `main`, alignée sur `origin/main` ; aucun worktree. Les branches `claude/*` locales (`jovial-goldberg-54e463`, `eval-type-d`, `print-contrast`) ont été supprimées après vérification `git merge-base --is-ancestor <branche> main`. Reste sur GitHub seulement `origin/claude/qcm-cam-marker-generator-e29kzq` : **un commit non fusionné** du 2026-07-21, *« docs : note de suivi migration marqueurs QCMCam (nouvelle biblio js-aruco2) »* — à récupérer dans `docs/` ou à supprimer, décision non prise.
+
+### Un worktree se périme vite — vérifier avant de coder
+Le fichier réel est celui du dépôt principal (`main`, servi par GitHub Pages). Un worktree ouvert par l'app peut être **très en retard** : le 2026-09-11, `jovial-goldberg` était à la v2.27.2 quand `main` était à la v2.51.0 (66 commits), et portait un brouillon Type D non commité **déjà présent sur `main` en version corrigée** (`7ab434c`, `509fcc8`…). Coder là aurait fait régresser. Réflexe : comparer `APP_VERSION` du worktree et de `plan de classe.html` à la racine, ou `git log --oneline <branche>..main | wc -l`.
+
+Voie propre quand le worktree est périmé ET porte du travail d'une autre session : ne pas y toucher ; `git worktree add ../<nom> -b claude/<nom> main`, coder, tester, commiter, puis `git -C <racine> merge --ff-only claude/<nom>`, puis `git worktree remove` + `git branch -D`. ⚠️ `git branch -d` depuis un worktree compare à la **branche courante**, pas à `main` → « not fully merged » trompeur ; trancher avec `merge-base --is-ancestor`. ⚠️ On ne peut pas supprimer le dossier d'un worktree **depuis une session qui y a son répertoire de travail** (« Permission denied » / « resource busy ») : git purge les fichiers et l'enregistrement, le dossier vide tombe à la fermeture de la session.
+
+### Fusion refusée à cause d'un fichier modifié dans le dépôt principal
+`merge --ff-only` échoue si le checkout principal a une modification non commitée sur un fichier que le commit touche (cas vécu : `CLAUDE.md`). Procédure validée par l'utilisateur : `git diff > patch` + `git checkout -- <fichier>`, fast-forward, `git apply --3way patch`, `git reset <fichier>` pour le laisser **non indexé** comme avant. Vérifier d'abord que la modification n'est pas déjà commitée ailleurs — le 2026-09-11, le « WIP » local de `CLAUDE.md` était le brouillon exact de `c2cf87e`, déjà sur GitHub et remplacé par `4cb9b13` : il a été écarté, pas réappliqué.
+
+### Fins de ligne : le dépôt et TOUTES les copies sur disque sont en LF
+`core.autocrlf=true` vient du **gitconfig système** (`C:/Program Files/Git/etc/gitconfig`), pas du projet. Conséquences : un `git worktree add` ou un `git checkout`/`merge` qui réécrit un fichier le sort en **CRLF**, alors que les fichiers de travail sont en LF (les outils d'édition les réécrivent ainsi). Après toute opération git qui réécrit `plan de classe.html` / `CLAUDE.md` / `test/*.js`, repasser en LF (`s.replace('\r\n','\n')`), puis `git add <fichier>` pour rafraîchir l'entrée d'index — sinon `git status` marque le fichier modifié alors que `git diff` est vide. ⚠️ Un script de patch qui cherche des ancres textuelles **ne matche rien** sur une copie CRLF : mesurer avec `s.count('\r\n')` en Python, pas avec `grep -c $'\r'` (peu fiable ici).
+
+### Détection de MAJ et rebase
+L'app compare `APP_BUILD_DATE` à la **date d'auteur** du dernier commit GitHub (`commit.author.date`, préservée par un rebase) — pas à la date de committer. Un rebase avant push ne crée donc pas de fausse alerte « MAJ disponible » tant que `APP_BUILD_DATE` a été posée à l'heure UTC réelle du commit d'origine (`date -u`).
 
 ## Données de démo (1er lancement)
 `createDemo()` (fin du fichier, juste avant `init()`) génère des données fictives au tout premier lancement, conditionné par `localStorage.planClasse_demoInstalled !== '1'` :
@@ -2659,6 +2678,8 @@ Plus AUCUN `alert()` / `confirm()` / `prompt()` natif dans l'app (blocables par 
 - Confirmations → `_uiConfirm` · saisies → `_uiPrompt` · retard → modale `mlate`.
 
 ## Tactile (`@media (pointer: coarse)`)
+
+⚠️ **Ce bloc s'applique réellement sur la Surface de l'utilisateur** (vérifié le 2026-09-11) : Chrome y déclare le pointeur principal « coarse » (écran tactile, mode tablette / sans souris), donc tous les boutons y sont rendus plus larges — pas seulement sur iPad. Conséquence : **toute largeur figée en dur autour de boutons `.btn-sm` casse là-bas** et seulement là-bas (cas vécu : la carte 🎲 Interroger à 300 px tronquait son 3ᵉ bouton — corrigé par une mesure du contenu réel, cf. `_pickMeasureCard`). Réflexe pour tout défaut « uniquement sur cet ordinateur » : `matchMedia('(pointer: coarse)').matches` dans la console, et tester avec un `<style>` injecté qui reproduit `.btn-sm{padding:9px 13px;font-size:.95em}` (l'émulation tactile du panneau d'aperçu est instable, cf. la note du 🎲 Interroger).
 
 Bloc en **fin de `<style>`** (doit battre le bloc COMPACTION à spécificité égale) : n'affecte QUE les écrans tactiles (Surface/iPad/Android), rien ne change à la souris. Agrandit : header/nav (annule la compaction), `.btn-sm`/`.gchip`/`.tagchip` des toolbars, contrôles internes des cellules du plan (`.cctr`, `.cell-unplace`, `.isel`, `.cipad`), inputs du tableur d'éval, `.counter-input`, cases à cocher/radios. ⚠️ Ressenti réel à valider sur l'appareil.
 
