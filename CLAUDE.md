@@ -586,7 +586,42 @@ Un élève transféré (via la modale Modifier → champ « Classe ») garde tou
 - **Agrandissement** (`stu.agrandissement`) et **Tiers-temps** (`stu.tiers_temps`) : deux **aménagements d'examen** cumulables avec tout, chacun seul dans son groupe (`STATUS_GROUP_D` / `STATUS_GROUP_E`). Rendus en **SUFFIXE** sur la pastille principale (`_agrPrimaryKey`) : `-A` et `+⅓` (U+2153 — glyphe de fraction minuscule dans la police, donc enveloppé dans `<span class="frac">` agrandi 1,55× en HTML ; `_agrSuffix(stu, key, html=false)` / `_agrExamSuffix(stu, false)` pour le texte brut des exports, cf. `_amenagementsLabel`), dans cet ordre — « PAP-A », « PPRE+⅓ », « PPS-A+⅓ » (`_agrExamSuffix`, `_agrSuffix`). Sans pastille à suffixer, pastille sarcelle `.spec-agr` seule portant le(s) suffixe(s) (`_agrStandalone`, `_agrStandaloneTitle`). Surfaces : cellule du plan, non placés, liste imprimée (`_amBadges`), boutons `📄-A` / `⏱+⅓` de l'onglet Élèves, menu contextuel, modale d'édition, carte de classe (puces `📄 N agrandissements` / `⏱ N tiers-temps` via `_classCounts`), import (colonne « Tiers-temps » ou valeurs `tiers temps` / `1/3` / `+⅓` / `TT` dans « Aménagements » — `_impNormAmen` ramène ces graphies à un jeton unique avant de découper, car `/` et `+` sont des séparateurs ; la forme collée « PAP-A » est aussi acceptée). ⚠️ **Tout nouveau groupe de statut doit être ajouté à `_statusGroup`** : une clé qu'il ne connaît pas est silencieusement ignorée par `_setStudentStatusExclusive`, donc le toggle ne fait rien (vu au premier essai du tiers-temps).
 - **Groupes** : G1 (bleu), G2 (orange), G3 (violet) pour demi/tiers-groupes
 - **Civilité** : `'M'` ou `'F'` (utilisée pour le mode couleur "genre")
+- **Délégué·e de classe** : `stu.delegue` = `'T'` (titulaire, nom souligné) · `'S'` (suppléant·e, pointillé) · `null` — cf. section *👩‍🏫 Professeur·e principal·e & 🗳 délégué·es*
 - **Tags cumulables** (`stu.tags = [tagId, ...]`) : DF, DNL, etc. — un élève peut en avoir plusieurs. Définis globalement dans `S.tags` (id, abbr, name, color). Affichés en chips colorés dans Plan Prof. Un tag peut aussi être affecté à une PLACE (`room.posTagId`) — mutuellement exclusif avec `room.groupes` au niveau de la place (une place est soit dans une zone G1/G2/G3, soit dans une zone de tag).
+
+## 👩‍🏫 Professeur·e principal·e & 🗳 délégué·es de classe
+
+Deux informations de « vie de classe », purement déclaratives : l'app les affiche, elle ne légifère pas (pas de limite de nombre, pas de contrôle). Cadrage arrêté avec l'utilisateur le 2026-09-11 (quatre arbitrages, tous sur l'option recommandée).
+
+### Modèle
+- **`cls.profPrincipal`** — texte libre (« Mme Dupont ») ou `null`. Migration légère dans `postLoadHook` (bloc par classe, à côté de `noNeighbors`) : tout ce qui n'est pas une chaîne non vide → `null`.
+- **`stu.delegue`** — `'T'` (titulaire) · `'S'` (suppléant·e) · `null`. Migration légère dans le bloc par élève (à côté de `tags`/`civilite`) : toute autre valeur → `null`. ⚠️ **Pas d'éco-délégué·e** (arbitrage explicite) — deux styles de soulignement sont déjà à la limite du lisible ; un 3ᵉ rôle passerait par une pastille, pas un 3ᵉ trait.
+
+Les deux voyagent dans le JSON / sync / undo / backups sans rien d'autre. Ni purge (pas indexés par sid/classId), ni section nouvelle dans `_validateImport`. Le rôle est un état **présent** : il n'entre ni dans les snapshots d'incidents ni dans les exports tableur.
+
+### Table des rôles — source unique
+`DELEGUE_ROLES = { T: { label, cls: 'dlg-t', short: 'D', hint }, S: { …, cls: 'dlg-s', short: 'S' } }` + helpers `_delegueInfo(stu)`, `_delegueNameCls(stu)` (→ `' dlg-t'` / `' dlg-s'` / `''`), `_delegueBadge(stu)` (pastille « 🗳 D » / « 🗳 S »), `_classDeleguesLine(cls)` (ligne de la carte de classe — noms triés, **élèves partis exclus** via `_stuActiveOn`). Mutation unique **`_setDelegue(id, code)`** (no-op si inchangé, code inconnu ⇒ retrait, `pushUndo` + `save` + re-render plan / liste / cartes) ; `ctxSetDelegue(code)` pour le clic droit.
+
+### Convention visuelle : le NOM est souligné
+Classes CSS **génériques** `.dlg-t` (trait plein 2 px) / `.dlg-s` (pointillé 2 px), `text-underline-offset:3px`, `text-decoration-skip-ink:none`. Le trait prend `currentColor` → il suit le thème et la couleur de texte de la cellule (absent, mode genre…) **sans variante sombre dédiée**, et passe tel quel en N&B. Posées sur :
+- **Plan Prof** : le `.cn` des deux branches de `buildCell` (appel et normale) — prénom ET nom soulignés (le `<br>` est dans le même bloc). L'infobulle de la cellule commence par « 🗳 Délégué·e » / « 🗳 Suppléant·e ».
+- **Plan imprimé** : le `.pn` de `doPrint('t')` et de `buildTeacherPageHTML` (Plusieurs plans). ⚠️ **Pas la Vue Élève ni son impression** (`doPrint('s')`) — arbitrage utilisateur : c'est un repère prof.
+- **Onglet Élèves** : pastille `.dlg-badge` après le prénom (tokens `--paper-warm` / `--ink-blue` / `--rule-line`, donc thème sombre OK) — **pas de bouton** dans la ligne, déjà chargée.
+- **Carte de classe** : ligne `🗳 Délégué·es : … — Suppléant·es : …`, chaque nom souligné selon son rôle.
+- **Fiche complète** (`renderFiche`) : ligne « Rôle ».
+
+### Où ça se règle
+- **Clic droit sur une cellule** → sous-menu `🗳 Rôle dans la classe ▸ Aucun / Délégué·e / Suppléant·e` (entre 🎓 Aménagements et 🪪 Fiche). `showCtxMenu` pose ● sur l'état courant (`#ctx-role-*-lbl`).
+- **Modifier l'élève** (`me`) : `<select id="es-delegue">` sous Groupe (`openEdit` / `saveEdit`).
+- **PP** : champ `#ec-pp` dans Modifier la classe (`editClass` / `saveClassEdit` — lu AVANT `_commit`, qui peut tourner après une confirmation) et `#nc-pp` à la création (`createClass`). Pas sur les classes recomposées (`mvc`) : une recomposition n'a pas de PP.
+
+### Bandeau : `_refreshHdrClassInfo(cls)` — source unique
+Le `#hdr-yr` (année, mono) est doublé d'un `#hdr-pp` (« · 👩‍🏫 Mme Dupont », sans, `--pencil`, `:empty{display:none}`). **Sept** sites écrivaient `#hdr-yr` à la main (`switchClass`, `saveClassEdit`, `init`, quatre rechargements) : tous passent par ce helper. ⚠️ **Ne plus écrire `hdr-yr.textContent` directement** — le PP ne suivrait pas.
+
+### Démo
+`createDemo` pose un PP par classe (`Mme Dupont`, `M. Bernard`…) et 2 titulaires + 2 suppléant·es (indices 4, 9, 14, 19) — pour que le soulignement se voie dès le premier lancement.
+
+Tests : `test/run.test.js` (migration T|S|null et PP, helpers de rendu avec tri et exclusion des partis, `_setDelegue` no-op / code inconnu / compte d'undo).
 
 ## AESH — Accompagnant·e·s d'Élèves en Situation de Handicap
 

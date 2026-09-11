@@ -110,6 +110,16 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .cell.em.drop-ok{background:#a9dfbf;border-color:#27ae60;border-style:dashed}
 .cell.oc.drop-ok{background:#a9dfbf;border-color:#27ae60}
 .cn{font-weight:700;font-size:1.12em;line-height:1.25;word-break:break-word}
+/* 🗳 Délégué·es de classe — le NOM est souligné : trait plein pour les titulaires (.dlg-t),
+   pointillé pour les suppléant·es (.dlg-s). Classes génériques : posées sur le .cn des cellules
+   du Plan Prof, le .pn du plan imprimé, la pastille de l'onglet Élèves et les noms de la carte
+   de classe. Le trait prend currentColor → suit le thème et le fond de la cellule (absent,
+   couleur genre/groupe…) sans variante sombre dédiée, et passe tel quel en N&B à l'impression. */
+.dlg-t{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;text-decoration-skip-ink:none}
+.dlg-s{text-decoration:underline dotted;text-decoration-thickness:2px;text-underline-offset:3px;text-decoration-skip-ink:none}
+.dlg-badge{font-family:var(--font-mono);font-size:.7em;padding:1px 5px;border-radius:8px;margin-left:6px;background:var(--paper-warm);color:var(--ink-blue);border:1px solid var(--rule-line);white-space:nowrap;vertical-align:middle}
+#hdr-pp{color:var(--pencil);font-size:.82em;white-space:nowrap;margin-left:2px}
+#hdr-pp:empty{display:none}
 .cipad{font-size:.85em;color:var(--cell-meta);margin-top:1px}
 .cpos{font-size:.72em;color:var(--cell-meta);font-weight:600;position:absolute;top:2px;left:3px}
 .spec-badges{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px}
@@ -2607,6 +2617,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <option value="">— Choisir une classe —</option>
   </select>
   <span id="hdr-yr"></span>
+  <span id="hdr-pp" title="Professeur·e principal·e de la classe"></span>
   <div id="hdr-right">
     <span id="hdr-user-links" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"></span>
     <button id="btn-user-links" class="hdr-btn" onclick="openUserLinksModal()" title="Configurer vos liens externes (ENT, Pronote, etc.)" style="padding:4px 8px">🔗</button>
@@ -3344,6 +3355,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Identifiant (ex : 3A)</label><input id="nc-id" placeholder="3A" maxlength="10" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
     <div class="fg"><label>Nom complet</label><input id="nc-nom" placeholder="3ème A" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
     <div class="fg"><label>Année scolaire</label><input id="nc-yr" type="number" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
+    <div class="fg"><label>Professeur·e principal·e <span style="font-size:.78em;color:var(--pencil)">(optionnel — affiché sur la carte de la classe et dans le bandeau)</span></label><input id="nc-pp" placeholder="Mme Dupont" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
     <div class="fg" id="nc-copy-row">
       <label>Salle initiale</label>
       <select id="nc-copy"><option value="">— Nouvelle salle —</option></select>
@@ -3439,6 +3451,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="fg"><label>Groupe</label>
       <select id="es-grp"><option value="">— Aucun groupe —</option><option value="1">🔵 Groupe 1</option><option value="2">🟠 Groupe 2</option><option value="3">🟣 Groupe 3</option></select>
+    </div>
+    <div class="fg"><label>Rôle dans la classe <span style="font-size:.78em;color:var(--pencil)">(délégué·es élu·es — nom souligné sur le plan)</span></label>
+      <select id="es-delegue"><option value="">— Aucun —</option><option value="T">🗳 Délégué·e (souligné)</option><option value="S">🗳 Suppléant·e (souligné en pointillé)</option></select>
     </div>
     <div class="fg"><label>Classe <span style="font-size:.78em;color:var(--pencil)">(en cas de changement de classe en cours d'année — l'historique, les compteurs et les appels passés sont conservés)</span></label>
       <select id="es-cls"></select>
@@ -6352,6 +6367,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Identifiant</label><input id="ec-id-disp" disabled style="background:#f0f0f0;color:#888"></div>
     <div class="fg"><label>Nom complet</label><input id="ec-nom"></div>
     <div class="fg"><label>Année scolaire</label><input id="ec-yr" type="number"></div>
+    <div class="fg"><label>Professeur·e principal·e <span style="font-size:.78em;color:var(--pencil)">(optionnel — affiché sur la carte de la classe et dans le bandeau)</span></label><input id="ec-pp" placeholder="Mme Dupont" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();saveClassEdit()}"></div>
     <div class="about-section" style="margin-top:14px">
       <h3>🎓 Disciplines enseignées</h3>
       <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">
@@ -6418,6 +6434,14 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div class="ctx-item" id="ctx-pai"     onclick="ctxTogglePai()">⚕️ <span id="ctx-pai-lbl"></span></div>
       <div class="ctx-item" id="ctx-agr"     onclick="ctxToggleAgrandissement()">📄 <span id="ctx-agr-lbl"></span></div>
       <div class="ctx-item" id="ctx-tt"      onclick="ctxToggleTiersTemps()">⏱ <span id="ctx-tt-lbl"></span></div>
+    </div>
+  </div>
+  <!-- Sous-menu Rôle : délégué·e / suppléant·e (● = état actuel, posé par showCtxMenu) -->
+  <div class="ctx-item has-sub" id="ctx-role" onclick="ctxToggleSubmenu(event,this)">🗳 Rôle dans la classe
+    <div class="ctx-submenu">
+      <div class="ctx-item" id="ctx-role-none" onclick="ctxSetDelegue(null)"><span id="ctx-role-none-lbl">○</span> Aucun</div>
+      <div class="ctx-item" id="ctx-role-t"    onclick="ctxSetDelegue('T')"><span id="ctx-role-t-lbl">○</span> Délégué·e <span style="color:var(--pencil);font-size:.85em">(nom <span class="dlg-t">souligné</span>)</span></div>
+      <div class="ctx-item" id="ctx-role-s"    onclick="ctxSetDelegue('S')"><span id="ctx-role-s-lbl">○</span> Suppléant·e <span style="color:var(--pencil);font-size:.85em">(<span class="dlg-s">pointillé</span>)</span></div>
     </div>
   </div>
   <div class="ctx-item" id="ctx-fiche"    onclick="ctxOpenFiche()">🪪 Fiche complète</div>
@@ -6602,11 +6626,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.51.1';
+const APP_VERSION    = '2.52.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-11T05:15:17Z';
+const APP_BUILD_DATE = '2026-09-11T07:27:55Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7462,6 +7486,7 @@ function postLoadHook() {
   for (const stu of Object.values(S.eleves || {})) {
     if (!Array.isArray(stu.tags)) stu.tags = [];
     if (typeof stu.civilite === 'undefined') stu.civilite = null; // 'M' | 'F' | null
+    if (stu.delegue !== 'T' && stu.delegue !== 'S') stu.delegue = null; // 🗳 rôle de délégué·e : 'T' | 'S' | null (toute autre valeur d'un JSON forgé → null)
     if (typeof stu.pap === 'undefined') stu.pap = false; // Plan d'Accompagnement Personnalisé (dispositif scolarité)
     if (typeof stu.agrandissement === 'undefined') stu.agrandissement = false; // photocopies agrandies (cumulable)
     if (typeof stu.tiers_temps === 'undefined') stu.tiers_temps = false; // temps majoré +⅓ aux évaluations (cumulable)
@@ -7486,6 +7511,8 @@ function postLoadHook() {
     }
     // Paires d'élèves à ne pas mettre côte à côte (au niveau de la classe)
     if (!Array.isArray(cls.noNeighbors)) cls.noNeighbors = [];
+    // 👩‍🏫 Professeur·e principal·e : texte libre ou null (jamais un autre type)
+    if (typeof cls.profPrincipal !== 'string' || !cls.profPrincipal.trim()) cls.profPrincipal = null;
     // Anciennement : cls.pairsStrictness (1..4). Désormais une seule règle, on
     // nettoie le champ pour qu'il ne traîne pas dans le JSON.
     if ('pairsStrictness' in cls) delete cls.pairsStrictness;
@@ -9425,6 +9452,11 @@ function showCtxMenu(e, cls, key, sid) {
   document.getElementById('ctx-pai-lbl').textContent       = s?.pai        ? 'Retirer PAI (médical)'  : 'Marquer PAI (médical — cumulable)';
   document.getElementById('ctx-agr-lbl').textContent       = s?.agrandissement ? 'Retirer Agrandissement' : 'Marquer Agrandissement (photocopies agrandies)';
   document.getElementById('ctx-tt-lbl').textContent        = s?.tiers_temps ? 'Retirer Tiers-temps' : 'Marquer Tiers-temps (temps majoré +⅓)';
+  // 🗳 Rôle : marque l'état courant (● / ○) dans le sous-menu
+  for (const [code, lblId] of [[null, 'ctx-role-none-lbl'], ['T', 'ctx-role-t-lbl'], ['S', 'ctx-role-s-lbl']]) {
+    const el = document.getElementById(lblId);
+    if (el) el.textContent = ((s?.delegue || null) === code) ? '●' : '○';
+  }
   // Compteur de rappels actifs
   const remN = Array.isArray(s?.reminders) ? s.reminders.length : 0;
   document.getElementById('ctx-rem-lbl').textContent =
@@ -9573,6 +9605,56 @@ function ctxTogglePpre()      { _ctxToggleStatus('ppre',       'PPRE',          
 function ctxTogglePap()       { _ctxToggleStatus('pap',        'PAP',             '🔷'); }
 function ctxToggleGEVAsco()   { _ctxToggleStatus('gevasco',    'GEVAsco/PPS',     '🔵'); }
 function ctxTogglePai()       { _ctxToggleStatus('pai',        'PAI',             '⚕️'); }
+
+// ═══ 🗳 Délégué·es de classe ═══
+// stu.delegue : 'T' (titulaire) · 'S' (suppléant·e) · null. Deux rôles seulement (arbitrage
+// utilisateur du 2026-09-11 : pas d'éco-délégué·e), sans limite de nombre — l'app affiche, elle
+// ne légifère pas. Le rôle est un état PRÉSENT : il ne va ni dans les snapshots d'incidents ni
+// dans les exports tableur. Réglé par clic droit (sous-menu Rôle) ou dans « Modifier l'élève ».
+const DELEGUE_ROLES = {
+  T: { label: 'Délégué·e',   cls: 'dlg-t', short: 'D', hint: 'nom souligné' },
+  S: { label: 'Suppléant·e', cls: 'dlg-s', short: 'S', hint: 'nom souligné en pointillé' },
+};
+function _delegueInfo(stu)    { return (stu && DELEGUE_ROLES[stu.delegue]) || null; }
+// Classe CSS à ajouter au conteneur du nom (Plan Prof .cn, plan imprimé .pn) — '' si aucun rôle.
+function _delegueNameCls(stu) { const d = _delegueInfo(stu); return d ? ' ' + d.cls : ''; }
+// Pastille compacte « 🗳 D » / « 🗳 S » (onglet Élèves).
+function _delegueBadge(stu) {
+  const d = _delegueInfo(stu);
+  return d ? `<span class="dlg-badge ${d.cls}" title="🗳 ${d.label} de classe (${d.hint} sur le plan)">🗳 ${d.short}</span>` : '';
+}
+// Ligne « 🗳 Délégué·es : … — Suppléant·es : … » de la carte de classe ('' si personne).
+// Les élèves partis (départ effectif) ne sont plus listés ; noms triés, chacun souligné selon son rôle.
+function _classDeleguesLine(cls) {
+  const by = { T: [], S: [] };
+  for (const sid of cls.eleves || []) {
+    const st = S.eleves[sid];
+    if (st && DELEGUE_ROLES[st.delegue] && _stuActiveOn(st)) by[st.delegue].push(st);
+  }
+  if (!by.T.length && !by.S.length) return '';
+  const fmt = (arr, code) => arr
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr') || a.prenom.localeCompare(b.prenom, 'fr'))
+    .map(st => `<span class="${DELEGUE_ROLES[code].cls}">${_escName(st.prenom)} ${_escName(st.nom)}</span>`).join(' · ');
+  const parts = [];
+  if (by.T.length) parts.push(`Délégué·e${by.T.length > 1 ? 's' : ''} : ${fmt(by.T, 'T')}`);
+  if (by.S.length) parts.push(`Suppléant·e${by.S.length > 1 ? 's' : ''} : ${fmt(by.S, 'S')}`);
+  return `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.9">🗳 ${parts.join(' &nbsp;—&nbsp; ')}</div>`;
+}
+// Mutation unique (undo, save, re-render des 3 surfaces : plan, liste, carte).
+function _setDelegue(id, code) {
+  const st = S.eleves[id]; if (!st) return;
+  const next = DELEGUE_ROLES[code] ? code : null;
+  if ((st.delegue || null) === next) return;
+  pushUndo();
+  st.delegue = next;
+  save(); renderTeacherGrid(); renderStudents(); renderClasses();
+  toast(next ? `🗳 ${st.prenom} ${st.nom} : ${DELEGUE_ROLES[next].label}` : `🗳 ${st.prenom} ${st.nom} : plus de rôle de délégué·e`);
+}
+function ctxSetDelegue(code) {
+  if (!ctxTarget) return;
+  _setDelegue(ctxTarget.sid, code);
+  closeCtxMenu();
+}
 function ctxToggleAgrandissement() { _ctxToggleStatus('agrandissement', 'Agrandissement', '📄'); }
 function ctxToggleTiersTemps()     { _ctxToggleStatus('tiers_temps',    'Tiers-temps',    '⏱'); }
 function ctxToggleUlis()      { _ctxToggleStatus('ulis',       'ULIS',            '🟢'); }
@@ -9800,6 +9882,7 @@ function renderFiche() {
     row('Classe', cls ? _escName(cls.nom) : dash) +
     (otherCls.length ? row('Aussi dans', otherCls.map(c => `<span class="spec-badge spec-ulis-incl" style="margin-right:3px">🔀 ${_escName(c.nom)}</span>`).join('')) : '') +
     row('Groupe', s.groupe ? `<span class="gbdg g${s.groupe}">G${s.groupe}</span>` : dash) +
+    row('Rôle', _delegueInfo(s) ? `<span class="${_delegueInfo(s).cls}">🗳 ${_delegueInfo(s).label}</span>` : dash) +
     row('Tags', tags || dash) +
     (dates ? row('Dates', dates) : '') +
     (prev ? row('Classes précédentes', prev) : ''));
@@ -13920,11 +14003,13 @@ function createClass() {
     activeRoom = sid;
   }
 
-  S.classes[id] = { id, nom, année: yr, eleves: [], rooms, activeRoom };
+  const profPrincipal = document.getElementById('nc-pp')?.value.trim() || null;
+  S.classes[id] = { id, nom, année: yr, profPrincipal, eleves: [], rooms, activeRoom };
   setupClassAccessors(S.classes[id]);
 
   document.getElementById('nc-id').value = '';
   document.getElementById('nc-nom').value = '';
+  if (document.getElementById('nc-pp')) document.getElementById('nc-pp').value = '';
   closeMod2('mc');
   save();
   refreshSelector();
@@ -14050,7 +14135,7 @@ function switchClass(id) {
   S.cur = id;
   document.getElementById('cls-sel').value = id;
   const cls = S.classes[id];
-  document.getElementById('hdr-yr').textContent = (cls.année || '?') + '–' + ((cls.année || 0)+1);
+  _refreshHdrClassInfo(cls);
   // Réinitialise les filtres "volatils" qui n'ont pas de sens à travers les classes
   // (sinon : recherche fantôme dans le panneau "non placés", liste vide sans raison apparente)
   const unplSearch = document.getElementById('unpl-search');
@@ -14266,12 +14351,14 @@ function renderClasses() {
     const _discLine = _discIds.length >= 2
       ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
       : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
+    const _ppLine  = cls.profPrincipal ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.9" title="Professeur·e principal·e">👩‍🏫 PP : ${_escName(cls.profPrincipal)}</div>` : '';
+    const _dlgLine = _classDeleguesLine(cls);
     return `
       <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg};border-left:6px solid ${levelAccentColor(order)};--cc-fg:${_contrastTextColor(bg)};color:${_contrastTextColor(bg)}" onclick="switchClass('${cls.id}');renderClasses()">
         <div class="cc-info">
           <div class="cc-name">${_escAttr(cls.nom)}</div>
           <div class="cc-meta">${cls.année}–${cls.année+1} &nbsp;·&nbsp; ${detail}</div>
-          ${_discLine}
+          ${_discLine}${_ppLine}${_dlgLine}
         </div>
         <div style="display:flex;gap:4px">
           <button class="btn btn-s btn-sm" onclick="event.stopPropagation();editClass('${cls.id}')">Éditer</button>
@@ -14414,6 +14501,14 @@ function renderClasses() {
   el.innerHTML = cards + recap + vcSection;
 }
 
+// Bandeau : année scolaire + professeur·e principal·e de la classe active. Source unique pour
+// les 7 sites qui écrivaient #hdr-yr à la main (switchClass, saveClassEdit, init, rechargements).
+function _refreshHdrClassInfo(cls) {
+  const yr = document.getElementById('hdr-yr'), pp = document.getElementById('hdr-pp');
+  if (yr) yr.textContent = cls ? (cls.année || '?') + '–' + ((cls.année || 0) + 1) : '';
+  if (pp) pp.textContent = (cls && cls.profPrincipal) ? '· 👩‍🏫 ' + cls.profPrincipal : '';
+}
+
 function editClass(id) {
   const cls = S.classes[id];
   if (!cls) return;
@@ -14421,6 +14516,7 @@ function editClass(id) {
   document.getElementById('ec-id-disp').value = id;
   document.getElementById('ec-nom').value = cls.nom;
   document.getElementById('ec-yr').value  = cls.année;
+  document.getElementById('ec-pp').value  = cls.profPrincipal || '';
   _ecRenderDisciplineChecks(cls);
   document.getElementById('mce').classList.add('on');
 }
@@ -14464,6 +14560,7 @@ function saveClassEdit() {
   if (!cls) return;
   const nom = document.getElementById('ec-nom').value.trim();
   const yr  = parseInt(document.getElementById('ec-yr').value) || cls.année;
+  const pp  = document.getElementById('ec-pp').value.trim() || null;   // lu ici : _commit peut tourner après une confirmation
   if (!nom) { toast('⚠️ Le nom ne peut pas être vide.', 'warn'); document.getElementById('ec-nom')?.focus(); return; }
   // Lit les disciplines cochées
   const allDiscs = Object.values(S.disciplines || {});
@@ -14487,6 +14584,7 @@ function saveClassEdit() {
   pushUndo();
   cls.nom   = nom;
   cls.année = yr;
+  cls.profPrincipal = pp;
   cls.disciplineIds = checkedIds;
   // Si la discipline actuellement affichée pour cette classe a été retirée, reset
   try {
@@ -14505,7 +14603,7 @@ function saveClassEdit() {
   renderClasses();
   // Refresh des toolbars et sélecteurs dans les onglets eval ouverts
   try { _refreshSubgroupSelectors(); } catch (_) {}
-  if (S.cur === id) document.getElementById('hdr-yr').textContent = yr + '–' + (yr+1);
+  if (S.cur === id) _refreshHdrClassInfo(cls);
   toast('Classe mise à jour.');
   };
   if (removedWithEvals.length) {
@@ -15615,6 +15713,7 @@ function openEdit(id) {
   document.getElementById('es-prn').value            = s.prenom;
   document.getElementById('es-civ').value            = s.civilite || '';
   document.getElementById('es-grp').value            = s.groupe || '';
+  document.getElementById('es-delegue').value        = s.delegue || '';
   // Peuple le sélecteur de classe (uniquement les classes réelles, jamais les recomposées)
   const clsSel = document.getElementById('es-cls');
   if (clsSel) {
@@ -15647,6 +15746,7 @@ function saveEdit() {
   s.prenom  = document.getElementById('es-prn').value.trim();
   s.civilite = document.getElementById('es-civ').value || null;
   s.groupe  = parseInt(document.getElementById('es-grp').value) || null;
+  s.delegue = DELEGUE_ROLES[document.getElementById('es-delegue').value] ? document.getElementById('es-delegue').value : null;
   // Statuts exclusifs intra-groupe (groupe A scolarité + groupe B linguistique UPE2A indépendants)
   _readAndApplyStatusGroup(s, 'es', STATUS_GROUP_A);
   _readAndApplyStatusGroup(s, 'es', STATUS_GROUP_B);
@@ -17319,7 +17419,7 @@ function renderStudents() {
       <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)"
           onmouseenter="onEleveRowMouseEnter('${s.id}')">
-        <td>${civBtn}<strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}${_lifeBadge}</td>
+        <td>${civBtn}<strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}${_delegueBadge(s)}${_lifeBadge}</td>
         <td>${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>
@@ -18796,7 +18896,7 @@ function buildCell(cls, row, col) {
         <span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>
         ${stu.groupe ? `<span class="gbadge g${stu.groupe}">G${stu.groupe}</span>` : ''}
         ${lateTime && !isAbsent ? `<span class="late-time">⏰ ${lateTime}</span>` : ''}
-        <div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+        <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
         ${isAbsent ? '<div style="font-size:1.4em;margin-top:2px">🚫</div>' : ''}`;
       return cell;
     }
@@ -18871,7 +18971,7 @@ function buildCell(cls, row, col) {
       ${stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : ''}
       ${specBadges}
       <button class="cell-unplace" onclick="event.stopPropagation();removeSeat(getCls(),'${key}')" title="Retirer de sa place">✕</button>
-      <div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+      <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
       <div class="cell-ctrs">
         <span class="cctr" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié">📦 ${stu.oublis}</span>
         <span class="cctr" style="background:${oubliColor(stu.non_travail)};border-radius:3px" onclick="event.stopPropagation();incNT('${stu.id}')" title="Travail non fait">📝 ${stu.non_travail}</span>
@@ -18894,7 +18994,7 @@ function buildCell(cls, row, col) {
                       style="${_style}">${_label}</span>`;
       })()}
     `;
-    const specTitle = [stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':'', stu.tiers_temps?'Tiers-temps (+⅓)':''].filter(Boolean).join(' · ');
+    const specTitle = [_delegueInfo(stu) ? '🗳 ' + _delegueInfo(stu).label : '', stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':'', stu.tiers_temps?'Tiers-temps (+⅓)':''].filter(Boolean).join(' · ');
     const notesTitle = stu.notes ? `\n📋 ${stu.notes}` : '';
     let postTitle = '';
     if (_postAppel) {
@@ -27733,7 +27833,7 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
             : '';
           inner = `${stuG ? `<span class="pgb g${stuG}">G${stuG}</span>` : ''}
                    ${aeshBadge}
-                   <div class="pn">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div>
+                   <div class="pn${_delegueNameCls(stu)}">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div>
                    ${ipad && _featureEnabled('tablettes') ? `<div class="pi">Tab. ${ipad}${groupFilter ? ' '+ipadModeLabel(groupFilter) : ''}</div>` : ''}
                    <div style="display:flex;gap:2px;justify-content:center;margin-top:2px">
                      <span class="pinc" style="background:${oubliColor(stu.oublis)};border-radius:3px;padding:0 3px;font-size:.75em">📦 ${stu.oublis}</span>
@@ -27855,7 +27955,7 @@ function buildTeacherPageHTML(cls) {
           : '';
         inner = `${stuG ? `<span class="pgb g${stuG}">G${stuG}</span>` : ''}
                  ${aeshBadge}
-                 <div class="pn">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div>
+                 <div class="pn${_delegueNameCls(stu)}">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div>
                  ${ipad && _featureEnabled('tablettes') ? `<div class="pi">Tab. ${ipad}</div>` : ''}
                  <div style="display:flex;gap:2px;justify-content:center;margin-top:2px">
                    <span class="pinc" style="background:${oubliColor(stu.oublis)};border-radius:3px;padding:0 3px;font-size:.75em">📦 ${stu.oublis}</span>
@@ -28528,7 +28628,7 @@ function _applyReloadedData(data, f) {
   if (S.cur) {
     const cls = S.classes[S.cur];
     document.getElementById('cls-sel').value = S.cur;
-    document.getElementById('hdr-yr').textContent = cls.année + '–' + (cls.année+1);
+    _refreshHdrClassInfo(cls);
   }
   renderClasses();
   renderUserLinks();
@@ -29165,7 +29265,7 @@ async function loadFromHandle(idx) {
         if (S.cur) {
           const cls = S.classes[S.cur];
           document.getElementById('cls-sel').value = S.cur;
-          document.getElementById('hdr-yr').textContent = cls.année + '–' + (cls.année+1);
+          _refreshHdrClassInfo(cls);
         }
         closeMod2('mfiles');
         renderClasses();
@@ -29306,7 +29406,7 @@ async function loadLastFile() {
         if (S.cur) {
           const cls = S.classes[S.cur];
           document.getElementById('cls-sel').value = S.cur;
-          document.getElementById('hdr-yr').textContent = (cls.année || '?') + '–' + ((cls.année || 0)+1);
+          _refreshHdrClassInfo(cls);
         }
         renderUserLinks(); // les liens externes du fichier rechargé remplacent les précédents
         renderClasses();
@@ -29503,7 +29603,7 @@ function importJSON(e) {
         if (S.cur) {
           const cls = S.classes[S.cur];
           document.getElementById('cls-sel').value = S.cur;
-          document.getElementById('hdr-yr').textContent = (cls.année || '?') + '–' + ((cls.année || 0)+1);
+          _refreshHdrClassInfo(cls);
         }
         renderClasses();
         renderUserLinks(); // les liens externes du fichier importé remplacent les précédents
@@ -31068,6 +31168,13 @@ function createDemo(opts) {
     if (cls.eleves[5])  S.eleves[cls.eleves[5]].reminders  = [_mkRem('📥 Récupérer un document, un livre ou du matériel')];
     if (cls.eleves[10]) S.eleves[cls.eleves[10]].reminders = [_mkRem('📞 Appeler / contacter les parents — point comportement')];
     if (cls.eleves[15]) S.eleves[cls.eleves[15]].reminders = [_mkRem('✍️ Faire signer un mot dans le carnet')];
+    // 👩‍🏫 Professeur·e principal·e + 🗳 délégué·es (2 titulaires, 2 suppléant·es) — pour montrer
+    // le soulignement sur le plan et les lignes de la carte de classe.
+    cls.profPrincipal = ({ '6A': 'Mme Dupont', '6B': 'M. Bernard', '5A': 'Mme Lefèvre', '5B': 'M. Moreau', '4A': 'Mme Garcia', '3A': 'M. Petit' })[alloc.id] || null;
+    if (cls.eleves[4])  S.eleves[cls.eleves[4]].delegue  = 'T';
+    if (cls.eleves[9])  S.eleves[cls.eleves[9]].delegue  = 'T';
+    if (cls.eleves[14]) S.eleves[cls.eleves[14]].delegue = 'S';
+    if (cls.eleves[19]) S.eleves[cls.eleves[19]].delegue = 'S';
 
     // Historique d'incidents : pour 6e A et 4e A, ajoute quelques entrées datées
     // pour que la modale "🕓 Historique" affiche du contenu réel.
@@ -33481,7 +33588,7 @@ function init() {
   if (S.cur && S.classes[S.cur]) {
     const cls = S.classes[S.cur];
     document.getElementById('cls-sel').value = S.cur;
-    document.getElementById('hdr-yr').textContent = cls.année + '–' + (cls.année+1);
+    _refreshHdrClassInfo(cls);
   }
   // Reconstitue l'état post-appel depuis S.attendance si on est encore dans le créneau
   // d'un appel enregistré pour la classe active (cas : fichier sync ouvert sur une autre
