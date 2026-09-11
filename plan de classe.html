@@ -248,9 +248,14 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 #pick-float .pf-name{font-size:1.6em;font-weight:700;color:#2980b9;line-height:1.15;text-align:center;margin:6px 0}
 #pick-float .pf-place{font-size:.85em;color:var(--pencil);text-align:center;margin-bottom:6px}
 #pick-float .pf-count{font-size:.75em;color:var(--pencil-soft);text-align:center;margin-bottom:10px}
-#pick-float .pf-actions{display:flex;gap:6px;justify-content:space-between;margin-top:auto}
-#pick-float .pf-actions .pf-secondary{display:flex;gap:6px}
-#pick-float .pf-actions button{flex-shrink:0}
+/* Les boutons ne rétrécissent jamais et ne se coupent pas au milieu du libellé ; si la
+   largeur manque quand même (viewport très étroit), ils passent à la ligne au lieu
+   d'être tronqués par l'overflow:hidden de la carte. La largeur de la carte est de
+   toute façon MESURÉE sur le contenu réel dans _pickMeasureCard (police, zoom,
+   agrandissement tactile des .btn-sm) — 300 px n'est plus qu'un minimum. */
+#pick-float .pf-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;margin-top:auto}
+#pick-float .pf-actions .pf-secondary{display:flex;flex-wrap:wrap;gap:6px}
+#pick-float .pf-actions button{flex-shrink:0;white-space:nowrap}
 #pick-float .pf-cycle{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;padding:3px 8px;border-radius:4px;font-size:.78em;text-align:center;margin-bottom:6px}
 /* Grille de la modale "Plan de l'appel" — version compacte lecture seule */
 .mp-grid{display:grid;gap:3px;margin:6px 0}
@@ -6597,11 +6602,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.51.0';
+const APP_VERSION    = '2.51.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-10T16:55:39Z';
+const APP_BUILD_DATE = '2026-09-11T05:15:17Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -25408,6 +25413,52 @@ function _pickUpdateLines(cellRect, cardLeft, cardTop, cardW, cardH) {
 
 let _pickFloatTimer = null;
 
+// Taille MINIMALE de la carte — la taille effective est mesurée sur le contenu.
+const PICK_CARD_MIN_W = 300, PICK_CARD_MIN_H = 240;
+
+// Mesure la carte (contenu déjà rempli), invisible et sans transition, puis restaure
+// ses styles. Largeur : le minimum, élargi SEULEMENT de ce dont la rangée de boutons
+// déborde quand on lui interdit le retour à la ligne — pas du « max-content » de toute
+// la carte, sinon la ligne de compteur (« 1/29 élèves interrogés · Cycle… ») l'élargirait
+// alors qu'elle peut très bien passer sur deux lignes. Hauteur : celle du contenu à cette
+// largeur (nom long, bandeau « cycle terminé »). Le tout borné au viewport (marge M).
+// box-sizing global = border-box → les tailles lues sont celles à poser en width/height.
+// ⚠️ +1 px sur chaque mesure : scrollWidth est arrondi à l'entier, et un débordement de
+// 0,4 px suffisait à renvoyer le dernier bouton à la ligne, sous le bord bas de la carte.
+function _pickMeasureCard(card) {
+  const M = 12;
+  const maxW = Math.max(PICK_CARD_MIN_W, window.innerWidth  - 2 * M);
+  const maxH = Math.max(PICK_CARD_MIN_H, window.innerHeight - 2 * M);
+  // Les DEUX conteneurs flex de la rangée : sans nowrap sur .pf-secondary aussi, il
+  // replierait ses propres boutons pour rétrécir, la rangée externe ne déborderait
+  // jamais et la mesure renverrait toujours le minimum.
+  const rows = [...card.querySelectorAll('.pf-actions, .pf-actions .pf-secondary')];
+  const act = rows[0] || null;
+  const wasOn = card.classList.contains('on');
+  const prev = {};
+  for (const k of ['transition','visibility','width','height','left','top','opacity','transform']) prev[k] = card.style[k];
+  const prevWrap = rows.map(el => [el.style.flexWrap, el.style.flexShrink]);
+  card.style.transition = 'none';
+  card.style.visibility = 'hidden';
+  card.style.left = '0px'; card.style.top = '0px';
+  card.style.opacity = '0'; card.style.transform = 'none';   // scale(.7) fausserait getBoundingClientRect
+  card.style.width = PICK_CARD_MIN_W + 'px'; card.style.height = 'auto';
+  card.classList.add('on');
+  let w = PICK_CARD_MIN_W;
+  if (act) {
+    rows.forEach(el => { el.style.flexWrap = 'nowrap'; el.style.flexShrink = '0'; });
+    const over = act.scrollWidth - act.clientWidth;
+    if (over > 0) w += over + 1;
+    rows.forEach((el, i) => { el.style.flexWrap = prevWrap[i][0]; el.style.flexShrink = prevWrap[i][1]; });
+  }
+  w = Math.min(w, maxW);
+  card.style.width = w + 'px';
+  const h = Math.max(PICK_CARD_MIN_H, Math.min(Math.ceil(card.getBoundingClientRect().height) + 1, maxH));
+  if (!wasOn) card.classList.remove('on');
+  for (const k in prev) card.style[k] = prev[k];
+  return { w, h };
+}
+
 // Affiche la carte flottante pour un élève donné, avec animation depuis sa cellule.
 function _pickShow(result) {
   const card = document.getElementById('pick-float');
@@ -25433,8 +25484,10 @@ function _pickShow(result) {
     : 'Cycle indéterminé (pas de créneau)';
   document.getElementById('pf-count').innerHTML = `${count}/${total} élève${total>1?'s':''} interrogé${count>1?'s':''} · ${sessTxt}`;
 
-  // Dimensions cibles de la carte
-  const cardW = 300, cardH = 240;
+  // Dimensions cibles de la carte : MESURÉES sur le contenu réel, 300×240 n'étant
+  // qu'un minimum. Une taille figée tronquait les boutons dès que la police rendait
+  // plus large (échelle Windows 125 %, zoom navigateur, .btn-sm agrandis en tactile).
+  const { w: cardW, h: cardH } = _pickMeasureCard(card);
 
   // Si pas de cellule (élève non placé — ne devrait pas arriver vu le filtre, mais fallback)
   if (!cellInfo) {
