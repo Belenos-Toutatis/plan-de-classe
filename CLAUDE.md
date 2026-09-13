@@ -1041,6 +1041,20 @@ cherche dans `S.attendance[cls.id]` un record dont `r.date === todayKey()` et `r
 
 Appelé à 3 endroits : `init()` (après `_loadAttTransient`), `autoReloadCheck()` (après reload sync), `switchClass()` (bascule vers une classe à appel actif non encore restauré).
 
+## 📣 Message à la classe (Plan Prof)
+
+Le pendant **collectif** des rappels par élève : ce que le prof doit dire à **toute la classe** en début de séance (rendre les copies, mot à faire signer, matériel à apporter). Demandé en usage réel : l'app est ouverte à chaque début de cours, c'est donc là que le pense-bête doit sauter aux yeux.
+
+- **Modèle** : `cls.classMessages = [{ id, text, ts }]`, sur la classe — donc emporté par sa suppression, par la fin d'année et par un rename de classe recomposée, **sans purge dédiée** (aucun sid ni classId dedans). Pas de migration : `_clsMessages(cls)` crée le tableau à la lecture. Un test le couvre.
+- **Bandeau `#class-msg-banner`** (statique dans `#tab-plan`, juste avant `.tp`), rendu par `_renderClassMsgBanner()` en tête de `renderTeacherGrid` — donc à chaque changement de classe, salle, undo. Fond `--highlighter` + liseré rouge `--margin-red` + halo pulsant (`cmsgPulse`, coupé au survol), texte en serif 1,18 em. Un ✓ Fait et un ✏️ par message, ➕ pour en ajouter. Masqué en consultation de snapshot.
+  - ⚠️ **Encre FIXE `#1a252f`** sur ce bandeau et sur les puces jaunes, comme `.crem-badge` : `--highlighter` est jaune dans les DEUX thèmes, `var(--ink-deep)` y poserait de l'ambre en mode nuit. Mesuré 6,84:1 en sombre, 10,99 en clair.
+  - ⚠️ Le bouton toolbar `#btn-class-msg.has-msg` porte des `!important` : la règle globale `.btn-g { background: var(--paper) !important }` (et sa jumelle sombre) battait le jaune sans eux.
+  - **Plan Prof seulement** : ni Vue Élève (projetée), ni impression (`@media print` le cache) — un message peut viser un élève nommément.
+- **Modale `mclassmsg`** (`openClassMsg(editId?)`, `renderClassMsgModal`) : liste + `<textarea>` (Entrée = valider, Maj+Entrée = retour à la ligne, 300 caractères). Le même formulaire sert à l'ajout et à la modification (`_cmsgEditId`, bouton « ✓ Modifier » + ✕ pour abandonner). Ajouter **ferme** la modale (un message = une action terminée, comme les commentaires d'éval). Dans `_MODAL_RERENDER`.
+- **✓ Fait supprime sans archiver** (`markClassMsgDone`) : c'est un pense-bête de séance, pas un fait à consigner — à la différence des rappels par élève, qui vont dans l'historique. Ctrl+Z le ramène ; la modale se ferme d'elle-même sur le dernier.
+- **Carte de classe** (onglet Classes) : puce jaune `📣 N message(s) à passer` avec les textes en infobulle — pour voir d'un coup d'œil quelles classes ont quelque chose en attente.
+- Démo : deux messages sur la 6A, un sur la 5B (annoncés dans `mwelcome`).
+
 ## Vue d'ensemble — tous les élèves toutes classes
 
 Bouton **📊 Vue d'ensemble** dans la toolbar de l'onglet Élèves → modal `moverview` :

@@ -2191,3 +2191,75 @@ test('délégués : _setDelegue mute, ignore les codes inconnus et est un no-op 
   assert.equal(get('globalThis._pushes'), 2);
   ev('pushUndo = function(){};');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+function stateWithDelegues() {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2', 's3', 's4'], activeRoom: 'r1', rooms: { r1: { seating: {} } }, profPrincipal: 42 } },
+    eleves: {
+      s1: { id: 's1', nom: 'ZOLA',   prenom: 'Al', classe_id: 'c1', delegue: 'T' },
+      s2: { id: 's2', nom: 'ARNAUD', prenom: 'Bo', classe_id: 'c1', delegue: 'T' },
+      s3: { id: 's3', nom: 'CROZ',   prenom: 'Cy', classe_id: 'c1', delegue: 'X' },                            // code inconnu (JSON forgé)
+      s4: { id: 's4', nom: 'DUC',    prenom: 'Di', classe_id: 'c1', delegue: 'S', departureDate: '2000-01-01' }, // parti·e
+    },
+    salles: { r1: { nom: 'S', rows: 2, cols: 2, positions_vides: [] } },
+    evaluations: {}, attendance: {}, snapshots: {}, movedHighlights: {},
+  });
+}
+
+test('délégués : postLoadHook assainit stu.delegue (T|S|null) et cls.profPrincipal (string|null)', () => {
+  stateWithDelegues();
+  ev('postLoadHook()');
+  assert.equal(get('S.eleves.s1.delegue'), 'T');
+  assert.equal(get('S.eleves.s3.delegue'), null, 'un code inconnu retombe sur null');
+  assert.equal(get('S.eleves.s4.delegue'), 'S');
+  assert.equal(get('S.classes.c1.profPrincipal'), null, 'un PP non-string retombe sur null');
+});
+
+test('délégués : helpers de rendu (classe CSS du nom, pastille, ligne de carte triée sans les partis)', () => {
+  stateWithDelegues();
+  ev('postLoadHook()');
+  assert.equal(ev("_delegueNameCls(S.eleves.s1)"), ' dlg-t');
+  assert.equal(ev("_delegueNameCls(S.eleves.s3)"), '');
+  assert.match(ev("_delegueBadge(S.eleves.s4)"), /dlg-badge dlg-s/);
+  assert.equal(ev("_delegueBadge(S.eleves.s3)"), '');
+  const line = ev('_classDeleguesLine(S.classes.c1)');
+  assert.match(line, /Délégué·es : <span class="dlg-t">Bo ARNAUD<\/span> · <span class="dlg-t">Al ZOLA<\/span>/, 'titulaires triés par nom');
+  assert.doesNotMatch(line, /Suppléant/, 'un·e suppléant·e parti·e n\'est plus listé·e');
+  assert.doesNotMatch(line, /CROZ/, 'code inconnu ignoré');
+});
+
+test('délégués : _setDelegue mute, ignore les codes inconnus et est un no-op si inchangé', () => {
+  stateWithDelegues();
+  ev('postLoadHook()');
+  ev('globalThis._pushes = 0; pushUndo = function(){ globalThis._pushes++; };');
+  ev("_setDelegue('s3', 'S')");
+  assert.equal(get('S.eleves.s3.delegue'), 'S');
+  ev("_setDelegue('s3', 'S')");                       // inchangé → pas d'entrée d'undo
+  ev("_setDelegue('s3', 'BIDON')");                   // code inconnu → retire le rôle
+  assert.equal(get('S.eleves.s3.delegue'), null);
+  assert.equal(get('globalThis._pushes'), 2);
+  ev('pushUndo = function(){};');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📣 Message à la classe — cls.classMessages (lecture défensive, ✓ Fait, purge
+// avec la classe). L'UI est neutralisée : on teste le modèle.
+// ─────────────────────────────────────────────────────────────────────────────
+test('classMessages : lecture défensive, ajout, ✓ Fait, disparaît avec la classe', () => {
+  setState({ classes: { c1: { id: 'c1', nom: 'X', eleves: [], rooms: {} } }, eleves: {}, salles: {}, cur: 'c1' });
+  ev(`_renderClassMsgBanner=function(){}; renderClassMsgModal=function(){};
+      closeMod2=function(){}; document.getElementById=function(){ return null; };`);
+  assert.deepEqual(get('_clsMessages(S.classes.c1)'), [], 'absent → tableau vide, jamais undefined');
+  assert.deepEqual(get('_clsMessages(null)'), []);
+  ev(`_clsMessages(S.classes.c1).push({ id: 'm1', text: 'Rendre les copies', ts: 1 },
+                                      { id: 'm2', text: 'Blouse jeudi', ts: 2 });`);
+  ev(`markClassMsgDone('m1')`);
+  assert.deepEqual(get('S.classes.c1.classMessages.map(m => m.id)'), ['m2']);
+  ev(`markClassMsgDone('inconnu')`); // id inexistant : no-op, ne lève pas
+  assert.equal(get('S.classes.c1.classMessages.length'), 1);
+  // Le message vit SUR la classe : supprimer la classe l'emporte, sans purge dédiée.
+  ev(`_purgeClassRefs('c1'); delete S.classes.c1;`);
+  assert.equal(get('JSON.stringify(S).includes("Blouse jeudi")'), false);
+});

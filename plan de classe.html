@@ -297,6 +297,27 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 }
 .cell.crem:hover{animation:none;outline-color:#c0392b;box-shadow:0 0 0 6px rgba(231,76,60,.3)}
 @media print{.crem-badge{animation:none;box-shadow:none}.cell.crem{animation:none;box-shadow:none;outline:3px solid #c0392b}}
+/* ── 📣 Message à la classe (Plan Prof) ─────────────────────────────────────
+   Bandeau surligneur au-dessus du plan : ce que le prof doit dire à la classe en
+   début de séance. Fond --highlighter (jaune dans les DEUX thèmes) → encre FIXE
+   sombre, comme .crem-badge : var(--ink-deep) tournerait à l'ambre en mode nuit
+   sur un fond qui, lui, reste jaune. Info privée au prof : jamais imprimée. */
+#class-msg-banner{display:none;background:var(--highlighter);border:2px solid #b8860b;border-left:10px solid var(--margin-red);color:#1a252f;border-radius:6px;padding:10px 14px;margin:0 0 10px;gap:8px 14px;align-items:flex-start;flex-wrap:wrap;box-shadow:var(--shadow-card);animation:cmsgPulse 2.4s ease-in-out infinite}
+#class-msg-banner.on{display:flex}
+#class-msg-banner:hover{animation:none}
+@keyframes cmsgPulse{0%,100%{box-shadow:0 0 0 0 rgba(176,61,46,.55)}50%{box-shadow:0 0 0 7px rgba(176,61,46,0)}}
+.cmsg-icon{font-size:1.8em;line-height:1;align-self:center}
+.cmsg-head{font-family:var(--font-mono);font-size:.72em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin-bottom:2px}
+.cmsg-list{flex:1;min-width:240px;display:flex;flex-direction:column;gap:6px}
+.cmsg-row{display:flex;align-items:flex-start;gap:8px}
+.cmsg-text{flex:1;font-size:1.18em;font-weight:600;line-height:1.35;white-space:pre-line;font-family:var(--font-serif)}
+.cmsg-date{font-family:var(--font-mono);font-size:.7em;font-weight:400;opacity:.7;white-space:nowrap;margin-left:6px}
+.cmsg-row .btn{white-space:nowrap}
+#class-msg-banner .btn-g{background:rgba(255,255,255,.55);color:#1a252f;border-color:rgba(0,0,0,.25)}
+#class-msg-banner .btn-g:hover{background:rgba(255,255,255,.85)}
+/* !important : la règle globale .btn-g { background: var(--paper) !important } (et sa jumelle sombre) bat sinon le jaune */
+#btn-class-msg.has-msg{background:var(--highlighter) !important;color:#1a252f !important;border-color:#b8860b !important;font-weight:700}
+@media print{#class-msg-banner{display:none !important}}
 .cell-unplace{position:absolute;top:2px;right:2px;background:none;border:none;color:var(--cell-meta);font-size:.9em;cursor:pointer;padding:0 2px;line-height:1;border-radius:3px;transition:background .12s,color .12s}
 .cell-unplace:hover{background:#e74c3c;color:#fff}
 .coub{font-size:.7em;color:#e74c3c;margin-top:1px}
@@ -2813,6 +2834,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Consulter les appels enregistrés">📅 Appels passés</button>
       <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : cliquez un élève pour ses places autorisées · glissez un élève sur un autre pour les séparer">🔒 Contraintes</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
+      <button class="btn btn-g btn-sm" id="btn-class-msg" onclick="openClassMsg()" title="Message à passer à toute la classe en début de séance — affiché en évidence au-dessus du plan tant qu'il n'est pas marqué fait">📣 Message</button>
       <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
       <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Refaire (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
       <button class="btn btn-g btn-sm" onclick="tgZoomOut()" title="Zoom − (touche −)">🔍−</button>
@@ -2841,6 +2863,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span class="tb-hint" style="margin-left:8px">Clic droit sur un élève (cellule du plan) → menu contextuel (déplacer, retirer, notes, rappels…). Glisser un élève depuis sa cellule jusqu'au panneau de droite (« Non placés ») → le retire de sa place et le remet en attente d'affectation.</span>
       <span id="tg-count" style="margin-left:auto;font-size:.85em;color:var(--pencil);white-space:nowrap"></span>
     </div>
+    <div id="class-msg-banner" role="status" aria-live="polite"></div>
     <div class="tp">
       <div class="tp-main">
         <div id="tg-zoom-wrap">
@@ -5562,6 +5585,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <li><strong>2 classes mobiles</strong> (CM1 et CM2) de 32 tablettes — une tablette est marquée HS dans CM2 pour la démo</li>
       <li>Tous les élèves sont <strong>placés</strong>, avec n° QCMcam configurés (pour le pool CM1)</li>
       <li>Quelques élèves marqués <strong>PPRE</strong> ou <strong>PPS</strong>, des <strong>compteurs d'oublis</strong>, des <strong>appels</strong> enregistrés</li>
+      <li>Des <strong>rappels</strong> 🔔 sur quelques élèves et, sur la 6e A et la 5e B, un <strong>📣 message à passer à la classe</strong> — affiché en jaune au-dessus du plan</li>
       <li><strong>41 évaluations</strong> : les <strong>4 types (A, B, C, D)</strong> dans chaque classe et à <strong>chaque semestre</strong>, avec bulletins et conseils de classe remplis</li>
       <li><strong>2 disciplines en parallèle</strong> sur la 6ᵉ A (Physique-chimie + Bilingue) — sélecteur de flux dans les onglets Devoirs / Bilans</li>
       <li>La <strong>3e A n'a aucune évaluation</strong> : c'est volontaire, pour vous montrer à quoi ressemble une classe qui démarre</li>
@@ -6497,6 +6521,30 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   </div>
 </div>
 
+<!-- ═══════════════ MODALE 📣 MESSAGE À LA CLASSE ═══════════════ -->
+<div id="mclassmsg" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:560px">
+    <h2>📣 Message à la classe — <span id="mcmsg-name"></span></h2>
+    <div style="font-size:.85em;color:var(--pencil);margin-bottom:10px">
+      Ce que tu dois dire à toute la classe en début de séance (rendre les copies, rappel de sortie, matériel à apporter…).
+      Le message s'affiche en évidence au-dessus du plan de cette classe jusqu'à ce que tu le marques <strong>✓ Fait</strong>.
+    </div>
+    <div id="mcmsg-list" style="margin-bottom:14px"></div>
+    <div style="border-top:1px solid var(--rule-line);padding-top:12px">
+      <div style="font-weight:600;margin-bottom:8px;font-size:.95em" id="mcmsg-form-title">+ Ajouter un message</div>
+      <div style="display:flex;gap:5px;align-items:flex-start">
+        <textarea id="mcmsg-text" data-autofocus rows="2" maxlength="300" placeholder="Ex. : Rendre les copies du DS · Sortie mardi : mot à faire signer…" style="flex:1;padding:7px;border:1px solid var(--rule-line);border-radius:4px;font-size:.95em;resize:vertical" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addClassMsgFromInput()}"></textarea>
+        <button class="btn btn-p" id="mcmsg-add-btn" onclick="addClassMsgFromInput()" style="padding:7px 14px">Ajouter</button>
+        <button class="btn btn-g" id="mcmsg-cancel-edit" onclick="_classMsgCancelEdit()" style="padding:7px 10px;display:none" title="Abandonner la modification">✕</button>
+      </div>
+      <div style="font-size:.78em;color:var(--pencil-soft);margin-top:4px">Entrée = valider · Maj+Entrée = retour à la ligne</div>
+    </div>
+    <div class="ma">
+      <button class="btn btn-g" onclick="closeMod2('mclassmsg')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════ MODALE CHOIX FORMAT IMPRESSION (débordement) ═══════════════ -->
 <div id="mPrintChoice" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:880px">
@@ -6626,11 +6674,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.52.0';
+const APP_VERSION    = '2.53.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-11T07:27:55Z';
+const APP_BUILD_DATE = '2026-09-13T11:10:15Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9257,6 +9305,7 @@ const _MODAL_RERENDER = {
   'mfiche':            () => renderFiche(),
   'mhist':             () => renderHist(),
   'mreminders':        () => renderRemindersModal(),
+  'mclassmsg':         () => renderClassMsgModal(),
   'mtags':             () => renderTagsModal(),
   'mtagbulk':          () => renderTagBulkModal(),
   'mlinks':            () => renderUserLinks(),
@@ -10158,6 +10207,157 @@ function deleteReminder(rid) {
 // des données démo/snapshots qui appelaient removeReminder via onclick).
 // Renvoie vers markReminderDone (comportement le plus prudent).
 function removeReminder(rid) { markReminderDone(rid); }
+
+// ═══════════════ 📣 MESSAGE À LA CLASSE ═══════════════
+// Ce que le prof doit DIRE À TOUTE LA CLASSE en début de séance — le pendant
+// collectif des rappels par élève. Stocké sur la classe : cls.classMessages =
+// [{ id, text, ts }]. Pas de migration : lecture défensive via _clsMessages.
+// Affiché en bandeau surligneur au-dessus du plan (Plan Prof uniquement — info
+// privée au prof, ni projetée en Vue Élève, ni imprimée). Un message part quand
+// il est marqué ✓ Fait (annulable par Ctrl+Z).
+function _clsMessages(cls) {
+  if (!cls) return [];
+  if (!Array.isArray(cls.classMessages)) cls.classMessages = [];
+  return cls.classMessages;
+}
+let _cmsgEditId = null; // id du message en cours de modification dans la modale (null = ajout)
+
+// Bandeau au-dessus du plan + état du bouton 📣 de la toolbar. Appelé en tête de
+// renderTeacherGrid (donc à chaque changement de classe, de salle, undo…).
+function _renderClassMsgBanner() {
+  const banner = document.getElementById('class-msg-banner');
+  const btn = document.getElementById('btn-class-msg');
+  const cls = getCls();
+  const list = cls ? _clsMessages(cls).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
+  if (btn) {
+    btn.classList.toggle('has-msg', list.length > 0);
+    btn.textContent = list.length ? `📣 Message (${list.length})` : '📣 Message';
+  }
+  if (!banner) return;
+  if (!list.length || _viewingSnapshot) { banner.classList.remove('on'); banner.innerHTML = ''; return; }
+  const rows = list.map(m => {
+    const date = m.ts ? new Date(m.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+    return `<div class="cmsg-row">
+      <div class="cmsg-text">${_escAttr(m.text)}${date ? `<span class="cmsg-date">· ${date}</span>` : ''}</div>
+      <button class="btn btn-s btn-sm" onclick="markClassMsgDone('${m.id}')" title="C'est dit — retire le message (Ctrl+Z pour le récupérer)">✓ Fait</button>
+      <button class="btn btn-g btn-sm" onclick="openClassMsg('${m.id}')" title="Modifier ce message">✏️</button>
+    </div>`;
+  }).join('');
+  banner.innerHTML = `
+    <span class="cmsg-icon" aria-hidden="true">📣</span>
+    <div class="cmsg-list">
+      <div class="cmsg-head">À dire à la classe</div>
+      ${rows}
+    </div>
+    <button class="btn btn-g btn-sm" onclick="openClassMsg()" title="Ajouter un autre message" style="align-self:center">➕</button>`;
+  banner.classList.add('on');
+}
+
+// Ouvre la modale ; avec un id → passe directement en modification de ce message.
+function openClassMsg(editId) {
+  const cls = getCls();
+  if (!cls) return toast('⚠️ Sélectionne d\'abord une classe.', 'warn');
+  document.getElementById('mcmsg-name').textContent = cls.nom;
+  _cmsgEditId = null;
+  document.getElementById('mcmsg-text').value = '';
+  renderClassMsgModal();
+  openMod('mclassmsg');
+  if (editId) _classMsgEdit(editId);
+}
+
+function renderClassMsgModal() {
+  const cls = getCls();
+  const listEl = document.getElementById('mcmsg-list');
+  if (!cls || !listEl) return;
+  const list = _clsMessages(cls).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  if (!list.length) {
+    listEl.innerHTML = _emptyStateHTML('📣', 'Aucun message en attente pour cette classe', 'Saisis-en un ci-dessous : il apparaîtra en jaune au-dessus du plan dès que tu afficheras cette classe.');
+  } else {
+    listEl.innerHTML =
+      `<div style="font-weight:600;margin-bottom:6px;font-size:.95em">Messages en attente (${list.length})</div>` +
+      list.map(m => {
+        const date = m.ts ? new Date(m.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+        const editing = m.id === _cmsgEditId;
+        return `
+          <div style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:var(--notice-bg);border-left:3px solid ${editing ? 'var(--margin-red)' : 'var(--notice-bd)'};border-radius:3px;margin-bottom:4px">
+            <div style="flex:1;font-size:.92em;white-space:pre-line">${_escAttr(m.text)}${date ? ` <span style="color:var(--pencil-soft);font-size:.85em;white-space:nowrap">· ajouté le ${date}</span>` : ''}</div>
+            <button class="btn btn-s" onclick="markClassMsgDone('${m.id}')" style="padding:4px 10px;font-size:.85em" title="C'est dit — retire le message (Ctrl+Z pour le récupérer)">✓ Fait</button>
+            <button class="btn btn-g" onclick="_classMsgEdit('${m.id}')" style="padding:4px 8px;font-size:.85em" title="Modifier">✏️</button>
+          </div>`;
+      }).join('');
+  }
+  // Formulaire : ajout ou modification
+  const title = document.getElementById('mcmsg-form-title');
+  const addBtn = document.getElementById('mcmsg-add-btn');
+  const cancelBtn = document.getElementById('mcmsg-cancel-edit');
+  if (title) title.textContent = _cmsgEditId ? '✏️ Modifier le message' : '+ Ajouter un message';
+  if (addBtn) addBtn.textContent = _cmsgEditId ? '✓ Modifier' : 'Ajouter';
+  if (cancelBtn) cancelBtn.style.display = _cmsgEditId ? '' : 'none';
+}
+
+function _classMsgEdit(id) {
+  const cls = getCls();
+  const m = cls && _clsMessages(cls).find(x => x.id === id);
+  if (!m) return;
+  _cmsgEditId = id;
+  const ta = document.getElementById('mcmsg-text');
+  ta.value = m.text || '';
+  renderClassMsgModal();
+  ta.focus();
+  setTimeout(() => { try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }, 0);
+}
+
+function _classMsgCancelEdit() {
+  _cmsgEditId = null;
+  document.getElementById('mcmsg-text').value = '';
+  renderClassMsgModal();
+}
+
+function addClassMsgFromInput() {
+  const cls = getCls();
+  if (!cls) return;
+  const ta = document.getElementById('mcmsg-text');
+  const text = (ta.value || '').trim();
+  if (!text) { ta.focus(); return; }
+  pushUndo();
+  const list = _clsMessages(cls);
+  const existing = _cmsgEditId ? list.find(x => x.id === _cmsgEditId) : null;
+  if (existing) {
+    existing.text = text;
+    toast('✏️ Message modifié');
+  } else {
+    list.push({ id: 'cmsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, ts: Date.now() });
+    toast(`📣 Message ajouté pour ${cls.nom}`);
+  }
+  _cmsgEditId = null;
+  ta.value = '';
+  save();
+  _renderClassMsgBanner();
+  if (typeof renderClasses === 'function' && document.getElementById('tab-classes')?.classList.contains('on')) renderClasses();
+  closeMod2('mclassmsg'); // un message = une action terminée, retour au plan
+}
+
+// « ✓ Fait » : le message a été passé, on le retire. Pas d'archive — c'est un
+// pense-bête de séance, pas un fait à consigner (contrairement aux rappels par
+// élève). Ctrl+Z le ramène.
+function markClassMsgDone(id) {
+  const cls = getCls();
+  if (!cls) return;
+  const list = _clsMessages(cls);
+  const idx = list.findIndex(x => x.id === id);
+  if (idx < 0) return;
+  pushUndo();
+  list.splice(idx, 1);
+  if (_cmsgEditId === id) _cmsgEditId = null;
+  save();
+  _renderClassMsgBanner();
+  if (typeof renderClasses === 'function' && document.getElementById('tab-classes')?.classList.contains('on')) renderClasses();
+  const modal = document.getElementById('mclassmsg');
+  if (modal && modal.classList.contains('on')) {
+    if (!list.length) closeMod2('mclassmsg'); else renderClassMsgModal();
+  }
+  toast(list.length ? `✓ Message passé — ${list.length} restant${list.length > 1 ? 's' : ''}` : '✓ Message passé — plus rien à dire à cette classe');
+}
 
 // ── Édition de la liste des motifs proposés (cf. mrempresets) ───────────
 // Couleur sélectionnée pour le prochain motif ajouté (état UI, non persisté)
@@ -14346,7 +14546,9 @@ function renderClasses() {
       : '';
     const agrLbl = (c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '')
                  + (c.tiersTemps > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves disposant d'un tiers-temps (temps majoré +⅓)">⏱ ${c.tiersTemps} tiers-temps</span>` : '');
-    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
+    const _nMsg = Array.isArray(cls.classMessages) ? cls.classMessages.length : 0;
+    const msgLbl = _nMsg > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(cls.classMessages.map(m => '• ' + m.text).join('\n'))}">📣 ${_nMsg} message${_nMsg > 1 ? 's' : ''} à passer</span>` : '';
+    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}${msgLbl}`;
     const _discIds = _clsDisciplineIds(cls);
     const _discLine = _discIds.length >= 2
       ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
@@ -17960,6 +18162,8 @@ function renderTeacherGrid() {
   // ou quand le mode est changé par programme via setPlanColorMode)
   const colorSel = document.getElementById('tg-color-mode');
   if (colorSel && colorSel.value !== _planColorMode) colorSel.value = _planColorMode;
+  // 📣 Message à la classe : bandeau au-dessus du plan + état du bouton toolbar
+  _renderClassMsgBanner();
 
   // Mode consultation snapshot (positions) : on rend depuis le snapshot
   if (_viewingSnapshot && _viewingSnapshot.type === 'positions') {
@@ -31175,6 +31379,10 @@ function createDemo(opts) {
     if (cls.eleves[9])  S.eleves[cls.eleves[9]].delegue  = 'T';
     if (cls.eleves[14]) S.eleves[cls.eleves[14]].delegue = 'S';
     if (cls.eleves[19]) S.eleves[cls.eleves[19]].delegue = 'S';
+    // 📣 Message à la classe — un exemple sur deux classes pour montrer le bandeau
+    const _mkMsg = (text) => ({ id: 'cmsg_demo_' + Math.random().toString(36).slice(2, 9), text, ts: Date.now() });
+    if (alloc.id === '6A') cls.classMessages = [_mkMsg('Rendre les copies du DS Énergie et corriger l\'exercice 2 au tableau'), _mkMsg('Sortie au planétarium mardi : mot à faire signer dans le carnet')];
+    if (alloc.id === '5B') cls.classMessages = [_mkMsg('Apporter une blouse pour la prochaine séance de TP')];
 
     // Historique d'incidents : pour 6e A et 4e A, ajoute quelques entrées datées
     // pour que la modale "🕓 Historique" affiche du contenu réel.
