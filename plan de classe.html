@@ -1349,6 +1349,22 @@ html[data-theme="dark"] .ipovf-gbadge.g1 { background: #1d3a5c !important; color
 html[data-theme="dark"] .ipovf-gbadge.g2 { background: #3a2f1a !important; color: var(--warn-fg) !important; }
 html[data-theme="dark"] .ipovf-gbadge.g3 { background: #2a2236 !important; color: #c9a8d4 !important; }
 
+/* ── Placer / échanger depuis l'onglet Élèves (modale #mseatpick, clic droit sur le n° de position) ── */
+.spk-cell { min-height: 62px; border-radius: 3px; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: .78em; position: relative; border: 2px solid var(--rule-line); background: var(--paper); color: var(--ink-deep); transition: transform .1s, box-shadow .1s; }
+.spk-cell .spk-num { position: absolute; top: 2px; left: 4px; font-size: .85em; color: var(--pencil); font-family: var(--font-mono); }
+.spk-cell .spk-name { margin-top: 8px; font-weight: 600; line-height: 1.1; }
+.spk-cell .spk-hint { position: absolute; top: 2px; right: 4px; font-size: .95em; font-weight: 700; color: var(--pencil-soft); }
+.spk-nt   { border: 1px solid var(--rule-line); background: var(--paper-deep); }
+.spk-aesh { border-style: dashed; background: var(--aesh-bg); border-color: var(--aesh-bd); color: var(--aesh-fg); opacity: .7; }
+.spk-free { cursor: pointer; border-style: dashed; color: var(--pencil-soft); }
+.spk-occ  { cursor: pointer; background: var(--paper-warm); }
+.spk-me   { border-color: var(--ink-blue); box-shadow: 0 0 0 3px var(--ink-blue) inset, 0 0 0 2px var(--paper); background: var(--info-bg); }
+.spk-me .spk-hint { color: var(--ink-blue); }
+.spk-free:hover, .spk-occ:hover { transform: scale(1.04); box-shadow: var(--shadow-pop); border-color: var(--ink-blue); z-index: 1; }
+.spk-free:hover .spk-hint, .spk-occ:hover .spk-hint { color: var(--ink-blue); }
+html[data-theme="dark"] .spk-me { background: var(--cell-occupied, var(--paper-warm)) !important; }
+@media (pointer: coarse) { .spk-cell { min-height: 72px; } }
+
 /* Paires d'élèves à séparer (.pair-row) */
 .pair-row { background: #fdedec; border: 1px solid #f5b7b1; color: var(--ink-deep); }
 html[data-theme="dark"] .pair-row { background: #3a1f1f !important; border-color: var(--margin-red) !important; color: var(--ink-deep) !important; }
@@ -6273,6 +6289,27 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <!-- ── MODAL "Plan de l'appel" : grille de la classe avec absents/retards d'un record (lecture seule) ── -->
+<!-- ── MODAL Placer / échanger un élève depuis l'onglet Élèves (clic droit sur le n° de position) ── -->
+<div id="mseatpick" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,1100px);width:auto">
+    <h2 id="mseatpick-title" style="margin-bottom:4px">📍 Place de l'élève</h2>
+    <p id="mseatpick-sub" style="font-size:.85em;color:var(--pencil);margin-bottom:8px"></p>
+    <div id="mseatpick-salle-row" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <strong style="font-size:.85em">📍 Salle :</strong>
+      <span id="mseatpick-salle-buttons" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
+    </div>
+    <div id="mseatpick-grid" style="border:1px solid var(--rule-line);border-radius:4px;padding:8px;background:var(--paper-warm);max-height:60vh;overflow:auto"></div>
+    <div style="text-align:center;background:var(--ink-blue);color:var(--paper);padding:3px 0;font-size:.85em;margin-top:4px">🖥 TABLEAU</div>
+    <p style="font-size:.8em;color:var(--pencil);margin-top:8px;line-height:1.4">
+      Clic sur une <strong>case vide</strong> = placer l'élève ici · clic sur un <strong>autre élève</strong> = échanger les places · la case bleue est sa place actuelle. Annulable par Ctrl+Z.
+    </p>
+    <div class="ma" style="justify-content:space-between">
+      <button class="btn btn-w btn-sm" id="mseatpick-unplace" onclick="_spkUnplace()" title="Retire l'élève du plan de cette salle (il repasse dans les non placés)">↩ Retirer de sa place</button>
+      <button class="btn btn-g" onclick="closeMod2('mseatpick')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <div id="mattPlan" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(95vw,1100px);width:100%">
     <h2 id="mattPlan-title" style="margin-bottom:4px">📋 Plan de l'appel</h2>
@@ -6674,11 +6711,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.53.0';
+const APP_VERSION    = '2.54.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-13T11:10:15Z';
+const APP_BUILD_DATE = '2026-09-18T16:22:06Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9303,6 +9340,7 @@ function _isTextEntryTarget(el) {
 // les re-rendre effacerait la saisie en cours. Tout nouveau panneau de consultation s'ajoute ici.
 const _MODAL_RERENDER = {
   'mfiche':            () => renderFiche(),
+  'mseatpick':         () => renderSeatPicker(),
   'mhist':             () => renderHist(),
   'mreminders':        () => renderRemindersModal(),
   'mclassmsg':         () => renderClassMsgModal(),
@@ -17600,6 +17638,9 @@ function renderStudents() {
               onkeydown="onPosKeyDown(event)" onblur="onPosBlur(event)"
               onpaste="onPosPaste(event)"
               onmousedown="event.stopPropagation()"
+              oncontextmenu="openSeatPicker(event,'${s.id}')"
+              ontouchstart="_spkTouchStart(event,'${s.id}')" ontouchend="_spkTouchEnd()" ontouchmove="_spkTouchEnd()" ontouchcancel="_spkTouchEnd()"
+              title="N° de place (QCMCam) — saisir un numéro, ou clic droit / appui long pour choisir sur le plan"
               style="width:54px;padding:3px 6px;border:1px solid #ccc;border-radius:3px;font-size:.95em;text-align:center">`
       : '<span style="color:var(--pencil-soft);font-size:.85em">—</span>';
     const stats = attStats[s.id] || { abs: 0, ret: 0 };
@@ -18125,6 +18166,132 @@ function onPosPaste(e) {
   if (errors.length) console.warn('Collage positions :\n' + errors.join('\n'));
   if (anyChange) _maybeShowViolationsModal(cls);
 }
+
+// ═══════════════════════════════════════════════════════════
+// PLACER / ÉCHANGER DEPUIS L'ONGLET ÉLÈVES — modale #mseatpick
+// ═══════════════════════════════════════════════════════════
+// Clic droit (ou appui long tactile) sur le n° de position d'un élève : un plan de la
+// salle s'ouvre, sa place actuelle en bleu ; clic sur une case vide = déplacer, clic sur
+// un autre élève = échanger. Si la classe a plusieurs salles, un sélecteur en tête —
+// choisir une salle en fait la salle ACTIVE de la classe (comme la barre 📍 Salle des
+// onglets), donc la colonne Position de la liste suit. Les mutations passent par
+// `applyEleveSeat` (mêmes règles que la saisie du numéro : tablettes qui suivent, swap).
+let _spkSid = null;
+let _spkTouchTimer = null;
+
+function openSeatPicker(e, sid) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const cls = getCls();
+  if (!cls || !S.eleves[sid]) return;
+  if (_viewingSnapshot) { toast('⚠️ Lecture seule en consultation de snapshot', 'warn'); return; }
+  if (!cls.activeRoom || !S.salles?.[cls.activeRoom]) { toast('⚠️ Aucune salle active pour cette classe', 'warn'); return; }
+  _spkSid = sid;
+  renderSeatPicker();
+  openMod('mseatpick');
+}
+
+// iPadOS n'émet jamais contextmenu au doigt : appui maintenu 550 ms → même modale.
+function _spkTouchStart(e, sid) {
+  _spkTouchEnd();
+  _spkTouchTimer = setTimeout(() => { _spkTouchTimer = null; openSeatPicker(null, sid); }, 550);
+}
+function _spkTouchEnd() {
+  if (_spkTouchTimer) { clearTimeout(_spkTouchTimer); _spkTouchTimer = null; }
+}
+
+function _spkSetRoom(salleId) {
+  const cls = getCls();
+  if (!cls || !cls.rooms?.[salleId]) return;
+  setActiveRoom(salleId);   // save + re-render de l'onglet Élèves (colonne Position)
+  renderSeatPicker();
+}
+
+function renderSeatPicker() {
+  const cls = getCls();
+  const stu = _spkSid ? S.eleves[_spkSid] : null;
+  const sid = _spkSid;
+  if (!cls || !stu) { closeMod2('mseatpick'); return; }
+  const salle = S.salles?.[cls.activeRoom];
+  const grid = document.getElementById('mseatpick-grid');
+  const title = document.getElementById('mseatpick-title');
+  const sub = document.getElementById('mseatpick-sub');
+  if (title) title.textContent = `📍 Place de ${stu.prenom} ${stu.nom}`;
+
+  // Sélecteur de salle, seulement si la classe en a plusieurs
+  const roomIds = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id]);
+  const row = document.getElementById('mseatpick-salle-row');
+  const btns = document.getElementById('mseatpick-salle-buttons');
+  if (row && btns) {
+    if (roomIds.length >= 2) {
+      row.style.display = 'flex';
+      btns.innerHTML = roomIds.map(id => {
+        const s = S.salles[id];
+        const active = id === cls.activeRoom;
+        const placedHere = Object.values(cls.rooms[id]?.seating || {}).includes(sid);
+        return `<button class="btn ${active ? 'btn-p' : 'btn-g'} btn-sm" onclick="_spkSetRoom('${_escAttr(id)}')"
+          title="${_escAttr(s.nom)}${active ? ' (salle active)' : ''}${placedHere ? ' — l’élève y a une place' : ' — non placé dans cette salle'}">${placedHere ? '📍 ' : ''}${_escAttr(s.nom)}</button>`;
+      }).join('');
+    } else { row.style.display = 'none'; btns.innerHTML = ''; }
+  }
+
+  if (!salle || !grid) { if (grid) grid.innerHTML = _emptyStateHTML('🏫', 'Aucune salle active', 'Rattache une salle à la classe depuis le Plan Prof.'); return; }
+  const rows = salle.rows || 4, cols = salle.cols || 10;
+  const posVides = new Set(salle.positions_vides || []);
+  const cur = getPos(sid, cls);
+  const unplaceBtn = document.getElementById('mseatpick-unplace');
+  if (unplaceBtn) unplaceBtn.style.display = cur ? '' : 'none';
+  if (sub) sub.textContent = cur
+    ? `${salle.nom} — actuellement place n° ${_qcmDisplayLabel(cls, cur.r, cur.c, cols)}. Choisis une nouvelle case pour la déplacer, ou un autre élève pour échanger.`
+    : `${salle.nom} — non placé·e dans cette salle. Choisis une case.`;
+
+  let html = '';
+  for (let r = rows - 1; r >= 0; r--) {
+    for (let c = cols - 1; c >= 0; c--) {
+      const key = `${r},${c}`;
+      if (posVides.has(key)) { html += '<div class="spk-cell spk-nt"></div>'; continue; }
+      const num = `<div class="spk-num">${_qcmDisplayLabel(cls, r, c, cols)}</div>`;
+      const aeshIdx = aeshAtKey(cls, key);
+      if (aeshIdx >= 0) {
+        const room = activeRoomData(cls);
+        html += `<div class="spk-cell spk-aesh" title="Place d’une AESH — non disponible">${num}<div class="spk-name">🧑‍🏫 ${aeshLabel(aeshIdx, aeshIndices(room).length)}</div></div>`;
+        continue;
+      }
+      const occ = cls.seating[key];
+      if (occ === sid) {
+        html += `<div class="spk-cell spk-me" title="Place actuelle de ${_escAttr(stu.prenom + ' ' + stu.nom)}">${num}<div class="spk-hint">◉</div><div class="spk-name">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div></div>`;
+        continue;
+      }
+      const other = occ ? S.eleves[occ] : null;
+      if (other) {
+        const tip = cur ? `↔ Échanger avec ${other.prenom} ${other.nom}` : `⚠ Prendre la place de ${other.prenom} ${other.nom} (qui devient non placé·e)`;
+        html += `<div class="spk-cell spk-occ" onclick="_spkPick('${key}')" title="${_escAttr(tip)}">${num}<div class="spk-hint">${cur ? '↔' : '⚠'}</div><div class="spk-name">${_escName(other.prenom)}<br>${_escName(other.nom)}</div></div>`;
+      } else {
+        html += `<div class="spk-cell spk-free" onclick="_spkPick('${key}')" title="Placer ${_escAttr(stu.prenom)} ici">${num}<div class="spk-hint">＋</div><div class="spk-name"><em>vide</em></div></div>`;
+      }
+    }
+  }
+  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(${cols}, minmax(72px, 1fr));gap:3px">${html}</div>`;
+}
+
+function _spkApply(newKey) {
+  const cls = getCls();
+  const sid = _spkSid;
+  if (!cls || !sid || !S.eleves[sid]) return;
+  pushUndo();
+  const beforeSeat = _snapSeating(cls);
+  const r = applyEleveSeat(cls, sid, newKey);
+  if (!r.changed) { undoStack.pop(); updateUndoRedoUI(); return; }
+  _recordMovesFromDiff(cls, beforeSeat);
+  save();
+  refreshPosInputs();
+  renderTeacherGrid();
+  renderSeatPicker();
+  if (r.msg) toast(r.msg);
+  else toast(newKey ? '📍 Élève placé·e' : '↩ Élève retiré·e de sa place');
+  _maybeShowViolationsModal(cls);
+}
+function _spkPick(key) { _spkApply(key); }
+function _spkUnplace() { _spkApply(null); }
 
 // Décrément des compteurs (avec garde 0)
 function decOubli(id) {
