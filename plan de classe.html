@@ -6711,11 +6711,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.54.0';
+const APP_VERSION    = '2.54.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-18T16:22:06Z';
+const APP_BUILD_DATE = '2026-09-20T20:15:28Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -41023,7 +41023,11 @@ function _evalPlanOverlayOpen() {
   // Pré-sélection : la date de la passation active du tableur (si dispo), sinon la + récente
   const activePassId = document.getElementById('meval-tableur').dataset.passId;
   const activePass = ev.passations.find(p => p.id === activePassId);
-  const presetDate = activePass?.date || dates[0];
+  // ⚠️ Date PER-CLASSE, comme les clés de groupsByDate : la date globale `pass.date`
+  // (= max des classes sur une éval multi-classes, ou vide) ne matchait aucune clé,
+  // et le plan s'ouvrait vide sans un mot.
+  let presetDate = activePass ? _passDateFor(activePass, cls.id) : dates[0];
+  if (!groupsByDate[presetDate]) presetDate = dates[0];
   document.getElementById('meval-plan-overlay').dataset.passDate = presetDate;
   // Peuple le sélecteur de date (regroupant les passations partageant cette date)
   const sel = document.getElementById('meval-plan-overlay-pass');
@@ -41061,7 +41065,11 @@ function _evalPlanOverlayRender() {
   const activeDate = document.getElementById('meval-plan-overlay').dataset.passDate;
   // Récupère toutes les passations de la date active POUR LA CLASSE active.
   const passesActive = (ev.passations || []).filter(p => _passDateFor(p, cls.id) === activeDate);
-  if (passesActive.length === 0) return;
+  const grid = document.getElementById('meval-plan-overlay-grid');
+  if (passesActive.length === 0) {
+    grid.innerHTML = _emptyStateHTML('🪑', 'Aucune passation à cette date', 'Choisis une autre date dans le sélecteur ci-dessus.');
+    return;
+  }
   // S'assure que chaque passation a son objet niveaux
   for (const p of passesActive) p.niveaux = p.niveaux || {};
   // Liste de paires (passation, cid) à afficher dans chaque cellule
@@ -41073,11 +41081,21 @@ function _evalPlanOverlayRender() {
   }
   const room = activeRoomData(cls);
   const salle = S.salles?.[cls.activeRoom];
-  if (!room || !salle) return;
+  if (!room || !salle) {
+    grid.innerHTML = _emptyStateHTML('🪑', 'Aucune salle active pour cette classe', 'Rattache une salle à la classe depuis l\'onglet Plan (Prof) avant de saisir sur le plan.');
+    return;
+  }
+  if (!Object.keys(cls.seating || {}).length) {
+    grid.innerHTML = _emptyStateHTML('🪑', `Aucun élève placé dans ${_esc(salle.nom || 'la salle active')}`, 'Place les élèves dans l\'onglet Plan (Prof), ou saisis dans le tableur.');
+    return;
+  }
+  if (pairs.length === 0) {
+    grid.innerHTML = _emptyStateHTML('🎯', 'Aucune compétence sur cette passation', 'Ajoute des compétences à la passation (🏗 Structure) pour pouvoir saisir les niveaux.');
+    return;
+  }
   const rows = salle.rows, cols = salle.cols;
   const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
   // Taille de cellule adaptative selon le total de compétences à afficher
-  const grid = document.getElementById('meval-plan-overlay-grid');
   const cellMinH = Math.max(120, 70 + pairs.length * 36);
   let html = `<div style="display:grid;grid-template-columns:repeat(${cols}, minmax(160px, 1fr));gap:6px;width:max-content;margin:0 auto">`;
   // Vue prof : r=rows-1 en haut, col 0 à droite
