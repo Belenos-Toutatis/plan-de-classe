@@ -6759,11 +6759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.56.2';
+const APP_VERSION    = '2.56.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-20T21:22:00Z';
+const APP_BUILD_DATE = '2026-09-20T21:25:13Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -42018,13 +42018,20 @@ function _evalTableurBUpdate(inputEl) {
 // exercice par exercice…).
 function _evalTableurAutoAdvance(inputEl, parsed, nb) {
   const raw = String(inputEl.value || '').trim();
+  if (!raw) return;                                   // cellule vidée : rien à valider
+  const up = raw.toUpperCase();
+  const ep = S.evalPrefs || {};
+  const eq = (c) => c != null && String(c).toUpperCase() === up;
   const isDigit = typeof parsed === 'number' && parsed >= 1 && parsed <= nb && /^[0-9]$/.test(raw);
+  // Libellé de niveau personnalisé écrit en entier (Réglages : « tape 1 ou ton libellé »)
+  const isLabel = typeof parsed === 'number' && parsed >= 1 && parsed <= nb && eq(ep.niveauLabels?.[parsed - 1]);
+  // Niveau 0 « non évalué » : son code (Réglages, défaut « 0 ») avance aussi — demandé.
+  const isZero  = parsed === 0 && (eq(ep.zeroLabel || '0') || up === '0');
   // ⚠️ Pas sur l'alias « N » de NN (_parseNiveauInputD) : on avancerait au premier N et
   // le second marquerait la cellule SUIVANTE. Seuls les codes écrits en entier avancent.
-  const up = raw.toUpperCase();
   const isCode  = typeof parsed === 'string'
-    && [ _codeA(), _codeNN(), 'A', 'NN', 'ABS' ].some(c => String(c).toUpperCase() === up);
-  if (!isDigit && !isCode) return;
+    && [ _codeA(), _codeNN(), 'A', 'NN', 'ABS' ].some(eq);
+  if (!isDigit && !isLabel && !isZero && !isCode) return;
   _evalTableurKey({ key: 'Enter', preventDefault() {} }, inputEl);
 }
 function _evalTableurRefreshFooterStatsB(ev, passId, cid) {
