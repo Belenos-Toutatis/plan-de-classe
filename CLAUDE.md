@@ -2207,6 +2207,10 @@ Sur une éval multi-classes, une classe peut ne pas avoir passé une mini-note, 
 - **Où ça se règle** : la modale du clic droit sur l'en-tête (`meval-mn-menu` / `meval-pass-menu`), bloc `.meval-skip-wrap` visible **seulement sur une éval multi-classes** (en mono-classe, une question non faite se supprime). La case agit tout de suite (`_tableurSubSkipToggle` : bascule, ferme la modale, re-rend, toast). Lecture seule ailleurs : pastille `.eval-skip-pill` « ⊘ 6B : 2 » dans la liste Devoirs et « ⊘ 2 non faites : Q2, Q3 » sur la ligne per-classe de ⚙ Réglages. La ligne d'aide « En-tête » du tableur le mentionne en multi-classes.
 - Tests : `run.test.js` (helpers et visite par `_forEachEvalPerClassMap` ; Type A — barème, `_studentHasAnyDataInEval`, absents, date auto, réactivation ; Type B — note, niveaux, compétences par classe, bascule et compte d'undo).
 
+### Tableur — filtre de groupe Tous / G1 / G2 / G3 (v2.56.0)
+
+Puces `#meval-tableur-gfilter` dans la barre du tableur (rendues par `_evalTableurRenderGroupChips` à chaque `_evalTableurRender`, cachées si la classe n'a aucun élève en groupe). Demandé pour les **passations par demi-groupe** : ne voir que les élèves présents. Le filtre agit dans `_evalTableurSortedSids` — donc sur les quatre tableurs, le collage, les stats du pied et le bilan compétences ouvert depuis le tableur (ils montrent ce qui est affiché) — et sur le plan de classe du Type B (élèves hors groupe estompés à leur place, `pointer-events:none`). Persisté dans `localStorage.planClasse_evalTableurGroup` comme le filtre du Plan Prof ; `_evalTableurGroup(cls)` retombe sur « Tous » si le groupe n'a personne dans la classe, et la puce d'un groupe vide est grisée (`_evalTableurSetGroup` l'ignore). ⚠️ Classe CSS **`.tgchip`**, pas `.gchip` : `setGroupFilter` éteint toutes les `.gchip` du document (même piège que `.amchip`). Test dans `run.test.js`.
+
 ### Modèle de dates 100 % per-classe
 
 Plus de date globale sur l'éval. Toutes les dates et créneaux passent par des maps per-classe :

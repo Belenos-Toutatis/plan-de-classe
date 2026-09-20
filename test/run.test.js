@@ -2346,3 +2346,29 @@ test('skippedClasses : Type B — passation sautée hors note et hors niveaux, c
   assert.equal(get(`_subSkippedFor(S.evaluations.e1.passations[1], 'c1')`), false);
   ev('pushUndo = function(){};');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filtre de groupe du tableur d'éval (Tous / G1 / G2 / G3) — passations par
+// demi-groupe. Un groupe vide dans la classe ramène sur « Tous ».
+// ─────────────────────────────────────────────────────────────────────────────
+test('tableur : filtre de groupe — comptes, repli sur Tous si le groupe est vide, filtrage des lignes', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1', 's2', 's3'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1', groupe: 1 },
+              s2: { id: 's2', nom: 'B', prenom: 'b', classe_id: 'c1', groupe: 2 },
+              s3: { id: 's3', nom: 'C', prenom: 'c', classe_id: 'c1', groupe: null } },
+    salles: {}, evalPrefs: {},
+    evaluations: { e1: { id: 'e1', type: 'A', classIds: ['c1'], noteMax: 20, miniNotes: [{ id: 'q1', max: 10 }], notes: {} } },
+  });
+  assert.deepEqual(get(`_evalTableurGroupCounts(S.classes.c1)`), { 1: 1, 2: 1, 3: 0 });
+  ev(`localStorage.setItem('planClasse_evalTableurGroup', '3')`);
+  assert.equal(get(`_evalTableurGroup(S.classes.c1)`), 0, 'G3 vide → Tous');
+  ev(`localStorage.setItem('planClasse_evalTableurGroup', '2')`);
+  assert.equal(get(`_evalTableurGroup(S.classes.c1)`), 2);
+  // _evalTableurSortedSids lit l'éval et le tri dans le DOM stubé : on les fournit
+  ev(`document.getElementById = (id) => id === 'meval-tableur-evalid' ? { value: 'e1' } : { value: 'nom-prenom' };`);
+  assert.deepEqual(get(`_evalTableurSortedSids(S.classes.c1)`), ['s2']);
+  ev(`localStorage.setItem('planClasse_evalTableurGroup', '0')`);
+  assert.deepEqual(get(`_evalTableurSortedSids(S.classes.c1)`), ['s1', 's2', 's3']);
+});
