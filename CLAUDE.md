@@ -2134,6 +2134,10 @@ Il se déduisait du **TEXTE** du commentaire (`_parseCommentsAdjustment` : `-1 p
 
 💡 Les codes de la ligne **Codes :** du mode d'emploi (`#meval-tableur-help-a` / `-nn`) sont posés par **`_evalTableurUpdateHelpForType`, à chaque rendu** — et non à la seule ouverture du tableur, sinon un aller-retour par les Réglages laissait l'ancien code affiché.
 
+### Tableurs B et D — un chiffre tapé = cellule suivante (v2.56.1)
+
+`_evalTableurAutoAdvance(inputEl, parsed, nb)`, appelé en fin de `_evalTableurBUpdate` et `_evalTableurDUpdate` : un niveau est un chiffre, la saisie est complète dès qu'il est tapé, on passe à la cellule suivante sans Entrée (demandé en usage réel). Conditions : la valeur brute est **un seul chiffre 1..nb**, ou un code Absent **d'un caractère** égal à `_codeA()`. « 0 » (effacer), un code de plusieurs lettres (`ABS`, `NN`) ou un libellé de niveau personnalisé se tapent encore. Le déplacement est celui d'**Entrée** (`_evalTableurKey` avec `key:'Enter'`), donc il suit le réglage « ↩ » — question par question, exercice par exercice. Pas en A/C : une note peut avoir plusieurs chiffres.
+
 ### Tableur — comportement de la touche Entrée (`#meval-tableur-enter`)
 
 Trois modes (`ENTER_BEHAVIORS`), gérés dans `_evalTableurKey`. `Tab` et les flèches ne changent jamais. Une **colonne** est une question en A/C, un couple (passation × compétence) en B, (question × compétence) en D.
