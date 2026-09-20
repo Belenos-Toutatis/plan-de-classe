@@ -2136,7 +2136,7 @@ Il se déduisait du **TEXTE** du commentaire (`_parseCommentsAdjustment` : `-1 p
 
 ### Tableurs B et D — un chiffre tapé = cellule suivante (v2.56.1)
 
-`_evalTableurAutoAdvance(inputEl, parsed, nb)`, appelé en fin de `_evalTableurBUpdate` et `_evalTableurDUpdate` : un niveau est un chiffre, la saisie est complète dès qu'il est tapé, on passe à la cellule suivante sans Entrée (demandé en usage réel). Conditions : la valeur brute est **un seul chiffre 1..nb**, ou un code Absent **d'un caractère** égal à `_codeA()`. « 0 » (effacer), un code de plusieurs lettres (`ABS`, `NN`) ou un libellé de niveau personnalisé se tapent encore. Le déplacement est celui d'**Entrée** (`_evalTableurKey` avec `key:'Enter'`), donc il suit le réglage « ↩ » — question par question, exercice par exercice. Pas en A/C : une note peut avoir plusieurs chiffres.
+`_evalTableurAutoAdvance(inputEl, parsed, nb)`, appelé en fin de `_evalTableurBUpdate` et `_evalTableurDUpdate` : un niveau est un chiffre, la saisie est complète dès qu'il est tapé, on passe à la cellule suivante sans Entrée (demandé en usage réel). Conditions : la valeur brute est **un seul chiffre 1..nb**, ou un **code complet** (`A`, `NN` ou leurs versions personnalisées — les parseurs ne renvoient une chaîne que sur correspondance exacte, donc « N » seul n'avance pas). « 0 » (effacer) et un libellé de niveau personnalisé se valident encore. Le déplacement est celui d'**Entrée** (`_evalTableurKey` avec `key:'Enter'`), donc il suit le réglage « ↩ » — question par question, exercice par exercice. Pas en A/C : une note peut avoir plusieurs chiffres.
 
 ### Tableur — comportement de la touche Entrée (`#meval-tableur-enter`)
 
