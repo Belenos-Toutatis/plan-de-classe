@@ -2263,3 +2263,86 @@ test('classMessages : lecture défensive, ajout, ✓ Fait, disparaît avec la cl
   ev(`_purgeClassRefs('c1'); delete S.classes.c1;`);
   assert.equal(get('JSON.stringify(S).includes("Blouse jeudi")'), false);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⊘ « Non faite par cette classe » — mini-note (A/C) ou passation (B) sautée pour
+// UNE classe d'une éval multi-classes (sub.skippedClasses[classId]). Hors note,
+// hors niveaux, hors pré-remplissage des absents, hors date auto ; les autres
+// classes ne bougent pas.
+// ─────────────────────────────────────────────────────────────────────────────
+test('skippedClasses : helpers, purge par _forEachEvalPerClassMap, résumé', () => {
+  app.__sub = { id: 'm1' };
+  ev(`_subSetSkipped(globalThis.__sub, 'c1', true)`);
+  assert.equal(ev(`_subSkippedFor(globalThis.__sub, 'c1')`), true);
+  assert.equal(ev(`_subSkippedFor(globalThis.__sub, 'c2')`), false);
+  assert.equal(ev(`_subSkippedFor(globalThis.__sub, null)`), false, 'sans classe → jamais sautée');
+  ev(`_subSetSkipped(globalThis.__sub, 'c1', false)`);
+  assert.equal(ev(`'skippedClasses' in globalThis.__sub`), false, 'map vide → supprimée');
+  // La map est visitée par _forEachEvalPerClassMap (purge et renommage de classe en héritent)
+  const seen = get(`(function(){ const seen=[]; _forEachEvalPerClassMap(
+      { miniNotes: [{ skippedClasses: { c1: true } }], passations: [{ skippedClasses: { c1: true } }] },
+      m => seen.push(Object.keys(m))); return seen; })()`);
+  assert.deepEqual(seen, [['c1'], ['c1']]);
+});
+
+test('skippedClasses : Type A — la question sautée sort du barème de SA classe seulement', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1'], rooms: {} }, c2: { id: 'c2', nom: 'B', eleves: ['s2'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'X', prenom: 'x', classe_id: 'c1' }, s2: { id: 's2', nom: 'Y', prenom: 'y', classe_id: 'c2' } },
+    salles: {}, evalPrefs: {},
+    evaluations: { e1: { id: 'e1', type: 'A', nomCourt: 'E', classIds: ['c1', 'c2'], noteMax: 20,
+      miniNotes: [{ id: 'q1', label: 'Q1', max: 10 }, { id: 'q2', label: 'Q2', max: 10 }],
+      notes: { s1: { values: { q1: 10, q2: 0 } }, s2: { values: { q1: 10, q2: 0 } } } } },
+  });
+  assert.equal(get(`_computeStudentEvalNote(S.evaluations.e1, 's1')`), 10);
+  ev(`_subSetSkipped(S.evaluations.e1.miniNotes[1], 'c1', true)`);
+  assert.equal(get(`_computeStudentEvalNote(S.evaluations.e1, 's1')`), 20, 'c1 : noté sur Q1 seule, ramené /20');
+  assert.equal(get(`_computeStudentEvalNote(S.evaluations.e1, 's2')`), 10, 'c2 : inchangé');
+  assert.equal(get(`_studentHasAnyDataInEval(S.evaluations.e1, 's1')`), true);
+  assert.deepEqual(get(`_evalSkippedSummary(S.evaluations.e1)`), { c1: 1 });
+  // Une valeur restée dans une colonne sautée ne compte plus comme « donnée »
+  ev(`S.evaluations.e1.notes.s1.values = { q2: 5 }`);
+  assert.equal(get(`_studentHasAnyDataInEval(S.evaluations.e1, 's1')`), false);
+  assert.equal(get(`_computeStudentEvalNote(S.evaluations.e1, 's1')`), null);
+  // Pré-remplissage des absents : la question sautée ne reçoit jamais de « A »
+  ev(`S.attendance = { c1: { r1: { id: 'r1', date: '2026-01-10', slotId: 'M1', absents: ['s1'], retards: {} } } };
+      S.evaluations.e1.miniNotes[1].dates = { c1: '2026-01-10' }; S.evaluations.e1.miniNotes[1].slotIds = { c1: 'M1' };`);
+  assert.equal(get(`_evalAutoFillAbsentsForMn(S.evaluations.e1, S.evaluations.e1.miniNotes[1], 'c1')`), 0);
+  // Date auto : la question sautée ne porte pas la date de la classe
+  ev(`S.evaluations.e1.miniNotes[0].dates = { c1: '2026-01-05' }; S.evaluations.e1.dates = {}; _evalAutoUpdateDate(S.evaluations.e1)`);
+  assert.equal(get(`S.evaluations.e1.dates.c1`), '2026-01-05');
+  ev(`_subSetSkipped(S.evaluations.e1.miniNotes[1], 'c1', false); _evalAutoUpdateDate(S.evaluations.e1)`);
+  assert.equal(get(`S.evaluations.e1.dates.c1`), '2026-01-10', 'réactivée : la date la plus récente reprend');
+});
+
+test('skippedClasses : Type B — passation sautée hors note et hors niveaux, compétences listées par classe', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1'], rooms: {} }, c2: { id: 'c2', nom: 'B', eleves: ['s2'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'X', prenom: 'x', classe_id: 'c1' }, s2: { id: 's2', nom: 'Y', prenom: 'y', classe_id: 'c2' } },
+    salles: {}, competences: { k1: { id: 'k1', code: 'K1' }, k2: { id: 'k2', code: 'K2' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic' },
+    evaluations: { e1: { id: 'e1', type: 'B', nomCourt: 'E', classIds: ['c1', 'c2'], noteMax: 20, weighting: 'equal',
+      passations: [
+        { id: 'p1', code: 'P1', date: '2026-01-05', competenceIds: ['k1'], niveaux: { s1: { k1: 4 }, s2: { k1: 4 } } },
+        { id: 'p2', code: 'P2', date: '2026-01-12', competenceIds: ['k2'], niveaux: { s1: { k2: 1 }, s2: { k2: 1 } } },
+      ] } },
+  });
+  assert.equal(get(`_computeStudentEvalNoteB(S.evaluations.e1, 's1')`), 12.5, '(20+5)/2');
+  ev(`_subSetSkipped(S.evaluations.e1.passations[1], 'c1', true)`);
+  assert.equal(get(`_computeStudentEvalNoteB(S.evaluations.e1, 's1')`), 20, 'c1 : P2 hors calcul');
+  assert.equal(get(`_computeStudentEvalNoteB(S.evaluations.e1, 's2')`), 12.5, 'c2 : inchangé');
+  assert.equal(get(`_evalCompetenceLevel(S.evaluations.e1, 's1', 'k2')`), null, 'niveau K2 non évalué pour c1');
+  assert.equal(get(`_evalCompetenceLevel(S.evaluations.e1, 's2', 'k2')`), 1);
+  assert.deepEqual(get(`_evalListEvaluatedCompetences(S.evaluations.e1, 'code', 'c1').map(c => c.code)`), ['K1']);
+  assert.deepEqual(get(`_evalListEvaluatedCompetences(S.evaluations.e1, 'code').map(c => c.code)`), ['K1', 'K2'], 'sans classe : tout');
+  assert.equal(get(`_studentNoteAbsenceReason(S.evaluations.e1, 's1')`), null);
+  // Bascule depuis l'UI : une entrée d'undo, no-op si inchangé
+  ev('globalThis._pushes = 0; pushUndo = function(){ globalThis._pushes++; }; save = function(){};');
+  ev(`_evalToggleSubSkipped('e1', 'p2', 'c1', true)`);   // déjà sautée → rien
+  ev(`_evalToggleSubSkipped('e1', 'p2', 'c1', false)`);
+  assert.equal(get('globalThis._pushes'), 1);
+  assert.equal(get(`_subSkippedFor(S.evaluations.e1.passations[1], 'c1')`), false);
+  ev('pushUndo = function(){};');
+});

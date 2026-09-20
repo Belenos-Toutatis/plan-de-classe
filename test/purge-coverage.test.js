@@ -106,7 +106,8 @@ function stateMaximal() {
         miniNotes: [{ id: 'mn1', label: 'Q1', max: 5,
                       dates: { [CLS]: '2026-01-10' }, slotIds: { [CLS]: 'M1' },
                       datesByGroup: { [CLS]: { 1: '2026-01-10' } },
-                      slotIdsByGroup: { [CLS]: { 1: 'M1' } } }],
+                      slotIdsByGroup: { [CLS]: { 1: 'M1' } },
+                      skippedClasses: { [CLS]: true } }],
         notes: { [SID]: { values: { mn1: 4 } }, sTemoin: { values: { mn1: 3 } } },
         studentRemarks: { [SID]: 'remarque victime' },
         // maps per-classe de niveau PASSATION
@@ -114,6 +115,7 @@ function stateMaximal() {
                        dates: { [CLS]: '2026-01-12' }, slotIds: { [CLS]: 'S1' },
                        datesByGroup: { [CLS]: { 1: '2026-01-12' } },
                        slotIdsByGroup: { [CLS]: { 1: 'S1' } },
+                       skippedClasses: { [CLS]: true },
                        niveaux: { [SID]: { comp1: 3 }, sTemoin: { comp1: 2 } } }],
       },
     },

@@ -1420,6 +1420,24 @@ html[data-theme="dark"] .pass-code-chip { background: #3b5a8c !important; color:
 html[data-theme="dark"] .meval-comp-chip { background: var(--paper-deep) !important; color: #9fc8d8 !important; border-color: var(--rule-line) !important; }
 html[data-theme="dark"] .meval-comp-chip:hover { background: #1c2e4a !important; border-color: #3b5a8c !important; }
 
+/* Tableur d'éval — colonne REPLIÉE : question (A/C) ou passation (B) « non faite par
+   cette classe » (sub.skippedClasses[classId]). Étroite, hachurée, sans saisie ; le
+   code est écrit à la verticale pour rester lisible dans 22 px. Tokens uniquement :
+   les hachures suivent le thème via --rule-line sur --paper-warm. */
+.meval-head-skip, .meval-cell-skip {
+  width: 22px; min-width: 22px; max-width: 22px; padding: 0 !important;
+  background: repeating-linear-gradient(135deg, var(--paper-warm) 0 4px, var(--rule-line) 4px 6px) !important;
+  border-bottom: 1px solid var(--rule-line-soft);
+  text-align: center; vertical-align: middle;
+}
+.meval-head-skip { border-bottom: 2px solid var(--rule-line); cursor: context-menu; }
+.meval-head-skip .meval-skip-mark { display: block; color: var(--danger-fg); font-weight: 700; font-size: 1em; line-height: 1.3; background: var(--paper-warm); border-radius: 50%; margin: 3px auto 2px; width: 18px; }
+.meval-head-skip .meval-skip-lbl { display: block; writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--font-mono); font-weight: 600; font-size: .78em; color: var(--ink-blue); margin: 2px auto 4px; background: var(--paper-warm); padding: 3px 1px; border-radius: 3px; }
+
+.meval-skip-wrap { margin-bottom: 12px; padding: 10px; background: var(--paper-warm); border-radius: 4px; border-left: 3px solid var(--danger-fg); }
+/* Pastille « ⊘ 6B : 1 » dans la liste Devoirs / Réglages */
+.eval-skip-pill { display: inline-block; font-family: var(--font-mono); font-size: .78em; padding: 1px 6px; border-radius: 9px; border: 1px dashed var(--danger-fg); color: var(--danger-fg); background: var(--paper); margin-left: 4px; white-space: nowrap; }
+
 /* Cellule du tableur d'éval focus — bordure intérieure sans changer le fond.
    La couleur de texte reste calculée par _contrastTextColor (set inline JS) pour
    rester lisible sur le fond signifiant de la case (rouge/orange/vert/bleu/gris). */
@@ -5278,6 +5296,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </label>
       <div id="meval-mn-menu-pergroup-rows" style="display:none;flex-direction:column;gap:6px;font-size:.9em"></div>
     </div>
+    <div id="meval-mn-menu-skip-wrap" class="meval-skip-wrap" style="display:none">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.92em">
+        <input type="checkbox" id="meval-mn-menu-skip" onchange="_tableurSubSkipToggle('mn', this.checked)">
+        <span><strong>⊘ Non faite par <span id="meval-mn-menu-skip-cls"></span></strong><br><span style="color:var(--pencil);font-size:.88em" id="meval-mn-menu-skip-hint"></span></span>
+      </label>
+    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
       <span style="font-size:.82em;color:var(--pencil);font-style:italic">💡 Insertion à un endroit précis : utilise <strong>🏗 Structure</strong> avec drag&drop</span>
       <button class="btn btn-g btn-sm" id="meval-mn-menu-pickcomp-btn" onclick="_tableurMnPickCompetences()" title="Affecter des compétences à cette question (et optionnellement à d'autres en un clic)" style="display:none">🎯 Compétences…</button>
@@ -5469,6 +5493,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div id="meval-pass-menu-pergroup-rows" style="display:none;flex-direction:column;gap:6px;font-size:.9em"></div>
     </div>
 
+    <div id="meval-pass-menu-skip-wrap" class="meval-skip-wrap" style="display:none">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.92em">
+        <input type="checkbox" id="meval-pass-menu-skip" onchange="_tableurSubSkipToggle('pass', this.checked)">
+        <span><strong>⊘ Non faite par <span id="meval-pass-menu-skip-cls"></span></strong><br><span style="color:var(--pencil);font-size:.88em" id="meval-pass-menu-skip-hint"></span></span>
+      </label>
+    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--paper-warm);border-radius:4px">
       <button class="btn btn-g btn-sm" onclick="_tableurPassEdit()" title="Modifier code / nom / date / créneau / compétences">✏ Éditer en détail</button>
       <button class="btn btn-r btn-sm" onclick="_tableurPassDelete()" title="Supprimer cette passation (et ses niveaux saisis)" style="margin-left:auto">🗑 Supprimer</button>
@@ -6711,11 +6741,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.54.1';
+const APP_VERSION    = '2.55.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-20T20:15:28Z';
+const APP_BUILD_DATE = '2026-09-20T20:43:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14276,7 +14306,7 @@ function _forEachEvalPerClassMap(ev, fn) {
   ];
   for (const sub of subs) {
     if (!sub || typeof sub !== 'object') continue;
-    for (const k of ['dates', 'slotIds', 'datesByGroup', 'slotIdsByGroup']) {
+    for (const k of ['dates', 'slotIds', 'datesByGroup', 'slotIdsByGroup', 'skippedClasses']) {
       if (sub[k] && typeof sub[k] === 'object') fn(sub[k]);
     }
   }
@@ -16647,12 +16677,16 @@ function renderHistNotes(stu) {
 let _renduState = { evalId: null, classId: null, checked: new Set() };
 
 // Enumère les colonnes disponibles pour une éval donnée. Renvoie [{ key, label, kind, ... }]
-function _renduListCols(ev) {
+// classId (optionnel, défaut : la classe projetée) : les passations / questions « non
+// faites par cette classe » ne donnent pas de colonne.
+function _renduListCols(ev, classId) {
   const cols = [];
   if (!ev) return cols;
+  const _skc = classId || _renduState?.classId || null;
   if (ev.type === 'B') {
     const sortedPass = (ev.passations || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     for (const p of sortedPass) {
+      if (_subSkippedFor(p, _skc)) continue;
       for (const cid of (p.competenceIds || [])) {
         const c = S.competences?.[cid];
         cols.push({ key: `pass:${p.id}:${cid}`, label: `${p.code || '?'} · ${c?.code || cid}`, kind: 'pass-comp', passId: p.id, cid });
@@ -16676,6 +16710,7 @@ function _renduListCols(ev) {
   } else {
     // Type A / C : mini-notes
     for (const mn of (ev.miniNotes || [])) {
+      if (_subSkippedFor(mn, _skc)) continue;
       cols.push({ key: `mn:${mn.id}`, label: mn.label || '?', kind: 'mn', mnId: mn.id, max: mn.max });
     }
     // Type C : Σ exercice
@@ -16691,7 +16726,7 @@ function _renduListCols(ev) {
   if (nMax !== 20) cols.push({ key: 'noteMax', label: `Note /${nMax}`, kind: 'note-max' });
   cols.push({ key: 'note20',  label: 'Note /20', kind: 'note-20' });
   // Compétences évaluées (toutes types)
-  const evalComps = _evalListEvaluatedCompetences(ev, 'code');
+  const evalComps = _evalListEvaluatedCompetences(ev, 'code', _skc);
   for (const c of evalComps) {
     cols.push({ key: `comp:${c.id}`, label: `🧩 ${c.code}`, kind: 'comp', cid: c.id, name: c.name });
   }
@@ -25130,6 +25165,8 @@ function _stuHasAnyNoteInPeriod(sid, classId, periode) {
 // doivent apparaître dans son bilan, même si ses nouveaux camarades ne sont pas concernés.
 function _studentHasAnyDataInEval(ev, sid) {
   if (!ev || !sid) return false;
+  const _skc = _evalStuClassId(ev, sid);
+  const _skipMn = (mnId) => _subSkippedFor((ev.miniNotes || []).find(m => m.id === mnId), _skc);
   if (ev.type === 'A' || ev.type === 'C') {
     const n = ev.notes?.[sid];
     if (!n) return false;
@@ -25138,6 +25175,7 @@ function _studentHasAnyDataInEval(ev, sid) {
       for (const k in vals) {
         const v = vals[k];
         if (v == null || v === '') continue;
+        if (_skipMn(k)) continue;
         if (v === 'A' || v === 'NN') return true;
         const num = parseFloat(v);
         if (Number.isFinite(num)) return true;
@@ -25145,6 +25183,7 @@ function _studentHasAnyDataInEval(ev, sid) {
     }
   } else if (ev.type === 'B') {
     for (const pass of (ev.passations || [])) {
+      if (_subSkippedFor(pass, _skc)) continue;
       const nv = pass.niveaux?.[sid];
       if (!nv || typeof nv !== 'object') continue;
       for (const k in nv) {
@@ -30469,7 +30508,7 @@ const _NotesExport = (function () {
       for (const ev of Object.values(S.evaluations || {})) {
         if (!_evalIncludesClass(ev, cls.id)) continue;
         if (ev.type === 'B') {
-          for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+          for (const p of (ev.passations || [])) { if (_subSkippedFor(p, cls.id)) continue; for (const cid of (p.competenceIds || [])) compIds.add(cid); }
         } else if (ev.type === 'D') {
           for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) compIds.add(cid);
         }
@@ -30612,7 +30651,7 @@ const _NotesExport = (function () {
     const compIds = new Set();
     for (const ev of evs) {
       if (ev.type === 'B') {
-        for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+        for (const p of (ev.passations || [])) { if (_subSkippedFor(p, cls.id)) continue; for (const cid of (p.competenceIds || [])) compIds.add(cid); }
       } else if (ev.type === 'D') {
         for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) compIds.add(cid);
       }
@@ -30695,8 +30734,8 @@ const _NotesExport = (function () {
     rows.push([]);
 
     if (ev.type === 'A' || ev.type === 'C') {
-      // Header questions
-      const mns = ev.miniNotes || [];
+      // Header questions — sans celles « non faites par cette classe »
+      const mns = (ev.miniNotes || []).filter(mn => !_subSkippedFor(mn, cls.id));
       // Bloc Σ « Totaux exercices » (Type C) — colonnes de somme brute par exercice,
       // dans l'ordre personnalisé affiché à l'écran (ev.exoTotalsOrder). Vide pour Type A.
       const isCExo = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
@@ -30705,7 +30744,7 @@ const _NotesExport = (function () {
             const realId = key === '__orphans__' ? null : key;
             const exo = realId ? (ev.exercices || []).find(e => e.id === realId) : null;
             const label = exo ? (exo.label || exo.id) : 'Sans exercice';
-            const max = (ev.miniNotes || []).reduce((s, mn) => s + (mn.exerciceId === realId ? (mn.max || 0) : 0), 0);
+            const max = mns.reduce((s, mn) => s + (mn.exerciceId === realId ? (mn.max || 0) : 0), 0);
             return { realId, label, max };
           })
         : [];
@@ -30788,7 +30827,7 @@ const _NotesExport = (function () {
 
     // Type B
     if (ev.type === 'B') {
-      const passations = ev.passations || [];
+      const passations = (ev.passations || []).filter(p => !_subSkippedFor(p, cls.id));
       // Collecte toutes les paires (passation, compétence)
       const cols = [];
       for (const p of passations) {
@@ -35434,9 +35473,11 @@ function _computeStudentEvalNoteRaw(evalObj, sid) {
   const comments = evalObj.notes?.[sid]?.comments || {};
   const excluded = evalObj.notes?.[sid]?.excluded || [];
   const excSet = new Set(excluded);
+  const _skc = _evalStuClassId(evalObj, sid);
   let sumVal = 0, sumMax = 0, hasAny = false;
   for (const mn of evalObj.miniNotes || []) {
     if (excSet.has(mn.id)) continue;  // Question retirée pour cet élève (aménagement)
+    if (_subSkippedFor(mn, _skc)) continue;  // Question non faite par sa classe
     const v = notes[mn.id];
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
@@ -35931,6 +35972,7 @@ function renderEvalNotes() {
           <span>📅 ${(() => { const d = _evalDateFor(ev, cls.id); return d ? _fmtDateFr(d) : '—'; })()}${_evalSlotIdFor(ev, cls.id) ? ' · ' + _esc(_evalSlotIdFor(ev, cls.id)) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
           · ${summaryInfo}
           · <strong>${nbStudents}/${totalStudents}</strong> saisi${nbStudents > 1 ? 's' : ''}</span>
+          ${_evalClassIds(ev).map(cid => _evalSkipPillHTML(ev, cid, false)).join('')}
           ${statsHTML}
         </div>
       </div>
@@ -36573,7 +36615,7 @@ function _evalEditRenderClasses(ev) {
         <span style="font-size:.85em;color:var(--pencil)">⏰</span>
         <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalEditPerClass(this)" style="padding:3px 6px;font-size:.85em">
           ${_evalEditSlotOpts(c, dateCur, slotCur)}
-        </select>`;
+        </select>${_evalSkipPillHTML(ev, c.id, true)}`;
     }
     html += `</div>`;
   }
@@ -38055,14 +38097,17 @@ function _evalSaisieRender() {
   ev.notes[sid] = ev.notes[sid] || { values: {} };
   const values = ev.notes[sid].values;
 
-  // Pour Type C : grouper visuellement par exercice ; pour Type A : flat
+  // Pour Type C : grouper visuellement par exercice ; pour Type A : flat.
+  // Les questions « non faites par la classe » de l'élève n'apparaissent pas sur sa fiche.
+  const _skcS = _evalStuClassId(ev, sid);
+  const _mnsS = ev.miniNotes.filter(mn => !_subSkippedFor(mn, _skcS));
   const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
   const groups = isTypeC
-    ? ev.exercices.map(exo => ({ exo, items: ev.miniNotes.filter(mn => mn.exerciceId === exo.id) }))
-    : [{ exo: null, items: ev.miniNotes }];
+    ? ev.exercices.map(exo => ({ exo, items: _mnsS.filter(mn => mn.exerciceId === exo.id) }))
+    : [{ exo: null, items: _mnsS }];
   // Ajoute les orphelins (Type C) à la fin
   if (isTypeC) {
-    const orph = ev.miniNotes.filter(mn => !mn.exerciceId || !ev.exercices.some(e => e.id === mn.exerciceId));
+    const orph = _mnsS.filter(mn => !mn.exerciceId || !ev.exercices.some(e => e.id === mn.exerciceId));
     if (orph.length > 0) groups.push({ exo: { label: '⚠ Questions sans exercice' }, items: orph });
   }
   let globalI = 0;
@@ -38916,15 +38961,19 @@ function _evalTableurUpdateHelpForType(ev) {
   paste.innerHTML = (t === 'A' || t === 'C')
     ? _tableurHelpOrig.paste
     : `<br><strong>Coller :</strong> non disponible sur ce type — la saisie se fait cellule par cellule.`;
+  // Éval multi-classes : le clic droit sur un en-tête propose aussi « ⊘ non faite par cette
+  // classe » (colonne repliée, hors note et exports pour cette classe seulement).
+  const multi = _evalClassIds(ev || {}).filter(id => S.classes?.[id]).length > 1;
+  const skipTip = multi ? ' / <strong>⊘ non faite par cette classe</strong> (colonne repliée)' : '';
   if (t === 'A') {
-    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du code court, du max et de la date · ${kbd('clic droit')} sur un en-tête = nom complet / suppression · ${comCell}`;
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du code court, du max et de la date · ${kbd('clic droit')} sur un en-tête = nom complet / suppression${skipTip} · ${comCell}`;
   } else if (t === 'C') {
     // ⚠️ PAS de date dans l'en-tête d'un Type C : une sommative a UNE date par classe
     // (bandeau du haut / Réglages), jamais une par question — cf. `dateInput = isTypeC ? ''`
     // dans le rendu. Le texte commun A/C l'annonçait pourtant, pour les deux.
-    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du code court de l'exercice ou de la question et du max · ${kbd('clic droit')} sur un en-tête = nom complet / suppression · ${comCell}`;
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe du code court de l'exercice ou de la question et du max · ${kbd('clic droit')} sur un en-tête = nom complet / suppression${skipTip} · ${comCell}`;
   } else if (t === 'B') {
-    head.innerHTML = `<br><strong>En-tête :</strong> édition directe de la date et du créneau · ${kbd('clic droit')} sur l'en-tête d'une passation = compétences, dates par groupe, suppression · ${comCell}`;
+    head.innerHTML = `<br><strong>En-tête :</strong> édition directe de la date et du créneau · ${kbd('clic droit')} sur l'en-tête d'une passation = compétences, dates par groupe, suppression${skipTip} · ${comCell}`;
   } else {
     head.innerHTML = `<br><strong>En-tête :</strong> édition directe du libellé de question et du poids de chaque compétence · 🎯 = compétences évaluées par la question · ${comCell} La structure (exercices, questions) se règle dans <em>🏗 Structure</em>.`;
   }
@@ -38954,7 +39003,7 @@ function _evalTableurRender() {
   // On reconstruit un tableau de questions ordonnées + un mapping exo→[colIdx].
   const isTypeC = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0;
   // Type C : liste des compétences évaluées (affichées en colonnes inline à droite)
-  const inlineComps = isTypeC ? _evalListEvaluatedCompetences(ev, 'code') : [];
+  const inlineComps = isTypeC ? _evalListEvaluatedCompetences(ev, 'code', cls.id) : [];
   let orderedMNs;
   let exoGroups = []; // [{label, span, colStart}]
   if (isTypeC) {
@@ -38985,7 +39034,7 @@ function _evalTableurRender() {
   if (isTypeC && exoGroups.length > 0) {
     for (const g of exoGroups) {
       let sum = 0;
-      for (const mn of orderedMNs) { if (mn.exerciceId === g.id) sum += (mn.max || 0); }
+      for (const mn of orderedMNs) { if (mn.exerciceId === g.id && !_subSkippedFor(mn, cls.id)) sum += (mn.max || 0); }
       exoMaxes[g.id || '__orphans__'] = sum;
       maxBrut += sum;
     }
@@ -39061,6 +39110,14 @@ function _evalTableurRender() {
   }
   orderedMNs.forEach((mn, ci) => {
     const tooltip = mn.name ? `${mn.label || '?'} — ${mn.name}` : (mn.label || '(sans nom)');
+    // Question « non faite par cette classe » : colonne REPLIÉE (étroite, hachurée,
+    // sans saisie). Elle reste visible pour dire qu'elle existe pour les autres classes
+    // et se réactive par le clic droit. Le <th> garde le clic droit pour cette raison.
+    if (_subSkippedFor(mn, cls.id)) {
+      const exoBoundary = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+      html += `<th class="meval-mn-head meval-head-skip" style="${exoBoundary}" title="${_esc(tooltip)} — ⊘ non faite par ${_esc(cls.nom)} (clic droit pour réactiver)" oncontextmenu="event.preventDefault();_tableurMnContextMenu(event,'${_esc(mn.id)}')"><span class="meval-skip-mark">⊘</span><span class="meval-skip-lbl">${_esc(mn.label || '?')}</span></th>`;
+      return;
+    }
     const mnDate = _mnDateFor(mn, cls.id);
     const mnSlot = _mnSlotIdFor(mn, cls.id) || '';
     // Construit les options du select créneau selon la salle + date
@@ -39180,6 +39237,11 @@ function _evalTableurRender() {
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
     html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     mnOrder.forEach((mn, ci) => {
+      if (_subSkippedFor(mn, cls.id)) {
+        const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+        html += `<td class="meval-cell-skip" data-ci="${ci}" data-mnid="${_esc(mn.id)}" style="${exoBdr}" title="⊘ ${_esc(mn.label || '?')} non faite par ${_esc(cls.nom)}"></td>`;
+        return;
+      }
       const v = values[mn.id];
       const dispVal = (v === 'NN') ? (S.evalPrefs?.codeNonNote || 'NN')
                     : (v === 'A')  ? (S.evalPrefs?.codeAbsent  || 'A')
@@ -39288,9 +39350,13 @@ function _evalTableurRender() {
   html += '<tr style="background:var(--paper-warm);border-top:2px solid var(--rule-line);position:sticky;bottom:0;z-index:2">';
   html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
   mnOrder.forEach((mn, ci) => {
+    const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+    if (_subSkippedFor(mn, cls.id)) {
+      html += `<td class="meval-cell-skip" style="${exoBdr}"></td>`;
+      return;
+    }
     const vals = sids.map(sid => ev.notes?.[sid]?.values?.[mn.id])
                      .filter(v => typeof v === 'number');
-    const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
     html += `<td data-stat-mn="${_esc(mn.id)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${exoBdr}">${_statsCellHTML(vals, { format: v => _fmtNote(v), noteMax: mn.max })}</td>`;
   });
   // Type C avec exos : stats Σ par exo regroupées en footer (ordre personnalisé)
@@ -39298,7 +39364,7 @@ function _evalTableurRender() {
     exoTotalsGroups.forEach((g, gi) => {
       const sumsExo = sids.map(sid => _computeStudentExoSum(ev, sid, g.id)).filter(v => typeof v === 'number');
       const borderLeft = gi === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px dashed var(--rule-line);';
-      const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === g.id).reduce((s, m) => s + (m.max || 0), 0);
+      const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === g.id && !_subSkippedFor(m, cls.id)).reduce((s, m) => s + (m.max || 0), 0);
       html += `<td data-stat-exo="${_esc(g.id || '__orphans__')}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-deep);${borderLeft}">${_statsCellHTML(sumsExo, { format: v => _fmtNote(v), noteMax: exoMax })}</td>`;
     });
   }
@@ -39343,9 +39409,11 @@ function _computeStudentExoSum(ev, sid, exoId) {
   const values = ev.notes?.[sid]?.values || {};
   const excluded = new Set(ev.notes?.[sid]?.excluded || []);
   let sum = 0, hasValue = false;
+  const _skc = _evalStuClassId(ev, sid);
   for (const mn of (ev.miniNotes || [])) {
     if (mn.exerciceId !== exoId) continue;
     if (excluded.has(mn.id)) continue;
+    if (_subSkippedFor(mn, _skc)) continue;
     const v = values[mn.id];
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
@@ -39359,8 +39427,10 @@ function _computeStudentNoteBrut(ev, sid) {
   const values = ev.notes?.[sid]?.values || {};
   const excluded = new Set(ev.notes?.[sid]?.excluded || []);
   let sum = 0, hasValue = false;
+  const _skc = _evalStuClassId(ev, sid);
   for (const mn of (ev.miniNotes || [])) {
     if (excluded.has(mn.id)) continue;
+    if (_subSkippedFor(mn, _skc)) continue;
     const v = values[mn.id];
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
@@ -39795,6 +39865,7 @@ function _evalTableurRefreshFooterStats(ev) {
   const tbody = wrap.querySelector('tbody');
   if (!tbody) return;
   const sids = Array.from(tbody.querySelectorAll('tr[data-sid]')).map(tr => tr.getAttribute('data-sid'));
+  const _skc = _evalTableurActiveCls(ev)?.id;   // barème d'exo hors questions non faites
 
   // Stats par mini-note (couleur sur la moyenne selon mn.max)
   wrap.querySelectorAll('[data-stat-mn]').forEach(td => {
@@ -39808,7 +39879,7 @@ function _evalTableurRefreshFooterStats(ev) {
     const exoId = td.getAttribute('data-stat-exo');
     const real = (exoId === '__orphans__') ? null : exoId;
     const vals = sids.map(sid => _computeStudentExoSum(ev, sid, real)).filter(v => typeof v === 'number');
-    const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === real).reduce((s, m) => s + (m.max || 0), 0);
+    const exoMax = (ev.miniNotes || []).filter(m => m.exerciceId === real && !_subSkippedFor(m, _skc)).reduce((s, m) => s + (m.max || 0), 0);
     td.innerHTML = _statsCellHTML(vals, { format: v => _fmtNote(v), noteMax: exoMax });
   });
   // Stats total brut (si colonne visible)
@@ -40035,7 +40106,10 @@ function _tableurBlockAt(ev, ci, byExo) {
   const row = document.querySelector('#meval-tableur-tbl tbody tr[data-sid]');
   if (!row) return null;
   const keys = [];
-  row.querySelectorAll('input[data-ci]').forEach(inp => {
+  // Les cellules repliées (colonne « non faite par cette classe ») n'ont pas d'input
+  // mais portent data-ci/data-mnid : elles comptent dans le bloc, sinon un exercice
+  // dont une question est sautée se scinderait en deux.
+  row.querySelectorAll('input[data-ci], td.meval-cell-skip[data-ci]').forEach(inp => {
     const i = parseInt(inp.getAttribute('data-ci'));
     if (!Number.isFinite(i)) return;
     const qid = inp.getAttribute('data-mnid') || inp.getAttribute('data-passid') || '';
@@ -40074,68 +40148,82 @@ function _evalTableurKey(e, inputEl) {
   if (numCols === 0) return;
   const numRows = document.querySelectorAll('#meval-tableur-tbl tbody tr').length;
 
-  let targetRi = ri, targetCi = ci;
   const key = e.key;
-  if (key === 'Tab') {
-    e.preventDefault();
-    if (e.shiftKey) {
+  // Calcule la cellule suivante depuis (ri, ci) selon la touche. Renvoyer null = on
+  // s'arrête. Extrait en fonction pour pouvoir ENJAMBER une colonne repliée (question
+  // ou passation « non faite par cette classe » : la cellule n'a pas d'input) — on
+  // avance d'un pas de plus dans le même sens jusqu'à trouver un champ.
+  const step = (ri, ci) => {
+    let targetRi = ri, targetCi = ci;
+    if (key === 'Tab') {
+      if (e.shiftKey) {
+        if (ci > 0) targetCi = ci - 1;
+        else if (ri > 0) { targetRi = ri - 1; targetCi = numCols - 1; }
+        else return null;
+      } else {
+        if (ci < numCols - 1) targetCi = ci + 1;
+        else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
+        else return null;
+      }
+    } else if (key === 'Enter') {
+      // ⚠️ `student` et `column` ont été RETIRÉS (jugés sans usage) : « Question par
+      // question » les couvre — en A/C, où une question tient sur une colonne, il fait
+      // exactement ce que faisait `column`. _enterBehavior() convertit les valeurs
+      // enregistrées avant ce retrait.
+      const enterBehavior = _enterBehavior();
+      // Sur une colonne repliée le bloc est introuvable : on retombe sur « cellule
+      // suivante », le pas d'après retrouvera un bloc.
+      const blk = (enterBehavior === 'byquestion' || enterBehavior === 'byexo')
+        ? _tableurBlockAt(ev, ci, enterBehavior === 'byexo') : null;
+      if (blk) {
+        // On termine un BLOC (une question, ou un exercice entier) pour l'élève courant,
+        // puis on descend au suivant sur le même bloc — soit la façon dont on corrige
+        // réellement : question par question, ou exercice par exercice, sur tout le paquet.
+        // Le bloc épuisé pour toute la classe, on passe au bloc suivant, premier élève.
+        if (ci < blk.end) targetCi = ci + 1;
+        else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = blk.start; }
+        else if (blk.end < numCols - 1) { targetRi = 0; targetCi = blk.end + 1; }
+        else return null;
+      } else {
+        // 'question' (défaut) : cellule suivante (idem Tab sans Shift)
+        if (ci < numCols - 1) targetCi = ci + 1;
+        else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
+        else return null;
+      }
+    } else if (key === 'ArrowDown') {
+      if (ri < numRows - 1) targetRi = ri + 1;
+      else return null;
+    } else if (key === 'ArrowUp') {
+      if (ri > 0) targetRi = ri - 1;
+      else return null;
+    } else if (key === 'ArrowLeft') {
       if (ci > 0) targetCi = ci - 1;
       else if (ri > 0) { targetRi = ri - 1; targetCi = numCols - 1; }
-      else return;
-    } else {
+      else return null;
+    } else if (key === 'ArrowRight') {
       if (ci < numCols - 1) targetCi = ci + 1;
       else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
-      else return;
-    }
-  } else if (key === 'Enter') {
-    e.preventDefault();
-    // ⚠️ `student` et `column` ont été RETIRÉS (jugés sans usage) : « Question par
-    // question » les couvre — en A/C, où une question tient sur une colonne, il fait
-    // exactement ce que faisait `column`. _enterBehavior() convertit les valeurs
-    // enregistrées avant ce retrait.
-    const enterBehavior = _enterBehavior();
-    if (enterBehavior === 'byquestion' || enterBehavior === 'byexo') {
-      // On termine un BLOC (une question, ou un exercice entier) pour l'élève courant,
-      // puis on descend au suivant sur le même bloc — soit la façon dont on corrige
-      // réellement : question par question, ou exercice par exercice, sur tout le paquet.
-      // Le bloc épuisé pour toute la classe, on passe au bloc suivant, premier élève.
-      const blk = _tableurBlockAt(ev, ci, enterBehavior === 'byexo');
-      if (!blk) return;
-      if (ci < blk.end) targetCi = ci + 1;
-      else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = blk.start; }
-      else if (blk.end < numCols - 1) { targetRi = 0; targetCi = blk.end + 1; }
-      else return;
+      else return null;
     } else {
-      // 'question' (défaut) : cellule suivante (idem Tab sans Shift)
-      if (ci < numCols - 1) targetCi = ci + 1;
-      else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
-      else return;
+      return null;
     }
-  } else if (key === 'ArrowDown') {
-    e.preventDefault();
-    if (ri < numRows - 1) targetRi = ri + 1;
-    else return;
-  } else if (key === 'ArrowUp') {
-    e.preventDefault();
-    if (ri > 0) targetRi = ri - 1;
-    else return;
-  } else if (key === 'ArrowLeft') {
+    return { ri: targetRi, ci: targetCi };
+  };
+  if (key === 'ArrowLeft') {
     // Seulement si curseur en début d'input (pour ne pas piéger l'édition)
     if (inputEl.selectionStart !== 0 || inputEl.selectionEnd !== 0) return;
-    e.preventDefault();
-    if (ci > 0) targetCi = ci - 1;
-    else if (ri > 0) { targetRi = ri - 1; targetCi = numCols - 1; }
-    else return;
   } else if (key === 'ArrowRight') {
     if (inputEl.selectionStart !== inputEl.value.length || inputEl.selectionEnd !== inputEl.value.length) return;
-    e.preventDefault();
-    if (ci < numCols - 1) targetCi = ci + 1;
-    else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = 0; }
-    else return;
-  } else {
+  } else if (key !== 'Tab' && key !== 'Enter' && key !== 'ArrowDown' && key !== 'ArrowUp') {
     return;
   }
-  const target = document.querySelector(`#meval-tableur-tbl input[data-ri="${targetRi}"][data-ci="${targetCi}"]`);
+  e.preventDefault();
+  let pos = step(ri, ci), target = null, guard = 0;
+  while (pos && guard++ < numCols * (numRows + 1)) {
+    target = document.querySelector(`#meval-tableur-tbl input[data-ri="${pos.ri}"][data-ci="${pos.ci}"]`);
+    if (target) break;
+    pos = step(pos.ri, pos.ci);
+  }
   if (target) { target.focus(); target.select(); }
 }
 
@@ -40233,13 +40321,15 @@ function _evalTableurEnsureInputVisible(inputEl) {
 
 // Liste les compétences évaluées par l'éval (B : union des passations.competenceIds ;
 // C : union des miniNotes.competenceIds). Retourne un tableau de comp objects triés.
-function _evalListEvaluatedCompetences(ev, sortMode) {
+// classId (optionnel) : ignore les passations / questions « non faites par cette classe »
+// (une compétence qui n'est portée que par elles n'est pas évaluée pour cette classe).
+function _evalListEvaluatedCompetences(ev, sortMode, classId) {
   if (!ev) return [];
   const set = new Set();
   if (ev.type === 'B') {
-    for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) set.add(cid);
+    for (const p of (ev.passations || [])) { if (_subSkippedFor(p, classId)) continue; for (const cid of (p.competenceIds || [])) set.add(cid); }
   } else if (ev.type === 'C' || ev.type === 'D') {
-    for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) set.add(cid);
+    for (const mn of (ev.miniNotes || [])) { if (_subSkippedFor(mn, classId)) continue; for (const cid of (mn.competenceIds || [])) set.add(cid); }
   }
   const comps = Array.from(set).map(cid => S.competences?.[cid]).filter(Boolean);
   if (sortMode === 'domain') {
@@ -40270,8 +40360,10 @@ function _evalStudentLevelForComp(ev, sid, cid) {
   if (ev.type === 'C') {
     let gotPts = 0, maxPts = 0, anySaisi = false;
     const values = ev.notes?.[sid]?.values || {};
+    const _skc = _evalStuClassId(ev, sid);
     for (const mn of (ev.miniNotes || [])) {
       if (!(mn.competenceIds || []).includes(cid)) continue;
+      if (_subSkippedFor(mn, _skc)) continue;
       const v = values[mn.id];
       if (v === 'A') { anySaisi = true; continue; }
       if (typeof v !== 'number') continue;
@@ -40756,7 +40848,7 @@ function _evalRenderBilanComps() {
   const cls = _evalTableurActiveCls(ev);
   if (!cls) return;
   const sortMode = document.getElementById('meval-bilan-sort')?.value || 'code';
-  const comps = _evalListEvaluatedCompetences(ev, sortMode);
+  const comps = _evalListEvaluatedCompetences(ev, sortMode, cls?.id);
   const wrap = document.getElementById('meval-bilan-wrap');
   if (!wrap) return;
   if (comps.length === 0) {
@@ -41015,11 +41107,13 @@ function _evalPlanOverlayOpen() {
   // En multi-classes, la date est celle de la classe active (passation.dates[clsId]).
   const groupsByDate = {};
   for (const p of ev.passations) {
+    if (_subSkippedFor(p, cls.id)) continue;   // passation non faite par cette classe
     const d = _passDateFor(p, cls.id);
     (groupsByDate[d] = groupsByDate[d] || []).push(p);
   }
   // Liste des dates triées du + récent au + ancien
   const dates = Object.keys(groupsByDate).sort((a, b) => b.localeCompare(a));
+  if (dates.length === 0) { toast('⚠ Toutes les passations sont marquées non faites par cette classe', 'warn'); return; }
   // Pré-sélection : la date de la passation active du tableur (si dispo), sinon la + récente
   const activePassId = document.getElementById('meval-tableur').dataset.passId;
   const activePass = ev.passations.find(p => p.id === activePassId);
@@ -41064,7 +41158,7 @@ function _evalPlanOverlayRender() {
   if (!cls) return;
   const activeDate = document.getElementById('meval-plan-overlay').dataset.passDate;
   // Récupère toutes les passations de la date active POUR LA CLASSE active.
-  const passesActive = (ev.passations || []).filter(p => _passDateFor(p, cls.id) === activeDate);
+  const passesActive = (ev.passations || []).filter(p => _passDateFor(p, cls.id) === activeDate && !_subSkippedFor(p, cls.id));
   const grid = document.getElementById('meval-plan-overlay-grid');
   if (passesActive.length === 0) {
     grid.innerHTML = _emptyStateHTML('🪑', 'Aucune passation à cette date', 'Choisis une autre date dans le sélecteur ci-dessus.');
@@ -41267,6 +41361,12 @@ function _evalTableurRenderB(ev, cls) {
   html += '<tr>';
   html += `<th rowspan="2" style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif);font-size:.95em"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   for (const p of sortedPass) {
+    // Passation « non faite par cette classe » : ses colonnes (une par compétence) se
+    // REPLIENT en une seule, étroite et hachurée. Le clic droit reste pour la réactiver.
+    if (_subSkippedFor(p, cls.id)) {
+      html += `<th rowspan="2" class="meval-head-skip" oncontextmenu="event.preventDefault();_tableurPassContextMenu(event,'${_esc(p.id)}')" style="border-left:2px solid var(--ink-blue-soft)" title="${_esc(p.code || '?')}${p.name ? ' — ' + _esc(p.name) : ''} — ⊘ non faite par ${_esc(cls.nom)} (clic droit pour réactiver)"><span class="meval-skip-mark">⊘</span><span class="meval-skip-lbl">${_esc(p.code || '?')}</span></th>`;
+      continue;
+    }
     const nbComps = (p.competenceIds || []).length || 1;
     const passDate = _passDateFor(p, cls.id);
     const passSlot = _passSlotIdFor(p, cls.id) || '';
@@ -41303,7 +41403,7 @@ function _evalTableurRenderB(ev, cls) {
       </th>`;
   }
   // Colonnes synthèse à droite : Note /20 + niveau atteint par compétence évaluée
-  const inlineCompsB = _evalListEvaluatedCompetences(ev, 'code');
+  const inlineCompsB = _evalListEvaluatedCompetences(ev, 'code', cls.id);
   html += `<th rowspan="2" style="padding:5px 8px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-blue);background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft);min-width:64px" title="Note finale calculée /20 (à partir des niveaux et de la règle de moyenne)">Note<br><span style="font-size:.74em;color:var(--pencil);font-weight:normal">/20</span></th>`;
   for (const c of inlineCompsB) {
     html += `<th rowspan="2" style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.78em;font-weight:700;color:var(--ink-blue);background:var(--paper-warm);border-left:1px solid var(--rule-line-soft);min-width:38px" title="${_escAttr((c.code || '?') + (c.name ? ' — ' + c.name : '') + '\nNiveau atteint sur cette compétence (calculé automatiquement)')}">${_esc(c.code || '?')}</th>`;
@@ -41317,6 +41417,7 @@ function _evalTableurRenderB(ev, cls) {
   // à cocher, tri par code ou par domaine).
   html += '<tr>';
   for (const p of sortedPass) {
+    if (_subSkippedFor(p, cls.id)) continue;   // <th rowspan=2> posé à la ligne 1
     const compIds = p.competenceIds || [];
     for (const cid of compIds) {
       const c = S.competences?.[cid];
@@ -41345,6 +41446,13 @@ function _evalTableurRenderB(ev, cls) {
       p.niveaux = p.niveaux || {};
       const niv = p.niveaux[sid] || {};
       const compIds = p.competenceIds || [];
+      if (_subSkippedFor(p, cls.id)) {
+        // ci avance du nombre de compétences : _evalTableurKey compte TOUTES les
+        // colonnes (passation × compétence), repliées ou non, et enjambe les trous.
+        html += `<td class="meval-cell-skip" data-ci="${ci}" data-passid="${_esc(p.id)}" style="border-left:2px solid var(--ink-blue-soft)" title="⊘ ${_esc(p.code || '?')} non faite par ${_esc(cls.nom)}"></td>`;
+        ci += compIds.length;
+        continue;
+      }
       if (compIds.length === 0) {
         html += `<td style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil);font-style:italic;font-size:.82em">—</td>`;
         continue;
@@ -41407,6 +41515,10 @@ function _evalTableurRenderB(ev, cls) {
   html += `<th style="padding:6px 10px;text-align:left;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-serif);font-style:italic;color:var(--ink-blue);z-index:3">📊 Stats</th>`;
   for (const p of sortedPass) {
     const compIds = p.competenceIds || [];
+    if (_subSkippedFor(p, cls.id)) {
+      html += `<td class="meval-cell-skip" style="border-left:2px solid var(--ink-blue-soft)"></td>`;
+      continue;
+    }
     if (compIds.length === 0) {
       html += `<td style="background:var(--paper-warm)"></td>`;
       continue;
@@ -41653,9 +41765,11 @@ function _noteColor(note, noteMax) {
 //   - null   : il y a au moins une saisie numérique (la note est calculable)
 function _studentNoteAbsenceReason(ev, sid) {
   if (!ev) return 'none';
+  const _skc = _evalStuClassId(ev, sid);
   if (ev.type === 'B') {
     let nA = 0, nNum = 0;
     for (const p of (ev.passations || [])) {
+      if (_subSkippedFor(p, _skc)) continue;
       const perStu = p.niveaux?.[sid];
       if (!perStu) continue;
       for (const cid of (p.competenceIds || [])) {
@@ -41691,7 +41805,7 @@ function _studentNoteAbsenceReason(ev, sid) {
   }
   // Type A / C
   const values = ev.notes?.[sid]?.values || {};
-  const mns = ev.miniNotes || [];
+  const mns = (ev.miniNotes || []).filter(mn => !_subSkippedFor(mn, _skc));
   let nA = 0, nNN = 0, nNum = 0;
   for (const mn of mns) {
     const v = values[mn.id];
@@ -42685,6 +42799,7 @@ function _tableurMnContextMenu(event, mnId) {
     return g === 1 || g === 2 || g === 3;
   });
   if (perGroupWrap) perGroupWrap.style.display = hasGroups ? '' : 'none';
+  _tableurSubSkipFill('mn', ev, mn, cls);
   // Active la checkbox si des données per-groupe existent déjà pour cette classe
   const cb = document.getElementById('meval-mn-menu-pergroup');
   const hasPgData = cls && (
@@ -42958,6 +43073,34 @@ function _tableurMnInsert(position) {
 }
 
 // ─── Menu contextuel Passation (Type B) ───
+// « ⊘ Non faite par cette classe » dans les modales de clic droit (mini-note / passation).
+// Visible seulement sur une éval multi-classes : en mono-classe, une question que la
+// classe n'a pas faite se supprime. La case agit tout de suite (une entrée d'undo),
+// re-rend le tableur pour replier/déplier la colonne et ferme la modale.
+function _tableurSubSkipFill(kind, ev, sub, cls) {
+  const wrap = document.getElementById(`meval-${kind}-menu-skip-wrap`);
+  if (!wrap) return;
+  const multi = _evalClassIds(ev).filter(id => S.classes?.[id]).length > 1;
+  if (!multi || !cls) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  document.getElementById(`meval-${kind}-menu-skip-cls`).textContent = cls.nom || cls.id;
+  document.getElementById(`meval-${kind}-menu-skip`).checked = _subSkippedFor(sub, cls.id);
+  const what = kind === 'pass' ? 'la passation' : (ev.type === 'C' ? 'la question' : 'la mini-note');
+  document.getElementById(`meval-${kind}-menu-skip-hint`).textContent =
+    `La colonne se replie pour cette classe : sans saisie, hors note et niveaux, hors pré-remplissage des absents, hors exports. Les autres classes gardent ${what}.`;
+}
+function _tableurSubSkipToggle(kind, on) {
+  const evalId = document.getElementById('meval-tableur-evalid').value;
+  const subId = document.getElementById(kind === 'pass' ? 'meval-pass-menu-passid' : 'meval-mn-menu-mnid').value;
+  const ev = S.evaluations?.[evalId];
+  const cls = ev ? _evalTableurActiveCls(ev) : null;
+  if (!ev || !cls) return;
+  _evalToggleSubSkipped(evalId, subId, cls.id, on);
+  closeMod2(kind === 'pass' ? 'meval-pass-menu' : 'meval-mn-menu');
+  _evalTableurRender();
+  toast(on ? `⊘ Marquée non faite par ${cls.nom} — colonne repliée` : `✓ Réactivée pour ${cls.nom}`);
+}
+
 function _tableurPassContextMenu(event, passId) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
   const ev = S.evaluations?.[evalId];
@@ -42974,6 +43117,7 @@ function _tableurPassContextMenu(event, passId) {
     return g === 1 || g === 2 || g === 3;
   });
   if (pgWrap) pgWrap.style.display = hasGroups ? '' : 'none';
+  _tableurSubSkipFill('pass', ev, pass, cls);
   const cb = document.getElementById('meval-pass-menu-pergroup');
   const hasPgData = cls && (
     Object.keys(pass.datesByGroup?.[cls.id] || {}).length > 0 ||
@@ -43724,11 +43868,12 @@ function _evalAutoUpdateDate(ev) {
       // N'agréger que les mini-notes effectivement passées par la classe (≥1 note
       // saisie). Fallback : si AUCUNE mini-note n'a de note (éval pas encore
       // commencée), on garde l'ensemble pour conserver la date planifiée.
-      const all  = (ev.miniNotes || []);
+      // Les questions « non faites par cette classe » sont hors jeu dès le départ.
+      const all  = (ev.miniNotes || []).filter(m => !_subSkippedFor(m, cid));
       const done = all.filter(m => _mnHasAnyNoteForClass(ev, m, cid));
       pool = done.length ? done : all;
     } else if (ev.type === 'B') {
-      pool = (ev.passations || []);
+      pool = (ev.passations || []).filter(p => !_subSkippedFor(p, cid));
     }
     if (!pool) return null;
     let best = null, bestDate = '';
@@ -43839,6 +43984,76 @@ function _evalSetSlotIdFor(ev, classId, slotId) {
   delete ev.slotId;
 }
 
+// ─── « ⊘ Non faite par cette classe » — mini-note (A/C) ou passation (B) sautée ───
+// Sur une éval multi-classes, une classe peut ne pas avoir passé une question ou une
+// passation. `sub.skippedClasses = { [classId]: true }` le consigne : la colonne est
+// REPLIÉE dans le tableur de cette classe, exclue de sa note, de ses niveaux, du
+// pré-remplissage des absents, de la date automatique, des stats et des exports.
+// ⚠️ Map keyée par classId → visitée par _forEachEvalPerClassMap (purge et renommage).
+// Une colonne vide compte déjà pour rien dans le calcul : le marquage porte
+// l'INTENTION (« pas faite » ≠ « pas encore saisie ») et bloque la saisie.
+function _subSkippedFor(sub, classId) {
+  return !!(classId && sub?.skippedClasses && sub.skippedClasses[classId] === true);
+}
+function _subSetSkipped(sub, classId, on) {
+  if (!sub || !classId) return;
+  if (on) {
+    sub.skippedClasses = sub.skippedClasses || {};
+    sub.skippedClasses[classId] = true;
+  } else if (sub.skippedClasses) {
+    delete sub.skippedClasses[classId];
+    if (!Object.keys(sub.skippedClasses).length) delete sub.skippedClasses;
+  }
+}
+// Classe de l'élève DU POINT DE VUE de l'éval : sa classe d'inscription si l'éval la
+// couvre, sinon la classe de l'éval (ex. recomposée) qui le compte dans son roster,
+// sinon sa classe d'inscription (éval orpheline après transfert).
+function _evalStuClassId(ev, sid) {
+  const own = S.eleves?.[sid]?.classe_id;
+  const ids = _evalClassIds(ev);
+  if (own && ids.includes(own)) return own;
+  for (const cid of ids) {
+    if (S.classes?.[cid]?.eleves?.includes(sid)) return cid;
+  }
+  return own || null;
+}
+// Nombre de questions/passations sautées par classe : { classId: n } (classes vivantes).
+function _evalSkippedSummary(ev) {
+  const out = {};
+  const subs = ev?.type === 'B' ? (ev.passations || []) : (ev?.miniNotes || []);
+  for (const cid of _evalClassIds(ev)) {
+    if (!S.classes?.[cid]) continue;
+    const n = subs.filter(sub => _subSkippedFor(sub, cid)).length;
+    if (n) out[cid] = n;
+  }
+  return out;
+}
+// Pastille « ⊘ 6B : 2 » (liste Devoirs) ou « ⊘ 2 non faites : Q2, Q3 » (Réglages, sans
+// le nom de la classe qui est déjà sur la ligne). Vide s'il n'y a rien à dire.
+function _evalSkipPillHTML(ev, classId, inRow) {
+  const subs = ev?.type === 'B' ? (ev.passations || []) : (ev?.miniNotes || []);
+  const skipped = subs.filter(sub => _subSkippedFor(sub, classId));
+  if (!skipped.length) return '';
+  const what = ev.type === 'B' ? 'passation' : (ev.type === 'C' ? 'question' : 'mini-note');
+  const labels = skipped.map(sub => sub.label || sub.code || '?').join(', ');
+  const n = skipped.length;
+  const tip = `${n} ${what}${n > 1 ? 's' : ''} non faite${n > 1 ? 's' : ''} par ${S.classes?.[classId]?.nom || classId} : ${labels}\n(clic droit sur l'en-tête de colonne dans le tableur pour changer)`;
+  const txt = inRow ? `⊘ ${n} non faite${n > 1 ? 's' : ''} : ${labels}` : `⊘ ${S.classes?.[classId]?.nom || classId} : ${n}`;
+  return `<span class="eval-skip-pill" title="${_escAttr(tip)}">${_esc(txt)}</span>`;
+}
+// Bascule depuis le tableur (clic droit sur l'en-tête → case) : une seule entrée d'undo.
+function _evalToggleSubSkipped(evalId, subId, classId, on) {
+  const ev = S.evaluations?.[evalId];
+  if (!ev) return;
+  const sub = (ev.miniNotes || []).find(m => m.id === subId) || (ev.passations || []).find(p => p.id === subId);
+  if (!sub || _subSkippedFor(sub, classId) === !!on) return;
+  pushUndo();
+  _subSetSkipped(sub, classId, !!on);
+  ev.updatedAt = Date.now();
+  _evalAutoUpdateDate(ev);
+  save();
+}
+
 // Auto-fill absences : quand la date/le créneau d'une éval (ou mn/passation)
 // change, on cherche les appels enregistrés correspondants et on pré-remplit
 // 'A' sur les cellules vides des élèves absents à ce moment-là.
@@ -43858,6 +44073,7 @@ function _evalCollectAbsentsForDateSlot(classId, dateYMD, slotId, groupFilter) {
 function _evalAutoFillAbsentsForMn(ev, mn, classId) {
   if (!ev || !mn || !classId) return 0;
   if (ev.type !== 'A' && ev.type !== 'C' && ev.type !== 'D') return 0;
+  if (_subSkippedFor(mn, classId)) return 0;   // question non faite par cette classe
   const cls = S.classes?.[classId];
   if (!cls) return 0;
   // Lit la date/le slot effectifs via les helpers (lecture par PRÉSENCE de clé) —
@@ -43906,6 +44122,7 @@ function _evalAutoFillAbsentsForMn(ev, mn, classId) {
 }
 
 function _evalAutoFillAbsentsForPass(ev, pass, classId) {
+  if (_subSkippedFor(pass, classId)) return 0;   // passation non faite par cette classe
   if (!ev || !pass || !classId) return 0;
   if (ev.type !== 'B') return 0;
   const cls = S.classes?.[classId];
@@ -44005,8 +44222,10 @@ function _computeStudentCompetenceLevel(ev, sid, cId) {
   const _nb = S.evalPrefs?.nbLevels || 4;
   // Récupère tous les niveaux saisis (> 0) pour cette compétence sur cet élève
   const entries = [];
+  const _skc = _evalStuClassId(ev, sid);
   for (const p of ev.passations) {
     if (!p.competenceIds?.includes(cId)) continue;
+    if (_subSkippedFor(p, _skc)) continue;
     const niv = p.niveaux?.[sid]?.[cId];
     if (typeof niv === 'number' && niv >= 1 && niv <= _nb) {
       entries.push({ date: _passDateFor(p, _cls), niveau: niv });
@@ -44053,21 +44272,25 @@ function _evalNoteTipB(ev, sid) {
   const weighting = ev.weighting || 'equal';
   const meanRule = ev.meanRule || S.evalPrefs?.meanRule || 'arithmetic';
   const _cls = S.eleves?.[sid]?.classe_id; // date de tri per-classe (cf. _passDateFor)
+  const _skc = _evalStuClassId(ev, sid);
+  const _passes = (ev.passations || []).filter(p => !_subSkippedFor(p, _skc));
+  const _nSkip = (ev.passations || []).length - _passes.length;
   const lines = [];
   lines.push(`Note /20 — calcul pour ${(S.eleves?.[sid]?.prenom || '')} ${(S.eleves?.[sid]?.nom || '')}`.trim());
   lines.push(`Règle : ${weighting === 'perCompetence' ? 'moyenne par compétence' : (weighting === 'coef' ? 'pondérée par coef de passation' : 'équitable')} · niveau→points : ${pts.slice(0, _nb).map((p, i) => `N${i + 1}=${p}`).join(' ')} · sur ${ptsMax}, ramené à ${noteMax}/20`);
+  if (_nSkip) lines.push(`⊘ ${_nSkip} passation${_nSkip > 1 ? 's' : ''} non faite${_nSkip > 1 ? 's' : ''} par sa classe — hors calcul`);
   lines.push('');
 
   if (weighting === 'perCompetence') {
     // Chaque entrée convertie en pts puis moyenne par compétence (selon règle),
     // puis moyenne arithmétique des compétences.
     const compIds = new Set();
-    for (const p of ev.passations) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+    for (const p of _passes) for (const cid of (p.competenceIds || [])) compIds.add(cid);
     let sumPts = 0, nbComps = 0;
     for (const cid of compIds) {
       const c = S.competences?.[cid];
       const entries = [];
-      for (const p of ev.passations) {
+      for (const p of _passes) {
         if (!(p.competenceIds || []).includes(cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
         if (typeof v === 'number' && v >= 1 && v <= _nb) entries.push({ niveau: v, date: _passDateFor(p, _cls), code: p.code || '?' });
@@ -44108,7 +44331,7 @@ function _evalNoteTipB(ev, sid) {
 
   // 'equal' ou 'coef' : toutes les saisies passations × compétences sommées
   let sumPts = 0, sumW = 0;
-  for (const p of ev.passations) {
+  for (const p of _passes) {
     const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
     if (w <= 0) continue;
     const compIds = p.competenceIds || [];
@@ -44151,6 +44374,7 @@ function _computeStudentEvalNoteB(ev, sid) {
 
   const weighting = ev.weighting || 'equal';
   const _cls = S.eleves?.[sid]?.classe_id; // pour la date de tri per-classe (cf. _passDateFor)
+  const _skc = _evalStuClassId(ev, sid);   // passations non faites par sa classe : ignorées
 
   if (weighting === 'perCompetence') {
     // Pour chaque compétence : convertit chaque niveau saisi en points,
@@ -44165,6 +44389,7 @@ function _computeStudentEvalNoteB(ev, sid) {
       const entries = [];
       for (const p of ev.passations) {
         if (!(p.competenceIds || []).includes(cid)) continue;
+        if (_subSkippedFor(p, _skc)) continue;
         const v = p.niveaux?.[sid]?.[cid];
         if (typeof v === 'number' && v >= 1 && v <= _nb) entries.push({ niveau: v, date: _passDateFor(p, _cls) });
       }
@@ -44196,6 +44421,7 @@ function _computeStudentEvalNoteB(ev, sid) {
   for (const p of ev.passations) {
     const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
     if (w <= 0) continue;
+    if (_subSkippedFor(p, _skc)) continue;
     for (const cid of (p.competenceIds || [])) {
       const niv = p.niveaux?.[sid]?.[cid];
       if (typeof niv !== 'number' || niv < 1 || niv > _nb) continue;
@@ -46179,10 +46405,12 @@ function _evalCompetenceLevel(ev, sid, cid) {
     const values   = ev.notes?.[sid]?.values   || {};
     const comments = ev.notes?.[sid]?.comments || {};
     const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+    const _skc = _evalStuClassId(ev, sid);
     let sum = 0, n = 0;
     for (const mn of (ev.miniNotes || [])) {
       if (!mn.competenceIds?.includes(cid)) continue;
       if (excluded.has(mn.id)) continue;
+      if (_subSkippedFor(mn, _skc)) continue;
       const v = values[mn.id];
       if (v === 'NN' || v === 'A' || v == null || v === '') continue;
       const num = parseFloat(v);
@@ -46216,9 +46444,11 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
     if (_did && _did !== 'all' && !_evalMatchesDiscipline(ev, _did)) continue;
     if (ev.countsForMean === false) continue; // éval diagnostique : hors bilan (niveaux comme moyenne)
     // Pour Type B : on prend toutes les passations sur cette compétence
+    const _skc = _evalStuClassId(ev, sid);
     if (ev.type === 'B') {
       for (const p of (ev.passations || [])) {
         if (!p.competenceIds?.includes(cid)) continue;
+        if (_subSkippedFor(p, _skc)) continue;
         const niv = p.niveaux?.[sid]?.[cid];
         if (typeof niv !== 'number' || niv < 1 || niv > (S.evalPrefs?.nbLevels || 4)) continue;
         entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: p.code, date: _passDateFor(p, classId) || ev.date, niveau: niv });
@@ -46232,6 +46462,7 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
       for (const mn of (ev.miniNotes || [])) {
         if (!mn.competenceIds?.includes(cid)) continue;
         if (excluded.has(mn.id)) continue;
+        if (_subSkippedFor(mn, _skc)) continue;
         const v = values[mn.id];
         if (v === 'NN' || v === 'A' || v == null || v === '') continue;
         const n = parseFloat(v);
@@ -47518,14 +47749,17 @@ function _evalExportOpen() {
 // ⚠️ Jumeau historique de _evalListEvaluatedCompetences : les deux avaient divergé (celui-ci
 // ignorait le D → l'export ENT d'une éval PAR COMPÉTENCES affichait « Compétences (0) »).
 // Tout nouveau type doit être ajouté aux DEUX, ou ce helper fusionné dans l'autre.
-function _evalCompetencesEvaluated(ev) {
+// classId (optionnel) : ignore les passations / questions « non faites par cette classe ».
+function _evalCompetencesEvaluated(ev, classId) {
   const ids = new Set();
   if (ev.type === 'B') {
     for (const p of (ev.passations || [])) {
+      if (_subSkippedFor(p, classId)) continue;
       for (const cid of (p.competenceIds || [])) ids.add(cid);
     }
   } else if (ev.type === 'C' || ev.type === 'A' || ev.type === 'D') {
     for (const mn of (ev.miniNotes || [])) {
+      if (_subSkippedFor(mn, classId)) continue;
       for (const cid of (mn.competenceIds || [])) ids.add(cid);
     }
   }
@@ -47545,10 +47779,12 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
   const values   = ev.notes?.[sid]?.values || {};
   const comments = ev.notes?.[sid]?.comments || {};
   const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+  const _skc = _evalStuClassId(ev, sid);
   const niveaux = [];
   for (const mn of (ev.miniNotes || [])) {
     if (!mn.competenceIds?.includes(cid)) continue;
     if (excluded.has(mn.id)) continue;
+    if (_subSkippedFor(mn, _skc)) continue;
     const v = values[mn.id];
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
@@ -47607,7 +47843,7 @@ function _evalExportBuildRows(ev) {
   // passation (B), cohérent avec le tableur (un élève qui n'a fait qu'une partie de
   // l'éval — ex. transféré en milieu d'année — apparaît quand même dans l'export).
   sids = sids.filter(sid => _stuActiveOnAnyEvalRef(S.eleves[sid], ev, cls.id));
-  const comps = _evalCompetencesEvaluated(ev);
+  const comps = _evalCompetencesEvaluated(ev, cls.id);
   const rows = [];
   for (const sid of sids) {
     const stu = S.eleves[sid];
