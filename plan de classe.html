@@ -6759,11 +6759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.56.3';
+const APP_VERSION    = '2.56.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-20T21:25:13Z';
+const APP_BUILD_DATE = '2026-09-20T21:31:36Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -41354,11 +41354,7 @@ function _evalPlanOverlayPill(btn) {
   else val = parseInt(raw, 10);
   pass.niveaux = pass.niveaux || {};
   pass.niveaux[sid] = pass.niveaux[sid] || {};
-  if (val === 0) {
-    delete pass.niveaux[sid][cid];
-  } else {
-    pass.niveaux[sid][cid] = val;
-  }
+  pass.niveaux[sid][cid] = val;   // 0 = « non évalué » explicite, conservé (comme au tableur)
   ev.updatedAt = Date.now();
   save();
   // Met à jour visuellement les 6 pastilles A/0/1/2/3/4 dans la cellule.
@@ -41534,6 +41530,7 @@ function _evalTableurRenderB(ev, cls) {
       compIds.forEach((cid, kIdx) => {
         const cur = niv[cid];
         const dispVal = (cur === 'A') ? (S.evalPrefs?.codeAbsent || 'A')
+                       : (cur === 0) ? (S.evalPrefs?.zeroLabel || '0')   // non évalué explicite
                        : (typeof cur === 'number' && cur >= 1 && cur <= 4
                           ? (S.evalPrefs?.niveauLabels?.[cur - 1] || String(cur))
                           : '');
@@ -41599,7 +41596,7 @@ function _evalTableurRenderB(ev, cls) {
     }
     compIds.forEach((cid, kIdx) => {
       const vals = sids.map(sid => p.niveaux?.[sid]?.[cid])
-                       .filter(v => typeof v === 'number');
+                       .filter(v => typeof v === 'number' && v >= 1);   // 0 = non évalué explicite
       const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
       html += `<td data-stat-b-passid="${_esc(p.id)}" data-stat-b-cid="${_esc(cid)}" style="padding:4px 6px;text-align:center;vertical-align:top;background:var(--paper-warm);${borderLeft}">${_statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true })}</td>`;
     });
@@ -41963,7 +41960,11 @@ function _evalTableurBUpdate(inputEl) {
   }
   inputEl.title = '';
   if (parsed === 0) {
-    delete pass.niveaux[sid][cid];
+    // Cellule VIDÉE → on retire ; code « non évalué » TAPÉ → 0 explicite, conservé et
+    // réaffiché à la réouverture (l'enseignant sait qu'il l'a vu et ne l'a pas évalué).
+    // Hors calcul et hors stats dans les deux cas (« niveau ≥ 1 » partout).
+    if (String(inputEl.value || '').trim() === '') delete pass.niveaux[sid][cid];
+    else pass.niveaux[sid][cid] = 0;
     if (td) td.style.background = '';
     inputEl.style.color = '';
     inputEl.style.fontWeight = '400';
@@ -42044,7 +42045,7 @@ function _evalTableurRefreshFooterStatsB(ev, passId, cid) {
   if (!pass) return;
   const td = wrap.querySelector(`[data-stat-b-passid="${CSS.escape(passId)}"][data-stat-b-cid="${CSS.escape(cid)}"]`);
   if (!td) return;
-  const vals = sids.map(sid => pass.niveaux?.[sid]?.[cid]).filter(v => typeof v === 'number');
+  const vals = sids.map(sid => pass.niveaux?.[sid]?.[cid]).filter(v => typeof v === 'number' && v >= 1);
   td.innerHTML = _statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true });
 }
 
@@ -42084,6 +42085,7 @@ function _parseNiveauInputD(raw, nbMax) {
 function _typeDDisplayVal(v) {
   if (v === 'A') return S.evalPrefs?.codeAbsent || 'A';
   if (v === 'NN') return S.evalPrefs?.codeNonNote || 'NN';
+  if (v === 0) return S.evalPrefs?.zeroLabel || '0';   // non évalué explicite (≠ vide)
   if (typeof v === 'number' && v >= 1) return S.evalPrefs?.niveauLabels?.[v - 1] || String(v);
   return '';
 }
@@ -42321,7 +42323,7 @@ function _evalTableurRenderD(ev, cls) {
       const cids = q.competenceIds || [];
       if (cids.length === 0) { html += `<th style="border-top:2px solid var(--rule-line)"></th>`; continue; }
       for (const cid of cids) {
-        const vals = sids.map(s => ev.notes?.[s]?.levels?.[q.id]?.[cid]).filter(v => typeof v === 'number');
+        const vals = sids.map(s => ev.notes?.[s]?.levels?.[q.id]?.[cid]).filter(v => typeof v === 'number' && v >= 1);
         html += `<th data-stat-d-mnid="${_esc(q.id)}" data-stat-d-cid="${_esc(cid)}" style="padding:2px 3px;text-align:center;font-size:.78em;border-top:2px solid var(--rule-line)">${_statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true })}</th>`;
       }
     }
@@ -42369,11 +42371,11 @@ function _evalTableurDUpdate(inputEl) {
   ev.notes[sid].levels = ev.notes[sid].levels || {};
   const slot = ev.notes[sid].levels[mnId] = ev.notes[sid].levels[mnId] || {};
   inputEl.title = '';
-  if (parsed === 0) {
+  if (parsed === 0 && String(inputEl.value || '').trim() === '') {
     delete slot[cid];
     if (Object.keys(slot).length === 0) delete ev.notes[sid].levels[mnId];
   } else {
-    slot[cid] = parsed;
+    slot[cid] = parsed;   // 0 tapé = « non évalué » explicite, conservé (cf. Type B)
   }
   const bg = _typeDCellBg(parsed === 0 ? null : parsed, nb);
   if (td) td.style.background = bg;
@@ -42390,7 +42392,7 @@ function _evalTableurDUpdate(inputEl) {
   if (foot) {
     const tbody = inputEl.closest('table')?.querySelector('tbody');
     const sids = tbody ? Array.from(tbody.querySelectorAll('tr[data-sid]')).map(tr => tr.getAttribute('data-sid')) : [];
-    const vals = sids.map(s => ev.notes?.[s]?.levels?.[mnId]?.[cid]).filter(v => typeof v === 'number');
+    const vals = sids.map(s => ev.notes?.[s]?.levels?.[mnId]?.[cid]).filter(v => typeof v === 'number' && v >= 1);
     foot.innerHTML = _statsCellHTML(vals, { format: v => v.toFixed(1), compLevels: true });
   }
   const row = inputEl.closest('tr');

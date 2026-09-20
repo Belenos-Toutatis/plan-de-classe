@@ -2138,6 +2138,10 @@ Il se déduisait du **TEXTE** du commentaire (`_parseCommentsAdjustment` : `-1 p
 
 `_evalTableurAutoAdvance(inputEl, parsed, nb)`, appelé en fin de `_evalTableurBUpdate` et `_evalTableurDUpdate` : un niveau est un chiffre, la saisie est complète dès qu'il est tapé, on passe à la cellule suivante sans Entrée (demandé en usage réel). Conditions : la valeur brute est **un seul chiffre 1..nb**, un **libellé de niveau personnalisé** écrit en entier, le code du **niveau 0 « non évalué »** (`zeroLabel`, défaut `0`), ou un **code complet** `A` / `NN` (versions personnalisées comprises). Jamais l'alias « N » seul de NN — on avancerait au premier N et le second marquerait la cellule suivante ; jamais une cellule vidée. Le déplacement est celui d'**Entrée** (`_evalTableurKey` avec `key:'Enter'`), donc il suit le réglage « ↩ » — question par question, exercice par exercice. Pas en A/C : une note peut avoir plusieurs chiffres.
 
+### Niveau 0 « non évalué » — un 0 EXPLICITE est conservé (v2.56.4)
+
+Dans les tableurs B et D (et le plan de classe du B), taper le code du niveau 0 (`zeroLabel`, défaut `0`) **stocke `0`** dans `pass.niveaux[sid][cid]` / `notes[sid].levels[mnId][cid]` ; seule une cellule **vidée** (`''`) supprime la clé. Motif utilisateur : à la réouverture, revoir le `0` dit « je l'ai vu, je ne l'ai pas évalué », un vide dit « pas encore passé ». Affichage : `_formatNiveau(0)` et `_typeDDisplayVal(0)` → `zeroLabel`, `null` → `''`. **Tous les calculs, stats et « données saisies » filtrent sur `niveau ≥ 1`** (les quatre stats de pied B/D ont été corrigées de `typeof === 'number'`, qui aurait compté le 0 dans les moyennes). Test dans `run.test.js`.
+
 ### Tableur — comportement de la touche Entrée (`#meval-tableur-enter`)
 
 Trois modes (`ENTER_BEHAVIORS`), gérés dans `_evalTableurKey`. `Tab` et les flèches ne changent jamais. Une **colonne** est une question en A/C, un couple (passation × compétence) en B, (question × compétence) en D.

@@ -2372,3 +2372,24 @@ test('tableur : filtre de groupe — comptes, repli sur Tous si le groupe est vi
   ev(`localStorage.setItem('planClasse_evalTableurGroup', '0')`);
   assert.deepEqual(get(`_evalTableurSortedSids(S.classes.c1)`), ['s1', 's2', 's3']);
 });
+
+// « Non évalué » explicite : un 0 STOCKÉ (tapé par l'enseignant) se réaffiche à la
+// réouverture, mais reste hors calcul, hors niveaux et hors « données saisies ».
+test('niveau 0 explicite (non évalué) : conservé à l\'affichage, ignoré par les calculs', () => {
+  setState({
+    cur: 'c1', classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'X', prenom: 'x', classe_id: 'c1' } }, salles: {},
+    competences: { k1: { id: 'k1', code: 'K1' }, k2: { id: 'k2', code: 'K2' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], zeroLabel: 'NE' },
+    evaluations: { e1: { id: 'e1', type: 'B', classIds: ['c1'], noteMax: 20,
+      passations: [{ id: 'p1', code: 'P1', date: '2026-01-05', competenceIds: ['k1', 'k2'], niveaux: { s1: { k1: 0, k2: 4 } } }] } },
+  });
+  assert.equal(get(`_computeStudentEvalNoteB(S.evaluations.e1, 's1')`), 20, 'le 0 ne pèse pas');
+  assert.equal(get(`_evalCompetenceLevel(S.evaluations.e1, 's1', 'k1')`), null);
+  assert.equal(get(`_formatNiveau(0)`), 'NE');
+  assert.equal(get(`_typeDDisplayVal(0)`), 'NE');
+  assert.equal(get(`_typeDDisplayVal(null)`), '', 'vide ≠ non évalué');
+  ev(`S.evaluations.e1.passations[0].niveaux.s1 = { k1: 0 }`);
+  assert.equal(get(`_studentHasAnyDataInEval(S.evaluations.e1, 's1')`), false, 'un 0 seul n\'est pas une donnée');
+  assert.equal(get(`_computeStudentEvalNoteB(S.evaluations.e1, 's1')`), null);
+});
