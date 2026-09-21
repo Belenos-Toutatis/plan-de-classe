@@ -6759,11 +6759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.56.5';
+const APP_VERSION    = '2.57.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-20T21:47:16Z';
+const APP_BUILD_DATE = '2026-09-21T03:42:24Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14548,7 +14548,7 @@ function _levelLabel(order) {
 // - amenagement : élèves avec PPRE / PPS (gevasco) / ULIS+ (inclusion) parmi les présents
 // - ulisOut : ULIS hors classe (info — pas dans le total photocopies)
 function _classCounts(cls) {
-  let total = 0, present = 0, amenagement = 0, ulisOut = 0, upe2aOut = 0, agrandissement = 0, tiersTemps = 0;
+  let total = 0, present = 0, amenagement = 0, ulisOut = 0, upe2aOut = 0, agrandissement = 0, agrPresent = 0, tiersTemps = 0;
   let m = 0, f = 0, civUnk = 0;
   for (const sid of cls.eleves || []) {
     const s = S.eleves[sid];
@@ -14566,12 +14566,16 @@ function _classCounts(cls) {
     if (s.ulis)  { ulisOut++;  continue; }
     if (s.upe2a) { upe2aOut++; continue; }
     present++;
+    if (s.agrandissement) agrPresent++;   // agrandissements parmi les présents → sert au compte des documents standard
     // Aménagés = présents avec PPRE / PPS / ULIS+ / UPE2A+
     if (s.ppre || s.pap || s.gevasco || s.ulis_incl || s.upe2a_incl || s.pai) amenagement++;
   }
   // outClass = ULIS hors + UPE2A hors → libellé combiné dans l'UI
   const outClass = ulisOut + upe2aOut;
-  return { total, present, amenagement, ulisOut, upe2aOut, outClass, agrandissement, tiersTemps, m, f, civUnk };
+  // Documents à tirer : docStd = copies au format standard (présents sans agrandissement) ; agrandissement = copies agrandies
+  // (compté sur TOUS les inscrits, un hors-inclusion pouvant en avoir besoin quand il vient).
+  const docStd = present - agrPresent;
+  return { total, present, amenagement, ulisOut, upe2aOut, outClass, agrandissement, agrPresent, docStd, tiersTemps, m, f, civUnk };
 }
 
 function sortedClasses() {
@@ -14594,7 +14598,7 @@ function renderClasses() {
   const levelCount = {};
   // Agrégation par niveau pour le récap photocopies en bas
   const byLevel = {}; // order -> { present, amenagement, total, ulisOut, upe2aOut, outClass, m, f, civUnk, classes:[nom] }
-  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0;
+  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0, totDocStd = 0;
 
   const cards = arr.map(cls => {
     const order = classLevelOrder(cls.nom);
@@ -14603,10 +14607,11 @@ function renderClasses() {
     const bg = levelBgColor(order, secIdx);
     const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
-    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, m:0, f:0, civUnk:0, classes:[] };
+    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[] };
     byLevel[order].present     += c.present;
     byLevel[order].amenagement += c.amenagement;
     byLevel[order].agrandissement += c.agrandissement;
+    byLevel[order].docStd      += c.docStd;
     byLevel[order].total       += c.total;
     byLevel[order].ulisOut     += c.ulisOut;
     byLevel[order].upe2aOut    += c.upe2aOut;
@@ -14616,7 +14621,7 @@ function renderClasses() {
     byLevel[order].civUnk      += c.civUnk;
     byLevel[order].classes.push(cls.nom);
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
-    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totAgr += c.agrandissement;
+    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totAgr += c.agrandissement; totDocStd += c.docStd;
     totM       += c.m;       totF  += c.f;           totCivUnk += c.civUnk;
 
     // Détail explicite pour les photocopies :
@@ -14684,6 +14689,7 @@ function renderClasses() {
       <td style="${tdNum}">${r.present}${_outHint(r.ulisOut, r.upe2aOut)}</td>
       <td style="${tdNum}">${nonAm}</td>
       <td style="${tdNum}">${r.amenagement}</td>
+      <td style="${tdNum}">${r.docStd}</td>
       <td style="${tdNum}${r.agrandissement>0?';color:var(--agr-fg);font-weight:700':''}">${r.agrandissement>0?'📄 '+r.agrandissement:'<span style="color:var(--pencil-soft)">—</span>'}</td>
     </tr>`;
   }).join('');
@@ -14702,7 +14708,8 @@ function renderClasses() {
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves normalement en classe (inscrits moins ULIS et UPE2A hors-inclusion)">Normalement présents</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves présents sans aménagement particulier (copie standard)">Non aménagés</th>
           <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves avec PPRE / PAP / PPS / ULIS+ / UPE2A+ / PAI — copies souvent adaptées">Aménagés</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves nécessitant des photocopies AGRANDIES (combien d'agrandissements tirer)">📄 Agrandissements</th>
+          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Documents au format standard à tirer (présents sans agrandissement)">📄 Docs non aménagés</th>
+          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Documents aménagés à tirer : photocopies AGRANDIES (élèves avec agrandissement, hors-inclusion compris)">📄 Docs aménagés</th>
         </tr></thead>
         <tbody>${recapRows}</tbody>
         <tfoot><tr class="rp-foot" style="font-weight:700">
@@ -14712,6 +14719,7 @@ function renderClasses() {
           <td style="${tfNum}">${totPresent}${_outHint(totUlisOut, totUpe2aOut)}</td>
           <td style="${tfNum}">${totNonAm}</td>
           <td style="${tfNum}">${totAm}</td>
+          <td style="${tfNum}">${totDocStd}</td>
           <td style="${tfNum}${totAgr>0?';color:var(--agr-fg)':''}">${totAgr>0?'📄 '+totAgr:'—'}</td>
         </tr></tfoot>
       </table>
@@ -14719,7 +14727,8 @@ function renderClasses() {
         💡 <strong>Inscrits</strong> = total des élèves dans la classe.
         <strong>Normalement présents</strong> = inscrits moins les ULIS et UPE2A hors-inclusion (jamais en classe).
         <strong>Aménagés</strong> = présents avec PPRE, PAP, PPS (Gevasco), ULIS+, UPE2A+ ou PAI — copies souvent adaptées.
-        <strong>📄 Agrandissements</strong> = élèves nécessitant des photocopies agrandies (nombre d'agrandissements à tirer).
+        <strong>📄 Docs non aménagés</strong> = documents au format standard à tirer (présents sans agrandissement).
+        <strong>📄 Docs aménagés</strong> = documents agrandis à tirer (élèves avec agrandissement, y compris hors-inclusion quand ils viennent).
       </div>
     </div>
   `;
@@ -27954,7 +27963,7 @@ function printClassesBilan() {
 
   // Agrégation par niveau pour le récap en bas
   const byLevel = {};
-  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totPlaced = 0, totAgr = 0;
+  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totPlaced = 0, totAgr = 0, totDocStd = 0;
   let totM = 0, totF = 0, totCivUnk = 0;
 
   const tdC = 'padding:5px 10px;border-bottom:1px solid #ddd';
@@ -27972,10 +27981,11 @@ function printClassesBilan() {
     const order = classLevelOrder(cls.nom);
     const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
-    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, m:0, f:0, civUnk:0, classes:[] };
+    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[] };
     byLevel[order].present     += c.present;
     byLevel[order].amenagement += c.amenagement;
     byLevel[order].agrandissement += c.agrandissement;
+    byLevel[order].docStd      += c.docStd;
     byLevel[order].total       += c.total;
     byLevel[order].ulisOut     += c.ulisOut;
     byLevel[order].upe2aOut    += c.upe2aOut;
@@ -27985,7 +27995,7 @@ function printClassesBilan() {
     byLevel[order].civUnk      += c.civUnk;
     byLevel[order].classes.push(cls.nom);
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
-    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totPlaced += np; totAgr += c.agrandissement;
+    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totPlaced += np; totAgr += c.agrandissement; totDocStd += c.docStd;
     totM       += c.m;       totF  += c.f;            totCivUnk += c.civUnk;
 
     const nonAm = c.present - c.amenagement;
@@ -27999,6 +28009,7 @@ function printClassesBilan() {
       <td style="${tdN}">${c.present}${outHint}</td>
       <td style="${tdN}">${nonAm}</td>
       <td style="${tdN}">${c.amenagement}</td>
+      <td style="${tdN}">${c.docStd}</td>
       <td style="${tdN}">${c.agrandissement || '—'}</td>
     </tr>`;
   }).join('');
@@ -28020,6 +28031,7 @@ function printClassesBilan() {
       <td style="${tdN}">${r.present}${_outHint(r.ulisOut, r.upe2aOut)}</td>
       <td style="${tdN}">${nonAm}</td>
       <td style="${tdN}">${r.amenagement}</td>
+      <td style="${tdN}">${r.docStd}</td>
       <td style="${tdN}">${r.agrandissement || '—'}</td>
     </tr>`;
   }).join('');
@@ -28045,7 +28057,8 @@ function printClassesBilan() {
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Normalement présents</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Non aménagés</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Aménagés</th>
-          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Agrand.</th>
+          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Docs non amén.</th>
+          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Docs amén.</th>
         </tr></thead>
         <tbody>${classesRows}</tbody>
         <tfoot><tr>
@@ -28056,6 +28069,7 @@ function printClassesBilan() {
           <td style="${tfN}">${totPresent}${_outHint(totUlisOut, totUpe2aOut)}</td>
           <td style="${tfN}">${totNonAm}</td>
           <td style="${tfN}">${totAm}</td>
+          <td style="${tfN}">${totDocStd}</td>
           <td style="${tfN}">${totAgr || '—'}</td>
         </tr></tfoot>
       </table>
@@ -28069,7 +28083,8 @@ function printClassesBilan() {
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Normalement présents</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Non aménagés</th>
           <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">Aménagés</th>
-          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Agrand.</th>
+          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Docs non amén.</th>
+          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #999">📄 Docs amén.</th>
         </tr></thead>
         <tbody>${recapRows}</tbody>
       </table>
@@ -28080,7 +28095,8 @@ function printClassesBilan() {
         <strong>Placés</strong> = élèves placés dans le plan.
         <strong>Normalement présents</strong> = inscrits moins ULIS / UPE2A hors-inclusion (jamais en classe).
         <strong>Aménagés</strong> = présents avec PPRE, PAP, PPS (Gevasco), ULIS+, UPE2A+ ou PAI — copies souvent adaptées.
-        <strong>📄 Agrand.</strong> = élèves nécessitant des photocopies agrandies (nombre d'agrandissements à tirer).
+        <strong>📄 Docs non amén.</strong> = documents au format standard à tirer (présents sans agrandissement).
+        <strong>📄 Docs amén.</strong> = documents agrandis à tirer (élèves avec agrandissement, y compris hors-inclusion quand ils viennent).
       </div>
     </div>
   `;
