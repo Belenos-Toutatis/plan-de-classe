@@ -711,20 +711,17 @@ Dans `_doOneRandomPlacement`, AVANT le placement standard des élèves :
    - (b) **Jamais en extrémité** d'un groupe ≥ 3 tables (au milieu uniquement, pour accompagner les deux côtés)
    - (c) **Préférence** : groupe de taille ≥ K+1 où K = nb d'élèves liés (assez de voisins côté potentiels). Cascade de fallback si pas dispo.
 2. **Éviction collision** : si une AESH atterrit sur une case élève, l'élève est remis dans `studentsToPlace`.
-3. **Pré-affectation des élèves liés** sur positions adjacentes via `_aeshAdjacentKeysPriority(salle, key)` — priorités strictes (groupe 1 entièrement consommé avant le 2, etc.) :
-   - **P1** côté immédiat (r, c±1) — sans X traversé
-   - **P2** côté étendu — saute un sans-table jusqu'à 3 cellules pour atteindre la table suivante
-   - **P3** derrière même col (r+1, c)
-   - **P4** derrière col±1 (r+1, c±1)
-   - **P5** derrière étendu (traverse un X dans la rangée r+1)
-   - **P6-8** devant (r-1) selon le même schéma
-   
-   Schémas validés par l'utilisateur :
+3. **Pré-affectation des élèves liés** sur positions adjacentes via `_aeshAdjacentKeysPriority(salle, key)` — priorités strictes (groupe 1 entièrement consommé avant le 2, etc.). **Règle de l'utilisateur (2026-09-23, v2.59.0)** : à gauche ou à droite ; s'il n'y a pas le choix, devant ou derrière, **diagonales comprises** ; traverser une allée seulement en dernier recours :
+   - **1** côté immédiat (r, c±1)
+   - **2** derrière (r+1, c) puis (r+1, c±1) · **3** devant (r−1, c) puis (r−1, c±1)
+   - **4** dernier recours : la table suivante au-delà d'une allée (≤ 3 cases), même rangée puis derrière puis devant
    ```
-   2 tables de 3 :         2 tables de 2 (X = sans-table) :
-   [3][2][3]               [5][X][3][4]
-   [1][AESH][1]            [2][X][AESH][1]
+   [2][2][2]
+   [1][AESH][1]
+   [3][3][3]
    ```
+   ⚠️ **Avant la v2.59.0, « côté au-delà de l'allée » passait AVANT « derrière »** (ancien schéma `[5][X][3][4] / [2][X][AESH][1]`, remplacé). Mesuré sur la salle ÎlotB (îlots 2×2), avec 2 élèves liés : le 2ᵉ partait sur l'**îlot voisin** 118 fois sur 300, alors que la place derrière l'AESH, dans son îlot, était libre. Avec `{ tiers: true }`, la fonction renvoie `{ side, near, far }`.
+   - **Choix de la place de l'AESH (règle d)** : parmi les candidates des règles a–c, on garde celles qui ont au moins K voisins **libres** à côté (K = nombre d'élèves liés) ; à défaut, au moins K voisins à côté + devant/derrière (et parmi elles, le plus de voisins à côté) ; à défaut, celles qui en ont le plus. Sans cela, dans une salle en îlots 2×2 (un seul voisin de côté par table), l'AESH tombait n'importe où. Mesuré après correction sur 150 mélanges × 7 salles de la démo : 100 % à côté ou devant/derrière. Seule exception : plus d'élèves liés que de voisins physiques (4 élèves autour d'une AESH dans un îlot de 4 tables).
 4. **Exclusion** : positions AESH retirées du `targetSet` (cibles de blocs) et de `all` (places candidates pour chaque élève).
 
 ### Modale "Mélanger tout"
