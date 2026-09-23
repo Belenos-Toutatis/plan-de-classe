@@ -6759,11 +6759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.59.0';
+const APP_VERSION    = '2.59.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-23T20:35:44Z';
+const APP_BUILD_DATE = '2026-09-23T20:46:09Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -8582,7 +8582,8 @@ function _countVideColsInRangeStrict(posVides, c1, c2, rMin, rMax) {
 // `key`). Règles uniques (calibrées sur vérité-terrain enseignant) :
 //   1. Même îlot                                                → INT
 //   2. Même rangée 1D contiguë (sans sans-table entre) ET dc ≤ 3 → INT
-//   3. dc_eff ≤ 1 ET dr_eff ≤ 3 (col line plafonnée à 3 rangées) → INT
+//   3. dc_eff ≤ 1 ET dr_eff ≤ 2 (col line plafonnée à 2 rangées EFFECTIVES — les rangées
+//      vides de séparation entre îlots ne comptent pas ; seuil passé de 3 à 2 le 2026-09-23) → INT
 //   4. dr_eff ≤ 1 ET dc_eff ≤ 2 ET aucune allée verticale traversée
 //      (dc_raw == dc_eff) → INT
 // Distance effective = distance raw moins les rangées/colonnes entièrement vides
@@ -8628,8 +8629,10 @@ function _pairAdjacentKeys(cls, salle, key) {
         }
       }
 
-      // Règle 3 : col line dc_eff ≤ 1, plafonnée à dr_eff ≤ 3
-      if (dcEff <= 1 && drEff <= 3) {
+      // Règle 3 : col line dc_eff ≤ 1, plafonnée à dr_eff ≤ 2. drEff ne compte pas les
+      // rangées vides de séparation : l'ancien seuil de 3 servait à les compenser, en
+      // double emploi — 3 rangs de tables d'écart déclenchaient une alerte.
+      if (dcEff <= 1 && drEff <= 2) {
         out.add(k2);
         continue;
       }

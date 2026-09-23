@@ -2422,3 +2422,18 @@ test('AESH : élèves liés à côté, sinon devant/derrière (diagonales), l\'a
   assert.deepEqual(flat, [...t.side, ...t.near, ...t.far]);
   assert.ok(flat.indexOf('3,5') < flat.indexOf('2,3'), 'la place derrière passe avant celle de l\'autre côté de l\'allée');
 });
+
+test('Paires à séparer : 2 rangs max devant/derrière, rangées de séparation non comptées', () => {
+  // 7 rangées × 3 colonnes, rangée 3 vide (séparation entre îlots)
+  const salle = { rows: 7, cols: 3, positions_vides: ['3,0', '3,1', '3,2'], ilots: {} };
+  setState({ salles: { s1: salle }, classes: { c1: { id: 'c1', eleves: [], noNeighbors: [] } }, eleves: {} });
+  const adj = get(`_pairAdjacentKeys(S.classes.c1, S.salles.s1, '0,1')`);
+  assert.ok(adj.includes('2,1'), '2 rangs derrière → trop proche');
+  assert.ok(!adj.includes('4,1'), '3 rangs de tables d\'écart (4 physiques, dont la séparation) → autorisé');
+  const adj2 = get(`_pairAdjacentKeys(S.classes.c1, S.salles.s1, '2,1')`);
+  assert.ok(adj2.includes('4,1'), 'de part et d\'autre de la séparation = 1 rang effectif → trop proche');
+  assert.ok(adj2.includes('5,1') && !adj2.includes('6,1'));
+  // Sans rangée vide : 3 rangs derrière → autorisé
+  const adj3 = get(`_pairAdjacentKeys(S.classes.c1, { rows: 5, cols: 3, positions_vides: [], ilots: {} }, '0,1')`);
+  assert.ok(adj3.includes('2,1') && !adj3.includes('3,1'));
+});
