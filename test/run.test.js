@@ -1565,6 +1565,23 @@ test('Import : en-têtes reconnus (synonymes, accents, casse) → bon champ', ()
   assert.equal(g('DUPONT'), null, 'un nom de famille ne doit pas passer pour un titre');
 });
 
+test('Import : sélection des classes du fichier — décochées ignorées, non créées', () => {
+  _impSetup();
+  const txt = 'Nom;Prénom;Classe\nDUPONT;Martin;3A\nMARTIN;Sophie;5C\nLEROY;Léa;4B\nPETIT;Zoé;';
+  const all = _impRun(txt);
+  assert.deepEqual(all.classGroups.map(g => [g.key, g.status, g.count, g.excluded]), [
+    ['3A', 'existing', 1, false], ['4B', 'existing', 1, false], ['5C', 'new', 1, false], ['', 'none', 1, false]]);
+  const r = _impRun(txt, { excludeClasses: ['5C', ''] });
+  assert.deepEqual(r.records.map(x => [x.nom, x.ok, !!x.excluded]),
+    [['DUPONT', true, false], ['MARTIN', false, true], ['LEROY', true, false], ['PETIT', false, true]]);
+  assert.deepEqual(r.newClasses, {}, 'une classe décochée ne doit pas être créée');
+  assert.equal(r.classGroups.find(g => g.key === '5C').excluded, true);
+  // Création décochée : la classe inconnue est regroupée sous son libellé brut
+  const off = _impRun(txt, { createClasses: false, excludeClasses: ['?5C'] });
+  assert.equal(off.classGroups.find(g => g.key === '?5C').status, 'unknown');
+  assert.equal(off.records[1].ok, false);
+});
+
 test('Import : valeurs — groupe GP1, civilités, aménagements, dates', () => {
   for (const [v, exp] of [['1', 1], ['G2', 2], ['GP3', 3], ['Gr1', 1], ['groupe 2', 2], ['Groupe3', 3], ['4', null], ['A', null]])
     assert.equal(ev(`_impNormGroupe(${JSON.stringify(v)})`), exp, `groupe ${v}`);

@@ -6759,11 +6759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.57.0';
+const APP_VERSION    = '2.58.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-21T03:42:24Z';
+const APP_BUILD_DATE = '2026-09-23T20:07:53Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15294,7 +15294,9 @@ function _impAnalyze(text, opts) {
   };
   // Classes inconnues : créées à l'import si opts.createClasses (défaut true)
   const createClasses = opts.createClasses !== false;
-  const newClasses = {}; // id → libellé d'origine
+  // Classes du fichier que l'utilisateur a DÉCOCHÉES (clés de regroupement, cf. classKey)
+  const excl = new Set(opts.excludeClasses || []);
+  const groups = {}; // classKey → { key, id, label, status, count }
 
   // Construction des enregistrements
   const defaultClassId = opts.defaultClassId || null;
@@ -15326,7 +15328,7 @@ function _impAnalyze(text, opts) {
           rec.classeId = _impResolveClass(v);
           if (rec.classeRaw && !rec.classeId && createClasses) {
             const nid = _impClassIdFromLabel(rec.classeRaw);
-            if (nid) { rec.classeId = nid; rec.classeNew = true; newClasses[nid] = newClasses[nid] || rec.classeRaw; }
+            if (nid) { rec.classeId = nid; rec.classeNew = true; }
           }
           return;
         }
@@ -15365,6 +15367,14 @@ function _impAnalyze(text, opts) {
       rec.ok = false;
       rec.warnings.unshift(!rec.nom && !rec.prenom ? 'nom et prénom manquants' : (!rec.nom ? 'nom manquant' : 'prénom manquant'));
     }
+    // Regroupement par classe du FICHIER : classe reconnue ou à créer → son id ;
+    // classe inconnue non créée → son libellé brut ; pas de classe → ''.
+    rec.classKey = rec.classeId || (rec.classeRaw ? '?' + rec.classeRaw : '');
+    if (!groups[rec.classKey]) groups[rec.classKey] = {
+      key: rec.classKey, id: rec.classeId || null, label: rec.classeRaw || rec.classeId || '', count: 0,
+      status: rec.classeNew ? 'new' : (rec.classeId ? 'existing' : (rec.classeRaw ? 'unknown' : 'none')) };
+    groups[rec.classKey].count++;
+    if (excl.has(rec.classKey)) { rec.ok = false; rec.excluded = true; rec.warnings.unshift('classe non sélectionnée'); }
     rec.targetClassId = rec.classeId || defaultClassId;
     if (rec.ok && !rec.targetClassId) { rec.ok = false; rec.warnings.push('aucune classe cible'); }
     if (rec.ok) {
@@ -15378,18 +15388,23 @@ function _impAnalyze(text, opts) {
   const codes = Object.entries(codesSeen)
     .map(([code, e]) => ({ code, count: e.count, interp: e.interp, raw: [...e.raw] }))
     .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
-  return { mode: det.mode, sep: det.sep, header: det.header, rows: det.rows, cols, mapping, records, codes, newClasses };
+  // Classes à créer : seulement celles dont au moins une ligne n'a pas été décochée
+  const newClasses = {}; // id → libellé d'origine
+  records.forEach(r => { if (r.classeNew && !r.excluded && !newClasses[r.classeId]) newClasses[r.classeId] = r.classeRaw; });
+  const classGroups = Object.values(groups).map(g => ({ ...g, excluded: excl.has(g.key) }))
+    .sort((a, b) => (a.key === '') - (b.key === '') || String(a.id || a.label).localeCompare(String(b.id || b.label), 'fr', { numeric: true }));
+  return { mode: det.mode, sep: det.sep, header: det.header, rows: det.rows, cols, mapping, records, codes, newClasses, classGroups };
 }
 
 // ── État et rendu ─────────────────────────────────────────────────────────
-let _imp = { sig: '', mapping: null, header: null, codeMap: {}, room: null, timer: null, result: null };
+let _imp = { sig: '', mapping: null, header: null, codeMap: {}, room: null, timer: null, result: null, exclude: new Set() };
 
 function openImportStudents() {
   // Pas de garde « Sélectionnez une classe » : au premier lancement (ou après un
   // Tout effacer) il n'y a AUCUNE classe, et c'est justement le fichier — colonne
   // Classe — qui doit les créer. Sans classe courante, les lignes sans classe sont
   // simplement rejetées (« aucune classe cible »), l'aperçu le dit.
-  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.room = null; _imp.result = null;
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.room = null; _imp.result = null; _imp.exclude = new Set();
   openMod('mi');
   _impRefresh();
 }
@@ -15408,9 +15423,10 @@ function _impRefresh() {
   // de colonnes, même 1re ligne) : si le texte change de nature, on redevine.
   const det = _impDetect(text);
   const sig = det.mode === 'table' ? `${det.sep}#${det.rows[0].length}#${det.rows[0].join('|')}` : 'text';
-  if (sig !== _imp.sig) { _imp.sig = sig; _imp.mapping = null; _imp.header = null; }
+  if (sig !== _imp.sig) { _imp.sig = sig; _imp.mapping = null; _imp.header = null; _imp.exclude = new Set(); }
   const createClasses = document.getElementById('imp-create-cls')?.checked !== false;
-  const res = _impAnalyze(text, { mode, mapping: _imp.mapping, header: _imp.header, codeMap: _imp.codeMap, createClasses, skipDup, defaultClassId: cls?.id || null });
+  const res = _impAnalyze(text, { mode, mapping: _imp.mapping, header: _imp.header, codeMap: _imp.codeMap, createClasses, skipDup,
+                                  excludeClasses: [..._imp.exclude], defaultClassId: cls?.id || null });
   _imp.result = res;
   // Le re-rendu reconstruit les panneaux par innerHTML : sans précaution, la modale
   // remonte en haut et le contrôle qu'on vient de toucher disparaît sous le doigt —
@@ -15424,6 +15440,7 @@ function _impRefresh() {
   const actCode = act?.dataset?.code, actField = act?.dataset?.field;
   _impRenderMapping(res);
   _impRenderCodes(res);
+  _impRenderClasses(res, cls);
   _impRenderPreview(res, cls);
   if (modalBody) modalBody.scrollTop = scrollTop;
   const newCodesBox = document.getElementById('imp-codes-scroll');
@@ -15542,6 +15559,67 @@ function _impRenderCodes(res) {
     </div>`;
 }
 
+// Classes présentes dans le fichier : une case par classe pour choisir lesquelles
+// importer (un export Pronote couvre souvent tout un niveau, voire l'établissement),
+// avec son statut — existante, à créer, ou inconnue (→ classe courante si la création
+// est décochée). Les cases décochées vivent dans _imp.exclude (clés classKey).
+function _impRenderClasses(res, cls) {
+  let box = document.getElementById('imp-classes');
+  if (!box) {
+    const anchor = document.getElementById('imp-codes') || document.getElementById('imp-mapping');
+    if (!anchor) return;
+    box = document.createElement('div'); box.id = 'imp-classes';
+    anchor.insertAdjacentElement('afterend', box);
+  }
+  const groups = res.classGroups || [];
+  if (!groups.some(g => g.status !== 'none')) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const curLab = cls ? _escName(cls.nom || cls.id) : null;
+  const statusHTML = g => {
+    if (g.status === 'existing') return '<span style="color:var(--pencil)">existante</span>';
+    if (g.status === 'new') return '<span style="color:#1a7442">✚ sera créée</span>';
+    if (g.status === 'unknown') return curLab
+      ? `<span style="color:var(--warn-fg, #a85312)">inconnue → ${curLab}</span>`
+      : '<span style="color:var(--danger-fg)">inconnue — ignorée</span>';
+    return curLab ? `<span style="color:var(--pencil)">→ ${curLab}</span>` : '<span style="color:var(--danger-fg)">ignorée</span>';
+  };
+  const nameHTML = g => g.key === '' ? '<em>Sans classe</em>'
+    : `<strong>${_escName(g.id || g.label)}</strong>${g.id && g.label && g.label !== g.id ? ` <span style="color:var(--pencil)">(« ${_escName(g.label)} »)</span>` : ''}`;
+  const chips = groups.map(g => `<label style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid var(--rule-line);border-radius:var(--radius-sm);background:var(--paper);cursor:pointer;${g.excluded ? 'opacity:.6' : ''}">
+      <input type="checkbox" data-code="__cls:${_escAttr(g.key)}" data-field="on" ${g.excluded ? '' : 'checked'} onchange="_impToggleClass('${_escJsAttr(g.key)}',this.checked)">
+      ${nameHTML(g)} <span style="font-family:var(--font-mono);font-size:.9em;color:var(--pencil)">${g.count}</span> <span style="font-size:.88em">${statusHTML(g)}</span>
+    </label>`).join('');
+  const nSel = groups.filter(g => !g.excluded).length;
+  const hasUnknown = groups.some(g => g.status === 'unknown');
+  box.innerHTML = `<div style="margin-top:8px;padding:8px 10px;border:1px solid var(--rule-line);border-radius:var(--radius-md);background:var(--paper-warm)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.86em;margin-bottom:6px">
+        <strong>🏫 Classes du fichier</strong>
+        <span style="color:var(--pencil)">${nSel} / ${groups.length} sélectionnée${nSel > 1 ? 's' : ''} — décoche celles à ne pas importer.</span>
+        <span style="margin-left:auto;display:flex;gap:4px">
+          <button class="btn btn-g btn-sm" type="button" onclick="_impSetAllClasses(true)">☑ Toutes</button>
+          <button class="btn btn-g btn-sm" type="button" onclick="_impSetAllClasses(false)">☐ Aucune</button>
+          ${cls && groups.some(g => g.id === cls.id) ? `<button class="btn btn-g btn-sm" type="button" onclick="_impOnlyClass('${_escJsAttr(cls.id)}')" title="Ne garder que la classe courante">Seulement ${curLab}</button>` : ''}
+        </span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:.86em">${chips}</div>
+      ${hasUnknown ? `<div style="font-size:.8em;color:var(--pencil);margin-top:6px">Coche « Créer les classes inconnues » (en bas) pour créer les classes marquées « inconnue ».</div>` : ''}
+    </div>`;
+}
+function _impToggleClass(key, on) {
+  if (on) _imp.exclude.delete(key); else _imp.exclude.add(key);
+  _impRefresh();
+}
+function _impSetAllClasses(on) {
+  const groups = _imp.result?.classGroups || [];
+  _imp.exclude = on ? new Set() : new Set(groups.map(g => g.key));
+  _impRefresh();
+}
+function _impOnlyClass(id) {
+  const groups = _imp.result?.classGroups || [];
+  _imp.exclude = new Set(groups.filter(g => g.id !== id).map(g => g.key));
+  _impRefresh();
+}
+
 function _impRenderPreview(res, cls) {
   const box = document.getElementById('imp-preview');
   const btn = document.getElementById('imp-btn-go');
@@ -15555,11 +15633,14 @@ function _impRenderPreview(res, cls) {
   }
   const ok = recs.filter(r => r.ok);
   const ko = recs.filter(r => !r.ok);
-  const dupSkipped = ko.filter(r => r.dup && r.warnings.some(w => w.startsWith('déjà présent'))).length;
+  const dupSkipped = ko.filter(r => !r.excluded && r.dup && r.warnings.some(w => w.startsWith('déjà présent'))).length;
   const civ = c => c === 'M' ? '♂' : c === 'F' ? '♀' : '';
   const stLab = st => Object.keys(st).filter(k => st[k]).map(k => ({ ppre: 'PPRE', pap: 'PAP', gevasco: 'PPS', ulis: 'ULIS', ulis_incl: 'ULIS+', upe2a: 'UPE2A', upe2a_incl: 'UPE2A+', pai: 'PAI', agrandissement: '-A', tiers_temps: '+⅓' }[k] || k)).join(' + ');
   const N = 8;
-  const shown = recs.slice(0, N);
+  // Les lignes des classes décochées ne sont pas montrées : l'aperçu décrit ce qui sera fait
+  const visible = recs.filter(r => !r.excluded);
+  const nExcl = recs.length - visible.length;
+  const shown = visible.slice(0, N);
   const hasCol = fn => recs.some(fn);
   const showGrp = hasCol(r => r.groupe), showCiv = hasCol(r => r.civilite), showTags = hasCol(r => r.tagAbbrs.length),
         showSt = hasCol(r => Object.keys(r.statuses).length), showArr = hasCol(r => r.arrivalDate), showNotes = hasCol(r => r.notes);
@@ -15586,10 +15667,10 @@ function _impRenderPreview(res, cls) {
       ${td(state, 'font-size:.85em')}
     </tr>`;
   }).join('');
-  const more = recs.length > N ? `<div style="font-size:.8em;color:var(--pencil);padding:4px 6px">… et ${recs.length - N} autre${recs.length - N > 1 ? 's' : ''} ligne${recs.length - N > 1 ? 's' : ''}</div>` : '';
+  const more = visible.length > N ? `<div style="font-size:.8em;color:var(--pencil);padding:4px 6px">… et ${visible.length - N} autre${visible.length - N > 1 ? 's' : ''} ligne${visible.length - N > 1 ? 's' : ''}</div>` : '';
   // Motifs d'exclusion, agrégés
   const reasons = {};
-  ko.forEach(r => { const k = (r.warnings[0] || 'ignorée').replace(/«.*?»/g, '…'); reasons[k] = (reasons[k] || 0) + 1; });
+  ko.filter(r => !r.excluded).forEach(r => { const k = (r.warnings[0] || 'ignorée').replace(/«.*?»/g, '…'); reasons[k] = (reasons[k] || 0) + 1; });
   const reasonsHtml = Object.entries(reasons).map(([k, n]) => `${n} × ${_escName(k)}`).join(' · ');
   const perClass = {};
   ok.forEach(r => { perClass[r.targetClassId] = (perClass[r.targetClassId] || 0) + 1; });
@@ -15601,7 +15682,8 @@ function _impRenderPreview(res, cls) {
   box.innerHTML = `${noCurHtml}
     <div style="font-size:.88em;margin:6px 0 4px">
       <strong>${recs.length} ligne${recs.length > 1 ? 's' : ''}</strong> · <span style="color:#1a7442">✓ ${ok.length} à importer</span>${perClassHtml ? ` <span style="color:var(--pencil)">(${perClassHtml})</span>` : ''}
-      ${ko.length ? ` · <span style="color:var(--danger-fg)">✗ ${ko.length} ignorée${ko.length > 1 ? 's' : ''}</span> <span style="color:var(--pencil);font-size:.9em">— ${reasonsHtml}</span>` : ''}
+      ${ko.length - nExcl ? ` · <span style="color:var(--danger-fg)">✗ ${ko.length - nExcl} ignorée${ko.length - nExcl > 1 ? 's' : ''}</span> <span style="color:var(--pencil);font-size:.9em">— ${reasonsHtml}</span>` : ''}
+      ${nExcl ? ` · <span style="color:var(--pencil)">${nExcl} dans des classes non sélectionnées</span>` : ''}
     </div>
     <div style="max-height:260px;overflow:auto;border:1px solid var(--rule-line);border-radius:3px;background:var(--paper)">
       <table style="width:100%;border-collapse:collapse;font-size:.86em">
@@ -15730,7 +15812,7 @@ function importStudents() {
   }
 
   document.getElementById('imp-txt').value = '';
-  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.room = null; _imp.result = null;
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.room = null; _imp.result = null; _imp.exclude = new Set();
   closeMod2('mi');
   save();
   if (createdClasses.length) refreshSelector();
