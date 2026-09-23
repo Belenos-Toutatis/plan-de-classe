@@ -2410,3 +2410,15 @@ test('niveau 0 explicite (non évalué) : conservé à l\'affichage, ignoré par
   assert.equal(get(`_studentHasAnyDataInEval(S.evaluations.e1, 's1')`), false, 'un 0 seul n\'est pas une donnée');
   assert.equal(get(`_computeStudentEvalNoteB(S.evaluations.e1, 's1')`), null);
 });
+
+test('AESH : élèves liés à côté, sinon devant/derrière (diagonales), l\'allée en dernier recours', () => {
+  // Salle 5×8, allée en colonne 4 ; AESH en 2,5 → côté gauche = allée.
+  const salle = { rows: 5, cols: 8, positions_vides: ['0,4', '1,4', '2,4', '3,4', '4,4'] };
+  const t = get(`_aeshAdjacentKeysPriority(${JSON.stringify(salle)}, '2,5', { tiers: true })`);
+  assert.deepEqual(t.side, ['2,6']);
+  assert.deepEqual(t.near, ['3,5', '3,6', '1,5', '1,6'], 'derrière puis devant, même colonne puis diagonales');
+  assert.deepEqual(t.far, ['2,3', '3,3', '1,3'], 'au-delà de l\'allée seulement en dernier');
+  const flat = get(`_aeshAdjacentKeysPriority(${JSON.stringify(salle)}, '2,5')`);
+  assert.deepEqual(flat, [...t.side, ...t.near, ...t.far]);
+  assert.ok(flat.indexOf('3,5') < flat.indexOf('2,3'), 'la place derrière passe avant celle de l\'autre côté de l\'allée');
+});

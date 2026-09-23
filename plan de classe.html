@@ -6759,11 +6759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.58.0';
+const APP_VERSION    = '2.59.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-23T20:07:53Z';
+const APP_BUILD_DATE = '2026-09-23T20:35:44Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7035,95 +7035,66 @@ function _aeshPresentForFilter(cls, idx, filter) {
 }
 
 // Renvoie les places adjacentes à une AESH placée à `key`, triées par PRIORITÉ
-// décroissante (les n° représentent des « groupes de priorité » — l'algorithme
-// consomme STRICTEMENT le groupe 1 avant de passer au 2, etc.).
+// décroissante — l'algorithme consomme STRICTEMENT le groupe 1 avant le 2, etc.
 //
-// Schéma 2 tables de 3 (priorité 1 = à côté immédiat, 2 = derrière au centre,
-// 3 = derrière sur les côtés) :
-//     [3][2][3]
-//     [1][AESH][1]
+// Règle de l'utilisateur (2026-09-23) : les élèves accompagnés sont À GAUCHE ou À
+// DROITE de l'AESH ; s'il n'y a pas le choix, DEVANT ou DERRIÈRE, diagonales
+// comprises. Traverser une allée ne vient qu'en tout dernier recours — une place de
+// l'autre côté de l'allée n'est pas « à côté » (dans une salle en îlots, c'est
+// l'îlot voisin) : avant, elle passait AVANT la place juste derrière, et l'élève
+// atterrissait sur l'îlot d'à côté alors que son voisin d'îlot était libre.
 //
-// Schéma 2 tables de 2 séparées par un X (= sans-table) — la priorité 2 traverse
-// le X pour atteindre l'autre paire, idem en priorité 5 derrière :
-//     [5][X][3][4]
-//     [2][X][AESH][1]
+//     [2][2][2]          (2 = derrière, même colonne puis diagonales)
+//     [1][AESH][1]       (1 = à côté immédiat)
+//     [3][3][3]          (3 = devant, même colonne puis diagonales)
+//   puis 4 : même rangée en traversant une allée (≤ 3 cases), derrière puis devant.
 //
-// Filtre les positions sans table (positions_vides) et les hors grille. La
-// traversée d'un X est limitée à 3 cellules pour rester local (ne pas balayer
-// toute la salle).
-function _aeshAdjacentKeysPriority(salle, key) {
-  if (!salle || !key) return [];
+// `opts.tiers` → renvoie { side, near, far } au lieu de la liste à plat (utilisé pour
+// choisir la place de l'AESH). Filtre les sans-table et le hors grille.
+function _aeshAdjacentKeysPriority(salle, key, opts) {
+  if (!salle || !key) return opts && opts.tiers ? { side: [], near: [], far: [] } : [];
   const [r, c] = key.split(',').map(Number);
   const rows = salle.rows || 4;
   const cols = salle.cols || 10;
   const posVides = new Set(salle.positions_vides || []);
-  const out = [];
+  const seen = new Set([key]);
+  const side = [], near = [], far = [];
   const isOff = (r2, c2) => r2 < 0 || r2 >= rows || c2 < 0 || c2 >= cols;
   const isVide = (r2, c2) => isOff(r2, c2) || posVides.has(`${r2},${c2}`);
-  const push = (r2, c2) => {
-    if (isOff(r2, c2)) return;
+  const push = (arr, r2, c2) => {
+    if (isVide(r2, c2)) return;
     const k = `${r2},${c2}`;
-    if (posVides.has(k)) return;
-    if (k === key) return;
-    if (out.includes(k)) return;
-    out.push(k);
+    if (seen.has(k)) return;
+    seen.add(k); arr.push(k);
   };
-  // Cherche la prochaine cellule-table dans la direction (dc=-1 ou +1) sur la
-  // rangée r2, en sautant les sans-tables. Limite : 3 sauts max.
+  // Prochaine table de la rangée r2 dans la direction dc, en sautant les sans-tables
+  // (3 sauts max, pour rester local).
   const nextTableInRow = (r2, dc) => {
     if (r2 < 0 || r2 >= rows) return null;
     let c2 = c + dc;
-    let steps = 0;
-    while (steps < 3 && c2 >= 0 && c2 < cols) {
+    for (let steps = 0; steps < 3 && c2 >= 0 && c2 < cols; steps++, c2 += dc)
       if (!posVides.has(`${r2},${c2}`)) return c2;
-      c2 += dc;
-      steps++;
-    }
     return null;
   };
-
-  // Priorité 1 : côté immédiat même rangée (sans X traversé)
-  push(r, c - 1);
-  push(r, c + 1);
-  // Priorité 2 : côté étendu — si c-1 ou c+1 est un X, on saute jusqu'à la
-  // prochaine table de la même rangée (autre paire/îlot).
-  if (isVide(r, c - 1)) {
-    const c2 = nextTableInRow(r, -1);
-    if (c2 != null) push(r, c2);
+  // 1 : à gauche / à droite, immédiatement
+  push(side, r, c - 1);
+  push(side, r, c + 1);
+  // 2 : derrière (même colonne, puis diagonales) · 3 : devant (idem)
+  for (const dr of [1, -1]) {
+    push(near, r + dr, c);
+    push(near, r + dr, c - 1);
+    push(near, r + dr, c + 1);
   }
-  if (isVide(r, c + 1)) {
-    const c2 = nextTableInRow(r, +1);
-    if (c2 != null) push(r, c2);
+  // 4 : dernier recours — la table suivante de l'autre côté d'une allée
+  for (const dr of [0, 1, -1]) {
+    for (const dc of [-1, 1]) {
+      if (!isVide(r + dr, c + dc)) continue;
+      const c2 = nextTableInRow(r + dr, dc);
+      if (c2 != null) push(far, r + dr, c2);
+    }
   }
-  // Priorité 3 : derrière l'AESH même colonne (r+1, c)
-  push(r + 1, c);
-  // Priorité 4 : derrière l'AESH ±1 colonne (r+1, c-1 / c+1)
-  push(r + 1, c - 1);
-  push(r + 1, c + 1);
-  // Priorité 5 : derrière étendu — traverse un X dans la rangée r+1
-  if (isVide(r + 1, c - 1)) {
-    const c2 = nextTableInRow(r + 1, -1);
-    if (c2 != null) push(r + 1, c2);
-  }
-  if (isVide(r + 1, c + 1)) {
-    const c2 = nextTableInRow(r + 1, +1);
-    if (c2 != null) push(r + 1, c2);
-  }
-  // Priorité 6 : devant l'AESH même colonne (r-1, c)
-  push(r - 1, c);
-  // Priorité 7 : devant l'AESH ±1 colonne
-  push(r - 1, c - 1);
-  push(r - 1, c + 1);
-  // Priorité 8 : devant étendu (traverse un X dans la rangée r-1)
-  if (isVide(r - 1, c - 1)) {
-    const c2 = nextTableInRow(r - 1, -1);
-    if (c2 != null) push(r - 1, c2);
-  }
-  if (isVide(r - 1, c + 1)) {
-    const c2 = nextTableInRow(r - 1, +1);
-    if (c2 != null) push(r - 1, c2);
-  }
-  return out;
+  if (opts && opts.tiers) return { side, near, far };
+  return [...side, ...near, ...far];
 }
 
 // Auto-pick un pool actif si aucun (premier de S.tabletPools)
@@ -12803,7 +12774,8 @@ function _doOneRandomPlacement(cls, studentsToPlace, opts) {
   //    occupée par un élève, pas par une autre AESH).
   // 2) Construit le set des positions occupées par AESH (à exclure du placement élèves).
   // 3) Pour chaque AESH avec des élèves liés : tente de pré-placer ces élèves sur les
-  //    positions adjacentes prioritaires (côté → derrière → devant — cf.
+  //    positions adjacentes prioritaires (côté → derrière/devant, diagonales comprises
+  //    → en dernier recours au-delà d'une allée — cf.
   //    _aeshAdjacentKeysPriority). Pré-affectés = retirés de studentsToPlace.
   const aeshKeysSet = new Set();
   if (room.aeshCount > 0) {
@@ -12865,6 +12837,30 @@ function _doOneRandomPlacement(cls, studentsToPlace, opts) {
       let candidates = baseCands.filter(k => sizeOfGroup(k) >= minSize && !isAeshExtremity(k));
       if (!candidates.length) candidates = baseCands.filter(k => !isAeshExtremity(k));
       if (!candidates.length) candidates = baseCands;
+      // (d) Les élèves liés doivent pouvoir s'asseoir À CÔTÉ d'elle, sinon devant ou
+      //     derrière (cf. _aeshAdjacentKeysPriority). On garde les places qui offrent
+      //     assez de voisins LIBRES à côté ; à défaut, assez de voisins à côté + devant/
+      //     derrière ; à défaut, celles qui en offrent le plus. Sans ce tri, une AESH
+      //     liée à 2 élèves dans une salle en îlots 2×2 (un seul voisin de côté par
+      //     table) tombait n'importe où et le 2e élève partait sur l'îlot voisin.
+      if (links.length) {
+        const free = k => !aeshKeysSet.has(k) && (!cls.seating[k] || links.includes(cls.seating[k]));
+        const score = k => {
+          const t = _aeshAdjacentKeysPriority(salle, k, { tiers: true });
+          const s1 = t.side.filter(free).length;
+          return { s1, s12: s1 + t.near.filter(free).length };
+        };
+        const scored = candidates.map(k => ({ k, ...score(k) }));
+        const K = links.length;
+        const keepBest = (arr, f) => { const m = Math.max(...arr.map(f)); return arr.filter(x => f(x) === m); };
+        let pool = scored.filter(x => x.s1 >= K);                 // tous à côté
+        if (!pool.length) {
+          pool = scored.filter(x => x.s12 >= K);                  // à côté + devant/derrière
+          pool = pool.length ? keepBest(pool, x => x.s1)          //   … le plus possible à côté
+                             : keepBest(scored, x => x.s12);      // sinon : le plus de voisins proches
+        }
+        candidates = pool.map(x => x.k);
+      }
       const chosen = candidates[Math.floor(Math.random() * candidates.length)];
       room.aeshSeating[i] = chosen;
       aeshKeysSet.add(chosen);
