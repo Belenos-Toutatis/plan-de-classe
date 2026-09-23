@@ -1718,10 +1718,10 @@ Plus de sélecteur 1..4 — règle unique pour toute classe. Un candidat à `(r2
 |---|---|---|
 | 1 | **Même îlot** | Tables groupées physiquement → toujours interdit, peu importe la distance dans l'îlot |
 | 2 | **Même rangée 1D contiguë** (sans `positions_vides` entre) **ET `dc_raw ≤ 3`** | Rangée de tables collées : 3 voisins de chaque côté |
-| 3 | **`dc_eff ≤ 1` ET `dr_eff ≤ 3`** | "Col line" — directement devant/derrière jusqu'à 3 rangées effectives, plafonné |
+| 3 | **`dc_eff ≤ 1` ET `dr_eff ≤ 2`** | "Col line" — directement devant/derrière (ou une colonne à côté) jusqu'à 2 rangées effectives, plafonné |
 | 4 | **`dr_eff ≤ 1` ET `dc_eff ≤ 2` ET `dc_raw == dc_eff`** (pas d'allée verticale traversée) | Voisinage immédiat sans trou de séparation |
 
-**Distance effective** : raw moins le nombre de rangées (resp. colonnes) entièrement vides traversées. Une rangée d'allée vide entre deux îlots est "transparente". Calibrée à 0 mismatch sur un fichier-test de 12 scénarios × 128 cellules-décisions.
+**Distance effective** : raw moins le nombre de rangées (resp. colonnes) entièrement vides traversées. ⚠️ **Seuil de la règle 3 passé de 3 à 2 le 2026-09-23** (v2.59.1), à la demande de l'utilisateur : le 3 avait été choisi pour « sauter » la rangée vide qui sépare deux îlots, or `dr_eff` la retire déjà — double emploi, et une paire à 3 rangs de tables d'écart déclenchait une alerte. Règle voulue : **2 rangs, sans compter les rangées de séparation**. Une rangée d'allée vide entre deux îlots est "transparente". Calibrée à 0 mismatch sur un fichier-test de 12 scénarios × 128 cellules-décisions.
 
 ### Helpers clés
 - `_computeTableGroups(salle)` → `Map<'r,c', { row, startCol, endCol }>` — pour chaque case-table, le groupe 1D contigu auquel elle appartient.
