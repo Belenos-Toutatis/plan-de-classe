@@ -6810,11 +6810,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.61.1';
+const APP_VERSION    = '2.61.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-25T15:49:12Z';
+const APP_BUILD_DATE = '2026-09-25T16:48:55Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10015,6 +10015,10 @@ function _confOpenFiche(sid) {
   if (_conf.on && _conf.sid !== sid) _confReveal(sid);
   openFiche(sid);
 }
+// Ligne « 🔒 N autres masqué·s » dans les listes nominatives d'un appel (mattDet).
+function _confMaskedLi(n) {
+  return n > 0 ? `<li style="padding:3px 0;list-style:none;margin-left:-18px;color:var(--pencil);font-style:italic">🔒 ${n} autre${n > 1 ? 's' : ''} élève${n > 1 ? 's' : ''} — nom${n > 1 ? 's' : ''} masqué${n > 1 ? 's' : ''} (mode confidentiel)</li>` : '';
+}
 function _confReveal(sid) {
   _conf.sid = sid || null;
   _confSave();
@@ -10069,6 +10073,9 @@ function _confRefresh() {
   else if (name === 'eleves' && typeof renderStudents === 'function') renderStudents();
   // Vue d'ensemble ouverte : son tri et ses filtres dépendent du mode.
   if (document.getElementById('moverview')?.classList?.contains('on') && typeof renderOverview === 'function') renderOverview();
+  if (document.getElementById('mattStats')?.classList?.contains('on') && typeof renderAttStats === 'function') renderAttStats();
+  if (document.getElementById('mattPlan')?.classList?.contains('on') && typeof renderMattPlan === 'function') renderMattPlan();
+  if (document.getElementById('mattDet')?.classList?.contains('on') && _mattCurrentRecordId && typeof viewAttendance === 'function') viewAttendance(_mattCurrentRecordId, _mattCurrentClassId);
 }
 // Cellule du plan pour un élève masqué : place, nom, tablette — rien d'autre (ni couleur
 // de groupe/tag/genre, ni badge, ni compteur, ni état d'appel, ni alerte de contrainte).
@@ -16670,7 +16677,9 @@ function renderAttStats() {
       const stu = S.eleves[sid];
       if (!stu) continue;
       const stats = getStudentAttendanceStatsInRange(cid, sid, fFrom, fTo);
-      if (hideZero && stats.abs === 0 && stats.ret === 0) continue;
+      // Mode confidentiel : « 0/0 masqués » ignoré (qui reste dans la liste trahirait qui a
+      // des absences), comme les tris par compteur ci-dessous.
+      if (!_conf.on && hideZero && stats.abs === 0 && stats.ret === 0) continue;
       rows.push({
         sid, classId: cid, className: cls.nom,
         nom: stu.nom, prenom: stu.prenom, groupe: stu.groupe,
@@ -16680,9 +16689,9 @@ function renderAttStats() {
   }
 
   // Tri
-  const dir = _statsSort.dir;
+  const dir = _conf.on ? 1 : _statsSort.dir;
   rows.sort((a, b) => {
-    const c = _statsSort.col;
+    const c = _conf.on ? 'classe' : _statsSort.col;
     if (c === 'classe') return (a.className||'').localeCompare(b.className||'', 'fr', { sensitivity:'base' }) * dir || a.nom.localeCompare(b.nom);
     if (c === 'nom')    return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr', { sensitivity:'base' }) * dir;
     if (c === 'abs')    return (a.abs - b.abs) * dir || a.nom.localeCompare(b.nom);
@@ -16712,9 +16721,9 @@ function renderAttStats() {
               : r.groupe === 2 ? '<span class="gbdg g2">G2</span>'
               : r.groupe === 3 ? '<span class="gbdg g3">G3</span>'
               : '<span class="gbdg gn">—</span>';
-    return `<tr>
+    return `<tr data-sid="${_escAttr(r.sid)}">
       ${showClassCol ? `<td><span style="background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600">${_escName(r.className)}</span></td>` : ''}
-      <td><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
+      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
       <td>${grp}</td>
       <td style="text-align:center" title="🚫 Absences sur la période : ${r.abs}"><span class="badge" style="background:${oubliColor(r.abs)};color:#222">${r.abs}</span></td>
       <td style="text-align:center" title="⏰ Retards sur la période : ${r.ret}"><span class="badge" style="background:${oubliColor(r.ret)};color:#222">${r.ret}</span></td>
@@ -16740,6 +16749,7 @@ function renderAttStats() {
 // Export CSV du tableau actuel (filtres + tri respectés). Format : BOM UTF-8 + séparateur ; + CRLF
 // pour ouverture directe dans Excel français / LibreOffice / Google Sheets.
 function exportAttStatsCSV() {
+  if (_conf.on) { toast('🔒 Mode confidentiel — export désactivé', 'warn'); return; }
   const fClass    = document.getElementById('msts-class')?.value || '';
   const fFrom     = document.getElementById('msts-from')?.value || '';
   const fTo       = document.getElementById('msts-to')?.value || '';
@@ -27272,8 +27282,9 @@ function renderMattPlan() {
       const fallback = sid ? (S.attendance?.[v.classId]?.[v.recordId]?.eleves?.[sid] || null) : null;
       const nomShown    = stu?.nom    ?? fallback?.nom;
       const prenomShown = stu?.prenom ?? fallback?.prenom;
-      const isAbsent = sid && v.absentsSet.has(sid);
-      const lateTime = sid && v.retardsMap.get(sid);
+      // Mode confidentiel : l'état d'appel n'est montré que pour l'élève affiché.
+      const isAbsent = sid && !_confHides(sid) && v.absentsSet.has(sid);
+      const lateTime = sid && !_confHides(sid) && v.retardsMap.get(sid);
       // Si on filtre par groupe et que l'élève (live) n'appartient pas à ce groupe → cellule vide.
       // Cas particulier : élève archivé (stu null) et présent dans abs/retards → on le garde quand même.
       const wasInRecord = isAbsent || lateTime;
@@ -27318,7 +27329,7 @@ function renderMattPlan() {
   let unplacedNote = '';
   if (!usingFallback && v.absentsSet.size > 0) {
     const placedSidsSnap = new Set(Object.values(seatingForRender).filter(Boolean));
-    const unplacedAbsents = [...v.absentsSet].filter(sid => !placedSidsSnap.has(sid));
+    const unplacedAbsents = [...v.absentsSet].filter(sid => !placedSidsSnap.has(sid) && !_confHides(sid));
     if (unplacedAbsents.length) {
       const _identityOf = sid => {
         const fallback = (S.attendance?.[v.classId]?.[v.recordId]?.eleves?.[sid]) || { nom: '?', prenom: '?' };
@@ -27435,8 +27446,10 @@ function viewAttendance(id, classId) {
   let html = '';
   if (nA) {
     html += `<h3 style="font-size:.95em;margin:8px 0 4px">🚫 Absents (${nA})</h3>`;
-    const sortedA = [...r.absents].sort(cmpNom);
-    html += `<ul style="padding-left:22px;margin:4px 0">${sortedA.map(sid => {
+    // Mode confidentiel : seuls les noms de l'élève affiché restent ; le nombre de classe
+    // est conservé (statistique de séance), les autres sont comptés sans être nommés.
+    const sortedA = [...r.absents].filter(sid => !_confHides(sid)).sort(cmpNom);
+    html += `<ul style="padding-left:22px;margin:4px 0">${_confMaskedLi(r.absents.length - sortedA.length)}${sortedA.map(sid => {
       const unplBdg = wasUnplaced(sid)
         ? ' <span style="color:var(--pencil);font-size:.82em;font-style:italic" title="Cet élève n\'avait pas de place affectée au moment de l\'appel">(non placé)</span>'
         : '';
@@ -27446,8 +27459,8 @@ function viewAttendance(id, classId) {
   if (nR) {
     html += `<h3 style="font-size:.95em;margin:8px 0 4px">⏰ Retards (${nR})</h3>`;
     // Tri alphabétique par nom de famille (l'heure d'arrivée reste affichée par ligne)
-    const items = Object.entries(r.retards).sort(([a], [b]) => cmpNom(a, b));
-    html += `<ul style="padding-left:22px;margin:4px 0">${items.map(([sid, hhmm]) => `<li style="padding:3px 0">${nameOf(sid)} <span style="background:#facc15;color:#78350f;padding:1px 6px;border-radius:3px;font-size:.85em;font-weight:600;margin-left:6px">arrivé à ${_esc(hhmm)}</span></li>`).join('')}</ul>`;
+    const items = Object.entries(r.retards).filter(([sid]) => !_confHides(sid)).sort(([a], [b]) => cmpNom(a, b));
+    html += `<ul style="padding-left:22px;margin:4px 0">${_confMaskedLi(nR - items.length)}${items.map(([sid, hhmm]) => `<li style="padding:3px 0">${nameOf(sid)} <span style="background:#facc15;color:#78350f;padding:1px 6px;border-radius:3px;font-size:.85em;font-weight:600;margin-left:6px">arrivé à ${_esc(hhmm)}</span></li>`).join('')}</ul>`;
   }
   // Section AESH absentes (Phase 2). On déduit le label depuis aeshCount actuel de la salle ;
   // si la salle/AESH a depuis été modifiée/supprimée, on affiche un libellé brut.
@@ -27469,6 +27482,7 @@ function viewAttendance(id, classId) {
 }
 
 function copyAttList() {
+  if (_conf.on) { toast('🔒 Mode confidentiel — copie de la liste désactivée', 'warn'); return; }
   const cid = _mattCurrentClassId || getCls()?.id;
   if (!cid || !_mattCurrentRecordId) return;
   const r = S.attendance?.[cid]?.[_mattCurrentRecordId];
