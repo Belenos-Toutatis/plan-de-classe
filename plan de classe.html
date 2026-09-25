@@ -6810,11 +6810,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.61.0';
+const APP_VERSION    = '2.61.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-25T15:40:01Z';
+const APP_BUILD_DATE = '2026-09-25T15:49:12Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10008,6 +10008,13 @@ function _confNameClick(sid) {
   _confReveal(sid === _conf.sid ? null : sid);
   return true;
 }
+// Onglet Élèves : le NOM ouvre toujours la fiche complète (demande de l'utilisateur),
+// y compris en mode confidentiel — la fiche ne montre que cet élève, qui devient donc
+// l'élève affiché. Le reste de la cellule du nom garde le clic afficher / masquer.
+function _confOpenFiche(sid) {
+  if (_conf.on && _conf.sid !== sid) _confReveal(sid);
+  openFiche(sid);
+}
 function _confReveal(sid) {
   _conf.sid = sid || null;
   _confSave();
@@ -10060,6 +10067,8 @@ function _confRefresh() {
   const name = at ? at.id.replace(/^tab-/, '') : null;
   if (name === 'plan' && typeof renderTeacherGrid === 'function') renderTeacherGrid();
   else if (name === 'eleves' && typeof renderStudents === 'function') renderStudents();
+  // Vue d'ensemble ouverte : son tri et ses filtres dépendent du mode.
+  if (document.getElementById('moverview')?.classList?.contains('on') && typeof renderOverview === 'function') renderOverview();
 }
 // Cellule du plan pour un élève masqué : place, nom, tablette — rien d'autre (ni couleur
 // de groupe/tag/genre, ni badge, ni compteur, ni état d'appel, ni alerte de contrainte).
@@ -16427,13 +16436,17 @@ function renderOverview() {
       });
     }
   }
-  if (fMinAbs > 0) rows = rows.filter(r => r.abs >= fMinAbs);
-  if (fMinRet > 0) rows = rows.filter(r => r.ret >= fMinRet);
+  // Mode confidentiel : filtres « Min. 🚫/⏰ » et tris par compteur IGNORÉS — la présence
+  // d'un élève dans la liste filtrée, ou son rang dans un tri par absences, révélerait
+  // l'information masquée. On trie alors par classe puis nom.
+  const _ovConf = !!_conf.on;
+  if (!_ovConf && fMinAbs > 0) rows = rows.filter(r => r.abs >= fMinAbs);
+  if (!_ovConf && fMinRet > 0) rows = rows.filter(r => r.ret >= fMinRet);
 
   // Tri
-  const dir = _ovSort.dir;
+  const dir = _ovConf ? 1 : _ovSort.dir;
   rows.sort((a, b) => {
-    const c = _ovSort.col;
+    const c = _ovConf ? 'classe' : _ovSort.col;
     if (c === 'classe') return (a.className || '').localeCompare(b.className || '', 'fr', { sensitivity: 'base' }) * dir || (a.nom).localeCompare(b.nom);
     if (c === 'nom')    return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr', { sensitivity: 'base' }) * dir;
     if (c === 'oublis') return ((a.oublis||0) - (b.oublis||0)) * dir || a.nom.localeCompare(b.nom);
@@ -16443,7 +16456,9 @@ function renderOverview() {
     return 0;
   });
 
-  if (info) {
+  if (info && _ovConf) {
+    info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🔒 mode confidentiel (filtres et tris par compteur désactivés)`;
+  } else if (info) {
     const totA = rows.reduce((s, r) => s + r.abs, 0);
     const totR = rows.reduce((s, r) => s + r.ret, 0);
     info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🚫 ${totA} · ⏰ ${totR}`;
@@ -16460,9 +16475,9 @@ function renderOverview() {
               : r.groupe === 2 ? '<span class="gbdg g2">G2</span>'
               : r.groupe === 3 ? '<span class="gbdg g3">G3</span>'
               : '<span class="gbdg gn">—</span>';
-    return `<tr>
+    return `<tr data-sid="${_escAttr(r.sid)}">
       <td><span style="background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600">${_escName(r.className)}</span></td>
-      <td><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
+      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
       <td>${grp}</td>
       <td style="text-align:center" title="📦 Matériel oublié : ${r.oublis}"><span class="badge" style="background:${oubliColor(r.oublis)};color:#222">${r.oublis}</span></td>
       <td style="text-align:center" title="📝 Travail non fait : ${r.non_travail}"><span class="badge" style="background:${oubliColor(r.non_travail)};color:#222">${r.non_travail}</span></td>
@@ -17988,7 +18003,7 @@ function renderStudents() {
     return `
       <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)">
-        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confNameClick('${s.id}')||openFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
+        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
         <td class="conf-keep">${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>
@@ -18147,10 +18162,13 @@ function openHistFromSnapshot(sid) {
 function onEleveRowMouseDown(sid, e) {
   if (e.button !== 0) return;
   // Ne pas démarrer la sélection si on clique sur un élément interactif
-  if (e.target.closest('button, input, select, a, [onclick]')) return;
-  // Mode confidentiel : la cellule du nom d'un élève masqué sert à le révéler (onclick du
+  // ⚠️ `:not(td)` : la cellule du nom porte un onclick (mode confidentiel) — sans cette
+  // exclusion, tout mousedown dans la 1re colonne abandonnait la sélection, même HORS mode
+  // (régression de la v2.61.0).
+  if (e.target.closest('button, input, select, a, [onclick]:not(td)')) return;
+  // Mode confidentiel : la cellule du nom sert à afficher / masquer l'élève (onclick du
   // <td>), pas à démarrer une sélection.
-  if (_confHides(sid) && e.target.closest('td:first-child')) return;
+  if (_conf.on && e.target.closest('td:first-child')) return;
   e.preventDefault();
   dragSelectStarted = true;
   dragSelectMode = selectedEleves.has(sid) ? 'remove' : 'add';
