@@ -526,7 +526,17 @@ html[data-theme="dark"] .qcm-info-banner a{color:#7fb4d8 !important}
 #toast.on{opacity:1}
 /* Sonomètre actif : son widget occupe le coin bas-droite → on remonte les toasts
    juste au-dessus pour ne pas le recouvrir. */
+/* Barre d'actions en lot de l'onglet Élèves : FLOTTANTE en bas de l'écran. Dans le flux,
+   elle apparaissait au-dessus du tableau pendant le clic de sélection et le faisait
+   coulisser sous le curseur — d'autres élèves se retrouvaient sélectionnés. */
+body.el-bulk-on:has(#tab-eleves.on) #toast{bottom:84px}
+body.el-bulk-on #tab-eleves{padding-bottom:84px}
+#el-bulk-bar{position:fixed;bottom:12px;left:calc(var(--margin-w, 56px) + 14px);right:16px;z-index:980;margin:0 !important;box-shadow:var(--shadow-pop, 0 6px 20px rgba(0,0,0,.18))}
+body.noise-widget-on #el-bulk-bar, body.timer-widget-on #el-bulk-bar{right:262px}
+@media (max-width: 760px){ #el-bulk-bar{left:6px;right:6px} body.noise-widget-on #el-bulk-bar, body.timer-widget-on #el-bulk-bar{right:6px;bottom:auto;top:6px} }
 body.noise-widget-on #toast{bottom:112px}
+/* Priorité au widget (le toast est à droite, au-dessus du widget, pas de la barre en lot). */
+body.el-bulk-on.noise-widget-on:has(#tab-eleves.on) #toast, body.el-bulk-on.timer-widget-on:has(#tab-eleves.on) #toast{bottom:112px}
 
 /* ─── PRINT AREA ─── */
 #pa{display:none}
@@ -6771,11 +6781,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.60.0';
+const APP_VERSION    = '2.60.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-25T15:00:49Z';
+const APP_BUILD_DATE = '2026-09-25T15:12:17Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -17838,8 +17848,7 @@ function renderStudents() {
     const _rowStyle = _inactive ? 'opacity:.55;font-style:italic' : '';
     return `
       <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
-          onmousedown="onEleveRowMouseDown('${s.id}',event)"
-          onmouseenter="onEleveRowMouseEnter('${s.id}')">
+          onmousedown="onEleveRowMouseDown('${s.id}',event)">
         <td>${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();openFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
         <td>${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
@@ -18003,13 +18012,29 @@ function onEleveRowMouseDown(sid, e) {
   e.preventDefault();
   dragSelectStarted = true;
   dragSelectMode = selectedEleves.has(sid) ? 'remove' : 'add';
+  _dragSelectLastSid = sid;
   applyEleveSelection(sid, dragSelectMode);
 }
 
-function onEleveRowMouseEnter(sid) {
+// Le glisser ne suit que les VRAIS mouvements de souris (mousemove), jamais un
+// mouseenter : ce dernier se déclenche aussi quand le tableau bouge sous un curseur
+// immobile (bandeau qui apparaît, ligne qui change de hauteur), et sélectionnait alors
+// des élèves par erreur. Les lignes survolées trop vite pour recevoir un événement sont
+// comblées : on applique toute la plage entre la dernière ligne et la ligne courante.
+let _dragSelectLastSid = null;
+document.addEventListener('mousemove', e => {
   if (!dragSelectStarted) return;
-  applyEleveSelection(sid, dragSelectMode);
-}
+  if (!(e.buttons & 1)) { dragSelectStarted = false; dragSelectMode = null; return; }
+  const tr = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.stbl tr[data-sid]');
+  if (!tr || tr.dataset.sid === _dragSelectLastSid) return;
+  const rows = [...document.querySelectorAll('.stbl tr[data-sid]')];
+  const to = rows.indexOf(tr);
+  let from = rows.findIndex(r => r.dataset.sid === _dragSelectLastSid);
+  if (from < 0) from = to;
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  for (let i = a; i <= b; i++) applyEleveSelection(rows[i].dataset.sid, dragSelectMode);
+  _dragSelectLastSid = tr.dataset.sid;
+});
 
 function applyEleveSelection(sid, mode) {
   if (mode === 'add') selectedEleves.add(sid);
@@ -18056,6 +18081,7 @@ function updateEleveBulkBar() {
   } else {
     bar.style.display = 'none';
   }
+  document.body.classList.toggle('el-bulk-on', selectedEleves.size > 0);
 }
 
 // Termine le drag dès que le bouton est relâché n'importe où
