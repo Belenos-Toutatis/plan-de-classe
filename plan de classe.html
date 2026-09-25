@@ -2420,6 +2420,28 @@ body.ff-no-eval      .ff-eval { display: none !important; }
 }
 .fiche-ico:hover, .fiche-ico:focus-visible { background: var(--paper-deep); border-color: var(--rule-line); }
 .fiche-click { cursor: pointer; border-radius: var(--radius-sm); }
+/* ── Mode confidentiel (🔒, _conf) — les règles qui dépendent de l'élève révélé sont
+   générées par _confUpdateStyle() dans <style id="conf-dyn-style">. */
+#conf-banner { display: none; align-items: center; gap: 8px; flex-wrap: wrap; padding: 5px 14px 5px calc(var(--margin-w, 56px) + 10px);
+  background: var(--notice-bg); color: var(--notice-fg); border-top: 1px solid var(--notice-bd); border-bottom: 2px solid var(--notice-bd); font-size: .9em; }
+body.conf-on:has(#tab-eleves.on, #tab-plan.on, #tab-notes.on, #tab-bilan.on, #tab-comp.on) #conf-banner { display: flex; }
+#conf-banner .conf-hint { color: var(--notice-fg); opacity: 1; font-size: .9em; font-style: italic; }
+#conf-sel { max-width: 240px; }
+#btn-conf.hdr-btn.conf-active { color: #fff !important; border-color: #b03d2e !important;
+  animation: confBlink 1.1s ease-in-out infinite; }
+/* Clignotement voulu (demande de l'utilisateur) : l'affichage n'est pas l'affichage
+   habituel, ça doit sauter aux yeux. ~0,9 Hz, loin du seuil de 3 Hz des recommandations
+   d'accessibilité. ⚠️ Le rouge passe par une OMBRE INTÉRIEURE, pas par background : la
+   règle du design system `.hdr-btn { background: var(--paper) !important }` gagne sur
+   toute animation (une déclaration !important bat les keyframes). */
+@keyframes confBlink {
+  0%, 100% { box-shadow: inset 0 0 0 40px #b03d2e, 0 0 0 0 rgba(232,96,79,0); }
+  50%      { box-shadow: inset 0 0 0 40px #e8604f, 0 0 0 5px rgba(232,96,79,.5); }
+}
+body.conf-on tr[data-sid] > td:first-child { cursor: pointer; }
+body.conf-on #class-msg-banner { display: none !important; }
+.cell.conf-hidden { cursor: pointer; }
+.cell.conf-hidden .conf-lock { position: absolute; right: 3px; bottom: 2px; font-size: .75em; opacity: .7; }
 /* Onglet Élèves : le nom ouvre la fiche complète (mousedown stoppé pour ne pas lancer la sélection). */
 .stu-name-link { cursor: pointer; border-radius: var(--radius-sm); }
 .stu-name-link:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -2737,6 +2759,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button id="btn-conf" class="hdr-btn" onclick="toggleConfMode()" title="Mode confidentiel — masque la vie scolaire des élèves (oublis, travail non fait, absences, aménagements, groupe, tags, notes, compétences, remarques) sur Élèves, Plan et Évaluations, sauf pour l'élève choisi. Pour montrer l'écran à un parent.">🔒</button>
     <button id="btn-timer" class="hdr-btn" onclick="openTimerSettings()" title="Compte à rebours / minuteur — durées prédéfinies, annonce vocale du temps restant, sonnerie finale (thèmes rétro). S'ouvre dans une fenêtre flottante déplaçable, toujours au premier plan.">⏲</button>
     <button id="btn-noise" class="hdr-btn" onclick="toggleNoiseMeter()" title="Sonomètre — surveille le niveau sonore de la classe et alerte quand c'est trop fort. Micro analysé en local uniquement, aucun enregistrement.">🎙</button>
     <button id="btn-about" class="hdr-btn" onclick="openAbout()" title="À propos · crédits · licence · vie privée · raccourcis · vérifier les mises à jour">ⓘ</button>
@@ -2802,6 +2825,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <button class="nb" onclick="showTab('bilan',this)" title="Bilan des notes : moyenne /20 par élève et moyenne par domaine du socle, prêt à coller dans le bulletin">📜 Bilan des notes</button>
   </div>
 </nav>
+<div id="conf-banner" role="status">
+  <span>🔒 <strong>Mode confidentiel</strong> — informations masquées, sauf pour :</span>
+  <select id="conf-sel" onchange="_confReveal(this.value || null)" aria-label="Élève dont les informations restent visibles"></select>
+  <span class="conf-hint">Clique sur un nom pour l'afficher.</span>
+  <button type="button" class="btn btn-sm" onclick="toggleConfMode()" style="margin-left:auto">🔓 Quitter le mode confidentiel</button>
+</div>
 </div>
 
 <!-- ═══════════════ MAIN ═══════════════ -->
@@ -6781,11 +6810,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.60.1';
+const APP_VERSION    = '2.61.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-25T15:12:17Z';
+const APP_BUILD_DATE = '2026-09-25T15:40:01Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9942,6 +9971,114 @@ function _safeColor(c) {
 // parenthèse, pas une destination (même convention que ⚙ Motifs… / ⚙ Bibliothèque…).
 // Cas d'usage : un rendez-vous parents ou un conseil, sans sauter d'onglet en onglet.
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// 🔒 MODE CONFIDENTIEL — pour montrer l'écran à un parent.
+// Masque, sur Élèves / Plan / Devoirs (tableurs) / Bilans, tout ce qui relève de la vie
+// scolaire (oublis, travail non fait, absences, aménagements, groupe, tags, notes,
+// compétences, remarques, mentions) SAUF pour l'élève révélé (_conf.sid). Les NOMS
+// restent visibles, ainsi que les statistiques de classe (pieds de tableaux).
+// Arbitrages de l'utilisateur (2026-09-25) : révélation par clic sur le nom, noms des
+// autres visibles, stats de classe toutes visibles, mode persisté (un F5 devant le
+// parent ne doit rien réafficher).
+// Mécanique : les tableaux (lignes tr[data-sid], 1re cellule = nom) sont masqués par CSS
+// généré (_confUpdateStyle) — aucune reconstruction nécessaire. Le plan, lui, est rendu
+// dépouillé par buildCell (_confHides) : couleurs de groupe/tag, badges et état d'appel
+// sont posés en classes et en contenu, un masque CSS en laisserait fuiter une partie.
+// ═══════════════════════════════════════════════════════════
+const CONF_LS_KEY = 'planClasse_confMode';
+var _conf = { on: false, sid: null };
+try {
+  const v = JSON.parse(localStorage.getItem(CONF_LS_KEY) || 'null');
+  if (v && v.on) _conf = { on: true, sid: typeof v.sid === 'string' ? v.sid : null };
+} catch (e) {}
+function _confSave() {
+  try { localStorage.setItem(CONF_LS_KEY, JSON.stringify(_conf)); } catch (e) {}
+}
+// true si les informations de cet élève doivent être masquées.
+function _confHides(sid) {
+  return !!(_conf.on && sid && sid !== _conf.sid);
+}
+// Clic sur un nom en mode confidentiel : révèle l'élève, ou le MASQUE de nouveau si
+// c'était déjà lui (demande de l'utilisateur : recevoir un parent sans savoir encore de
+// qui il est le parent, et pouvoir revenir à « tout masqué » d'un clic). Renvoie true
+// pour que l'appelant n'exécute pas son action habituelle. Hors mode → false → action
+// habituelle (fiche, historique…).
+function _confNameClick(sid) {
+  if (!_conf.on || !sid) return false;
+  _confReveal(sid === _conf.sid ? null : sid);
+  return true;
+}
+function _confReveal(sid) {
+  _conf.sid = sid || null;
+  _confSave();
+  _confRefresh();
+}
+function toggleConfMode() {
+  _conf.on = !_conf.on;
+  _conf.sid = null;
+  _confSave();
+  _confRefresh();
+  toast(_conf.on ? '🔒 Mode confidentiel activé — clique sur un nom pour afficher ses informations'
+                 : '🔓 Mode confidentiel désactivé');
+}
+function _confUpdateStyle() {
+  let st = document.getElementById('conf-dyn-style');
+  if (!st) {
+    st = document.createElement('style');
+    st.id = 'conf-dyn-style';
+    document.head.appendChild(st);
+  }
+  if (!_conf.on) { st.textContent = ''; return; }
+  const esc = (window.CSS && CSS.escape) ? CSS.escape : (x => String(x).replace(/["\\]/g, '\\$&'));
+  const not = _conf.sid ? `:not([data-sid="${esc(_conf.sid)}"])` : '';
+  const td = `body.conf-on tr[data-sid]${not} > td:not(:first-child):not(.conf-keep)`;
+  // Fond hachuré neutre : la couleur d'une cellule (note, niveau, compteur) est déjà une
+  // information. pointer-events:none coupe aussi les infobulles (title), qui en portent.
+  st.textContent = `
+${td} { background: repeating-linear-gradient(45deg, var(--paper-warm) 0 6px, var(--paper-deep) 6px 12px) !important; color: transparent !important; pointer-events: none !important; text-shadow: none !important; }
+${td} > * { visibility: hidden !important; }
+body.conf-on .us[data-sid]${not} .spec-badge, body.conf-on .us[data-sid]${not} .gbdg { display: none !important; }
+body.conf-on .us[data-sid]${not} { pointer-events: auto; }`;
+}
+function _confRenderBanner() {
+  const btn = document.getElementById('btn-conf');
+  if (btn) { btn.classList?.toggle?.('conf-active', _conf.on); btn.setAttribute?.('aria-pressed', String(_conf.on)); }
+  document.body.classList.toggle('conf-on', _conf.on);
+  const sel = document.getElementById('conf-sel');
+  if (!sel || !_conf.on) return;
+  const cls = getCls();
+  const sids = (cls?.eleves || []).filter(id => S.eleves[id])
+    .sort((a, b) => (S.eleves[a].nom || '').localeCompare(S.eleves[b].nom || '', 'fr') || (S.eleves[a].prenom || '').localeCompare(S.eleves[b].prenom || '', 'fr'));
+  sel.innerHTML = `<option value="">— personne —</option>` +
+    sids.map(id => `<option value="${_escAttr(id)}"${id === _conf.sid ? ' selected' : ''}>${_escName(S.eleves[id].nom)} ${_escName(S.eleves[id].prenom)}</option>`).join('');
+  if (_conf.sid && !sids.includes(_conf.sid)) sel.value = '';
+}
+function _confRefresh() {
+  _confUpdateStyle();
+  _confRenderBanner();
+  const at = document.querySelector('.tab.on');
+  const name = at ? at.id.replace(/^tab-/, '') : null;
+  if (name === 'plan' && typeof renderTeacherGrid === 'function') renderTeacherGrid();
+  else if (name === 'eleves' && typeof renderStudents === 'function') renderStudents();
+}
+// Cellule du plan pour un élève masqué : place, nom, tablette — rien d'autre (ni couleur
+// de groupe/tag/genre, ni badge, ni compteur, ni état d'appel, ni alerte de contrainte).
+// Clic = révéler l'élève. Pas de glisser : on ne réorganise pas un plan devant un parent.
+function _confBuildHiddenCell(cell, cls, key, stu, row, col, ipad) {
+  cell.classList.add('oc', 'conf-hidden');
+  cell.draggable = false;
+  const pool = S.tabletPools?.[cls.activePool];
+  const tab = (pool && pool.count > 0) ? `<span class="cipad" style="color:var(--pencil)">${ipad ? 'Tab. ' + ipad : 'Tab. —'}</span>` : '';
+  cell.innerHTML = `
+    <span class="cpos">N°${seatLabel(row, col, cls.configuration.cols || 10)}</span>
+    <div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+    ${tab}<span class="conf-lock" aria-hidden="true">🔒</span>`;
+  cell.title = `${stu.prenom} ${stu.nom}\n🔒 Mode confidentiel — clic pour afficher ses informations`;
+  cell.addEventListener('click', () => _confReveal(stu.id));
+  cell.addEventListener('contextmenu', e => { e.preventDefault(); _confReveal(stu.id); });
+  return cell;
+}
+
 let _ficheSid = null;
 function openFiche(sid) {
   if (!S.eleves[sid]) return;
@@ -13963,6 +14100,7 @@ function showTab(name, btn) {
   if (btn) btn.classList.add('on');
   localStorage.setItem('planClasse_tab', name);
   renderTab(name);
+  _confRenderBanner();
 }
 
 // Bascule entre onglets via le nom (retrouve le bouton nav s'il existe)
@@ -14466,6 +14604,7 @@ function switchClass(id) {
   // Re-render active tab
   const at = document.querySelector('.tab.on');
   if (at) renderTab(at.id.replace('tab-',''));
+  _confRenderBanner();
 }
 
 function refreshSelector() {
@@ -17849,8 +17988,8 @@ function renderStudents() {
     return `
       <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)">
-        <td>${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();openFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
-        <td>${posInput}</td>
+        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confNameClick('${s.id}')||openFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
+        <td class="conf-keep">${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>
           <input type="number" min="0" class="counter-input"
@@ -18009,6 +18148,9 @@ function onEleveRowMouseDown(sid, e) {
   if (e.button !== 0) return;
   // Ne pas démarrer la sélection si on clique sur un élément interactif
   if (e.target.closest('button, input, select, a, [onclick]')) return;
+  // Mode confidentiel : la cellule du nom d'un élève masqué sert à le révéler (onclick du
+  // <td>), pas à démarrer une sélection.
+  if (_confHides(sid) && e.target.closest('td:first-child')) return;
   e.preventDefault();
   dragSelectStarted = true;
   dragSelectMode = selectedEleves.has(sid) ? 'remove' : 'add';
@@ -19391,6 +19533,15 @@ function buildCell(cls, row, col) {
   }
   // 'none' → pas de classe de coloration zone
 
+  if (stu && _confHides(stu.id)) return _confBuildHiddenCell(cell, cls, key, stu, row, col, ipad);
+  // Élève révélé : un clic sur sa case (hors boutons internes) le masque de nouveau.
+  if (stu && _conf.on && !_appelMode) {
+    cell.addEventListener('click', e => {
+      if (e.target.closest('button, select, input, .cctr, .cipad, .crem-badge, .cell-unplace')) return;
+      _confReveal(null);
+    });
+  }
+
   if (stu) {
     cell.classList.add('oc');
     if (gcls) cell.classList.add(gcls);
@@ -20163,7 +20314,7 @@ function renderUnplaced() {
       data-sid="${_escAttr(s.id)}"
       ondragstart="startDragUnplaced(event,'${_escAttr(s.id)}')"
       ondragend="this.classList.remove('dragging')"
-      onclick="unplToggleSelect(event,'${_escAttr(s.id)}')">
+      onclick="_confNameClick('${_escAttr(s.id)}')||unplToggleSelect(event,'${_escAttr(s.id)}')">
       ${otherClsBdg}
       ${s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.7em">G${s.groupe}</span>` : ''}
       ${specBdgs.join('')}
@@ -34153,6 +34304,9 @@ document.addEventListener('keydown', e => {
 // INIT
 // ═══════════════════════════════════════════════════════════
 function init() {
+  // Mode confidentiel persisté : posé AVANT le 1er rendu, pour qu'un F5 devant un
+  // parent n'affiche jamais, même un instant, les informations masquées.
+  _confUpdateStyle(); document.body.classList.toggle('conf-on', _conf.on);
   // Indicateur de version (coin bas-droit) — peuplé dès l'init pour aide au debug
   const verEl = document.getElementById('app-version-tag');
   if (verEl && typeof APP_VERSION === 'string') {
@@ -39458,7 +39612,7 @@ function _evalTableurRender() {
     const values = ev.notes?.[sid]?.values || {};
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     mnOrder.forEach((mn, ci) => {
       if (_subSkippedFor(mn, cls.id)) {
         const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
@@ -41148,7 +41302,7 @@ function _evalRenderBilanComps() {
     if (!stu) continue;
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
       // Comp non évaluée → afficher "0" (niveau "non évalué"), pas "—"
@@ -41668,7 +41822,7 @@ function _evalTableurRenderB(ev, cls) {
     if (!stu) return;
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     let ci = 0;
     for (const p of sortedPass) {
       p.niveaux = p.niveaux || {};
@@ -42421,7 +42575,7 @@ function _evalTableurRenderD(ev, cls) {
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     const levels = ev.notes?.[sid]?.levels || {};
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     let ci = 0;
     for (const g of exoGroups) {
       g.mns.forEach((q, qi) => {
@@ -46072,7 +46226,7 @@ function renderBilanTab() {
     if (!stu) continue;
     const rowBg = i % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-sid="${_esc(sid)}" style="background:${rowBg}">`;
-    html += `<td onclick="openHist('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1;cursor:pointer" title="Cliquer pour ouvrir l'historique de l'élève">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||openHist('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1;cursor:pointer" title="Cliquer pour ouvrir l'historique de l'élève">${_fmtStuNameInnerHtml(stu)}</td>`;
     // Détermine quelles facultatives sont effectivement comptées pour cet élève
     // (par période de synthèse ou global selon le filtre). On précalcule l'union
     // sur les périodes de synthèse pour rester rapide.
@@ -47603,8 +47757,8 @@ function renderCompetencesTab() {
     const stu = S.eleves[sid];
     if (!stu) continue;
     const bg = _si % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
-    html += `<tr style="background:${bg}">`;
-    html += `<td onclick="openHist('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap;cursor:pointer" title="Cliquer pour ouvrir l'historique de l'élève">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<tr data-sid="${_esc(sid)}" style="background:${bg}">`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||openHist('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap;cursor:pointer" title="Cliquer pour ouvrir l'historique de l'élève">${_fmtStuNameInnerHtml(stu)}</td>`;
     let sumMean = 0, nbMean = 0;
     for (const col of cols) {
       // Pour chaque colonne (compétence unique OU domaine), on agrège les niveaux
