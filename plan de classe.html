@@ -2400,6 +2400,22 @@ body.ff-no-eval      .ff-eval { display: none !important; }
   font-variant-numeric: oldstyle-nums;
 }
 .about-section p { color: var(--ink-deep); }
+/* Fiche élève (mfiche) : petites icônes d'action posées à côté d'un titre, et zones
+   cliquables (Notes, titre Rappels) — remplacent les boutons du pied. */
+.fiche-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+  padding: 0 4px; margin-left: 4px; font-size: .9em; line-height: 1.4;
+  cursor: pointer; color: inherit; vertical-align: baseline;
+}
+.fiche-ico:hover, .fiche-ico:focus-visible { background: var(--paper-deep); border-color: var(--rule-line); }
+.fiche-click { cursor: pointer; border-radius: var(--radius-sm); }
+/* Onglet Élèves : le nom ouvre la fiche complète (mousedown stoppé pour ne pas lancer la sélection). */
+.stu-name-link { cursor: pointer; border-radius: var(--radius-sm); }
+.stu-name-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.fiche-click:hover { background: var(--paper-deep); }
+.fiche-click-hint { color: var(--pencil); font-size: .8em; font-weight: 400; margin-left: 6px; }
+@media (pointer: coarse) { .fiche-ico { min-width: 32px; min-height: 30px; font-size: 1em; } }
 .about-section a { color: var(--ink-blue); text-decoration: underline; }
 .about-section a:hover { color: var(--margin-red); }
 .about-section code { font-family: var(--font-mono); font-size: .9em; }
@@ -3683,10 +3699,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <h2 id="mfiche-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">🪪 Fiche élève</h2>
     <div id="mfiche-body" style="max-height:70vh;overflow-y:auto;padding-right:4px"></div>
     <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-sm" onclick="_ficheGo('edit')" title="Ouvrir la modale Modifier — la fiche se rouvre à la fermeture">✏️ Modifier</button>
-      <button class="btn btn-sm" onclick="_ficheGo('hist')" title="Historique détaillé (incidents, notes, absences)">🕓 Historique</button>
-      <button class="btn btn-sm" onclick="_ficheGo('rem')" title="Rappels / À vérifier">🔔 Rappels</button>
-      <button class="btn btn-sm" onclick="_ficheGo('notes')" title="Notes libres">📋 Notes</button>
       <button class="btn btn-g" onclick="closeMod2('mfiche')" style="margin-left:auto">Fermer</button>
     </div>
   </div>
@@ -6759,11 +6771,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.59.1';
+const APP_VERSION    = '2.60.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-23T20:46:09Z';
+const APP_BUILD_DATE = '2026-09-25T15:00:49Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9914,8 +9926,9 @@ function _safeColor(c) {
 // ═══════════════════════════════════════════════════════════
 // 🪪 FICHE COMPLÈTE D'UN ÉLÈVE — tout ce que l'app sait de lui, sur un seul écran.
 // Ouverte par le menu contextuel du plan (clic droit → 🪪 Fiche complète). Lecture seule :
-// les boutons du pied renvoient vers les modales d'édition existantes (Modifier, Historique,
-// Rappels, Notes) et la fiche se ROUVRE à leur fermeture via _modalReturnTo — c'est une
+// les accès aux modales existantes sont posés À CÔTÉ de ce qu'ils concernent (✏️ près du nom,
+// 🕓 près de Compteurs / Appel / Évaluations, clic sur Notes et sur le titre Rappels) plutôt
+// qu'en boutons de pied, et la fiche se ROUVRE à leur fermeture via _modalReturnTo — c'est une
 // parenthèse, pas une destination (même convention que ⚙ Motifs… / ⚙ Bibliothèque…).
 // Cas d'usage : un rendez-vous parents ou un conseil, sans sauter d'onglet en onglet.
 // ═══════════════════════════════════════════════════════════
@@ -9932,7 +9945,9 @@ function ctxOpenFiche() {
   closeCtxMenu();
   openFiche(sid);
 }
-function _ficheGo(what) {
+// `tab` / `periode` (hist seulement) : onglet de l'historique à ouvrir (incidents,
+// attendance, notes) et, pour les notes, la période ('' = toute l'année).
+function _ficheGo(what, tab, periode) {
   const sid = _ficheSid;
   if (!sid || !S.eleves[sid]) return;
   const target = { edit: 'me', hist: 'mhist', rem: 'mreminders', notes: 'mnotes' }[what];
@@ -9940,7 +9955,7 @@ function _ficheGo(what) {
   closeMod2('mfiche');
   _modalReturnTo[target] = () => { if (S.eleves[sid]) openFiche(sid); };
   if (what === 'edit') openEdit(sid);
-  else if (what === 'hist') openHist(sid);
+  else if (what === 'hist') openHist(sid, tab, periode);
   else if (what === 'rem') openReminders(sid);
   else openStuNotes(sid);
 }
@@ -9978,7 +9993,8 @@ function renderFiche() {
     ? (s.departureDate && _stuDepartedOn(s) ? `<span class="spec-badge spec-ulis">🚪 parti·e le ${_fmtDateFr(s.departureDate)}</span>`
                                               : `<span class="spec-badge spec-ulis">📅 arrive le ${_fmtDateFr(s.arrivalDate)}</span>`)
     : '';
-  ttl.innerHTML = `🪪 <span>${_escName(s.prenom)} <strong>${_escName(s.nom)}</strong></span> ${civ}
+  const ico = (onclick, icon, title) => `<button type="button" class="fiche-ico" onclick="${onclick}" title="${_escAttr(title)}" aria-label="${_escAttr(title)}">${icon}</button>`;
+  ttl.innerHTML = `🪪 <span>${_escName(s.prenom)} <strong>${_escName(s.nom)}</strong></span>${ico("_ficheGo('edit')", '✏️', "Modifier l'élève — la fiche se rouvre à la fermeture")} ${civ}
     ${cls ? `<span style="font-size:.7em;font-weight:400;color:var(--pencil)">${_escName(cls.nom)}</span>` : ''} ${stateBdg}`;
 
   // ── Identité & scolarité
@@ -10000,7 +10016,7 @@ function renderFiche() {
   const badges = _ficheSpecBadges(s);
   const amen = sec('🎓 Aménagements',
     row('Dispositifs', badges || '<span style="color:var(--pencil)">aucun</span>') +
-    row('Notes', s.notes ? `<span style="white-space:pre-line">${_escName(s.notes)}</span>` : dash));
+    `<tr class="fiche-click" onclick="_ficheGo('notes')" title="Cliquer pour voir et modifier les notes"><th style="text-align:left;padding:3px 14px 3px 0;color:var(--pencil);font-weight:600;white-space:nowrap;vertical-align:top;font-size:.9em;width:1%">📋 Notes</th><td style="padding:3px 0;vertical-align:top">${s.notes ? `<span style="white-space:pre-line">${_escName(s.notes)}</span>` : `${dash}<span class="fiche-click-hint">cliquer pour en ajouter</span>`}</td></tr>`);
 
   // ── Place, tablette, AESH (salle active de la classe réelle)
   let place = '';
@@ -10041,15 +10057,15 @@ function renderFiche() {
       if (a || r) { per.push({ cid, a, r }); totAbs += a; totRet += r; }
     }
     const detail = per.length > 1 ? ` <span style="color:var(--pencil);font-size:.85em">(${per.map(p => `${_escName(S.classes?.[p.cid]?.nom || p.cid)} : 🚫 ${p.a} · ⏰ ${p.r}`).join(' ; ')})</span>` : '';
-    attRows = row('Appel', `${pill(totAbs, '🚫', 'Absences cumulées (tous appels enregistrés)')} ${pill(totRet, '⏰', 'Retards cumulés')}${detail}`);
+    attRows = row(`Appel${ico("_ficheGo('hist','attendance')", '🕓', 'Détail des absences et retards')}`, `${pill(totAbs, '🚫', 'Absences cumulées (tous appels enregistrés)')} ${pill(totRet, '⏰', 'Retards cumulés')}${detail}`);
   }
   const incidents = sec('📦 Incidents & appel',
-    row('Compteurs', `${pill(s.oublis, '📦', 'Matériel oublié')} ${pill(s.non_travail, '📝', 'Travail non fait')} <span style="color:var(--pencil);font-size:.85em">${lastIncLbl}</span>`) +
+    row(`Compteurs${ico("_ficheGo('hist','incidents')", '🕓', 'Détail des incidents (📦 / 📝)')}`, `${pill(s.oublis, '📦', 'Matériel oublié')} ${pill(s.non_travail, '📝', 'Travail non fait')} <span style="color:var(--pencil);font-size:.85em">${lastIncLbl}</span>`) +
     attRows);
 
   // ── Rappels
   const rems = Array.isArray(s.reminders) ? s.reminders : [];
-  const rappels = sec('🔔 Rappels / À vérifier',
+  const rappels = sec(`<span class="fiche-click" onclick="_ficheGo('rem')" title="Cliquer pour gérer les rappels" style="padding:0 4px;margin-left:-4px">🔔 Rappels / À vérifier <span class="fiche-click-hint">ajouter · traiter</span></span>`,
     row(`${rems.length || 'Aucun'}`, rems.length
       ? `<ul style="margin:0;padding-left:18px">${rems.map(r => `<li>${_escName(r.label)} <span style="color:var(--pencil);font-size:.85em">(${fmtTs(r.ts)})</span></li>`).join('')}</ul>`
       : '<span style="color:var(--pencil)">rien à vérifier</span>'));
@@ -10068,7 +10084,7 @@ function renderFiche() {
         const rem = _getBulletinRemarque(cls.id, s.id, p.code, did);
         const isCur = p.code === cur;
         return `<tr style="${isCur ? 'font-weight:600' : ''}">
-          <td style="padding:3px 8px 3px 0;white-space:nowrap;color:var(--pencil)">${p.code}${isCur ? ' <span title="Période en cours">●</span>' : ''}</td>
+          <td style="padding:3px 8px 3px 0;white-space:nowrap;color:var(--pencil)">${p.code}${isCur ? ' <span title="Période en cours">●</span>' : ''}${ico(`_ficheGo('hist','notes','${p.code}')`, '🕓', `Détail des notes — ${p.code}`)}</td>
           <td style="padding:3px 8px;text-align:right;font-family:var(--font-mono)">${mean == null ? dash : `<strong>${_fmtNote(mean)}</strong><span style="color:var(--pencil);font-size:.8em">/20</span>`}</td>
           <td style="padding:3px 8px">${ment || dash}</td>
           <td style="padding:3px 0;font-size:.88em;white-space:pre-line">${rem ? _escName(rem) : dash}</td>
@@ -10077,7 +10093,7 @@ function renderFiche() {
       return `${discIds.length > 1 ? `<tr><td colspan="4" style="padding:6px 0 2px;font-weight:600;color:var(--ink-blue)">🎓 ${_escName(_disciplineLabel(did))}</td></tr>` : ''}
         <tr style="font-size:.8em;color:var(--pencil)"><th style="text-align:left;padding:2px 8px 2px 0">Période</th><th style="text-align:right;padding:2px 8px">Moyenne</th><th style="text-align:left;padding:2px 8px">Conseil</th><th style="text-align:left">Remarque bulletin</th></tr>${trs}`;
     }).join('');
-    evals = sec('📊 Évaluations', blocks);
+    evals = sec(`📊 Évaluations${ico("_ficheGo('hist','notes','')", '🕓', "Détail des notes — toute l'année")}`, blocks);
   }
 
   body.innerHTML = identite + amen + place + incidents + rappels + evals;
@@ -16202,7 +16218,8 @@ function _popHist(s, type) {
 
 // ─── Modal Historique : incidents (📦📝) + absences/retards (🚫⏰) ──
 let mhistTargetSid = null;
-let _histTab = 'incidents'; // 'incidents' | 'attendance'
+let _histTab = 'incidents'; // 'incidents' | 'notes' | 'attendance'
+let _histNotesPeriode = '';  // onglet Notes : '' = toute l'année, sinon code de période
 
 // ─── Vue d'ensemble — tous les élèves de toutes les classes ────────
 let _ovSort = { col: 'abs', dir: -1 }; // par défaut tri absences desc
@@ -16636,15 +16653,22 @@ function exportAttStatsCSV() {
   toast(`💾 ${filename} téléchargé (${rows.length} ligne${rows.length>1?'s':''})`);
 }
 
-function openHist(sid) {
+// tab (facultatif) : 'incidents' | 'notes' | 'attendance' ; periode (onglet notes) : code
+// de période, ou '' pour toute l'année.
+function openHist(sid, tab, periode) {
   mhistTargetSid = sid;
-  _histTab = 'incidents';
+  _histTab = ['incidents', 'notes', 'attendance'].includes(tab) ? tab : 'incidents';
+  _histNotesPeriode = typeof periode === 'string' ? periode : '';
   renderHist();
   openMod('mhist');
 }
 
 function setHistTab(tab) {
   _histTab = tab;
+  renderHist();
+}
+function setHistNotesPeriode(p) {
+  _histNotesPeriode = p || '';
   renderHist();
 }
 
@@ -16727,6 +16751,7 @@ function renderHistNotes(stu) {
   const items = [];
   for (const ev of Object.values(S.evaluations || {})) {
     if (!_evalIncludesClass(ev, stu.classe_id)) continue;
+    if (_histNotesPeriode && ev.periode !== _histNotesPeriode) continue;
     const note = _computeStudentEvalNote(ev, sid); // déjà arrondi par granulométrie
     if (note == null) continue;
     const date = _evalDateFor(ev, stu.classe_id) || '';
@@ -16753,9 +16778,17 @@ function renderHistNotes(stu) {
   const avg = note20Vals.length ? note20Vals.reduce((s, v) => s + v, 0) / note20Vals.length : null;
   const avgDisp = (avg != null && meanG > 0) ? Math.round(avg / meanG) * meanG : avg;
   if (summary) {
-    summary.textContent = items.length
+    // Choix de la période : toute l'année ou une période précise (ouvert depuis la fiche
+    // élève avec la période de la ligne cliquée).
+    const chip = (code, lbl) => {
+      const on = _histNotesPeriode === code;
+      return `<button type="button" class="btn btn-sm" onclick="setHistNotesPeriode('${code}')" style="padding:2px 9px;${on ? 'background:#2176b8;color:#fff' : 'background:var(--paper-warm);color:var(--pencil)'}" aria-pressed="${on}">${lbl}</button>`;
+    };
+    const chips = `<span style="display:inline-flex;gap:4px;flex-wrap:wrap;margin-right:8px">${chip('', 'Toute l\'année')}${_periodeOptions().map(o => chip(o.code, o.code)).join('')}</span>`;
+    const txt = items.length
       ? `📊 ${items.length} note${items.length > 1 ? 's' : ''}${avgDisp != null ? ' · moyenne /20 : ' + _fmtNote(avgDisp) : ''}`
-      : 'Aucune note saisie pour cet élève.';
+      : (_histNotesPeriode ? `Aucune note sur ${_histNotesPeriode}.` : 'Aucune note saisie pour cet élève.');
+    summary.innerHTML = `${chips}<span>${_esc(txt)}</span>`;
   }
   const list = document.getElementById('mhist-list');
   if (!items.length) {
@@ -17466,7 +17499,9 @@ function _evalShowNoteDetail(evalId, sid) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
       let nivCell;
       if (niv == null) {
-        nivCell = `<span style="color:var(--pencil);font-style:italic">non atteint</span>`;
+        // Pas de niveau = rien de comptable pour cette compétence (case vide, A ou NN) :
+        // elle est prévue mais pas encore évaluée — surtout pas « non atteinte ».
+        nivCell = `<span style="color:var(--pencil);font-style:italic" title="Aucune saisie comptée pour cette compétence (case vide, ${_escAttr(_codeA())} ou ${_escAttr(_codeNN())})">pas encore évaluée</span>`;
       } else {
         const lvlInt = Math.max(1, Math.min(colors.length, Math.round(niv)));
         const bg = colors[lvlInt - 1] || 'var(--paper-warm)';
@@ -17805,7 +17840,7 @@ function renderStudents() {
       <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)"
           onmouseenter="onEleveRowMouseEnter('${s.id}')">
-        <td>${civBtn}<strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}${_delegueBadge(s)}${_lifeBadge}</td>
+        <td>${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();openFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
         <td>${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>
