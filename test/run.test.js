@@ -2437,3 +2437,14 @@ test('Paires à séparer : 2 rangs max devant/derrière, rangées de séparation
   const adj3 = get(`_pairAdjacentKeys(S.classes.c1, { rows: 5, cols: 3, positions_vides: [], ilots: {} }, '0,1')`);
   assert.ok(adj3.includes('2,1') && !adj3.includes('3,1'));
 });
+
+test('_stuOutOnSubDate : élève parti / pas encore arrivé à la date d\'une passation', () => {
+  const stu = { groupe: 1, arrivalDate: '2026-10-01', departureDate: '2027-03-16' };
+  const call = (sub, isPass) => get(`_stuOutOnSubDate(${JSON.stringify(stu)}, ${JSON.stringify(sub)}, 'c1', ${isPass})`);
+  assert.equal(call({ dates: { c1: '2027-03-20' } }, true), 'left');
+  assert.equal(call({ dates: { c1: '2027-03-16' } }, true), 'left', 'le jour du départ = 1er jour d\'absence');
+  assert.equal(call({ dates: { c1: '2027-03-15' } }, true), null);
+  assert.equal(call({ dates: { c1: '2026-09-20' } }, false), 'notyet');
+  assert.equal(call({ dates: { c1: '' }, date: '2027-04-01' }, true), null, 'date vidée pour la classe → pas de verdict');
+  assert.equal(call({ dates: { c1: '2027-01-10' }, datesByGroup: { c1: { 1: '2027-04-01' } } }, true), 'left', 'date du groupe de l\'élève prioritaire');
+});
