@@ -2539,7 +2539,7 @@ Appliqué dans : `renderBilanTab`, `_bilanBuildRows`, `renderCompetencesTab` (si
 
 **Évals diagnostiques (`countsForMean === false`)** : exclues de TOUS les bilans — moyenne /20 (historique) ET niveaux de compétences agrégés (`_aggregateStudentCompetence`, `_computeStudentDomainLevel`, collecte des colonnes de `renderCompetencesTab`). Le tableur de l'éval elle-même reste complet (vue intra-éval).
 
-UI : dans la modale 🔀 Classe recomposée (`mvc`), deux mini-sélecteurs « de [—] à [—] » par élève coché + barre d'action en lot avec sélection secondaire (case droite distincte de la case d'appartenance gauche) pour appliquer en bulk : `mvcBulkApplyPeriod()` / `mvcBulkResetPeriod()` / `mvcBulkSelAll()`.
+UI : dans la modale 🔀 Classe recomposée (`mvc`), bloc repliable **🗓 Présence par période** — cf. section *Classes recomposées* ci-dessous.
 
 ### Suppression d'une discipline
 
@@ -2553,21 +2553,24 @@ Bouton **🎓 Disciplines** dans la toolbar de l'onglet **Devoirs** (uniquement 
 
 Une « classe recomposée » est une `cls` avec `cls.virtual = true` créée via l'onglet Classes (bouton **+ Nouvelle classe recomposée**). Elle a son propre roster (sids issus de n'importe quelle(s) classe(s) réelle(s)), sa propre salle/plan, ses propres bilans et disciplines.
 
-### Modale `mvc` — mode pliable
+### Modale `mvc` — filtres et présence par période
 
-Pour réduire la densité visuelle dans le cas simple (cocher quelques élèves), la modale a deux niveaux :
+De haut en bas : nom / année / salle / identifiant, disciplines, **panneau de filtres** (toujours visible), recherche + « 👁 Cochés uniquement » + Tout cocher/décocher, bouton repliable **▸ 🗓 Présence par période**, liste des élèves groupée par classe. Tous les contrôles portent une infobulle ; couleurs en tokens (`.mvc-chip` / `.on` = `--chip-on-bg`, `.mvc-cls-head` = `--info-bg`, `.mvc-per-sel`, `.mvc-per-box`) — audit de contraste : 0 écart en clair et en sombre.
 
-- **Panneau 🔎 Filtrer les candidats — toujours visible** (v2.63.0 ; il était caché derrière « Options avancées » alors que c'est l'outil principal). ET entre les lignes, OU dans une ligne. Quatre lignes, **pas plus** (v2.63.1 : l'utilisateur a jugé le panneau surchargé et fait retirer les compteurs à facettes, la ligne Groupe et la ligne « pas encore dans une classe recomposée ») :
-  - **Tags et Aménagements : clic cyclique neutre → exigé → exclu (⊘ barré) → neutre** (`_mvcCycle` ; `tagIds`/`tagExcl`, `amen`/`amenExcl`). OU/ET entre tags exigés ; aménagements exigés = l'un OU l'autre. ⚠️ Un bouton « ⊘ Exclure » a été essayé (v2.63.1) puis retiré : l'utilisateur le croyait valable pour tout le panneau. Le cycle est annoncé dans l'infobulle du libellé de ligne.
-  - **Classes regroupées par niveau** : la puce de niveau (gras) coche/décoche toutes les classes du niveau (`mvcSetFilterLevel`) ; bordure pointillée = niveau partiel. Plusieurs niveaux possibles.
-  - **Civilité** ; liste des aménagements dans `MVC_AMEN` (PPRE, PAP, PPS, ULIS et UPE2A inclusion comprise, PAI, -A, +⅓, aucun).
-  - ⚠️ Toute nouvelle ligne = une clé dans `_mvcEmptyFilters`, `_mvcHasFilter`, `_mvcStuMatches` et un rendu dans `renderMvcFilterPanel` — mais demander avant : le panneau est à sa limite.
-- **« ▸ 🗓 Présence par période »** (ex-« Options avancées ») ne replie plus que la présence par période, la 2e case 🗓 et les « de … à … » par ligne.
-État : variable globale `_mvcAdvancedOn` (booléen, reset à chaque ouverture via `_mvcResetAdvanced()`). Toggle : `_mvcToggleAdvanced()` qui synchronise visibilité du wrap, libellé du bouton (▸ vs ▾), header de colonnes et re-render de la liste.
+**Panneau 🔎 Filtrer les candidats** (v2.63.x). ET entre les lignes, OU dans une ligne. Quatre lignes, **pas plus** — l'utilisateur a jugé le panneau surchargé et fait retirer les compteurs à facettes, la ligne Groupe et la ligne « pas encore dans une classe recomposée » :
+- **Tags** et **Aménagements** : clic cyclique **neutre → exigé → exclu (⊘ barré) → neutre** (`_mvcCycle` ; `tagIds`/`tagExcl`, `amen`/`amenExcl`). OU/ET au choix entre tags exigés ; aménagements exigés = l'un OU l'autre. Liste dans `MVC_AMEN` (PPRE, PAP, PPS, ULIS et UPE2A inclusion comprise, PAI, -A, +⅓, aucun). ⚠️ Un bouton « ⊘ Exclure » a été essayé puis retiré : l'utilisateur le croyait valable pour tout le panneau. Le cycle est annoncé dans l'infobulle du libellé de ligne.
+- **Classes regroupées par niveau** : la puce de niveau (gras) coche/décoche toutes ses classes (`mvcSetFilterLevel`) ; bordure pointillée = niveau partiel. Il n'y a plus de dimension « niveau » distincte → plusieurs niveaux possibles.
+- **Civilité**.
+- ⚠️ Toute nouvelle ligne = une clé dans `_mvcEmptyFilters`, `_mvcHasFilter`, `_mvcStuMatches` et un rendu dans `renderMvcFilterPanel` — mais demander avant : le panneau est à sa limite.
 
-**Le panneau 🔎 Filtrer les candidats filtre aussi l'AFFICHAGE** (v2.62.0) : `_mvcVisibility()` combine filtres (tags / classes / niveau), recherche par nom et « 👁 Cochés uniquement ». Un élève coché masqué reste membre — une ligne au-dessus de la liste le compte. ⚠️ « Tout cocher / décocher » et « + Tous / − Aucun » n'agissent **que sur les élèves visibles** ; tout retrait passe par `_mvcSetMember(sid, false)` (efface aussi `_mvcMembership` et `_mvcBulkSel`, comme la case individuelle). **Présence par période** (ex-« barre bulk », v2.62.1) : bloc `.mvc-per-box` rédigé en deux étapes — ① choisir les élèves (case 🗓 de droite, `_mvcBulkSel`), ② « Présents de [début d'année | S1…] à [fin d'année | …] » + Appliquer / ↻ Toute l'année. ⚠️ **Seules les bornes qui ont un sens sont proposées** (v2.63.3, `_mvcPerSelectOptions`) : « du » = début d'année · début du semestre 2 ; « à la » = fin du semestre 1 · fin d'année. Début de la 1re période et fin de la dernière valent « pas de limite » (valeur vide) : `_mvcNormBounds` y ramène les anciens `fromPer: 'S1'` / `toPer: 'S2'` à l'ouverture — sans quoi le sélecteur « à » ne trouvait pas l'option et affichait la première, « fin du S1 ». Sur les lignes, libellés courts (« début S2 », « fin S1 ») ; une plage inversée y est refusée et le sélecteur remis. Les boutons de l'étape ② sont désactivés tant que ① est vide (l'infobulle dit pourquoi) ; une plage inversée (S2 → S1) est refusée. Tous les contrôles de la modale ont une infobulle. Couleurs en tokens (`.mvc-chip` / `.on` = `--chip-on-bg`, `.mvc-cls-head` = `--info-bg`, `.mvc-per-sel`) : les `#3498db` / `#fff` / `#eaf4ff` d'origine ne suivaient pas le thème sombre. Audit contraste de la modale : 0 écart en clair et en sombre.
+**Les filtres restreignent l'AFFICHAGE de la liste** (`_mvcVisibility()` = filtres + recherche + « Cochés uniquement »). Un élève coché masqué reste membre — une ligne au-dessus de la liste le compte. ⚠️ « Tout cocher / décocher » et « + Tous / − Aucun » n'agissent **que sur les élèves visibles** ; tout retrait passe par `_mvcSetMember(sid, false)` (efface aussi `_mvcMembership` et `_mvcBulkSel`, comme la case individuelle).
 
-CSS responsive : `@media (pointer: coarse)` agrandit les cases (22px) et sélecteurs (font-size 1em, padding) — meilleure ergonomie sur Surface / iPad. La case bulk droite utilise `accent-color: var(--disc-accent)` pour la distinguer visuellement.
+**🗓 Présence par période** (repliée par défaut ; état `_mvcAdvancedOn`, `_mvcToggleAdvanced` / `_mvcResetAdvanced` — noms hérités de l'ancien « Options avancées »). Dépliée, elle montre le bloc `.mvc-per-box` en deux étapes, et sur chaque ligne cochée des sélecteurs « de … à … » plus une 2e case 🗓 (`accent-color: var(--disc-accent)`) :
+- ① choisir les élèves (case 🗓, `_mvcBulkSel` ; ☑ Tous les membres / ☐ Aucun) ; ② « Présents du … à la … » + ✅ Appliquer / ↻ Toute l'année (`mvcBulkApplyPeriod`, `mvcBulkResetPeriod`). Les boutons de ② sont désactivés tant que ① est vide (l'infobulle dit pourquoi).
+- ⚠️ **Seules les bornes qui ont un sens sont proposées** (`_mvcPerSelectOptions`) : « du » = début d'année · début du semestre 2 ; « à la » = fin du semestre 1 · fin d'année (trimestres : début du T2/T3, fin du T1/T2). Début de la 1re période et fin de la dernière valent « pas de limite » (valeur vide) : `_mvcNormBounds` y ramène les anciens `fromPer: 'S1'` / `toPer: 'S2'` à l'ouverture — sans quoi le sélecteur « à » ne trouvait pas l'option et affichait la première, « fin du S1 ». Libellés courts sur les lignes (« début S2 », « fin S1 »).
+- Une plage inversée (début du S2 → fin du S1) est refusée, dans la barre comme sur les lignes (le sélecteur revient à sa valeur).
+
+CSS responsive : `@media (pointer: coarse)` agrandit les cases (22px) et sélecteurs (font-size 1em, padding) — Surface / iPad.
 
 ### Workflow inverse depuis l'onglet Élèves
 
@@ -2575,7 +2578,7 @@ Sélection multi-élèves (clic & glisser) dans l'onglet Élèves → barre d'ac
 
 ### Appartenance per-période (`cls.membership`)
 
-Pour les classes recomposées dont le roster évolue entre périodes (typique : Devoir Fait), chaque élève peut avoir un intervalle d'appartenance restreint : `cls.membership[sid] = { fromPer, toPer }`. Codes période (S1/S2 ou T1/T2/T3) ou null pour ouvert. Géré dans le mode avancé (sélecteurs « de [..] à [..] » par élève + barre bulk violette). Cf. section *Appartenance per-période* dans le bloc Disciplines pour les détails.
+Pour les classes recomposées dont le roster évolue entre périodes (typique : Devoir Fait), chaque élève peut avoir un intervalle d'appartenance restreint : `cls.membership[sid] = { fromPer, toPer }`. Codes période (S1/S2 ou T1/T2/T3) ou null pour ouvert. Géré dans le bloc repliable **🗓 Présence par période** de la modale (cf. ci-dessus). Cf. section *Appartenance per-période* dans le bloc Disciplines pour les détails.
 
 ## Surlignage des aménagements d'examen (Plan Prof)
 
