@@ -2474,3 +2474,28 @@ test('classe recomposée : filtres (cycle exiger/exclure sur tags et aménagemen
   })()`);
   assert.deepEqual(r, { excl: 'ac', viaBtn: 't2|', cycleAmen: 'c', and: 'b', civ: 'ac', ulis: 'c', none: 'b', combo: 'a', has0: false });
 });
+
+test('classe recomposée : bornes de présence — seules les bornes utiles, 1re/dernière période = pas de limite', () => {
+  const r = get(`(() => {
+    const prev = S.evalPrefs && S.evalPrefs.periodMode;
+    S.evalPrefs = S.evalPrefs || {}; S.evalPrefs.periodMode = 'semestre';
+    const vals = h => [...h.matchAll(/value="([^"]*)"[^>]*>([^<]*)</g)].map(x => x[1] + '=' + x[2]);
+    const out = {
+      from: vals(_mvcPerSelectOptions('fromPer', null, false)),
+      to:   vals(_mvcPerSelectOptions('toPer', null, false)),
+      norm: _mvcNormBounds('S1', 'S2'),
+      keep: _mvcNormBounds('S2', 'S1'),
+      selLast: /value="" selected/.test(_mvcPerSelectOptions('toPer', 'S2', true)),
+    };
+    S.evalPrefs.periodMode = 'trimestre';
+    out.triTo = vals(_mvcPerSelectOptions('toPer', null, true));
+    S.evalPrefs.periodMode = prev;
+    return out;
+  })()`);
+  assert.deepEqual(r.from, ["=début d'année", 'S2=début du semestre 2']);
+  assert.deepEqual(r.to, ['S1=fin du semestre 1', "=fin d'année"]);
+  assert.deepEqual(r.norm, { fromPer: null, toPer: null });
+  assert.deepEqual(r.keep, { fromPer: 'S2', toPer: 'S1' });
+  assert.equal(r.selLast, true);
+  assert.deepEqual(r.triTo, ['T1=fin T1', 'T2=fin T2', "=fin d'année"]);
+});

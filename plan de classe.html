@@ -4097,8 +4097,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div class="mvc-per-step">
         <span class="mvc-per-num" title="Étape 2">②</span>
         <span>Présents</span>
-        <label class="mvc-per-lbl" title="Première période où ces élèves sont dans la classe (« début d'année » = dès la rentrée)">de <select id="mvc-bulk-from" class="mvc-per-sel"></select></label>
-        <label class="mvc-per-lbl" title="Dernière période (incluse) où ces élèves sont dans la classe (« fin d'année » = jusqu'au bout)">à <select id="mvc-bulk-to" class="mvc-per-sel"></select></label>
+        <label class="mvc-per-lbl" title="À partir de quand ces élèves sont dans la classe">du <select id="mvc-bulk-from" class="mvc-per-sel"></select></label>
+        <label class="mvc-per-lbl" title="Jusqu'à quand ces élèves sont dans la classe">à la <select id="mvc-bulk-to" class="mvc-per-sel"></select></label>
         <button id="mvc-bulk-apply" class="btn btn-p btn-sm" onclick="mvcBulkApplyPeriod()" title="Applique cette plage aux élèves choisis à l'étape ①">✅ Appliquer</button>
         <button id="mvc-bulk-reset" class="btn btn-g btn-sm" onclick="mvcBulkResetPeriod()" title="Retire la limite : les élèves choisis redeviennent présents toute l'année">↻ Toute l'année</button>
       </div>
@@ -6855,11 +6855,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.63.2';
+const APP_VERSION    = '2.63.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-30T17:36:48Z';
+const APP_BUILD_DATE = '2026-09-30T17:44:44Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11286,7 +11286,8 @@ function openVirtualClassModal(id, opts) {
   _mvcMembership = {};
   if (id && S.classes?.[id]?.membership) {
     for (const [sid, m] of Object.entries(S.classes[id].membership)) {
-      if (m && (m.fromPer || m.toPer)) _mvcMembership[sid] = { fromPer: m.fromPer || null, toPer: m.toPer || null };
+      const b = m ? _mvcNormBounds(m.fromPer, m.toPer) : null;
+      if (b && (b.fromPer || b.toPer)) _mvcMembership[sid] = b;
     }
   }
   _mvcSeedFromTag = opts?.fromTag || null;
@@ -11385,9 +11386,8 @@ function renderMvcStudents() {
       </div>`;
     const _perOpts = _periodeOptions();
     const _mkPerSel = (sid, key, current) => {
-      let opts = `<option value="">${key === 'fromPer' ? 'début' : 'fin'}</option>`;
-      for (const p of _perOpts) opts += `<option value="${p.code}"${current === p.code ? ' selected' : ''}>${p.code}</option>`;
-      const _ttl = (key === 'fromPer') ? "Présent dans la classe à partir de cette période (« début » = dès la rentrée)" : "Présent jusqu'à cette période incluse (« fin » = jusqu'à la fin de l'année)";
+      const opts = _mvcPerSelectOptions(key, current, true);
+      const _ttl = (key === 'fromPer') ? "Présent dans la classe à partir de…" : "Présent dans la classe jusqu'à…";
       return `<select class="mvc-per-sel" onchange="mvcSetMembership('${sid}','${key}',this.value)" title="${_ttl}">${opts}</select>`;
     };
     html += eleves.map(s => {
@@ -11477,9 +11477,37 @@ function _mvcBulkFillPeriodSelects() {
   const from = document.getElementById('mvc-bulk-from');
   const to   = document.getElementById('mvc-bulk-to');
   if (!from || !to) return;
-  const per = _periodeOptions().map(p => `<option value="${p.code}">${_escAttr(p.label)}</option>`).join('');
-  from.innerHTML = `<option value="">début d'année</option>` + per;
-  to.innerHTML   = `<option value="">fin d'année</option>` + per;
+  from.innerHTML = _mvcPerSelectOptions('fromPer', null, false);
+  to.innerHTML   = _mvcPerSelectOptions('toPer', null, false);
+}
+// Bornes de présence : on ne propose que celles qui ont un sens. « Début du S1 » = début
+// d'année, « fin du S2 » (dernière période) = fin d'année : ces deux-là sont donc portées
+// par la valeur vide (= pas de limite), et les listes se lisent « début d'année · début
+// du semestre 2 » et « fin du semestre 1 · fin d'année ».
+function _mvcPerNoun(code, short) {
+  const n = String(code).slice(1);
+  if (short) return code;                                    // S2, T3…
+  return (String(code)[0] === 'T' ? 'trimestre ' : 'semestre ') + n;
+}
+function _mvcPerSelectOptions(key, current, short) {
+  const codes = _periodeOptions().map(p => p.code);
+  const cur = _mvcNormBounds(key === 'fromPer' ? current : null, key === 'toPer' ? current : null)[key] || '';
+  const o = (v, lbl) => `<option value="${v}"${cur === v ? ' selected' : ''}>${lbl}</option>`;
+  if (key === 'fromPer') {
+    return o('', "début d'année")
+      + codes.slice(1).map(c => o(c, short ? `début ${_mvcPerNoun(c, true)}` : `début du ${_mvcPerNoun(c)}`)).join('');
+  }
+  return codes.slice(0, -1).map(c => o(c, short ? `fin ${_mvcPerNoun(c, true)}` : `fin du ${_mvcPerNoun(c)}`)).join('')
+    + o('', "fin d'année");
+}
+// Ramène les bornes équivalentes à « pas de limite » sur null (1re période en début,
+// dernière en fin) — les fichiers antérieurs peuvent porter « S1 » / « S2 ».
+function _mvcNormBounds(fromPer, toPer) {
+  const codes = _periodeOptions().map(p => p.code);
+  return {
+    fromPer: (fromPer && fromPer !== codes[0] && codes.includes(fromPer)) ? fromPer : null,
+    toPer:   (toPer && toPer !== codes[codes.length - 1] && codes.includes(toPer)) ? toPer : null,
+  };
 }
 // Met à jour le libellé « la sélection (case droite) — N élève(s) ».
 function _mvcBulkUpdateTarget() {
@@ -11504,19 +11532,19 @@ function mvcBulkApplyPeriod() {
   const toPer   = (document.getElementById('mvc-bulk-to')?.value   || null) || null;
   const _codes = _periodeOptions().map(p => p.code);
   if (fromPer && toPer && _codes.indexOf(fromPer) > _codes.indexOf(toPer)) {
-    toast(`⚠️ Plage impossible : ${fromPer} vient après ${toPer}.`, 'warn'); return;
+    toast(`⚠️ Plage impossible : le début du ${_mvcPerNoun(fromPer)} vient après la fin du ${_mvcPerNoun(toPer)}.`, 'warn'); return;
   }
   let n = 0;
   for (const sid of _mvcBulkSel) {
     if (!_mvcSelected.has(sid)) continue; // safety : ignorer les non-membres
     if (!fromPer && !toPer) delete _mvcMembership[sid];
-    else _mvcMembership[sid] = { fromPer, toPer };
+    else _mvcMembership[sid] = _mvcNormBounds(fromPer, toPer);
     n++;
   }
   renderMvcStudents();
   const lbl = (!fromPer && !toPer)
     ? `↻ ${n} élève(s) présents toute l'année`
-    : `🗓 ${n} élève(s) → de ${fromPer || '…'} à ${toPer || '…'}`;
+    : `🗓 ${n} élève(s) présents du ${fromPer ? 'début du ' + _mvcPerNoun(fromPer) : "début d'année"} à la ${toPer ? 'fin du ' + _mvcPerNoun(toPer) : "fin d'année"}`;
   toast(lbl);
 }
 // Retire toutes les restrictions de période pour les sids cochés à droite.
@@ -11533,7 +11561,15 @@ function mvcBulkResetPeriod() {
 // `key` = 'fromPer' | 'toPer' ; `value` = code période ou '' (= null = ouvert).
 function mvcSetMembership(sid, key, value) {
   if (!_mvcMembership[sid]) _mvcMembership[sid] = { fromPer: null, toPer: null };
+  const prev = _mvcMembership[sid][key];
   _mvcMembership[sid][key] = value || null;
+  const m = _mvcMembership[sid], codes = _periodeOptions().map(p => p.code);
+  if (m.fromPer && m.toPer && codes.indexOf(m.fromPer) > codes.indexOf(m.toPer)) {
+    toast(`⚠️ Plage impossible : le début du ${_mvcPerNoun(m.fromPer)} vient après la fin du ${_mvcPerNoun(m.toPer)}.`, 'warn');
+    m[key] = prev;
+    renderMvcStudents();   // remet le sélecteur sur la valeur conservée
+    return;
+  }
   // Si tout est null, retire l'entrée pour rester propre
   if (!_mvcMembership[sid].fromPer && !_mvcMembership[sid].toPer) delete _mvcMembership[sid];
 }
