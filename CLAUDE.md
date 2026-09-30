@@ -2562,6 +2562,8 @@ Pour réduire la densité visuelle dans le cas simple (cocher quelques élèves)
 
 État : variable globale `_mvcAdvancedOn` (booléen, reset à chaque ouverture via `_mvcResetAdvanced()`). Toggle : `_mvcToggleAdvanced()` qui synchronise visibilité du wrap, libellé du bouton (▸ vs ▾), header de colonnes et re-render de la liste.
 
+**Le panneau 🔎 Filtrer les candidats filtre aussi l'AFFICHAGE** (v2.62.0) : `_mvcVisibility()` combine filtres (tags / classes / niveau), recherche par nom et « 👁 Cochés uniquement ». Un élève coché masqué reste membre — une ligne au-dessus de la liste le compte. ⚠️ « Tout cocher / décocher » et « + Tous / − Aucun » n'agissent **que sur les élèves visibles** ; tout retrait passe par `_mvcSetMember(sid, false)` (efface aussi `_mvcMembership` et `_mvcBulkSel`, comme la case individuelle). Couleurs en tokens (`.mvc-chip` / `.on` = `--chip-on-bg`, `.mvc-cls-head` = `--info-bg`, `.mvc-per-sel`) : les `#3498db` / `#fff` / `#eaf4ff` d'origine ne suivaient pas le thème sombre. Audit contraste de la modale : 0 écart en clair et en sombre.
+
 CSS responsive : `@media (pointer: coarse)` agrandit les cases (22px) et sélecteurs (font-size 1em, padding) — meilleure ergonomie sur Surface / iPad. La case bulk droite utilise `accent-color: var(--disc-accent)` pour la distinguer visuellement.
 
 ### Workflow inverse depuis l'onglet Élèves
