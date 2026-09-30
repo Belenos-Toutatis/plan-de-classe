@@ -1234,6 +1234,17 @@ html[data-theme="dark"] #mvc-filter-panel { background: var(--paper-warm) !impor
 .mvc-chip { padding: 1px 8px !important; font-size: .78em !important; border-radius: 10px !important; background: var(--paper) !important; color: var(--pencil) !important; border: 1px solid var(--rule-line) !important; }
 .mvc-chip.on, .mvc-chip-btn.on { background: var(--chip-on-bg) !important; color: #fff !important; border-color: var(--chip-on-bg) !important; }
 .mvc-chip.mvc-tagmode { padding: 1px 6px !important; }
+.mvc-fp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+.mvc-fp-lbl { font-size: .82em; color: var(--pencil); min-width: 66px; }
+.mvc-fp-lbl2 { min-width: 0; margin-left: 12px; }
+.mvc-fp-chips { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.mvc-chip .mvc-cnt { font-family: var(--font-mono); font-size: .86em; margin-left: 4px; opacity: .85; }
+.mvc-chip.zero:not(.on):not(.excl):not(.part) { opacity: .45; }
+.mvc-chip.part { border: 1px dashed var(--chip-on-bg) !important; color: var(--ink-deep) !important; }
+.mvc-chip.excl { background: var(--paper) !important; color: var(--danger-fg) !important; border: 1px solid var(--danger-fg) !important; text-decoration: line-through; }
+.mvc-lvl-group { display: inline-flex; gap: 3px; flex-wrap: wrap; align-items: center; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--rule-line); }
+.mvc-lvl-group:last-child { border-right: 0; }
+.mvc-chip.mvc-lvl { font-weight: 700 !important; }
 .mvc-cls-head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: var(--info-bg); border-left: 3px solid var(--link-fg); font-size: .88em; font-weight: 600; color: var(--ink-deep); }
 .mvc-stu-row { border-bottom: 1px solid var(--rule-line-soft); }
 .mvc-stu-row:hover { background: var(--paper-warm); }
@@ -4021,45 +4032,46 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:var(--disc-accent)">🎓 Disciplines enseignées</div>
       <div id="mvc-disc-checks"></div>
     </div>
-    <!-- Bouton « Options avancées » qui plie/déplie le panneau de filtres + la barre
-         bulk période. Cas simple (cocher 12 élèves d'1 classe) : on n'a pas besoin
-         de tout ça affiché. -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <button type="button" id="mvc-adv-toggle" class="btn btn-g btn-sm" onclick="_mvcToggleAdvanced()" style="padding:3px 10px;font-size:.85em" title="Affiche/cache les outils avancés (filtres par tag/classe/niveau + présence par période)">▸ Options avancées</button>
-      <span id="mvc-adv-summary" style="font-size:.78em;color:var(--pencil);font-style:italic">filtres + présence par période</span>
-    </div>
-    <div id="mvc-advanced-wrap" style="display:none">
-    <!-- Panneau de filtres cumulatifs (ET entre groupes ; tags = ET ou OU au choix ; classes = OU) -->
+    <!-- Panneau de filtres : toujours visible (outil principal pour composer un groupe).
+         Critères cumulés en ET d'une ligne à l'autre, OU à l'intérieur d'une ligne
+         (tags : OU/ET au choix, plus exclusion). Les puces affichent le nombre d'élèves
+         qu'elles donneraient avec les autres critères ; à 0, elles sont estompées. -->
     <div id="mvc-filter-panel" style="background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px;padding:8px 10px;margin-bottom:8px">
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap">
         <strong style="font-size:.9em">🔎 Filtrer les candidats</strong>
-        <span style="font-size:.78em;color:var(--pencil)">— Combinaison ET entre les lignes · la liste n'affiche que les élèves correspondants</span>
+        <span style="font-size:.78em;color:var(--pencil)" title="Un élève doit satisfaire chaque ligne où quelque chose est choisi ; dans une même ligne, l'un OU l'autre suffit">— ET entre les lignes, OU dans une ligne · la liste n'affiche que les élèves correspondants</span>
       </div>
-      <!-- Ligne Tags -->
-      <div id="mvc-fp-tags-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
-        <span style="font-size:.82em;color:var(--pencil);min-width:54px">Tags :</span>
-        <span id="mvc-fp-tags" style="display:flex;gap:4px;flex-wrap:wrap"></span>
+      <div class="mvc-fp-row">
+        <span class="mvc-fp-lbl" title="Clic : ne garder que ce tag · 2ᵉ clic : EXCLURE ce tag · 3ᵉ clic : retirer">Tags :</span>
+        <span id="mvc-fp-tags" class="mvc-fp-chips"></span>
         <span id="mvc-fp-tagmode-wrap" style="display:none;align-items:center;gap:3px;margin-left:6px;font-size:.78em">
           <span style="color:var(--pencil)">Combiner :</span>
-          <button id="mvc-fp-tagmode-or" class="btn btn-sm mvc-chip mvc-tagmode" onclick="mvcSetTagMode('or')" title="Élève qui a AU MOINS UN des tags cochés">OU</button>
-          <button id="mvc-fp-tagmode-and" class="btn btn-sm mvc-chip mvc-tagmode" onclick="mvcSetTagMode('and')" title="Élève qui a TOUS les tags cochés">ET</button>
+          <button id="mvc-fp-tagmode-or" class="btn btn-sm mvc-chip mvc-tagmode" onclick="mvcSetTagMode('or')" title="Élève qui a AU MOINS UN des tags choisis">OU</button>
+          <button id="mvc-fp-tagmode-and" class="btn btn-sm mvc-chip mvc-tagmode" onclick="mvcSetTagMode('and')" title="Élève qui a TOUS les tags choisis">ET</button>
         </span>
       </div>
-      <!-- Ligne Classes -->
-      <div id="mvc-fp-cls-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
-        <span style="font-size:.82em;color:var(--pencil);min-width:54px">Classes :</span>
-        <span id="mvc-fp-cls" style="display:flex;gap:4px;flex-wrap:wrap"></span>
+      <div class="mvc-fp-row">
+        <span class="mvc-fp-lbl" title="Puce en gras = tout le niveau d'un coup ; puces suivantes = classes une à une">Classes :</span>
+        <span id="mvc-fp-cls" class="mvc-fp-chips"></span>
       </div>
-      <!-- Ligne Niveau -->
-      <div id="mvc-fp-lvl-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-        <span style="font-size:.82em;color:var(--pencil);min-width:54px">Niveau :</span>
-        <span id="mvc-fp-lvl" style="display:flex;gap:4px;flex-wrap:wrap"></span>
+      <div class="mvc-fp-row">
+        <span class="mvc-fp-lbl">Groupe :</span>
+        <span id="mvc-fp-grp" class="mvc-fp-chips"></span>
+        <span class="mvc-fp-lbl mvc-fp-lbl2">Civilité :</span>
+        <span id="mvc-fp-civ" class="mvc-fp-chips"></span>
       </div>
-      <!-- Compteur + actions -->
+      <div class="mvc-fp-row">
+        <span class="mvc-fp-lbl" title="Élève qui a AU MOINS UN des aménagements choisis">Aménag. :</span>
+        <span id="mvc-fp-amen" class="mvc-fp-chips"></span>
+      </div>
+      <div class="mvc-fp-row" style="margin-bottom:8px">
+        <span class="mvc-fp-lbl">Autre :</span>
+        <span id="mvc-fp-other" class="mvc-fp-chips"></span>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--rule-line-soft);padding-top:6px">
         <span id="mvc-fp-summary" style="font-size:.85em;color:var(--pencil);flex:1;min-width:160px">Aucun filtre actif</span>
-        <button id="mvc-fp-check"   class="btn btn-p btn-sm" onclick="mvcApplyFilters('check')"   title="Cocher les élèves correspondants" disabled>+ Cocher</button>
-        <button id="mvc-fp-uncheck" class="btn btn-g btn-sm" onclick="mvcApplyFilters('uncheck')" title="Décocher les élèves correspondants" disabled>− Décocher</button>
+        <button id="mvc-fp-check"   class="btn btn-p btn-sm" onclick="mvcApplyFilters('check')"   title="Ajouter à la classe recomposée tous les élèves correspondants" disabled>+ Cocher</button>
+        <button id="mvc-fp-uncheck" class="btn btn-g btn-sm" onclick="mvcApplyFilters('uncheck')" title="Retirer de la classe recomposée tous les élèves correspondants" disabled>− Décocher</button>
         <button class="btn btn-g btn-sm" onclick="mvcResetFilters()" title="Vider tous les filtres">↻ Réinitialiser</button>
       </div>
     </div>
@@ -4070,6 +4082,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-g btn-sm" onclick="mvcCheckAll(true)" title="Ajoute à la classe recomposée tous les élèves actuellement affichés">Tout cocher</button>
       <button class="btn btn-g btn-sm" onclick="mvcCheckAll(false)" title="Retire de la classe recomposée tous les élèves actuellement affichés">Tout décocher</button>
     </div>
+    <!-- Présence par période : repliée par défaut (cas simple = élèves présents toute l'année). -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <button type="button" id="mvc-adv-toggle" class="btn btn-g btn-sm" onclick="_mvcToggleAdvanced()" style="padding:3px 10px;font-size:.85em" title="Affiche/cache les réglages de présence par période (élèves qui ne sont dans la classe qu'une partie de l'année)">▸ 🗓 Présence par période</button>
+      <span id="mvc-adv-summary" style="font-size:.78em;color:var(--pencil);font-style:italic">si certains élèves ne sont là qu'une partie de l'année</span>
+    </div>
+    <div id="mvc-advanced-wrap" style="display:none">
     <!-- Présence par période (classes évolutives type Devoirs faits) — rédigée en 2 étapes :
          ① choisir les élèves (case violette 🗓 de droite, distincte de la case « membre »),
          ② leur appliquer une plage de périodes. -->
@@ -6844,11 +6862,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.62.1';
+const APP_VERSION    = '2.63.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-30T17:15:21Z';
+const APP_BUILD_DATE = '2026-09-30T17:20:04Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11111,7 +11129,13 @@ let _mvcMembership = {};
 let _mvcBulkSel = new Set();
 // Filtres cumulatifs du panneau "🔎 Filtrer les candidats" (intersection ET entre les 3 dimensions ;
 // tags entre eux : OU par défaut, ET configurable ; classes entre elles : OU implicite ; niveau : single)
-let _mvcFilters = { tagIds: new Set(), tagMode: 'or', classIds: new Set(), level: null };
+let _mvcFilters = _mvcEmptyFilters();
+// tagIds = tags requis, tagExcl = tags exclus ; groups ⊂ {0,1,2,3} (0 = sans groupe) ;
+// civ ⊂ {M,F} ; amen ⊂ clés de MVC_AMEN ; notInVc = pas déjà dans une autre classe recomposée.
+function _mvcEmptyFilters() {
+  return { tagIds: new Set(), tagExcl: new Set(), tagMode: 'or', classIds: new Set(),
+           groups: new Set(), civ: new Set(), amen: new Set(), notInVc: false };
+}
 let _mvcShowOnlySelected = false;
 
 // Suggère un ID court à partir du nom de la classe : 3 premiers caractères de
@@ -11191,7 +11215,7 @@ function _mvcToggleAdvanced() {
   const sum = document.getElementById('mvc-adv-summary');
   const headers = document.getElementById('mvc-students-headers');
   if (wrap) wrap.style.display = _mvcAdvancedOn ? '' : 'none';
-  if (btn) btn.textContent = _mvcAdvancedOn ? '▾ Options avancées' : '▸ Options avancées';
+  if (btn) btn.textContent = _mvcAdvancedOn ? '▾ 🗓 Présence par période' : '▸ 🗓 Présence par période';
   if (sum) sum.style.display = _mvcAdvancedOn ? 'none' : '';
   if (headers) headers.style.display = _mvcAdvancedOn ? 'flex' : 'none';
   if (typeof renderMvcStudents === 'function') renderMvcStudents();
@@ -11203,7 +11227,7 @@ function _mvcResetAdvanced() {
   const sum = document.getElementById('mvc-adv-summary');
   const headers = document.getElementById('mvc-students-headers');
   if (wrap) wrap.style.display = 'none';
-  if (btn) btn.textContent = '▸ Options avancées';
+  if (btn) btn.textContent = '▸ 🗓 Présence par période';
   if (sum) sum.style.display = '';
   if (headers) headers.style.display = 'none';
 }
@@ -11290,7 +11314,7 @@ function openVirtualClassModal(id, opts) {
     .join('');
 
   // Reset des filtres et toggle "cochés uniquement" à chaque ouverture
-  _mvcFilters = { tagIds: new Set(), tagMode: 'or', classIds: new Set(), level: null };
+  _mvcFilters = _mvcEmptyFilters();
   _mvcShowOnlySelected = false;
   { const _b = document.getElementById('mvc-show-only-btn'); if (_b) _mvcSyncShowOnlyBtn(_b); }
 
@@ -11419,9 +11443,7 @@ function renderMvcStudents() {
 // ce qu'on voit.
 function _mvcVisibility() {
   const q = (document.getElementById('mvc-search')?.value || '').toLowerCase().trim();
-  const F = _mvcFilters;
-  const hasFilter = F.tagIds.size > 0 || F.classIds.size > 0 || F.level !== null;
-  const matching = hasFilter ? _mvcMatchingSids() : null;
+  const matching = _mvcHasFilter() ? _mvcMatchingSids() : null;
   return (sid) => {
     const stu = S.eleves[sid];
     if (!stu) return false;
@@ -11551,114 +11573,184 @@ function _mvcSetMember(sid, on) {
   _mvcBulkSel.delete(sid);
 }
 // ─── Panneau de filtres cumulatifs ──────────────────────────────────
-// Renvoie la liste des niveaux présents dans les classes réelles (ordre croissant).
+// Aménagements filtrables. `has(stu)` : l'élève porte ce dispositif (inclusion comprise
+// pour ULIS / UPE2A). `none` = aucun aménagement ni dispositif.
+const MVC_AMEN = [
+  { k: 'ppre', lbl: 'PPRE',  name: 'PPRE',                        has: s => !!s.ppre },
+  { k: 'pap',  lbl: 'PAP',   name: 'PAP',                         has: s => !!s.pap },
+  { k: 'pps',  lbl: 'PPS',   name: 'PPS / Gevasco',               has: s => !!s.gevasco },
+  { k: 'ulis', lbl: 'ULIS',  name: 'ULIS (inclus ou non)',        has: s => !!(s.ulis || s.ulis_incl) },
+  { k: 'upe2a',lbl: 'UPE2A', name: 'UPE2A (inclus ou non)',       has: s => !!(s.upe2a || s.upe2a_incl) },
+  { k: 'pai',  lbl: 'PAI',   name: 'PAI (médical)',               has: s => !!s.pai },
+  { k: 'agr',  lbl: '-A',    name: 'Agrandissement des documents',has: s => !!s.agrandissement },
+  { k: 'tt',   lbl: '+⅓',    name: 'Tiers-temps',                 has: s => !!s.tiers_temps },
+  { k: 'none', lbl: 'aucun', name: 'Aucun aménagement ni dispositif',
+    has: s => !MVC_AMEN.some(a => a.k !== 'none' && a.has(s)) },
+];
+function _mvcHasFilter(F = _mvcFilters) {
+  return F.tagIds.size > 0 || F.tagExcl.size > 0 || F.classIds.size > 0 || F.groups.size > 0
+      || F.civ.size > 0 || F.amen.size > 0 || F.notInVc;
+}
+// Niveaux présents dans les classes réelles (ordre croissant).
 function _mvcAvailableLevels() {
   const lvls = new Set();
   for (const cls of realClasses()) lvls.add(classLevelOrder(cls.nom));
   return [...lvls].sort((a,b) => a-b);
 }
-
-// Construit la liste des sids candidats au filtre courant (intersection ET entre dimensions).
+function _mvcClassesOfLevel(n) { return realClasses().filter(c => classLevelOrder(c.nom) === n); }
+// Élèves déjà membres d'une AUTRE classe recomposée que celle en cours d'édition.
+function _mvcInOtherVcSet() {
+  const set = new Set();
+  for (const c of Object.values(S.classes || {})) {
+    if (!c || !c.virtual || c.id === _mvcEditingId) continue;
+    for (const sid of (c.eleves || [])) set.add(sid);
+  }
+  return set;
+}
+// Univers : tous les élèves des classes réelles (un sid une seule fois).
+function _mvcUniverse() {
+  const src = new Set();
+  for (const cls of realClasses()) for (const sid of (cls.eleves || [])) if (S.eleves[sid]) src.add(sid);
+  return src;
+}
+// L'élève satisfait-il les critères ? `skip` = une dimension à ignorer (sert aux
+// compteurs des puces : « combien d'élèves si je choisis aussi celle-ci »).
+function _mvcStuMatches(stu, F, skip, inVc) {
+  if (skip !== 'tags') {
+    const t = Array.isArray(stu.tags) ? stu.tags : [];
+    if (F.tagIds.size) {
+      const ids = [...F.tagIds];
+      if (F.tagMode === 'and' ? !ids.every(x => t.includes(x)) : !ids.some(x => t.includes(x))) return false;
+    }
+    for (const x of F.tagExcl) if (t.includes(x)) return false;
+  }
+  if (skip !== 'cls' && F.classIds.size && !F.classIds.has(stu.classe_id)) return false;
+  if (skip !== 'grp' && F.groups.size && !F.groups.has(stu.groupe || 0)) return false;
+  if (skip !== 'civ' && F.civ.size && !F.civ.has(stu.civilite)) return false;
+  if (skip !== 'amen' && F.amen.size && !MVC_AMEN.some(a => F.amen.has(a.k) && a.has(stu))) return false;
+  if (skip !== 'other' && F.notInVc && inVc.has(stu.id)) return false;
+  return true;
+}
+// Élèves correspondant aux filtres courants (vide si aucun filtre).
 function _mvcMatchingSids() {
   const F = _mvcFilters;
-  const hasAny = F.tagIds.size > 0 || F.classIds.size > 0 || F.level !== null;
-  if (!hasAny) return new Set();
-  // Source : tous les élèves des classes réelles (un sid n'apparaît qu'une fois)
-  const src = new Set();
-  for (const cls of realClasses()) for (const sid of (cls.eleves || [])) src.add(sid);
+  if (!_mvcHasFilter(F)) return new Set();
+  const inVc = _mvcInOtherVcSet();
   const result = new Set();
-  for (const sid of src) {
-    const stu = S.eleves[sid];
-    if (!stu) continue;
-    // Filtre tags
-    if (F.tagIds.size > 0) {
-      const stuTags = Array.isArray(stu.tags) ? stu.tags : [];
-      if (F.tagMode === 'and') {
-        let ok = true;
-        for (const tid of F.tagIds) { if (!stuTags.includes(tid)) { ok = false; break; } }
-        if (!ok) continue;
-      } else { // 'or'
-        let ok = false;
-        for (const tid of F.tagIds) { if (stuTags.includes(tid)) { ok = true; break; } }
-        if (!ok) continue;
-      }
-    }
-    // Filtre classes (OU implicite : l'élève est dans une des classes cochées)
-    if (F.classIds.size > 0) {
-      const stuCls = S.classes[stu.classe_id];
-      if (!stuCls || !F.classIds.has(stuCls.id)) continue;
-    }
-    // Filtre niveau (un seul à la fois)
-    if (F.level !== null) {
-      const stuCls = S.classes[stu.classe_id];
-      if (!stuCls || classLevelOrder(stuCls.nom) !== F.level) continue;
-    }
-    result.add(sid);
-  }
+  for (const sid of _mvcUniverse()) if (_mvcStuMatches(S.eleves[sid], F, null, inVc)) result.add(sid);
   return result;
 }
+// Compteur d'une puce : élèves qui passent les AUTRES lignes et vérifient `pred`.
+function _mvcFacetCount(dim, pred, ctx) {
+  let n = 0;
+  for (const stu of ctx.pool[dim]) if (pred(stu)) n++;
+  return n;
+}
 
-// Render du panneau de filtres : chips, mode tag, compteur, état des boutons.
+function _mvcChipHTML({ on, cls = '', cnt, onclick, title, label, style = '' }) {
+  const z = cnt === 0 ? ' zero' : '';
+  return `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${cls}${z}" aria-pressed="${!!on}" onclick="${onclick}" title="${title}"${style}>${label}<span class="mvc-cnt">${cnt}</span></button>`;
+}
+
+// Render du panneau : puces (avec compteurs), mode ET/OU, résumé, boutons.
 function renderMvcFilterPanel() {
-  // Chips Tags
-  const tagsWrap = document.getElementById('mvc-fp-tags');
+  const F = _mvcFilters;
+  const inVc = _mvcInOtherVcSet();
+  const uni = [..._mvcUniverse()].map(sid => S.eleves[sid]);
+  // Pour chaque ligne, le vivier = élèves qui passent toutes les AUTRES lignes.
+  const pool = {};
+  for (const d of ['tags', 'cls', 'grp', 'civ', 'amen', 'other']) pool[d] = uni.filter(stu => _mvcStuMatches(stu, F, d, inVc));
+  const ctx = { pool };
+  const $ = id => document.getElementById(id);
+
+  // Tags : cycle requis → exclu → neutre
   const tagList = Object.values(S.tags || {}).sort((a,b) => a.abbr.localeCompare(b.abbr));
-  if (tagsWrap) {
-    if (!tagList.length) {
-      tagsWrap.innerHTML = '<span style="font-size:.78em;color:var(--pencil-soft);font-style:italic">aucun tag défini</span>';
-    } else {
-      tagsWrap.innerHTML = tagList.map(t => {
-        const on = _mvcFilters.tagIds.has(t.id);
-        // Puce active = couleur du tag choisie par l'utilisateur, encre dérivée du fond.
-        const onStyle = on ? ` style="background:${_safeColor(t.color)} !important;color:${_contrastTextColor(_safeColor(t.color))} !important;border-color:${_safeColor(t.color)} !important"` : '';
-        return `<button type="button" class="btn btn-sm mvc-chip" aria-pressed="${on}" onclick="mvcToggleFilterTag('${t.id}')"${onStyle} title="${_escAttr(t.name)} — ${on ? 'retirer du filtre' : 'ne garder que les élèves portant ce tag'}">${_escAttr(t.abbr)}</button>`;
+  if ($('mvc-fp-tags')) {
+    $('mvc-fp-tags').innerHTML = !tagList.length
+      ? '<span style="font-size:.78em;color:var(--pencil-soft);font-style:italic">aucun tag défini</span>'
+      : tagList.map(t => {
+        const on = F.tagIds.has(t.id), ex = F.tagExcl.has(t.id);
+        const c = _safeColor(t.color);
+        const cnt = _mvcFacetCount('tags', stu => Array.isArray(stu.tags) && stu.tags.includes(t.id), ctx);
+        const next = on ? 'clic : l\'EXCLURE (garder ceux qui ne l\'ont pas)' : ex ? 'clic : retirer du filtre' : 'clic : ne garder que les élèves qui l\'ont';
+        const state = on ? 'requis' : ex ? 'EXCLU' : '';
+        return _mvcChipHTML({ on, cls: ex ? ' excl' : '', cnt, onclick: `mvcToggleFilterTag('${t.id}')`,
+          title: `${_escAttr(t.name)}${state ? ' — ' + state : ''} · ${cnt} élève(s) · ${next}`,
+          label: (ex ? '⊘ ' : '') + _escAttr(t.abbr),
+          style: on ? ` style="background:${c} !important;color:${_contrastTextColor(c)} !important;border-color:${c} !important"` : '' });
       }).join('');
-    }
   }
-  // Mode ET/OU visible uniquement si ≥ 2 tags cochés
-  const modeWrap = document.getElementById('mvc-fp-tagmode-wrap');
+  const modeWrap = $('mvc-fp-tagmode-wrap');
   if (modeWrap) {
-    modeWrap.style.display = (_mvcFilters.tagIds.size >= 2) ? 'inline-flex' : 'none';
-    const orBtn  = document.getElementById('mvc-fp-tagmode-or');
-    const andBtn = document.getElementById('mvc-fp-tagmode-and');
-    if (orBtn && andBtn) {
-      const isOr = _mvcFilters.tagMode === 'or';
-      orBtn.classList.toggle('on', isOr);   orBtn.setAttribute('aria-pressed', isOr);
-      andBtn.classList.toggle('on', !isOr); andBtn.setAttribute('aria-pressed', !isOr);
-    }
+    modeWrap.style.display = (F.tagIds.size >= 2) ? 'inline-flex' : 'none';
+    const isOr = F.tagMode === 'or';
+    $('mvc-fp-tagmode-or')?.classList.toggle('on', isOr);
+    $('mvc-fp-tagmode-and')?.classList.toggle('on', !isOr);
   }
-  // Chips Classes (réelles uniquement)
-  const clsWrap = document.getElementById('mvc-fp-cls');
-  if (clsWrap) {
-    const reals = realClasses();
-    if (!reals.length) {
-      clsWrap.innerHTML = '<span style="font-size:.78em;color:var(--pencil-soft);font-style:italic">aucune classe</span>';
-    } else {
-      clsWrap.innerHTML = reals.map(c => {
-        const on = _mvcFilters.classIds.has(c.id);
-        return `<button type="button" class="btn btn-sm mvc-chip${on?' on':''}" aria-pressed="${on}" onclick="mvcToggleFilterClass('${c.id}')" title="${on ? 'Retirer' : 'Ajouter'} ${_escAttr(c.nom)} au filtre (plusieurs classes = l'une OU l'autre)">${_escAttr(c.nom)}</button>`;
-      }).join('');
-    }
-  }
-  // Chips Niveaux (single-select : clic re-toggle)
-  const lvlWrap = document.getElementById('mvc-fp-lvl');
-  if (lvlWrap) {
+
+  // Classes regroupées par niveau ; la puce de niveau (en gras) sélectionne tout le niveau.
+  if ($('mvc-fp-cls')) {
     const lvls = _mvcAvailableLevels();
-    if (!lvls.length) {
-      lvlWrap.innerHTML = '<span style="font-size:.78em;color:var(--pencil-soft);font-style:italic">—</span>';
-    } else {
-      lvlWrap.innerHTML = lvls.map(n => {
-        const on = _mvcFilters.level === n;
-        return `<button type="button" class="btn btn-sm mvc-chip${on?' on':''}" aria-pressed="${on}" onclick="mvcSetFilterLevel(${n})" title="${on ? 'Retirer le filtre de niveau' : 'Ne garder que les élèves de ' + _escAttr(_levelLabel(n))} (un seul niveau à la fois)">${_escAttr(_levelLabel(n))}</button>`;
+    $('mvc-fp-cls').innerHTML = !lvls.length
+      ? '<span style="font-size:.78em;color:var(--pencil-soft);font-style:italic">aucune classe</span>'
+      : lvls.map(n => {
+        const cs = _mvcClassesOfLevel(n);
+        const nOn = cs.filter(c => F.classIds.has(c.id)).length;
+        const all = nOn === cs.length, part = nOn > 0 && !all;
+        const ids = new Set(cs.map(c => c.id));
+        const lvlCnt = _mvcFacetCount('cls', stu => ids.has(stu.classe_id), ctx);
+        const lvlLbl = _escAttr(_levelLabel(n));
+        let h = _mvcChipHTML({ on: all, cls: ' mvc-lvl' + (part ? ' part' : ''), cnt: lvlCnt, onclick: `mvcSetFilterLevel(${n})`,
+          title: `${all ? 'Retirer' : 'Choisir'} toutes les classes de ${lvlLbl} (${cs.length}) · ${lvlCnt} élève(s)`, label: lvlLbl });
+        h += cs.map(c => {
+          const on = F.classIds.has(c.id);
+          const cnt = _mvcFacetCount('cls', stu => stu.classe_id === c.id, ctx);
+          return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterClass('${c.id}')`,
+            title: `${on ? 'Retirer' : 'Ajouter'} ${_escAttr(c.nom)} au filtre · ${cnt} élève(s) (plusieurs classes = l'une OU l'autre)`, label: _escAttr(c.nom) });
+        }).join('');
+        return `<span class="mvc-lvl-group">${h}</span>`;
       }).join('');
-    }
   }
-  // Compteur + boutons
-  const sumEl = document.getElementById('mvc-fp-summary');
-  const checkBtn   = document.getElementById('mvc-fp-check');
-  const uncheckBtn = document.getElementById('mvc-fp-uncheck');
+
+  // Groupe
+  if ($('mvc-fp-grp')) {
+    $('mvc-fp-grp').innerHTML = [[1,'G1'],[2,'G2'],[3,'G3'],[0,'sans groupe']].map(([g, l]) => {
+      const cnt = _mvcFacetCount('grp', stu => (stu.groupe || 0) === g, ctx);
+      const on = F.groups.has(g);
+      return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterSet('groups',${g})`,
+        title: `${on ? 'Retirer' : 'Ne garder que'} les élèves ${g ? 'du groupe ' + l : 'sans groupe'} · ${cnt} élève(s)`, label: l });
+    }).join('');
+  }
+  // Civilité
+  if ($('mvc-fp-civ')) {
+    $('mvc-fp-civ').innerHTML = [['M','♂ Garçons'],['F','♀ Filles']].map(([k, l]) => {
+      const cnt = _mvcFacetCount('civ', stu => stu.civilite === k, ctx);
+      const on = F.civ.has(k);
+      return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterSet('civ','${k}')`,
+        title: `${on ? 'Retirer le filtre' : 'Ne garder que les ' + l.slice(2).toLowerCase()} · ${cnt} élève(s)`, label: l });
+    }).join('');
+  }
+  // Aménagements
+  if ($('mvc-fp-amen')) {
+    $('mvc-fp-amen').innerHTML = MVC_AMEN.map(a => {
+      const cnt = _mvcFacetCount('amen', a.has, ctx);
+      const on = F.amen.has(a.k);
+      return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterSet('amen','${a.k}')`,
+        title: `${a.name} — ${on ? 'retirer du filtre' : 'ne garder que ces élèves'} · ${cnt} élève(s) (plusieurs = l'un OU l'autre)`, label: a.lbl });
+    }).join('');
+  }
+  // Autre
+  if ($('mvc-fp-other')) {
+    const cnt = _mvcFacetCount('other', stu => !inVc.has(stu.id), ctx);
+    $('mvc-fp-other').innerHTML = _mvcChipHTML({ on: F.notInVc, cnt, onclick: 'mvcToggleNotInVc()',
+      title: `${F.notInVc ? 'Retirer le filtre' : 'Masquer les élèves déjà inscrits dans une autre classe recomposée'} · ${cnt} élève(s) ne sont dans aucune autre`,
+      label: 'pas encore dans une classe recomposée' });
+  }
+
+  // Résumé + boutons
+  const sumEl = $('mvc-fp-summary');
   const matching = _mvcMatchingSids();
-  const hasFilter = _mvcFilters.tagIds.size > 0 || _mvcFilters.classIds.size > 0 || _mvcFilters.level !== null;
+  const hasFilter = _mvcHasFilter(F);
   if (sumEl) {
     if (!hasFilter) {
       sumEl.textContent = 'Aucun filtre actif';
@@ -11673,39 +11765,46 @@ function renderMvcFilterPanel() {
       sumEl.style.color = 'var(--ok-fg)';
     }
   }
+  const checkBtn = $('mvc-fp-check'), uncheckBtn = $('mvc-fp-uncheck');
   if (checkBtn)   { checkBtn.disabled   = !hasFilter || matching.size === 0; checkBtn.textContent   = `+ Cocher${matching.size?` (${matching.size})`:''}`; }
   if (uncheckBtn) { uncheckBtn.disabled = !hasFilter || matching.size === 0; uncheckBtn.textContent = `− Décocher${matching.size?` (${matching.size})`:''}`; }
 }
 
+function _mvcFiltersChanged() { renderMvcFilterPanel(); renderMvcStudents(); }
+// Tag : neutre → requis → exclu → neutre.
 function mvcToggleFilterTag(tagId) {
-  if (_mvcFilters.tagIds.has(tagId)) _mvcFilters.tagIds.delete(tagId);
-  else _mvcFilters.tagIds.add(tagId);
-  renderMvcFilterPanel();
-  renderMvcStudents();
+  const F = _mvcFilters;
+  if (F.tagIds.has(tagId)) { F.tagIds.delete(tagId); F.tagExcl.add(tagId); }
+  else if (F.tagExcl.has(tagId)) F.tagExcl.delete(tagId);
+  else F.tagIds.add(tagId);
+  _mvcFiltersChanged();
 }
 function mvcToggleFilterClass(clsId) {
   if (_mvcFilters.classIds.has(clsId)) _mvcFilters.classIds.delete(clsId);
   else _mvcFilters.classIds.add(clsId);
-  renderMvcFilterPanel();
-  renderMvcStudents();
+  _mvcFiltersChanged();
 }
+// Niveau = raccourci sur ses classes : toutes choisies → on les retire, sinon on les ajoute.
 function mvcSetFilterLevel(n) {
-  _mvcFilters.level = (_mvcFilters.level === n) ? null : n;
-  renderMvcFilterPanel();
-  renderMvcStudents();
+  const cs = _mvcClassesOfLevel(n);
+  const all = cs.length && cs.every(c => _mvcFilters.classIds.has(c.id));
+  for (const c of cs) { if (all) _mvcFilters.classIds.delete(c.id); else _mvcFilters.classIds.add(c.id); }
+  _mvcFiltersChanged();
 }
+function mvcToggleFilterSet(key, v) {
+  const set = _mvcFilters[key];
+  if (!(set instanceof Set)) return;
+  if (set.has(v)) set.delete(v); else set.add(v);
+  _mvcFiltersChanged();
+}
+function mvcToggleNotInVc() { _mvcFilters.notInVc = !_mvcFilters.notInVc; _mvcFiltersChanged(); }
 function mvcSetTagMode(mode) {
   _mvcFilters.tagMode = (mode === 'and') ? 'and' : 'or';
-  renderMvcFilterPanel();
-  renderMvcStudents();
+  _mvcFiltersChanged();
 }
 function mvcResetFilters() {
-  _mvcFilters.tagIds.clear();
-  _mvcFilters.classIds.clear();
-  _mvcFilters.level = null;
-  _mvcFilters.tagMode = 'or';
-  renderMvcFilterPanel();
-  renderMvcStudents();
+  _mvcFilters = _mvcEmptyFilters();
+  _mvcFiltersChanged();
 }
 function mvcApplyFilters(action) {
   const matching = _mvcMatchingSids();

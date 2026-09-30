@@ -2448,3 +2448,29 @@ test('_stuOutOnSubDate : élève parti / pas encore arrivé à la date d\'une pa
   assert.equal(call({ dates: { c1: '' }, date: '2027-04-01' }, true), null, 'date vidée pour la classe → pas de verdict');
   assert.equal(call({ dates: { c1: '2027-01-10' }, datesByGroup: { c1: { 1: '2027-04-01' } } }, true), 'left', 'date du groupe de l\'élève prioritaire');
 });
+
+test('classe recomposée : filtres (exclusion de tag, groupe, civilité, aménagement, autre classe recomposée)', () => {
+  const r = get(`(() => {
+    const st = (id, o) => Object.assign({ id, nom: id, prenom: id, classe_id: 'c1', tags: [] }, o);
+    const E = {
+      a: st('a', { tags: ['t1'], groupe: 1, civilite: 'F', ppre: true }),
+      b: st('b', { tags: ['t1', 't2'], groupe: 2, civilite: 'M' }),
+      c: st('c', { groupe: 0, civilite: 'F', ulis_incl: true }),
+    };
+    const F = () => _mvcEmptyFilters();
+    const m = (f, s, inVc = new Set()) => _mvcStuMatches(E[s], f, null, inVc);
+    const pick = (f, inVc) => Object.keys(E).filter(s => m(f, s, inVc)).join('');
+    const out = {};
+    let f = F(); f.tagExcl.add('t2'); out.excl = pick(f);
+    f = F(); f.tagIds.add('t1'); f.tagIds.add('t2'); f.tagMode = 'and'; out.and = pick(f);
+    f = F(); f.groups.add(0); f.groups.add(1); out.grp = pick(f);
+    f = F(); f.civ.add('F'); out.civ = pick(f);
+    f = F(); f.amen.add('ulis'); out.ulis = pick(f);
+    f = F(); f.amen.add('none'); out.none = pick(f);
+    f = F(); f.notInVc = true; out.notvc = pick(f, new Set(['a']));
+    f = F(); f.civ.add('F'); f.tagIds.add('t1'); out.combo = pick(f);
+    out.has0 = _mvcHasFilter(F());
+    return out;
+  })()`);
+  assert.deepEqual(r, { excl: 'ac', and: 'b', grp: 'ac', civ: 'ac', ulis: 'c', none: 'b', notvc: 'bc', combo: 'a', has0: false });
+});
