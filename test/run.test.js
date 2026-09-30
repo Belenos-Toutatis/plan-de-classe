@@ -2449,7 +2449,7 @@ test('_stuOutOnSubDate : élève parti / pas encore arrivé à la date d\'une pa
   assert.equal(call({ dates: { c1: '2027-01-10' }, datesByGroup: { c1: { 1: '2027-04-01' } } }, true), 'left', 'date du groupe de l\'élève prioritaire');
 });
 
-test('classe recomposée : filtres (exclusion de tag, civilité, aménagement)', () => {
+test('classe recomposée : filtres (cycle exiger/exclure sur tags et aménagements, civilité)', () => {
   const r = get(`(() => {
     const st = (id, o) => Object.assign({ id, nom: id, prenom: id, classe_id: 'c1', tags: [] }, o);
     const E = {
@@ -2462,7 +2462,8 @@ test('classe recomposée : filtres (exclusion de tag, civilité, aménagement)',
     const out = {};
     let f = F(); f.tagExcl.add('t2'); out.excl = pick(f);
     const _fc = _mvcFiltersChanged; _mvcFiltersChanged = () => {};
-    f = F(); f.exclMode = true; _mvcFilters = f; mvcToggleFilterTag('t2'); _mvcFiltersChanged = _fc; out.viaBtn = [...f.tagExcl].join() + '|' + [...f.tagIds].join();
+    f = F(); _mvcFilters = f; mvcToggleFilterTag('t2'); mvcToggleFilterTag('t2'); mvcToggleFilterAmen('ppre'); mvcToggleFilterAmen('ppre'); _mvcFiltersChanged = _fc;
+    out.cycleAmen = pick(f); out.viaBtn = [...f.tagExcl].join() + '|' + [...f.tagIds].join();
     f = F(); f.tagIds.add('t1'); f.tagIds.add('t2'); f.tagMode = 'and'; out.and = pick(f);
     f = F(); f.civ.add('F'); out.civ = pick(f);
     f = F(); f.amen.add('ulis'); out.ulis = pick(f);
@@ -2471,5 +2472,5 @@ test('classe recomposée : filtres (exclusion de tag, civilité, aménagement)',
     out.has0 = _mvcHasFilter(F());
     return out;
   })()`);
-  assert.deepEqual(r, { excl: 'ac', viaBtn: 't2|', and: 'b', civ: 'ac', ulis: 'c', none: 'b', combo: 'a', has0: false });
+  assert.deepEqual(r, { excl: 'ac', viaBtn: 't2|', cycleAmen: 'c', and: 'b', civ: 'ac', ulis: 'c', none: 'b', combo: 'a', has0: false });
 });
