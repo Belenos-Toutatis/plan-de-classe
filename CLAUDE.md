@@ -2557,11 +2557,11 @@ Une « classe recomposée » est une `cls` avec `cls.virtual = true` créée via
 
 Pour réduire la densité visuelle dans le cas simple (cocher quelques élèves), la modale a deux niveaux :
 
-- **Panneau 🔎 Filtrer les candidats — toujours visible** (v2.63.0 ; il était caché derrière « Options avancées » alors que c'est l'outil principal). ET entre les lignes, OU dans une ligne :
-  - **Tags** : clic cyclique neutre → requis → **exclu** (⊘ barré, `F.tagExcl`) → neutre ; OU/ET entre tags requis.
-  - **Classes regroupées par niveau** : la puce de niveau (gras) est un raccourci qui coche/décoche toutes les classes du niveau (`mvcSetFilterLevel`) ; bordure pointillée = niveau partiel. Plus de dimension « niveau » séparée → **plusieurs niveaux** possibles.
-  - **Groupe** (G1/G2/G3/sans), **Civilité**, **Aménagements** (`MVC_AMEN` : PPRE, PAP, PPS, ULIS et UPE2A inclusion comprise, PAI, -A, +⅓, aucun), **Autre** : « pas encore dans une classe recomposée » (autre que celle éditée).
-  - **Compteurs à facettes** sur chaque puce : nombre d'élèves qui passent les AUTRES lignes et portent cette valeur (`_mvcStuMatches(stu, F, skipDim, inVc)`) ; à 0, la puce est estompée. ⚠️ Toute nouvelle ligne = une clé dans `_mvcEmptyFilters`, `_mvcHasFilter`, `_mvcStuMatches` (avec son `skip`) et le tableau des dimensions de `renderMvcFilterPanel`.
+- **Panneau 🔎 Filtrer les candidats — toujours visible** (v2.63.0 ; il était caché derrière « Options avancées » alors que c'est l'outil principal). ET entre les lignes, OU dans une ligne. Quatre lignes, **pas plus** (v2.63.1 : l'utilisateur a jugé le panneau surchargé et fait retirer les compteurs à facettes, la ligne Groupe et la ligne « pas encore dans une classe recomposée ») :
+  - **Tags** : clic = exiger / retirer ; OU/ET entre tags requis. **Exclure passe par le bouton visible « ⊘ Exclure »** (`F.exclMode`) : enfoncé, un clic sur un tag l'exclut (⊘ barré, `F.tagExcl`). ⚠️ Un premier essai en clic cyclique (requis → exclu) marchait mais restait introuvable — l'utilisateur « n'arrivait pas à exclure » : un geste annoncé seulement en infobulle n'existe pas pour lui.
+  - **Classes regroupées par niveau** : la puce de niveau (gras) coche/décoche toutes les classes du niveau (`mvcSetFilterLevel`) ; bordure pointillée = niveau partiel. Plusieurs niveaux possibles.
+  - **Civilité** et **Aménagements** (`MVC_AMEN` : PPRE, PAP, PPS, ULIS et UPE2A inclusion comprise, PAI, -A, +⅓, aucun).
+  - ⚠️ Toute nouvelle ligne = une clé dans `_mvcEmptyFilters`, `_mvcHasFilter`, `_mvcStuMatches` et un rendu dans `renderMvcFilterPanel` — mais demander avant : le panneau est à sa limite.
 - **« ▸ 🗓 Présence par période »** (ex-« Options avancées ») ne replie plus que la présence par période, la 2e case 🗓 et les « de … à … » par ligne.
 État : variable globale `_mvcAdvancedOn` (booléen, reset à chaque ouverture via `_mvcResetAdvanced()`). Toggle : `_mvcToggleAdvanced()` qui synchronise visibilité du wrap, libellé du bouton (▸ vs ▾), header de colonnes et re-render de la liste.
 

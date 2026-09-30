@@ -1236,10 +1236,8 @@ html[data-theme="dark"] #mvc-filter-panel { background: var(--paper-warm) !impor
 .mvc-chip.mvc-tagmode { padding: 1px 6px !important; }
 .mvc-fp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
 .mvc-fp-lbl { font-size: .82em; color: var(--pencil); min-width: 66px; }
-.mvc-fp-lbl2 { min-width: 0; margin-left: 12px; }
 .mvc-fp-chips { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-.mvc-chip .mvc-cnt { font-family: var(--font-mono); font-size: .86em; margin-left: 4px; opacity: .85; }
-.mvc-chip.zero:not(.on):not(.excl):not(.part) { opacity: .45; }
+.mvc-chip.mvc-exclmode.on { background: var(--danger-bg) !important; color: var(--danger-on) !important; border-color: var(--danger-bg) !important; }
 .mvc-chip.part { border: 1px dashed var(--chip-on-bg) !important; color: var(--ink-deep) !important; }
 .mvc-chip.excl { background: var(--paper) !important; color: var(--danger-fg) !important; border: 1px solid var(--danger-fg) !important; text-decoration: line-through; }
 .mvc-lvl-group { display: inline-flex; gap: 3px; flex-wrap: wrap; align-items: center; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--rule-line); }
@@ -4034,15 +4032,15 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <!-- Panneau de filtres : toujours visible (outil principal pour composer un groupe).
          Critères cumulés en ET d'une ligne à l'autre, OU à l'intérieur d'une ligne
-         (tags : OU/ET au choix, plus exclusion). Les puces affichent le nombre d'élèves
-         qu'elles donneraient avec les autres critères ; à 0, elles sont estompées. -->
+         (tags : OU/ET au choix, plus exclusion via le bouton « ⊘ Exclure »). -->
     <div id="mvc-filter-panel" style="background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px;padding:8px 10px;margin-bottom:8px">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap">
         <strong style="font-size:.9em">🔎 Filtrer les candidats</strong>
         <span style="font-size:.78em;color:var(--pencil)" title="Un élève doit satisfaire chaque ligne où quelque chose est choisi ; dans une même ligne, l'un OU l'autre suffit">— ET entre les lignes, OU dans une ligne · la liste n'affiche que les élèves correspondants</span>
       </div>
       <div class="mvc-fp-row">
-        <span class="mvc-fp-lbl" title="Clic : ne garder que ce tag · 2ᵉ clic : EXCLURE ce tag · 3ᵉ clic : retirer">Tags :</span>
+        <span class="mvc-fp-lbl">Tags :</span>
+        <button type="button" id="mvc-fp-exclmode" class="btn btn-sm mvc-chip mvc-exclmode" onclick="mvcToggleExclMode()" aria-pressed="false" title="Mode exclusion : un clic sur un tag garde les élèves qui ne l'ont PAS">⊘ Exclure</button>
         <span id="mvc-fp-tags" class="mvc-fp-chips"></span>
         <span id="mvc-fp-tagmode-wrap" style="display:none;align-items:center;gap:3px;margin-left:6px;font-size:.78em">
           <span style="color:var(--pencil)">Combiner :</span>
@@ -4055,18 +4053,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <span id="mvc-fp-cls" class="mvc-fp-chips"></span>
       </div>
       <div class="mvc-fp-row">
-        <span class="mvc-fp-lbl">Groupe :</span>
-        <span id="mvc-fp-grp" class="mvc-fp-chips"></span>
-        <span class="mvc-fp-lbl mvc-fp-lbl2">Civilité :</span>
+        <span class="mvc-fp-lbl">Civilité :</span>
         <span id="mvc-fp-civ" class="mvc-fp-chips"></span>
       </div>
-      <div class="mvc-fp-row">
+      <div class="mvc-fp-row" style="margin-bottom:8px">
         <span class="mvc-fp-lbl" title="Élève qui a AU MOINS UN des aménagements choisis">Aménag. :</span>
         <span id="mvc-fp-amen" class="mvc-fp-chips"></span>
-      </div>
-      <div class="mvc-fp-row" style="margin-bottom:8px">
-        <span class="mvc-fp-lbl">Autre :</span>
-        <span id="mvc-fp-other" class="mvc-fp-chips"></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--rule-line-soft);padding-top:6px">
         <span id="mvc-fp-summary" style="font-size:.85em;color:var(--pencil);flex:1;min-width:160px">Aucun filtre actif</span>
@@ -6862,11 +6854,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.63.0';
+const APP_VERSION    = '2.63.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-09-30T17:20:04Z';
+const APP_BUILD_DATE = '2026-09-30T17:30:06Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11130,11 +11122,11 @@ let _mvcBulkSel = new Set();
 // Filtres cumulatifs du panneau "🔎 Filtrer les candidats" (intersection ET entre les 3 dimensions ;
 // tags entre eux : OU par défaut, ET configurable ; classes entre elles : OU implicite ; niveau : single)
 let _mvcFilters = _mvcEmptyFilters();
-// tagIds = tags requis, tagExcl = tags exclus ; groups ⊂ {0,1,2,3} (0 = sans groupe) ;
-// civ ⊂ {M,F} ; amen ⊂ clés de MVC_AMEN ; notInVc = pas déjà dans une autre classe recomposée.
+// tagIds = tags requis, tagExcl = tags exclus ; civ ⊂ {M,F} ; amen ⊂ clés de MVC_AMEN.
+// exclMode : bouton « ⊘ Exclure » enfoncé → un clic sur un tag l'exclut au lieu de l'exiger.
 function _mvcEmptyFilters() {
-  return { tagIds: new Set(), tagExcl: new Set(), tagMode: 'or', classIds: new Set(),
-           groups: new Set(), civ: new Set(), amen: new Set(), notInVc: false };
+  return { tagIds: new Set(), tagExcl: new Set(), tagMode: 'or', exclMode: false,
+           classIds: new Set(), civ: new Set(), amen: new Set() };
 }
 let _mvcShowOnlySelected = false;
 
@@ -11588,8 +11580,8 @@ const MVC_AMEN = [
     has: s => !MVC_AMEN.some(a => a.k !== 'none' && a.has(s)) },
 ];
 function _mvcHasFilter(F = _mvcFilters) {
-  return F.tagIds.size > 0 || F.tagExcl.size > 0 || F.classIds.size > 0 || F.groups.size > 0
-      || F.civ.size > 0 || F.amen.size > 0 || F.notInVc;
+  return F.tagIds.size > 0 || F.tagExcl.size > 0 || F.classIds.size > 0
+      || F.civ.size > 0 || F.amen.size > 0;
 }
 // Niveaux présents dans les classes réelles (ordre croissant).
 function _mvcAvailableLevels() {
@@ -11598,72 +11590,48 @@ function _mvcAvailableLevels() {
   return [...lvls].sort((a,b) => a-b);
 }
 function _mvcClassesOfLevel(n) { return realClasses().filter(c => classLevelOrder(c.nom) === n); }
-// Élèves déjà membres d'une AUTRE classe recomposée que celle en cours d'édition.
-function _mvcInOtherVcSet() {
-  const set = new Set();
-  for (const c of Object.values(S.classes || {})) {
-    if (!c || !c.virtual || c.id === _mvcEditingId) continue;
-    for (const sid of (c.eleves || [])) set.add(sid);
-  }
-  return set;
-}
 // Univers : tous les élèves des classes réelles (un sid une seule fois).
 function _mvcUniverse() {
   const src = new Set();
   for (const cls of realClasses()) for (const sid of (cls.eleves || [])) if (S.eleves[sid]) src.add(sid);
   return src;
 }
-// L'élève satisfait-il les critères ? `skip` = une dimension à ignorer (sert aux
-// compteurs des puces : « combien d'élèves si je choisis aussi celle-ci »).
-function _mvcStuMatches(stu, F, skip, inVc) {
-  if (skip !== 'tags') {
-    const t = Array.isArray(stu.tags) ? stu.tags : [];
-    if (F.tagIds.size) {
-      const ids = [...F.tagIds];
-      if (F.tagMode === 'and' ? !ids.every(x => t.includes(x)) : !ids.some(x => t.includes(x))) return false;
-    }
-    for (const x of F.tagExcl) if (t.includes(x)) return false;
+// L'élève satisfait-il les critères ? (ET entre lignes, OU dans une ligne)
+function _mvcStuMatches(stu, F) {
+  const t = Array.isArray(stu.tags) ? stu.tags : [];
+  if (F.tagIds.size) {
+    const ids = [...F.tagIds];
+    if (F.tagMode === 'and' ? !ids.every(x => t.includes(x)) : !ids.some(x => t.includes(x))) return false;
   }
-  if (skip !== 'cls' && F.classIds.size && !F.classIds.has(stu.classe_id)) return false;
-  if (skip !== 'grp' && F.groups.size && !F.groups.has(stu.groupe || 0)) return false;
-  if (skip !== 'civ' && F.civ.size && !F.civ.has(stu.civilite)) return false;
-  if (skip !== 'amen' && F.amen.size && !MVC_AMEN.some(a => F.amen.has(a.k) && a.has(stu))) return false;
-  if (skip !== 'other' && F.notInVc && inVc.has(stu.id)) return false;
+  for (const x of F.tagExcl) if (t.includes(x)) return false;
+  if (F.classIds.size && !F.classIds.has(stu.classe_id)) return false;
+  if (F.civ.size && !F.civ.has(stu.civilite)) return false;
+  if (F.amen.size && !MVC_AMEN.some(a => F.amen.has(a.k) && a.has(stu))) return false;
   return true;
 }
 // Élèves correspondant aux filtres courants (vide si aucun filtre).
 function _mvcMatchingSids() {
   const F = _mvcFilters;
   if (!_mvcHasFilter(F)) return new Set();
-  const inVc = _mvcInOtherVcSet();
   const result = new Set();
-  for (const sid of _mvcUniverse()) if (_mvcStuMatches(S.eleves[sid], F, null, inVc)) result.add(sid);
+  for (const sid of _mvcUniverse()) if (_mvcStuMatches(S.eleves[sid], F)) result.add(sid);
   return result;
 }
-// Compteur d'une puce : élèves qui passent les AUTRES lignes et vérifient `pred`.
-function _mvcFacetCount(dim, pred, ctx) {
-  let n = 0;
-  for (const stu of ctx.pool[dim]) if (pred(stu)) n++;
-  return n;
-}
-
-function _mvcChipHTML({ on, cls = '', cnt, onclick, title, label, style = '' }) {
-  const z = cnt === 0 ? ' zero' : '';
-  return `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${cls}${z}" aria-pressed="${!!on}" onclick="${onclick}" title="${title}"${style}>${label}<span class="mvc-cnt">${cnt}</span></button>`;
+function _mvcChipHTML({ on, cls = '', onclick, title, label, style = '' }) {
+  return `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${cls}" aria-pressed="${!!on}" onclick="${onclick}" title="${title}"${style}>${label}</button>`;
 }
 
 // Render du panneau : puces (avec compteurs), mode ET/OU, résumé, boutons.
 function renderMvcFilterPanel() {
   const F = _mvcFilters;
-  const inVc = _mvcInOtherVcSet();
-  const uni = [..._mvcUniverse()].map(sid => S.eleves[sid]);
-  // Pour chaque ligne, le vivier = élèves qui passent toutes les AUTRES lignes.
-  const pool = {};
-  for (const d of ['tags', 'cls', 'grp', 'civ', 'amen', 'other']) pool[d] = uni.filter(stu => _mvcStuMatches(stu, F, d, inVc));
-  const ctx = { pool };
   const $ = id => document.getElementById(id);
 
-  // Tags : cycle requis → exclu → neutre
+  // Tags : clic = exiger (ou exclure si « ⊘ Exclure » est enfoncé) ; re-clic = retirer.
+  const exBtn = $('mvc-fp-exclmode');
+  if (exBtn) { exBtn.classList.toggle('on', F.exclMode); exBtn.setAttribute('aria-pressed', F.exclMode);
+    exBtn.textContent = F.exclMode ? '⊘ Exclure : actif' : '⊘ Exclure';
+    exBtn.title = F.exclMode ? 'Mode exclusion actif : cliquer un tag garde les élèves qui ne l\'ont PAS — cliquer ici pour revenir au mode normal'
+                          : 'Mode exclusion : ensuite, un clic sur un tag garde les élèves qui ne l\'ont PAS'; }
   const tagList = Object.values(S.tags || {}).sort((a,b) => a.abbr.localeCompare(b.abbr));
   if ($('mvc-fp-tags')) {
     $('mvc-fp-tags').innerHTML = !tagList.length
@@ -11671,11 +11639,11 @@ function renderMvcFilterPanel() {
       : tagList.map(t => {
         const on = F.tagIds.has(t.id), ex = F.tagExcl.has(t.id);
         const c = _safeColor(t.color);
-        const cnt = _mvcFacetCount('tags', stu => Array.isArray(stu.tags) && stu.tags.includes(t.id), ctx);
-        const next = on ? 'clic : l\'EXCLURE (garder ceux qui ne l\'ont pas)' : ex ? 'clic : retirer du filtre' : 'clic : ne garder que les élèves qui l\'ont';
+        const next = (on || ex) ? 'clic : retirer du filtre'
+          : F.exclMode ? 'clic : EXCLURE les élèves qui l\'ont' : 'clic : ne garder que les élèves qui l\'ont';
         const state = on ? 'requis' : ex ? 'EXCLU' : '';
-        return _mvcChipHTML({ on, cls: ex ? ' excl' : '', cnt, onclick: `mvcToggleFilterTag('${t.id}')`,
-          title: `${_escAttr(t.name)}${state ? ' — ' + state : ''} · ${cnt} élève(s) · ${next}`,
+        return _mvcChipHTML({ on, cls: ex ? ' excl' : '', onclick: `mvcToggleFilterTag('${t.id}')`,
+          title: `${_escAttr(t.name)}${state ? ' — ' + state : ''} · ${next}`,
           label: (ex ? '⊘ ' : '') + _escAttr(t.abbr),
           style: on ? ` style="background:${c} !important;color:${_contrastTextColor(c)} !important;border-color:${c} !important"` : '' });
       }).join('');
@@ -11697,56 +11665,34 @@ function renderMvcFilterPanel() {
         const cs = _mvcClassesOfLevel(n);
         const nOn = cs.filter(c => F.classIds.has(c.id)).length;
         const all = nOn === cs.length, part = nOn > 0 && !all;
-        const ids = new Set(cs.map(c => c.id));
-        const lvlCnt = _mvcFacetCount('cls', stu => ids.has(stu.classe_id), ctx);
         const lvlLbl = _escAttr(_levelLabel(n));
-        let h = _mvcChipHTML({ on: all, cls: ' mvc-lvl' + (part ? ' part' : ''), cnt: lvlCnt, onclick: `mvcSetFilterLevel(${n})`,
-          title: `${all ? 'Retirer' : 'Choisir'} toutes les classes de ${lvlLbl} (${cs.length}) · ${lvlCnt} élève(s)`, label: lvlLbl });
+        let h = _mvcChipHTML({ on: all, cls: ' mvc-lvl' + (part ? ' part' : ''), onclick: `mvcSetFilterLevel(${n})`,
+          title: `${all ? 'Retirer' : 'Choisir'} toutes les classes de ${lvlLbl} (${cs.length})`, label: lvlLbl });
         h += cs.map(c => {
           const on = F.classIds.has(c.id);
-          const cnt = _mvcFacetCount('cls', stu => stu.classe_id === c.id, ctx);
-          return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterClass('${c.id}')`,
-            title: `${on ? 'Retirer' : 'Ajouter'} ${_escAttr(c.nom)} au filtre · ${cnt} élève(s) (plusieurs classes = l'une OU l'autre)`, label: _escAttr(c.nom) });
+          return _mvcChipHTML({ on, onclick: `mvcToggleFilterClass('${c.id}')`,
+            title: `${on ? 'Retirer' : 'Ajouter'} ${_escAttr(c.nom)} au filtre (plusieurs classes = l'une OU l'autre)`, label: _escAttr(c.nom) });
         }).join('');
         return `<span class="mvc-lvl-group">${h}</span>`;
       }).join('');
   }
 
-  // Groupe
-  if ($('mvc-fp-grp')) {
-    $('mvc-fp-grp').innerHTML = [[1,'G1'],[2,'G2'],[3,'G3'],[0,'sans groupe']].map(([g, l]) => {
-      const cnt = _mvcFacetCount('grp', stu => (stu.groupe || 0) === g, ctx);
-      const on = F.groups.has(g);
-      return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterSet('groups',${g})`,
-        title: `${on ? 'Retirer' : 'Ne garder que'} les élèves ${g ? 'du groupe ' + l : 'sans groupe'} · ${cnt} élève(s)`, label: l });
-    }).join('');
-  }
   // Civilité
   if ($('mvc-fp-civ')) {
     $('mvc-fp-civ').innerHTML = [['M','♂ Garçons'],['F','♀ Filles']].map(([k, l]) => {
-      const cnt = _mvcFacetCount('civ', stu => stu.civilite === k, ctx);
       const on = F.civ.has(k);
-      return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterSet('civ','${k}')`,
-        title: `${on ? 'Retirer le filtre' : 'Ne garder que les ' + l.slice(2).toLowerCase()} · ${cnt} élève(s)`, label: l });
+      return _mvcChipHTML({ on, onclick: `mvcToggleFilterSet('civ','${k}')`,
+        title: on ? 'Retirer le filtre' : 'Ne garder que les ' + l.slice(2).toLowerCase(), label: l });
     }).join('');
   }
   // Aménagements
   if ($('mvc-fp-amen')) {
     $('mvc-fp-amen').innerHTML = MVC_AMEN.map(a => {
-      const cnt = _mvcFacetCount('amen', a.has, ctx);
       const on = F.amen.has(a.k);
-      return _mvcChipHTML({ on, cnt, onclick: `mvcToggleFilterSet('amen','${a.k}')`,
-        title: `${a.name} — ${on ? 'retirer du filtre' : 'ne garder que ces élèves'} · ${cnt} élève(s) (plusieurs = l'un OU l'autre)`, label: a.lbl });
+      return _mvcChipHTML({ on, onclick: `mvcToggleFilterSet('amen','${a.k}')`,
+        title: `${a.name} — ${on ? 'retirer du filtre' : 'ne garder que ces élèves'} (plusieurs = l'un OU l'autre)`, label: a.lbl });
     }).join('');
   }
-  // Autre
-  if ($('mvc-fp-other')) {
-    const cnt = _mvcFacetCount('other', stu => !inVc.has(stu.id), ctx);
-    $('mvc-fp-other').innerHTML = _mvcChipHTML({ on: F.notInVc, cnt, onclick: 'mvcToggleNotInVc()',
-      title: `${F.notInVc ? 'Retirer le filtre' : 'Masquer les élèves déjà inscrits dans une autre classe recomposée'} · ${cnt} élève(s) ne sont dans aucune autre`,
-      label: 'pas encore dans une classe recomposée' });
-  }
-
   // Résumé + boutons
   const sumEl = $('mvc-fp-summary');
   const matching = _mvcMatchingSids();
@@ -11771,14 +11717,15 @@ function renderMvcFilterPanel() {
 }
 
 function _mvcFiltersChanged() { renderMvcFilterPanel(); renderMvcStudents(); }
-// Tag : neutre → requis → exclu → neutre.
+// Tag : déjà choisi (requis ou exclu) → retiré ; sinon exigé, ou exclu si « ⊘ Exclure » est enfoncé.
 function mvcToggleFilterTag(tagId) {
   const F = _mvcFilters;
-  if (F.tagIds.has(tagId)) { F.tagIds.delete(tagId); F.tagExcl.add(tagId); }
+  if (F.tagIds.has(tagId)) F.tagIds.delete(tagId);
   else if (F.tagExcl.has(tagId)) F.tagExcl.delete(tagId);
-  else F.tagIds.add(tagId);
+  else (F.exclMode ? F.tagExcl : F.tagIds).add(tagId);
   _mvcFiltersChanged();
 }
+function mvcToggleExclMode() { _mvcFilters.exclMode = !_mvcFilters.exclMode; renderMvcFilterPanel(); }
 function mvcToggleFilterClass(clsId) {
   if (_mvcFilters.classIds.has(clsId)) _mvcFilters.classIds.delete(clsId);
   else _mvcFilters.classIds.add(clsId);
@@ -11797,7 +11744,6 @@ function mvcToggleFilterSet(key, v) {
   if (set.has(v)) set.delete(v); else set.add(v);
   _mvcFiltersChanged();
 }
-function mvcToggleNotInVc() { _mvcFilters.notInVc = !_mvcFilters.notInVc; _mvcFiltersChanged(); }
 function mvcSetTagMode(mode) {
   _mvcFilters.tagMode = (mode === 'and') ? 'and' : 'or';
   _mvcFiltersChanged();
