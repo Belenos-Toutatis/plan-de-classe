@@ -392,6 +392,12 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .stbl th:hover{background:#1a2838}
 .stbl td{padding:7px 11px;border-bottom:1px solid #f0f0f0;font-size:.85em;vertical-align:middle}
 .stbl tr:last-child td{border-bottom:none}
+/* Onglet Élèves : la liste défile DANS #stl (hauteur posée par _fitStlHeight) pour que
+   l'en-tête reste visible. #stl défile déjà en largeur (responsive) : un en-tête collé à la
+   PAGE y serait impossible, un conteneur qui défile capte le sticky. Le overflow:hidden de
+   .stbl (coins arrondis) bloquerait aussi le sticky — neutralisé ici. */
+#stl .stbl{overflow:visible}
+#stl .stbl thead th{position:sticky;top:0;z-index:3}
 .stbl tr:hover td{background:#f8f9fa}
 .stbl tbody tr.selected td{background:#d4e7f7}
 .stbl tbody tr.selected:hover td{background:#bcd9ee}
@@ -1114,6 +1120,8 @@ html[data-theme="dark"] .stbl          { background: var(--paper-warm) !importan
 html[data-theme="dark"] .stbl th,
 html[data-theme="dark"] .stbl td       { background: transparent !important; border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
 html[data-theme="dark"] .stbl tr:hover td { background: var(--paper-deep) !important; }
+/* En-tête collant : il lui faut un fond OPAQUE, sinon les lignes défilent à travers. */
+html[data-theme="dark"] #stl .stbl thead th { background: var(--paper-warm) !important; }
 /* .cc : on ne force PAS le background en dark — il vient de levelBgColor()
    inline et est déjà thème-aware (HSL adapté à la saturation/lightness sombre). */
 /* Les 3 côtés seulement : `border-color` en bloc écrasait la bordure GAUCHE de niveau,
@@ -2717,6 +2725,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
    tout le reste — modales comprises — se dimensionnait alors sur cette largeur fantôme.
    Les blocs intrinsèquement larges (tableaux, plans) défilent DANS leur conteneur.
    ═══════════════════════════════════════════════════════════════════ */
+#stl { overflow-y: auto; }
 #stl, .recap-photocopies, #cfg-slots-list, .qcm-plan-wrap, #tg-zoom-wrap, #sv-zoom-wrap { overflow-x: auto; max-width: 100%; }
 @media (max-width: 760px) {
   .tab-group { flex-wrap: wrap; }
@@ -6855,11 +6864,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.63.4';
+const APP_VERSION    = '2.63.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-02T16:57:00Z';
+const APP_BUILD_DATE = '2026-10-02T17:16:14Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -18218,7 +18227,7 @@ function renderStudents() {
         <th onclick="sortEleves('nt')">📝 Travail non fait${arrow('nt')}</th>
         <th class="ff-appel" onclick="sortEleves('abs')" title="Cumul absences sur tous les appels enregistrés">🚫 Absences${arrow('abs')}</th>
         <th class="ff-appel" onclick="sortEleves('ret')" title="Cumul retards sur tous les appels enregistrés">⏰ Retards${arrow('ret')}</th>
-        <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PAP / PPS / ULIS / UPE2A — boutons exclusifs intra-groupe), médicaux (PAI — cumulable) et 📄-A = agrandissement (photocopies agrandies) et ⏱+⅓ = tiers-temps (temps majoré) — cumulables, affichés en suffixe « PPRE-A », « PAP+⅓ », « PPS-A+⅓ »…. Notes libres en dernier.">Aménagements (PPRE · PAP · PPS · ULIS · UPE2A · PAI · 📄-A · ⏱+⅓) / Notes</th>
+        <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PAP / PPS / ULIS / UPE2A — boutons exclusifs intra-groupe), médicaux (PAI — cumulable) et 📄-A = agrandissement (photocopies agrandies) et ⏱+⅓ = tiers-temps (temps majoré) — cumulables, affichés en suffixe « PPRE-A », « PAP+⅓ », « PPS-A+⅓ »…. 📋 Informations libres en dernier.">Aménagements (PPRE · PAP · PPS · ULIS · UPE2A · PAI · 📄-A · ⏱+⅓) / Infos</th>
         <th style="cursor:default">Actions</th>
       </tr></thead>
       <tbody>${rows}</tbody>
@@ -18226,6 +18235,18 @@ function renderStudents() {
   `;
   updateEleveBulkBar();
 }
+
+// Hauteur de la zone qui défile de l'onglet Élèves : jusqu'au bas de l'écran (moins la
+// barre d'actions en lot flottante si elle est affichée), mesurée page remontée — ainsi
+// toute la liste tient à l'écran et son en-tête (sticky) reste visible pendant le défilement.
+function _fitStlHeight() {
+  const el = document.getElementById('stl');
+  if (!el || !document.getElementById('tab-eleves')?.classList.contains('on')) return;
+  const top = el.getBoundingClientRect().top + window.scrollY;
+  const pad = document.body.classList.contains('el-bulk-on') ? 84 : 12;
+  el.style.maxHeight = Math.max(260, window.innerHeight - top - pad) + 'px';
+}
+window.addEventListener('resize', () => _fitStlHeight());
 
 function sortEleves(col) {
   if (eleveSort.col === col) eleveSort.dir = -eleveSort.dir;
@@ -18404,6 +18425,7 @@ function updateEleveBulkBar() {
     bar.style.display = 'none';
   }
   document.body.classList.toggle('el-bulk-on', selectedEleves.size > 0);
+  _fitStlHeight();
 }
 
 // Termine le drag dès que le bouton est relâché n'importe où
