@@ -127,6 +127,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
    28 px passent. Au-delà de 40, un nom très long (« DE LA TOUR-DUVERNOY ») passe sous la photo. */
 .cphoto{position:absolute;right:3px;bottom:3px;width:clamp(28px,22%,40px);height:auto;aspect-ratio:1;object-fit:cover;border-radius:3px;border:1px solid var(--rule-line);cursor:zoom-in}
 .cphoto:not([src]){visibility:hidden}
+/* Place réservée à un élève pas encore arrivé (audit 2026-10-03, § 1.1) */
+.cell.em.reserved{border-style:dashed;border-color:var(--cell-meta)}
+.creserved{font-size:.95em;color:var(--cell-meta);font-style:italic;line-height:1.3}
 /* Mode trombinoscope du Plan Prof : la photo occupe toute la largeur de la case (bornée à 170 px). */
 #tg.tg-trombi .cell{justify-content:flex-start;padding:4px 4px 5px}
 #tg.tg-trombi .cell.em{min-height:96px}
@@ -2956,7 +2959,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <span class="group-label" title="Devoirs, notes et compétences : saisie, bilans par période, remarques de bulletin">Évaluations</span>
     <button class="nb" onclick="showTab('notes',this)" title="Devoirs : création des évaluations, saisie des notes /20">📊 Devoirs</button>
     <button class="nb" onclick="showTab('comp',this)" title="Bilan des compétences : vue transverse classe + niveau moyen par élève sur chaque compétence évaluée">🎯 Bilan des compétences</button>
-    <button class="nb" onclick="showTab('bilan',this)" title="Bilan des notes : moyenne /20 par élève et moyenne par domaine du socle, prêt à coller dans le bulletin">📜 Bilan des notes</button>
+    <button class="nb" onclick="showTab('bilan',this)" title="Bilan des notes : moyenne /20 par élève et par période, rang, remarques et mentions de conseil — prêt pour le bulletin">📜 Bilan des notes</button>
   </div>
 </nav>
 <div id="conf-banner" role="status">
@@ -3003,7 +3006,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-g btn-sm" onclick="openTagsModal()" title="Gérer les tags cumulables (DF, DNL, etc.) — partagés entre toutes les classes">🏷 Tags</button>
       <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('incidents')" title="Sauvegarder ou consulter l'état des incidents à une date">📸 Snapshots</button>
       <button class="btn btn-g btn-sm" onclick="openOverviewModal()" title="Vue d'ensemble : tous les élèves de toutes les classes avec absences/retards cumulés">📊 Vue d'ensemble</button>
-      <button class="btn btn-g btn-sm" onclick="goToExportPositions()" title="Tableau complet de la classe (positions, groupes, compteurs, aménagements, notes) — triable, copiable, exportable en CSV">📊 Export</button>
+      <button class="btn btn-g btn-sm" onclick="goToExportPositions()" title="Tableau complet de la classe (positions, groupes, compteurs, aménagements, informations) — triable, copiable, exportable en CSV">📊 Export</button>
       <button class="btn btn-g btn-sm" onclick="printElevesList()" title="Imprimer la liste : élève, groupe, oublis, travail non fait (portrait — Ctrl+P)">🖨 Imprimer la liste</button>
       <button class="btn btn-d btn-sm" onclick="clearAllSeating()">🗑 Retirer toutes les positions</button>
       <span class="tb-hint" style="margin-left:auto;font-size:.78em">Astuce : clic & glisser sur une ligne pour sélectionner plusieurs élèves</span>
@@ -3105,7 +3108,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <option value="genre">🎨 Couleur : Genre</option>
         <option value="none">🎨 Couleur : Aucune</option>
       </select>
-      <span class="tb-hint" style="margin-left:8px">Clic droit sur un élève (cellule du plan) → menu contextuel (déplacer, retirer, notes, rappels…). Glisser un élève depuis sa cellule jusqu'au panneau de droite (« Non placés ») → le retire de sa place et le remet en attente d'affectation.</span>
+      <span class="tb-hint" style="margin-left:8px">Clic droit sur un élève (cellule du plan) → menu contextuel (aménagements, rôle, fiche complète, informations, rappels, retirer de sa place…). Glisser un élève depuis sa cellule jusqu'au panneau de droite (« Non placés ») → le retire de sa place et le remet en attente d'affectation.</span>
       <span id="tg-count" style="margin-left:auto;font-size:.85em;color:var(--pencil);white-space:nowrap"></span>
     </div>
     <div id="class-msg-banner" role="status" aria-live="polite"></div>
@@ -3203,10 +3206,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <strong>Tables</strong> — indique le <strong>positionnement physique des tables</strong> dans la salle. Cliquez sur une case (ou clic + glisser sur plusieurs) pour basculer <strong>Avec table ⬜</strong> ↔ <strong>Sans table ✖</strong>. Modifie le catalogue : toutes les classes utilisant cette salle sont impactées.
     </div>
     <div class="al al-i" id="cfg-hint-groupes" style="display:none">
-      <strong>Groupes G1/G2/G3</strong> — réserve des places pour chaque groupe lors du <strong>placement automatique</strong>. Utile quand les élèves conservent les <strong>mêmes places en classe entière et en groupe</strong>. <strong>1.</strong> Sélectionnez des cases (clic + glisser). <strong>2.</strong> Bouton <strong style="color:var(--g1-fg)">G1</strong> / <strong style="color:var(--g2-fg)">G2</strong> / <strong style="color:var(--g3-fg)">G3</strong> / Aucun. Une place ne peut être que dans <em>un seul</em> groupe ou tag. Spécifique à la classe sélectionnée. <em>Si les élèves ont des places différentes selon le groupe, utilisez plutôt l'onglet <strong>Tags</strong> ci-contre + créez une <strong>classe recomposée</strong> (depuis l'onglet <strong>Élèves</strong> → bouton 🔀 sur un tag, ou depuis l'onglet <strong>Classes</strong> → ➕ Nouvelle).</em>
+      <strong>Groupes G1/G2/G3</strong> — réserve des places pour chaque groupe lors du <strong>placement automatique</strong>. Utile quand les élèves conservent les <strong>mêmes places en classe entière et en groupe</strong>. <strong>1.</strong> Sélectionnez des cases (clic + glisser). <strong>2.</strong> Bouton <strong style="color:var(--g1-fg)">G1</strong> / <strong style="color:var(--g2-fg)">G2</strong> / <strong style="color:var(--g3-fg)">G3</strong> / Aucun. Une place ne peut être que dans <em>un seul</em> groupe ou tag. Spécifique à la classe sélectionnée. <em>Si les élèves ont des places différentes selon le groupe, utilisez plutôt l'onglet <strong>Tags</strong> ci-contre + créez une <strong>classe recomposée</strong> (onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🔀 Classe recomposée</strong>, ou onglet <strong>Classes</strong> → <strong>+ Nouvelle classe recomposée</strong>).</em>
     </div>
     <div class="al al-i" id="cfg-hint-tags" style="display:none">
-      <strong>Tags</strong> — réserve des places pour des <strong>sous-ensembles d'élèves taggés</strong> (DF, DNL, etc.). Utile pour les <strong>classes recomposées</strong> (DNL, Devoir Fait, accompagnement…). <strong>1.</strong> Sélectionnez des cases. <strong>2.</strong> Bouton de tag. Une place ne peut être que dans <em>un seul</em> groupe ou tag. <em>Gérer les tags : bouton <strong>⚙ Gérer les tags</strong> dans la barre d'actions. Affecter un tag à un élève : onglet <strong>Élèves</strong> → édition élève.</em><br>
+      <strong>Tags</strong> — réserve des places pour des <strong>sous-ensembles d'élèves taggés</strong> (DF, DNL, etc.). Utile pour les <strong>classes recomposées</strong> (DNL, Devoir Fait, accompagnement…). <strong>1.</strong> Sélectionnez des cases. <strong>2.</strong> Bouton de tag. Une place ne peut être que dans <em>un seul</em> groupe ou tag. <em>Gérer les tags : onglet <strong>Élèves</strong> → <strong>🏷 Tags</strong>. Affecter un tag à des élèves : onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🏷 Tags…</strong>.</em><br>
       <strong>Au placement automatique :</strong> un élève taggé T cherche en priorité une place taggée T. Sinon il prend une place sans tag (libre). Sinon (rare) une place taggée différemment, avec popup d'avertissement. Si une place taggée T reste sans candidat T, elle peut accueillir un autre élève en débordement (toast). <strong>Placement manuel</strong> (drag&drop) : aucune contrainte — on place qui on veut où on veut.
     </div>
     <div class="al al-i" id="cfg-hint-contraintes" style="display:none">
@@ -3537,7 +3540,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <p class="al al-i evhelp" id="evhelp-bilan" style="margin-bottom:8px;position:relative;padding-right:28px">
       <button onclick="_evhelpToggle('bilan')" title="Masquer ce mode d'emploi (réaffichable via le ? à gauche de Période)" style="position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1">✕</button>
-      Synthèse de la période pour le bulletin. <strong>Une colonne par évaluation</strong> (note /20 individuelle de chaque élève, fond coloré selon la valeur), triées <strong>par date croissante</strong> de gauche à droite (sans date à la fin). En multi-période (« Toutes »), les colonnes <strong>Moyenne /20</strong>, <strong>Rang</strong> et <strong>📝 Remarque</strong> sont dédupliquées par période (S1/S2 ou T1/T2/T3). La moyenne est <strong>pondérée par les coefficients</strong> de chaque éval. Les évals marquées <em>« ne compte pas dans la moyenne »</em> (diagnostiques) sont ignorées. Clic droit sur le code court d'une éval = ouvrir sa saisie tableur. Bouton <strong>🔀 Comparer classes</strong> : tableau croisé classes × civilité (moyenne, σ, médiane) sur la période ou un sous-ensemble d'évaluations.
+      Synthèse de la période pour le bulletin. <strong>Une colonne par évaluation</strong> (note /20 individuelle de chaque élève, fond coloré selon la valeur), triées <strong>par date croissante</strong> de gauche à droite (sans date à la fin). En multi-période (« Toutes »), les colonnes <strong>Moyenne /20</strong>, <strong>Rang</strong> et <strong>📝 Remarque</strong> sont dédupliquées par période (S1/S2 ou T1/T2/T3). La moyenne est <strong>pondérée par les coefficients</strong> de chaque éval. Les évals marquées <em>« ne compte pas dans la moyenne »</em> (diagnostiques) sont ignorées. Clic sur le code court d'une éval = ouvrir sa saisie tableur. Bouton <strong>🔀 Comparer classes</strong> : tableau croisé classes × civilité (moyenne, σ, médiane) sur la période ou un sous-ensemble d'évaluations.
     </p>
     <div id="bilan-wrap"></div>
   </div>
@@ -3772,7 +3775,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </label>
     </div>
     <div class="fg"><label>📋 Informations (affichées au survol de la place)</label>
-      <textarea id="es-notes" rows="3" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em;resize:vertical" placeholder="Aménagements, PAP, observations…"></textarea>
+      <textarea id="es-notes" rows="3" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em;resize:vertical" placeholder="Santé, famille, points d'attention… (les aménagements se règlent avec leurs boutons)"></textarea>
     </div>
     <div style="font-size:.78em;color:var(--pencil);margin:10px 0 4px">Arrivée / départ en cours d'année (laisser vide si présent toute l'année)</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
@@ -4114,8 +4117,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </p>
     <div id="mshuffle-options" style="background:#f9fbfd;border:1px solid #d6dbdf;border-radius:4px;padding:12px 14px;margin-bottom:10px"></div>
     <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin-bottom:12px">
-      💡 Décocher une règle ou changer le niveau de paires <strong>n'affecte que ce placement</strong> —
-      les réglages enregistrés dans Config Salle ne sont pas modifiés.
+      💡 Ces règles sont <strong>mémorisées pour cette salle</strong> au moment du mélange, et donc
+      partagées par toutes les classes qui l'utilisent. Les contraintes (places autorisées, paires à séparer) sont toujours respectées.
     </p>
     <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-g" onclick="closeMod2('mshuffle')">Annuler</button>
@@ -4879,7 +4882,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <label style="display:block;margin:3px 0;cursor:pointer">
         <input type="radio" name="meval-new-type" value="B" onchange="_evalNewOnTypeChange()">
         <strong>Type B — Compétences au fil de l'eau (passations)</strong>
-        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Container long (semestre) qui accumule des <strong>passations</strong>. Chaque passation = 1 séance, 1 code court (A9, TP3…), 1 à 3 compétences évaluées par niveau. Note finale calculée à partir des niveaux atteints.</div>
+        <div style="margin-left:24px;color:var(--pencil);font-size:.85em">Container long (semestre) qui accumule des <strong>passations</strong>. Chaque passation = 1 séance, 1 code court (A9, TP3…), une ou plusieurs compétences évaluées par niveau. Note finale calculée à partir des niveaux atteints.</div>
       </label>
       <label style="display:block;margin:3px 0;cursor:pointer">
         <input type="radio" name="meval-new-type" value="C" onchange="_evalNewOnTypeChange()">
@@ -4945,7 +4948,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <h3>⚙ Options avancées</h3>
       <label style="display:block;margin-bottom:6px;cursor:pointer;font-size:.92em">
         <input type="checkbox" id="meval-new-countsForMean" checked>
-        <strong>Compte dans la moyenne du semestre</strong> <span style="color:var(--pencil);font-size:.88em">(décocher pour une <em>éval diagnostique</em>)</span>
+        <strong>Compte dans la moyenne de la période</strong> <span style="color:var(--pencil);font-size:.88em">(décocher pour une <em>éval diagnostique</em>)</span>
       </label>
       <label style="display:block;margin-bottom:6px;cursor:pointer;font-size:.92em">
         <input type="checkbox" id="meval-new-facultative" onchange="_evalNewToggleFacMode()">
@@ -5044,7 +5047,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <h3>⚙ Options avancées</h3>
       <label style="display:block;margin-bottom:6px;cursor:pointer;font-size:.92em">
         <input type="checkbox" id="meval-edit-countsForMean" onchange="_evalEditMarkDirty()" checked>
-        <strong>Compte dans la moyenne du semestre</strong> <span style="color:var(--pencil);font-size:.88em">(décocher pour une <em>éval diagnostique</em>)</span>
+        <strong>Compte dans la moyenne de la période</strong> <span style="color:var(--pencil);font-size:.88em">(décocher pour une <em>éval diagnostique</em>)</span>
       </label>
       <label style="display:block;margin-bottom:6px;cursor:pointer;font-size:.92em">
         <input type="checkbox" id="meval-edit-facultative" onchange="_evalEditMarkDirty();_evalEditToggleFacMode()">
@@ -5824,7 +5827,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <option value="nom-prenom">↕ Nom Prénom</option>
           <option value="prenom-nom">↕ Prénom Nom</option>
         </select>
-        <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Élève suivant : descend dans la même colonne&#10;• Colonne par colonne : descend, puis remonte en haut de la colonne suivante&#10;• Question par question : remplit la question pour un élève, puis descend — la question est faite pour toute la classe avant de passer à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier">
+        <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Question par question : remplit la question pour un élève, puis descend — la question est faite pour toute la classe avant de passer à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier">
           <option value="question" selected>↩ Question suivante</option>
           <option value="byquestion">↩ Question par question</option>
           <option value="byexo">↩ Exercice par exercice</option>
@@ -6114,7 +6117,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
           <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mtags', openTagsModal)">🏷 Gérer les tags (DF, DNL, etc.)</button>
         </div>
-        <div style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:4px">Aussi accessible depuis Plan Prof → mode Tags.</div>
+        <div style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:4px">Aussi accessible depuis l'onglet Élèves → 🏷 Tags.</div>
       </div>
       <!-- Rappels -->
       <div class="about-section">
@@ -6998,11 +7001,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.68.0';
+const APP_VERSION    = '2.68.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T15:14:46Z';
+const APP_BUILD_DATE = '2026-10-03T15:44:59Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12561,11 +12564,12 @@ function randomPlacement(reshuffle) {
 // Exécute le placement aléatoire avec les options choisies (modal "mshuffle" ou
 // valeurs par défaut). Les options ne mutent jamais l'état enregistré de la classe —
 // elles s'appliquent uniquement à ce placement.
-function _runRandomPlacement(opts) {
+function _runRandomPlacement(opts, afterUndo) {
   const cls = getCls();
   if (!cls) return;
 
   pushUndo();
+  if (typeof afterUndo === 'function') afterUndo();
 
   let studentsToPlace;
   if (opts.reshuffle) {
@@ -12992,8 +12996,11 @@ function confirmShuffle() {
   const opts = _shuffleOptions;
   // Persiste les choix dans la salle active : partagé entre toutes les classes
   // qui utilisent cette salle, sauvegardé dans le JSON.
+  // Écrit APRÈS le pushUndo du placement (rappel passé à _runRandomPlacement), sinon
+  // Ctrl+Z annulait le mélange mais gardait les règles modifiées (audit 2026-10-03, § 1.10).
   const cls = getCls();
-  if (cls && cls.activeRoom && S.salles?.[cls.activeRoom]) {
+  const persist = () => {
+    if (!cls || !cls.activeRoom || !S.salles?.[cls.activeRoom]) return;
     S.salles[cls.activeRoom].shuffleOpts = {
       frontFirst:       !!opts.frontFirst,
       spacing:          { ...(opts.spacing || {}) },
@@ -13002,9 +13009,9 @@ function confirmShuffle() {
       ilotSpacing:      opts.ilotSpacing      || 'spread',
       keepAeshPlacement: !!opts.keepAeshPlacement,
     };
-  }
+  };
   closeMod2('mshuffle');
-  _runRandomPlacement(opts);
+  _runRandomPlacement(opts, persist);
 }
 
 // ─── Helpers pour le nouvel algorithme de placement aléatoire ─────────────
@@ -16653,7 +16660,7 @@ function saveEdit() {
       ? `🔁 Réinitialisé : groupe G${s.groupe} (les groupes sont propres à chaque classe — à redéfinir si besoin dans la nouvelle)\n`
       : '';
     const confirmMsg = `Déplacer ${s.prenom} ${s.nom} de "${oldCls?.nom || s.classe_id}" vers "${newCls.nom}" ?\n\n`
-      + `✅ Conservé : compteurs (📦/📝), historique d'incidents, civilité, statuts, tags, notes\n`
+      + `✅ Conservé : compteurs (📦/📝), historique d'incidents, civilité, statuts, tags, informations\n`
       + `✅ Conservé : appels passés dans l'ancienne classe (visibles dans 🕓 Historique)\n`
       + grpInfo
       + `🪑 Retiré : sa place dans le plan de l'ancienne classe (à replacer dans la nouvelle)\n\n`
@@ -17361,7 +17368,11 @@ function _evalOpenRendu(evalId) {
   document.getElementById('mrendu-evalid').value = evalId;
   // Détermine la classe active : si appelé depuis le tableur, lit son select de classe,
   // sinon prend S.cur si l'éval la couvre, sinon la première classe vivante.
-  const tableurCid = (document.getElementById('meval-tableur-classpicker')?.querySelector('input[type="radio"]:checked')?.value) || null;
+  // La classe choisie dans le tableur, s'il est ouvert. (On lisait un bouton radio que le
+  // sélecteur de classes n'a plus — il est fait de boutons — donc on retombait sur S.cur :
+  // une éval multi-classes projetait la classe du bandeau. Audit 2026-10-03, § 1.5.)
+  const _tab = document.getElementById('meval-tableur');
+  const tableurCid = (_tab?.classList.contains('on') && _tab.dataset.classid) || null;
   const cid = (tableurCid && _evalIncludesClass(ev, tableurCid)) ? tableurCid
             : (S.cur && _evalIncludesClass(ev, S.cur)) ? S.cur
             : _evalPrimaryAliveClassId(ev);
@@ -18129,15 +18140,24 @@ function _setCounter(id, field, type, newVal) {
 function setOubli(id, v) { _setCounter(id, 'oublis',      'oubli', v); }
 function setNT(id, v)    { _setCounter(id, 'non_travail', 'nt',    v); }
 
+// Remet à zéro les compteurs 📦 / 📝 d'un élève et retire LEURS entrées de l'historique.
+// Les autres entrées (rappels faits) restent : avant, toutes les remises à zéro faisaient
+// history = [] et effaçaient aussi la trace des rappels traités (audit 2026-10-03, § 1.2).
+function _clearIncidents(s) {
+  if (!s) return;
+  s.oublis = 0; s.non_travail = 0;
+  s.history = (Array.isArray(s.history) ? s.history : []).filter(h => h && h.type !== 'oubli' && h.type !== 'nt');
+}
 function resetOne(id) {
-  if (!S.eleves[id]) return;
-  pushUndo();
-  S.eleves[id].oublis = 0;
-  S.eleves[id].non_travail = 0;
-  S.eleves[id].history = [];
-  save();
-  renderStudents();
-  renderTeacherGrid();
+  const s = S.eleves[id];
+  if (!s) return;
+  if (!(s.oublis || s.non_travail)) { toast('Compteurs déjà à zéro.'); return; }
+  _uiConfirm({
+    title: '↺ Remettre les compteurs à zéro', okLabel: '↺ Remettre à zéro', okClass: 'btn-w',
+    message: `Remettre à zéro les compteurs de ${s.prenom} ${s.nom} (📦 ${s.oublis || 0} · 📝 ${s.non_travail || 0}) ?\nLes incidents correspondants sont retirés de son historique ; les rappels traités y restent. Ctrl+Z annule.`,
+    onOk: () => { pushUndo(); _clearIncidents(s); save(); renderStudents(); renderTeacherGrid(); },
+  });
+  return;
 }
 
 function resetAll() {
@@ -18145,11 +18165,11 @@ function resetAll() {
   if (!cls) return;
   _uiConfirm({
     title: '↺ Réinitialiser la classe', okLabel: '↺ Réinitialiser', okClass: 'btn-w',
-    message: 'Réinitialiser tous les compteurs et l\'historique de cette classe ?',
+    message: 'Remettre à zéro les compteurs 📦 / 📝 de tous les élèves de cette classe ?\nLes incidents sont retirés des historiques ; les rappels traités y restent. Ctrl+Z annule.',
     onOk: () => {
       pushUndo();
       cls.eleves.forEach(id => {
-        if (S.eleves[id]) { S.eleves[id].oublis = 0; S.eleves[id].non_travail = 0; S.eleves[id].history = []; }
+        _clearIncidents(S.eleves[id]);
       });
       save();
       renderStudents();
@@ -18642,12 +18662,12 @@ function bulkResetCounters() {
   if (!selectedEleves.size) return;
   _uiConfirm({
     title: '↺ Réinitialiser la sélection', okLabel: '↺ Réinitialiser', okClass: 'btn-w',
-    message: `Réinitialiser les compteurs et l'historique de ${selectedEleves.size} élève(s) sélectionné(s) ?`,
+    message: `Remettre à zéro les compteurs 📦 / 📝 de ${selectedEleves.size} élève(s) sélectionné(s) ?\nLes incidents sont retirés des historiques ; les rappels traités y restent. Ctrl+Z annule.`,
     onOk: () => {
       pushUndo();
       const n = selectedEleves.size;
       selectedEleves.forEach(sid => {
-        if (S.eleves[sid]) { S.eleves[sid].oublis = 0; S.eleves[sid].non_travail = 0; S.eleves[sid].history = []; }
+        _clearIncidents(S.eleves[sid]);
       });
       save();
       renderStudents();
@@ -19738,6 +19758,8 @@ function buildCell(cls, row, col) {
   //  - Déjà parti : sa place a normalement été libérée par _freeDepartedSeats
   //    (sid retiré du seating). Le masque ici sert de filet pour le court instant
   //    entre le passage de la date de départ et le prochain nettoyage.
+  // Élève attendu (arrivée future) : on garde de quoi dessiner la place « réservée ».
+  const reservedFor = (stu && !_stuActiveOn(stu) && !_stuDepartedOn(stu)) ? stu : null;
   if (stu && !_stuActiveOn(stu)) { sid = null; stu = null; }
   const ipad  = ipadGet(cls, key, groupFilter);
   const seatG = (cls.groupes || {})[key] || 0;     // groupe de la PLACE (0=non assigné)
@@ -20027,14 +20049,14 @@ function buildCell(cls, row, col) {
       otherClsBadge,
       aeshLinkedBadge,
       tagBadges,
-      stu.ppre        ? `<span class="spec-badge spec-ppre"      title="${_escAttr(stu.notes||'PPRE')}">PPRE${_agrSuffix(stu,'ppre')}</span>` : '',
-      stu.pap         ? `<span class="spec-badge spec-pap"       title="${_escAttr(stu.notes||'PAP — Plan d’Accompagnement Personnalisé')}">PAP${_agrSuffix(stu,'pap')}</span>` : '',
-      stu.gevasco     ? `<span class="spec-badge spec-gev"       title="${_escAttr(stu.notes||'GEVAsco/PPS')}">PPS${_agrSuffix(stu,'gevasco')}</span>` : '',
-      stu.ulis        ? `<span class="spec-badge spec-ulis"      title="${_escAttr(stu.notes||'ULIS hors classe')}">ULIS${_agrSuffix(stu,'ulis')}</span>` : '',
-      stu.ulis_incl   ? `<span class="spec-badge spec-ulis-incl" title="${_escAttr(stu.notes||'ULIS inclusion')}">ULIS+${_agrSuffix(stu,'ulis_incl')}</span>` : '',
-      stu.upe2a       ? `<span class="spec-badge spec-upe2a"     title="${_escAttr(stu.notes||'UPE2A hors classe')}">UPE2A${_agrSuffix(stu,'upe2a')}</span>` : '',
-      stu.upe2a_incl  ? `<span class="spec-badge spec-upe2a-incl" title="${_escAttr(stu.notes||'UPE2A inclusion')}">UPE2A+${_agrSuffix(stu,'upe2a_incl')}</span>` : '',
-      stu.pai         ? `<span class="spec-badge spec-pai"        title="${_escAttr(stu.notes||'PAI — Projet d’Accueil Individualisé (médical)')}">PAI${_agrSuffix(stu,'pai')}</span>` : '',
+      stu.ppre        ? `<span class="spec-badge spec-ppre"      title="${_escAttr('PPRE')}">PPRE${_agrSuffix(stu,'ppre')}</span>` : '',
+      stu.pap         ? `<span class="spec-badge spec-pap"       title="${_escAttr('PAP — Plan d’Accompagnement Personnalisé')}">PAP${_agrSuffix(stu,'pap')}</span>` : '',
+      stu.gevasco     ? `<span class="spec-badge spec-gev"       title="${_escAttr('GEVAsco/PPS')}">PPS${_agrSuffix(stu,'gevasco')}</span>` : '',
+      stu.ulis        ? `<span class="spec-badge spec-ulis"      title="${_escAttr('ULIS hors classe')}">ULIS${_agrSuffix(stu,'ulis')}</span>` : '',
+      stu.ulis_incl   ? `<span class="spec-badge spec-ulis-incl" title="${_escAttr('ULIS inclusion')}">ULIS+${_agrSuffix(stu,'ulis_incl')}</span>` : '',
+      stu.upe2a       ? `<span class="spec-badge spec-upe2a"     title="${_escAttr('UPE2A hors classe')}">UPE2A${_agrSuffix(stu,'upe2a')}</span>` : '',
+      stu.upe2a_incl  ? `<span class="spec-badge spec-upe2a-incl" title="${_escAttr('UPE2A inclusion')}">UPE2A+${_agrSuffix(stu,'upe2a_incl')}</span>` : '',
+      stu.pai         ? `<span class="spec-badge spec-pai"        title="${_escAttr('PAI — Projet d’Accueil Individualisé (médical)')}">PAI${_agrSuffix(stu,'pai')}</span>` : '',
       _agrStandalone(stu) ? `<span class="spec-badge spec-agr"   title="${_escAttr(_agrStandaloneTitle(stu))}">${_agrExamSuffix(stu)}</span>` : '',
       stu.notes       ? `<span class="spec-badge" style="background:#95a5a6;color:${_contrastTextColor('#95a5a6')};cursor:pointer" onclick="event.stopPropagation();openStuNotes('${stu.id}')" title="${_escAttr(stu.notes + '\n\n(Clic = ouvrir les informations)')}">📋</span>` : '',
     ].filter(Boolean);
@@ -20070,7 +20092,7 @@ function buildCell(cls, row, col) {
                       style="${_style}">${_label}</span>`;
       })()}
     `;
-    const specTitle = [_delegueInfo(stu) ? '🗳 ' + _delegueInfo(stu).label : '', stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':'', stu.tiers_temps?'Tiers-temps (+⅓)':''].filter(Boolean).join(' · ');
+    const specTitle = [_delegueInfo(stu) ? '🗳 ' + _delegueInfo(stu).label : '', stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.ulis?'ULIS hors classe':'', stu.ulis_incl?'ULIS inclusion':'', stu.upe2a?'UPE2A hors classe':'', stu.upe2a_incl?'UPE2A inclusion':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':'', stu.tiers_temps?'Tiers-temps (+⅓)':''].filter(Boolean).join(' · ');
     const notesTitle = stu.notes ? `\n📋 ${stu.notes}` : '';
     let postTitle = '';
     if (_postAppel) {
@@ -20108,6 +20130,13 @@ function buildCell(cls, row, col) {
     if (gcls && _planColorMode !== 'genre') cell.classList.add(gcls);
     if (inlineColorStyle && _planColorMode !== 'genre') cell.style.cssText = inlineColorStyle;
     cell.innerHTML = `<span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>`;
+    // Place réservée à un élève qui n'est pas encore arrivé : elle paraissait vide, et y
+    // déposer quelqu'un retirait l'élève attendu sans prévenir (audit 2026-10-03, § 1.1).
+    if (reservedFor) {
+      cell.classList.add('reserved');
+      cell.title = `Place réservée à ${reservedFor.prenom} ${reservedFor.nom}, qui arrive le ${_fmtDateFr(reservedFor.arrivalDate)}`;
+      cell.innerHTML += `<div class="creserved">📅 ${_escAttr(reservedFor.prenom)} ${_escAttr(reservedFor.nom)}<br><small>arrive le ${_escAttr(_fmtDateFr(reservedFor.arrivalDate))}</small></div>`;
+    }
   }
 
   // Mode trombinoscope (bouton 📷, 3ᵉ état) : la case ne garde que photo, prénom et nom. Les
@@ -20137,6 +20166,21 @@ function dropOnCell(cls, toKey) {
     const sids = drag.sids || [];
     drag = null;
     if (sids.length) _placeBatchCascade(cls, sids, toKey);
+    return;
+  }
+  // Place réservée à un élève pas encore arrivé : on demande avant de la prendre.
+  const _resStu = S.eleves[cls.seating[toKey]];
+  if (_resStu && !_stuActiveOn(_resStu) && !_stuDepartedOn(_resStu) && !drag.reservedOk
+      && !(drag.type === 'placed' && drag.fromKey === toKey)) {
+    const d = drag; drag = null;
+    _uiConfirm({
+      title: '📅 Place réservée',
+      message: `Cette place est réservée à ${_resStu.prenom} ${_resStu.nom}, qui arrive le ${_fmtDateFr(_resStu.arrivalDate)}.\n`
+             + (d.type === 'placed' ? `Les deux places seront échangées : ${_resStu.prenom} prendra l'ancienne place de l'élève déplacé.`
+                                    : `${_resStu.prenom} perdra sa place réservée : il faudra le replacer à son arrivée.`),
+      okLabel: 'Placer quand même', okClass: 'btn-w',
+      onOk: () => { drag = { ...d, reservedOk: true }; dropOnCell(cls, toKey); },
+    });
     return;
   }
   pushUndo();
@@ -24870,7 +24914,7 @@ function renderExportPositions() {
       { sortKey: 'ret',    label: '⏰ Retards',   align: 'right',  display: d => d.ret || '' },
     ] : []),
     { sortKey: 'amenag',   label: 'Aménagements', align: 'left',   display: d => d.amenag },
-    { sortKey: 'notes',    label: 'Notes',        align: 'left',   display: d => d.notes },
+    { sortKey: 'notes',    label: 'Informations', align: 'left',   display: d => d.notes },
   ];
 
   // Tri
@@ -25094,7 +25138,7 @@ function renderIpads() {
 
   if (!modes.length) {
     el.innerHTML = `<p style="color:var(--pencil);padding:12px 0">Aucun élève placé et aucune tablette assignée pour cette salle / classe mobile.<br>
-      <span style="font-size:.92em">→ Onglet <a href="#" onclick="event.preventDefault();switchTab('plan')" style="color:#3498db;font-weight:600">🪑 Plan de classe</a> → placer des élèves puis menu <strong>⚙ Actions ▾</strong> → <strong>📱 Affecter automatiquement les tablettes</strong>.</span>
+      <span style="font-size:.92em">→ Onglet <a href="#" onclick="event.preventDefault();switchTab('plan')" style="color:var(--link-fg);font-weight:600">🪑 Plan</a> pour placer les élèves, puis bouton <strong>📱 Affecter automatiquement</strong> ci-dessus.</span>
     </p>`;
     renderPoolList();
     return;
@@ -25209,10 +25253,10 @@ function renderIpads() {
   // Bandeaux d'alerte
   const alerts = [];
   if (totalUnavail > 0) {
-    alerts.push(`<div class="al al-w" style="background:var(--alert-bg);border-color:var(--alert-bd);color:var(--alert-fg)">🚫 <strong>${totalUnavail} tablette(s) indisponible(s)</strong> affectée(s) à des élèves — lignes en rouge ci-dessous. Changez le n° via le menu déroulant pour résoudre.</div>`);
+    alerts.push(`<div class="al al-w" style="background:var(--alert-bg);border-color:var(--alert-bd);color:var(--alert-fg)">🚫 <strong>${totalUnavail} tablette(s) indisponible(s)</strong> affectée(s) à des élèves — lignes en rouge ci-dessous. Cliquez sur leur « Tab. N » pour en choisir une autre.</div>`);
   }
   if (totalNoTablet > 0) {
-    alerts.push(`<div class="al al-w" style="background:#fef3c7;border-color:#fbbf24;color:#92400e">⚠️ <strong>${totalNoTablet} élève(s) sans tablette</strong> affectée — lignes en jaune en bas de chaque tableau. Affectez un n° via le menu déroulant.</div>`);
+    alerts.push(`<div class="al al-w" style="background:#fef3c7;border-color:#fbbf24;color:#92400e">⚠️ <strong>${totalNoTablet} élève(s) sans tablette</strong> affectée — lignes en jaune en bas de chaque tableau. Cliquez sur « Tab. — » pour en affecter une.</div>`);
   }
   if (dupeWarnings.length) {
     alerts.push(`<div class="al al-w">⚠️ Tablettes en doublon — ${dupeWarnings.join(' · ')}</div>`);
@@ -35998,7 +36042,7 @@ document.addEventListener('keydown', e => {
     if (curTab === 'eleves')  { e.preventDefault(); printElevesList(); return; }
     if (curTab === 'classes') { e.preventDefault(); printClassesBilan(); return; }
     if (curTab === 'qcmcam')  { e.preventDefault(); openQcmMarkersDialog(); return; }
-    if (curTab === 'notes')   { e.preventDefault(); toast('🖨 Impression des évaluations à venir (phase 10 — export ENT)', 'info'); return; }
+    if (curTab === 'notes')   { e.preventDefault(); toast('🖨 Pour imprimer une évaluation : bouton 👀 Projeter de sa ligne, puis 🖨 dans la projection. Les moyennes s\'impriment depuis le Bilan des notes (📋 Copier tout / 💾 CSV).', 'info'); return; }
   }
 
   // Zoom et filtres groupe sur Plan Prof / Vue Élève
@@ -37072,6 +37116,25 @@ function _evalPrefsSave() {
   const maxNote = parseFloat(document.getElementById('evalprefs-maxNote')?.value);
   if (!Number.isFinite(maxNote) || maxNote <= 0) {
     toast('⚠ Note maximale invalide (> 0)', 'warn'); return;
+  }
+  // Passer de semestres à trimestres (ou l'inverse) remappe les évaluations, fusionne les
+  // remarques de bulletin et efface les présences par période : on le dit AVANT, et on
+  // demande (c'était un simple toast après coup — audit 2026-10-03, § 1.10).
+  if (S.evalPrefs.periodMode !== periodMode && !_evalPrefsSave._periodOk) {
+    const oldP = periodMode === 'trimestre' ? 'S' : 'T';
+    const nEv = Object.values(S.evaluations || {}).filter(e => e?.periode?.[0] === oldP).length;
+    const nMb = Object.values(S.classes || {}).reduce((n, c) => n + Object.keys(c?.membership || {}).length, 0);
+    const to = periodMode === 'trimestre' ? 'trimestres (T1, T2, T3)' : 'semestres (S1, S2)';
+    _uiConfirm({
+      title: '📅 Changer le découpage de l\'année', okLabel: 'Passer en ' + (periodMode === 'trimestre' ? 'trimestres' : 'semestres'), okClass: 'btn-w',
+      message: `Passer en ${to} :\n`
+        + `• ${nEv} évaluation(s) changeront de période (d'après leur date, sinon S1→T1 et S2→T3, ou T1·T2→S1 et T3→S2) ;\n`
+        + `• les remarques de bulletin, éléments travaillés et mentions de conseil suivront ; deux périodes qui fusionnent voient leurs textes mis bout à bout ;\n`
+        + (nMb ? `• ${nMb} présence(s) par période des classes recomposées seront effacées (à refaire) ;\n` : '')
+        + `Ctrl+Z annule tant que l'onglet reste ouvert.`,
+      onOk: () => { _evalPrefsSave._periodOk = true; try { _evalPrefsSave(); } finally { _evalPrefsSave._periodOk = false; } },
+    });
+    return;
   }
   // Tout est valide : on applique
   pushUndo();
@@ -38972,7 +39035,7 @@ function _evalEditRenderSaisieSection(ev) {
   const help    = document.getElementById('meval-edit-saisie-help');
   const actions = document.getElementById('meval-edit-saisie-actions');
   title.textContent = '🎯 Passations (séances où des compétences sont évaluées)';
-  help.innerHTML = 'Chaque passation correspond à une séance avec son <strong>code court</strong> (ex. A9, TP3), sa <strong>date</strong>, et 1 à 3 compétences évaluées. Plusieurs passations s\'accumulent au fil du semestre pour former cette évaluation.';
+  help.innerHTML = 'Chaque passation correspond à une séance avec son <strong>code court</strong> (ex. A9, TP3), sa <strong>date</strong>, et une ou plusieurs compétences évaluées. Plusieurs passations s\'accumulent au fil du semestre pour former cette évaluation.';
   ev.passations = ev.passations || [];
   let html = '';
   if (ev.passations.length === 0) {
@@ -47980,7 +48043,7 @@ function renderBilanTab() {
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     const suffix = isMulti ? ' (' + sd.perCode + ')' : (periode ? ' (' + periode + ')' : '');
     const remAttr = isMulti ? `onclick="_toggleBilanCol('${remKey(sd)}')" style="cursor:pointer;` : 'style="';
-    html += `<th ${remAttr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan par compétences.">📝 Remarque${suffix}</th>`;
+    html += `<th ${remAttr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des compétences.">📝 Remarque${suffix}</th>`;
   });
   // Colonne Conseil (mentions du conseil de classe) — 1 par période
   const _cmTip = _conseilMentionsSorted().map(m => `${m.abbr} = ${m.nom}`).join(', ');
@@ -48129,7 +48192,7 @@ function renderBilanTab() {
       const counterClass = remLen > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${rowBg};position:relative">
-        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan par compétences)">${_esc(remarque)}</textarea>
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec le Bilan des compétences)">${_esc(remarque)}</textarea>
         <span class="${counterClass}" title="Nombre de caractères (limite ENT : 600)">${remLen}/600</span>
       </td>`;
     });
@@ -49524,7 +49587,7 @@ function renderCompetencesTab() {
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     const suffix = compMulti ? ' (' + perCode + ')' : (periode ? ' (' + periode + ')' : '');
     const attr = compMulti ? `onclick="_toggleBilanCol('${cRemKey(perCode)}')" style="cursor:pointer;` : 'style="';
-    html += `<th ${attr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des évaluations.">📝 Remarque${suffix}</th>`;
+    html += `<th ${attr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des notes.">📝 Remarque${suffix}</th>`;
   });
   html += '</tr></thead><tbody>';
   _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
@@ -49602,7 +49665,7 @@ function renderCompetencesTab() {
       const counterClsC = remLenC > 600 ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = compMulti ? ' (' + perCode + ')' : '';
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${bg};position:relative">
-        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec Bilan des évaluations)">${_esc(remarqueC)}</textarea>
+        <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec le Bilan des notes)">${_esc(remarqueC)}</textarea>
         <span class="${counterClsC}" title="Nombre de caractères (limite ENT : 600)">${remLenC}/600</span>
       </td>`;
     });
@@ -49916,7 +49979,10 @@ function _evalExportOpen() {
   // Si on ouvre l'export depuis le tableur, prioriser la classe affichée dans le tableur
   // (sinon l'utilisateur qui a basculé sur une autre classe se retrouvait avec la
   // classe courante S.cur — confusion).
-  const _tableurCid = document.getElementById('meval-tableur')?.dataset.classid;
+  // Seulement si le tableur est OUVERT : dataset.classid survit à sa fermeture, et un export
+  // lancé depuis la liste des devoirs reprenait sinon la classe d'un tableur fermé.
+  const _tabEl = document.getElementById('meval-tableur');
+  const _tableurCid = _tabEl?.classList.contains('on') ? _tabEl.dataset.classid : null;
   let defaultCid;
   if (_tableurCid && aliveCids.includes(_tableurCid)) defaultCid = _tableurCid;
   else if (S.cur && aliveCids.includes(S.cur)) defaultCid = S.cur;

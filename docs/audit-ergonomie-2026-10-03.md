@@ -313,6 +313,18 @@ Trois façons de présenter l'aide selon l'onglet :
 
 ## 7. Plan d'action proposé (par lots, à valider)
 
+> **Lot A — fait en v2.68.1 (3 octobre 2026) :**
+> - place réservée dessinée et protégée par une confirmation (§ 1.1) ;
+> - remises à zéro qui gardent les rappels traités, ↺ de ligne confirmé (§ 1.2) ;
+> - infobulles des statuts = nom du statut, ULIS et UPE2A ajoutés à l'infobulle de la case (§ 1.3) ;
+> - projection **et** Export ENT sur la classe du tableur ouvert (§ 1.5) ;
+> - message « phase 10 » remplacé par une indication utile ;
+> - confirmation récapitulative avant le passage semestre ↔ trimestre ;
+> - pied de « Mélanger tout » corrigé, et règles de mélange écrites après `pushUndo` (annulables) ;
+> - textes du § 6.3 corrigés (Informations, menus déroulants des tablettes, aides de Config Salle et des Réglages, anciens noms d'onglet, « moyenne de la période », « une ou plusieurs compétences », infobulle de la touche Entrée, « clic » sur le code d'une évaluation).
+>
+> **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
+
 | Lot | Contenu | Risque | Taille |
 |---|---|---|---|
 | **A — Corrections immédiates** | § 1.1 place réservée, § 1.2 historique, § 1.3 infobulle des statuts, § 1.5 projection, message « phase 10 », textes périmés du § 6.3, confirmation du passage semestre/trimestre, pied de « Mélanger tout » | très faible | ½ journée |

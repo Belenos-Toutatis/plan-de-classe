@@ -2500,3 +2500,14 @@ test('classe recomposée : bornes de présence — seules les bornes utiles, 1re
   assert.equal(r.selLast, true);
   assert.deepEqual(r.triTo, ['T1=fin T1', 'T2=fin T2', "=fin d'année"]);
 });
+
+test('Remise à zéro des compteurs : les rappels traités restent dans l\'historique (audit 2026-10-03)', () => {
+  ev(`S.eleves = { z1: { id: 'z1', nom: 'Z', prenom: 'Zoé', oublis: 2, non_travail: 1,
+        history: [{ ts: 1, type: 'oubli' }, { ts: 2, type: 'nt' }, { ts: 3, type: 'rappel_fait', label: 'Mot signé' }, { ts: 4, type: 'oubli' }] } };
+      _clearIncidents(S.eleves.z1);`);
+  assert.equal(ev('S.eleves.z1.oublis'), 0);
+  assert.equal(ev('S.eleves.z1.non_travail'), 0);
+  assert.equal(ev('JSON.stringify(S.eleves.z1.history.map(h => h.type))'), '["rappel_fait"]');
+  ev(`S.eleves.z1.history = null; _clearIncidents(S.eleves.z1);`);
+  assert.equal(ev('JSON.stringify(S.eleves.z1.history)'), '[]', 'historique absent : tableau vide, pas d\'erreur');
+});
