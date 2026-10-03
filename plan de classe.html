@@ -419,9 +419,11 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .stbl td{padding:7px 11px;border-bottom:1px solid #f0f0f0;font-size:.85em;vertical-align:middle}
 .stbl tr:last-child td{border-bottom:none}
 /* 📷 Photos d'élèves : infobulle au survol d'un nom, photo de la fiche, modale d'import */
-#photo-pop{position:fixed;z-index:10050;display:none;pointer-events:none;background:var(--paper);border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);box-shadow:var(--shadow-pop,0 6px 18px rgba(0,0,0,.25));padding:5px;text-align:center;font-size:.8em;color:var(--ink-deep);max-width:150px}
+#photo-pop{position:fixed;z-index:10050;display:none;pointer-events:none;background:var(--paper);border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);box-shadow:var(--shadow-pop,0 6px 18px rgba(0,0,0,.25));padding:5px;text-align:center;font-size:.8em;color:var(--ink-deep);max-width:310px}
 #photo-pop img{display:block;width:120px;height:120px;object-fit:cover;border-radius:3px;margin-bottom:3px}
 #photo-pop .mnp{margin:4px auto 2px}
+#photo-pop img{margin-left:auto;margin-right:auto}
+#photo-pop .mnp-rooms{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center}
 #photo-pop .mnp-lbl{color:var(--pencil);font-size:.92em}
 /* Mini-plan « où est assis l'élève corrigé » (tableur d'éval) — orientation Plan Prof, bureau en bas */
 .mnp{display:grid;gap:1px;width:max-content}
@@ -7163,11 +7165,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.74.0';
+const APP_VERSION    = '2.75.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T22:27:05Z';
+const APP_BUILD_DATE = '2026-10-03T22:31:58Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30766,10 +30768,10 @@ document.addEventListener('mousemove', e => {
 async function _photoPopShow(sid) {
   const url = (_photos.ready && _photoHas(sid)) ? await _photoUrl(sid) : null;
   if (_photoPop.sid !== sid) return;
-  // Dans le tableur d'éval : mini-plan sous la photo (plan du jour du devoir).
+  // Mini-plans sous la photo, un par salle. Dans le tableur d'éval : plan du jour du devoir.
   const ctx = _photoPop.plan ? _mnpCtx() : null;
-  const m = ctx && ctx.cls.eleves?.includes(sid) ? _mnpBuild(ctx.ev, ctx.cls, sid, 140) : null;
-  if (!url && !m) return;
+  const plans = _mnpAllRooms(sid, ctx, 130);
+  if (!url && !plans.length) return;
   if (!_photoPop.el) {
     _photoPop.el = document.createElement('div');
     _photoPop.el.id = 'photo-pop';
@@ -30777,7 +30779,7 @@ async function _photoPopShow(sid) {
   }
   const s = S.eleves[sid];
   _photoPop.el.innerHTML = (url ? `<img src="${url}" alt="">` : '') + `<div>${_escName(s.prenom)} ${_escName(s.nom)}</div>`
-    + (m ? m.html + `<div class="mnp-lbl">${_esc(m.label)}</div>` : '');
+    + (plans.length ? `<div class="mnp-rooms">${plans.map(m => `<div>${m.html}<div class="mnp-lbl">${_esc(m.label)}</div></div>`).join('')}</div>` : '');
   _photoPop.el.style.display = 'block';
   _photoPopPlace();
 }
@@ -30788,17 +30790,10 @@ document.addEventListener('mouseover', e => {
   _photoPopHide();
   if (!sid || !S.eleves?.[sid] || _confHides(sid)) return;
   _photoPop.plan = !!(e.target.closest && e.target.closest('#meval-tableur'));
-  if (_photoPop.plan) {   // tableur : la bulle montre au moins le mini-plan, photo ou pas
-    _photoPop.sid = sid;
-    _photoPop.timer = setTimeout(() => _photoPopShow(sid), 250);
-    return;
-  }
-  if (!_photos.ready) {
-    // Autorisation accordée entre-temps (geste sur la sync, import…) : on relit le dossier, sans insister.
-    if (dirHandle && Date.now() - _photos.lastTry > 30000) _photosRefresh(false);
-    return;
-  }
-  if (!_photoHas(sid)) return;
+  // Autorisation accordée entre-temps (geste sur la sync, import…) : on relit le dossier, sans insister.
+  if (!_photos.ready && dirHandle && Date.now() - _photos.lastTry > 30000) _photosRefresh(false);
+  // La bulle montre la photo ET les mini-plans : elle s'affiche même sans photo
+  // (_photoPopShow renonce s'il n'y a ni l'une ni les autres).
   _photoPop.sid = sid;
   _photoPop.timer = setTimeout(() => _photoPopShow(sid), 250);
 }, { passive: true });
@@ -36995,11 +36990,14 @@ function _mnpCtx() {
   const cls = ev ? _evalTableurActiveCls(ev) : null;
   return ev && cls ? { ev, cls } : null;
 }
-// {salle, key, html, label} pour un élève — html = grille de carrés (cellule ≤ maxW px au total).
-function _mnpBuild(ev, cls, sid, maxW) {
-  const salle = S.salles?.[cls.activeRoom];
+// {key, html, label} pour un élève dans une salle — html = grille de carrés (≤ maxW px de large).
+// Sans `seating`, prend le plan du jour du devoir (ev fourni et salle active), sinon le plan courant.
+function _mnpBuild(ev, cls, sid, maxW, roomId, seating) {
+  roomId = roomId || cls.activeRoom;
+  const salle = S.salles?.[roomId];
   if (!salle) return null;
-  const seating = _evalPatternSeatingFor(ev, cls.id) || cls.rooms?.[cls.activeRoom]?.seating || {};
+  seating = seating || (ev && roomId === cls.activeRoom ? _evalPatternSeatingFor(ev, cls.id) : null)
+    || cls.rooms?.[roomId]?.seating || {};
   const rows = salle.rows || 4, cols = salle.cols || 10;
   const sz = Math.max(4, Math.min(9, Math.floor(maxW / cols) - 3));
   const vides = new Set(salle.positions_vides || []);
@@ -37013,9 +37011,21 @@ function _mnpBuild(ev, cls, sid, maxW) {
   }
   h += '<div class="mnp-desk"></div></div>';
   let label;
-  if (key) { const [r, c] = key.split(',').map(Number); label = `${salle.nom} · place n° ${_qcmDisplayLabel(cls, r, c, cols)}`; }
+  if (key) { const [r, c] = key.split(',').map(Number); label = `${salle.nom} · place n° ${qcmNumForCell(cls, roomId, r, c) ?? '🚫'}`; }
   else label = `${salle.nom} · non placé·e`;
   return { key, html: h, label };
+}
+// Un mini-plan par salle de la classe (salle active d'abord), pour la bulle photo.
+// Classe : celle du tableur d'éval, sinon la classe affichée si l'élève en fait partie
+// (classe recomposée), sinon sa classe d'inscription.
+function _mnpAllRooms(sid, ctx, maxW) {
+  const stu = S.eleves[sid];
+  let cls = ctx ? ctx.cls : null;
+  if (!cls) { const cur = getCls(); cls = cur && cur.eleves?.includes(sid) ? cur : S.classes?.[stu?.classe_id]; }
+  if (!cls || !cls.eleves?.includes(sid)) return [];
+  const ids = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id]);
+  ids.sort((a, b) => (b === cls.activeRoom) - (a === cls.activeRoom));
+  return ids.map(id => _mnpBuild(ctx ? ctx.ev : null, cls, sid, maxW, id)).filter(Boolean);
 }
 function _mnpFolded() { try { return localStorage.getItem('planClasse_evalMiniPlan') === '0'; } catch (e) { return false; } }
 function _mnpToggle(show) {
