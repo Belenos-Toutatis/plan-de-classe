@@ -349,6 +349,17 @@ Trois façons de présenter l'aide selon l'onglet :
 >
 > **Reste ouvert du lot D :** niveau d'une classe recomposée (toujours déduit du nom) ; panneau « détail du calcul » au clic sur une note du Bilan (§ 4) ; Vue Élève sans onglet allumé.
 >
+> **Lot E — fait en v2.71.0 :**
+> - **🖨 Imprimer** dans le Bilan des notes et le Bilan des compétences (et Ctrl+P sur ces onglets) : le tableau affiché recopié tel quel, en paysage, avec la remarque de classe et les éléments travaillés ;
+> - **📤 Export ENT** dans le Bilan des notes (moyenne /20 et remarque par élève, copiés) ; une seule icône 📤 pour l'Export ENT partout (ligne de Devoirs, tableur, modale) ;
+> - **📊 XLSX / ODS** dans Devoirs et les deux Bilans, en plus de Données ▾ ;
+> - **🖨 Imprimer** la fiche complète (portrait) ;
+> - Vue d'ensemble : **🖨 Imprimer** et **💾 CSV**, filtres et tri de l'écran ; le CSV des statistiques d'absence passe aussi par `_csvCellGuard` ;
+> - **🖼 Trombinoscope de la classe** dans 🖨 Imprimer du Plan ;
+> - onglet QCMCam : **🗺 Plans QCMCam…** dans la barre (libellé de la modale des marqueurs corrigé) et **📂 Importer des résultats…** qui mène à Devoirs.
+>
+> **Reste ouvert du lot E :** statistiques d'absence par période toujours à trois niveaux (la Vue d'ensemble couvre les cumuls) ; ordre des boutons d'export identique dans les deux Bilans (lot F).
+>
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
 | Lot | Contenu | Risque | Taille |

@@ -1452,6 +1452,12 @@ L'orientation est imposée via une règle `@page` injectée dynamiquement avant 
 - En N&B, `_applyPrintColorMode()` injecte un `<style>` qui force tous les fonds colorés en blanc (cellules `.oc`, badges `.pgb.g1/g2`, `.pinc`). Les cases "sans table" `.nt` restent grisées (info structurelle).
 - Les badges incidents 📦/📝 utilisent la classe `.pinc` (qui force `print-color-adjust:exact` pour Chrome/Edge) — fonctionne sur les cellules de plan ET sur les cellules de tableau (liste Élèves).
 
+### Impression d'un écran de consultation (v2.71.0) — `_printConsultation`
+
+Bilans des notes et des compétences (`printBilanNotes` / `printBilanComp`, aussi Ctrl+P sur ces onglets), fiche complète (`printFiche`), Vue d'ensemble (`printOverview`). On **recopie le nœud rendu** (`cloneNode`) plutôt que de reconstruire : l'impression montre ce que l'on voit (tri, colonnes masquées, évals d'autres classes, couleurs). `_printSanitizeClone` transforme champs → texte, retire boutons, compteurs, icônes de la fiche, attributs `onclick`/`title`, neutralise le collant, pose le `tfoot` une seule fois en fin, et respecte **Couleurs / N&B** (`_printColors`). Écrit dans `#pa`, `_setPrintOrientation`, `document.title` = nom du PDF. Ce sont **4 chemins d'impression de plus** pour l'audit des impressions (17 au total). ⚠️ Couleurs : ces tableaux portent des **tokens** et des fonds calculés — sur papier, c'est le bloc de neutralisation `@media print { html[data-theme="dark"] … }` qui les ramène au thème clair. Bloqué en mode confidentiel pour la Vue d'ensemble (comme son CSV).
+
+**Exports ajoutés** : `_bilanNotesExportEnt` (élève, moyenne /20 à la granulométrie `meanGranularity`, remarque — par période en mode « Toutes » ; élèves = lignes affichées), `exportOverviewCSV` (via `_overviewRows`, partagé avec `renderOverview`). Une seule icône **📤** pour l'Export ENT.
+
 ## Sync auto + backups
 - Bouton **"🔄 Sync ON/OFF"** dans le header (persisté localStorage `planClasse_autoSync`)
 - Quand activé :

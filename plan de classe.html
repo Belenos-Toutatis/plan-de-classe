@@ -3067,6 +3067,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <button onclick="closeAllDd();doPrint('t')">🖨 Plan Prof <span style="color:var(--pencil-soft);font-size:.85em">(Ctrl+P)</span></button>
           <button onclick="closeAllDd();doPrint('s')">🖨 Plan Élève</button>
           <button onclick="closeAllDd();doPrintEmpty()">🖨 Plan vide (positions)</button>
+          <button onclick="closeAllDd();printTrombiCurrent()" title="Photos, prénoms et noms de la classe — une page A4 portrait">🖼 Trombinoscope de la classe</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();openPrintAllClasses()">🖨 Plusieurs plans (Prof)…</button>
           <div class="dd-sep"></div>
@@ -3487,6 +3488,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-s btn-sm" onclick="copyQcmAllClasses()">📋 Copier toutes les classes</button>
       <button class="btn btn-g btn-sm" onclick="exportQcmCsv()" title="Exporte en une seule fois la liste complète de TOUS les élèves de TOUTES les classes et TOUTES les salles configurées dans ce logiciel, au format CSV directement importable dans QCMcam (identifiants `classe-salle`, prénoms désambiguïsés, numéros de position QCMCam déjà calculés). Plus besoin de saisir manuellement quoi que ce soit côté QCMCam.&#10;&#10;⚠️ Dans QCMcam 2, choisis « Remplacer » et non « Mettre à jour » : la mise à jour n'ajoute et ne retire que des élèves, elle ne réécrit JAMAIS les numéros de carte d'un élève déjà présent — après un changement de plan, tu garderais les anciens numéros.">💾 Exporter liste élèves.csv</button>
       <button class="btn btn-p btn-sm" onclick="openQcmMarkersDialog()" title="Imprimer les marqueurs ArUco distribués aux élèves (raccourci : Ctrl+P)">🎯 Marqueurs ArUco</button>
+      <button class="btn btn-g btn-sm" onclick="openQcmPlanPrintSelector()" title="Imprimer le plan des numéros QCMCam d'une ou plusieurs salles (sans prénoms), à garder au bureau">🗺 Plans QCMCam…</button>
+      <button class="btn btn-g btn-sm" onclick="_qcmGoImportResults()" title="Les résultats d'un QCM s'importent dans l'évaluation concernée : Devoirs → ouvrir sa saisie → 📂">📂 Importer des résultats…</button>
       <span id="qcm-dir-info" style="font-size:.78em;color:var(--pencil);align-self:center"></span>
     </div>
     <div class="qcm-info-banner">
@@ -3522,6 +3525,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="openDisciplinesFromTab()" title="Gérer le catalogue de disciplines + cocher celles enseignées à la classe active">🎓 Disciplines</button>
         <label style="font-size:.85em;color:var(--pencil);align-self:center">Période :</label>
         <select id="eval-period-filter" onchange="_syncBilanPeriode('eval-period-filter');renderEvalNotes()" style="padding:4px 8px;font-size:.9em" title="Période affichée. Partagée entre les onglets Devoirs, Bilan des compétences et Bilan des notes."></select>
+        <button class="btn btn-g btn-sm" onclick="openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe, mis en forme avec couleurs">📊 XLSX / ODS</button>
         <button class="btn btn-g btn-sm" onclick="openEvalPrefs()" title="Paramètres globaux : couleurs des niveaux, points par niveau, période, règle de moyenne…">⚙ Paramètres</button>
       </div>
     </div>
@@ -3547,8 +3551,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="bilan-period-filter" onchange="_syncBilanPeriode('bilan-period-filter');renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
         <button class="btn btn-g btn-sm" id="bilan-crosstab-btn" onclick="_bilanOpenCrossTab()" title="Comparer les classes : moyenne, σ et médiane par classe × civilité, sur la période ou un sous-ensemble d'évaluations">🔀 Comparer classes</button>
-        <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">📋 Copier tout</button>
+        <button class="btn btn-g btn-sm" onclick="printBilanNotes()" title="Imprimer le tableau affiché (paysage), avec la remarque de classe et les éléments travaillés — Ctrl+P">🖨 Imprimer</button>
+        <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">📋 Copier</button>
         <button class="btn btn-g btn-sm" onclick="_bilanDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
+        <button class="btn btn-g btn-sm" onclick="_bilanNotesExportEnt()" title="Export prêt pour l'ENT (copié) : une ligne par élève, moyenne /20 et remarque bulletin de la période">📤 Export ENT</button>
+        <button class="btn btn-g btn-sm ff-eval" onclick="openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe">📊 XLSX / ODS</button>
       </div>
     </div>
     <p class="al al-i evhelp" id="evhelp-bilan" style="margin-bottom:8px;position:relative;padding-right:28px">
@@ -3564,9 +3571,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <h2>🎯 Bilan des compétences</h2>
       <span class="tab-ctx" id="tabctx-comp"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+        <button class="btn btn-g btn-sm" onclick="printBilanComp()" title="Imprimer le tableau affiché (paysage), avec la remarque de classe et les éléments travaillés — Ctrl+P">🖨 Imprimer</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompCopy()" title="Copier le tableau au format TSV (collable dans Excel/LibreOffice/ENT)">📋 Copier</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompCsv()" title="Télécharger un fichier CSV">💾 CSV</button>
-        <button class="btn btn-g btn-sm" onclick="_bilanCompExportEnt()" title="Export prêt pour l'ENT : ligne par élève, colonnes = compétences uniquement (niveau atteint)">📤 Export ENT</button>
+        <button class="btn btn-g btn-sm" onclick="_bilanCompExportEnt()" title="Export prêt pour l'ENT (copié) : ligne par élève, colonnes = compétences uniquement (niveau atteint)">📤 Export ENT</button>
+        <button class="btn btn-g btn-sm ff-eval" onclick="openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe">📊 XLSX / ODS</button>
         <span style="width:1px;height:18px;background:var(--rule-line);margin:0 4px"></span>
         <label style="font-size:.85em;color:var(--pencil)">Affichage :</label>
         <select id="comp-display-mode" onchange="_compBilanSetDisplayMode(this.value)" title="Une colonne par compétence (codes), ou une colonne par domaine du socle (D1.1, D2…) avec moyenne par domaine" style="padding:4px 8px;font-size:.88em">
@@ -3898,6 +3907,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <h2 id="mfiche-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">🪪 Fiche élève</h2>
     <div id="mfiche-body" style="max-height:70vh;overflow-y:auto;padding-right:4px"></div>
     <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="printFiche()" title="Imprimer la fiche (portrait) — pour un rendez-vous avec les parents">🖨 Imprimer</button>
       <button class="btn btn-g" onclick="closeMod2('mfiche')" style="margin-left:auto">Fermer</button>
     </div>
   </div>
@@ -4375,7 +4385,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <div style="flex:1">
           <div style="font-weight:600;color:var(--notice-fg);margin-bottom:2px">Imprimer le plan QCMCam (vue prof)</div>
           <div style="font-size:.85em;color:var(--pencil);margin-bottom:8px">Une page A4 par salle cochée, avec la grille des places et le <strong>numéro QCMCam</strong> affiché sur chacune (sans nom d'élève — le plan reste valable pour toutes les classes qui utilisent cette salle). Pratique à afficher au tableau ou à coller sur le bureau du prof.</div>
-          <button class="btn btn-w btn-sm" onclick="openQcmPlanPrintSelector()" title="Choisir les salles à imprimer (catalogue de salles)">📋 Choisir les salles…</button>
+          <button class="btn btn-w btn-sm" onclick="openQcmPlanPrintSelector()" title="Choisir les salles dont imprimer le plan QCMCam">🗺 Imprimer les plans… (choisir les salles)</button>
         </div>
       </div>
       <!-- Carte 3 : Générateur intégré pour LA salle active uniquement (un jeu par salle, réutilisable entre classes) -->
@@ -5151,7 +5161,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="meval-export" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-      <h2 id="meval-export-title" style="margin:0">💾 Export ENT</h2>
+      <h2 id="meval-export-title" style="margin:0">📤 Export ENT</h2>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <label id="meval-export-class-label" style="font-size:.85em;color:var(--pencil);display:none">Classe :</label>
         <select id="meval-export-class" onchange="_evalExportRender()" style="padding:4px 8px;font-size:.88em;display:none"></select>
@@ -5858,7 +5868,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="_evalPasteOpen()" title="📥 Coller des notes (depuis QCMCam, un autre tableur…)" aria-label="Coller des notes" style="padding:4px 6px">📥</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-qcmcam-btn" onclick="_evalQcmcamOpen()" title="📂 Importer un fichier de résultats exporté de QCMcam (v2 ou v1 — matching par prénom)" aria-label="Importer CSV QCMcam" style="display:none;padding:4px 6px">📂</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="📋 Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">📋</button>
-        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="💾 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px">💾</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="📤 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px">📤</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-sobr-btn" onclick="_evalTableurSobrToggleMenu(event)" title="🎨 Sobriété : retirer les fonds colorés (notes et/ou compétences) — choix indépendants persistés." aria-label="Sobriété" style="padding:4px 6px">🎨</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
@@ -6580,8 +6590,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span id="ov-info" style="margin-left:auto;color:var(--pencil)"></span>
     </div>
     <div id="ov-list" style="max-height:60vh;overflow-y:auto;border:1px solid #ddd;border-radius:4px"></div>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('moverview')">Fermer</button>
+    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="printOverview()" title="Imprimer la liste affichée (filtres et tri compris)">🖨 Imprimer</button>
+      <button class="btn btn-g" onclick="exportOverviewCSV()" title="Télécharger la liste affichée en CSV (filtres et tri compris)">💾 CSV</button>
+      <button class="btn btn-g" onclick="closeMod2('moverview')" style="margin-left:auto">Fermer</button>
     </div>
   </div>
 </div>
@@ -7067,11 +7079,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.70.0';
+const APP_VERSION    = '2.71.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T16:18:56Z';
+const APP_BUILD_DATE = '2026-10-03T16:27:53Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14384,6 +14396,10 @@ function printQcmPlans(salleIds) {
 
 // Ouvre la sous-modale de sélection. Liste les salles UNIQUES du catalogue (S.salles)
 // — pas de doublons classe·salle puisque le plan est le même pour toutes les classes.
+function _qcmGoImportResults() {
+  switchTab('notes');
+  toast('📂 Ouvre la saisie de l\'évaluation (clic sur sa ligne), puis le bouton 📂 de la barre du tableur. Types A et C seulement.', 'info');
+}
 function openQcmPlanPrintSelector() {
   const list = document.getElementById('mqcm-plan-list');
   const cls = getCls();
@@ -17034,13 +17050,9 @@ function sortOverview(col) {
   renderOverview();
 }
 
-function renderOverview() {
-  const fClass  = document.getElementById('ov-f-class')?.value || '';
-  const fMinAbs = parseInt(document.getElementById('ov-f-minabs')?.value || '0', 10) || 0;
-  const fMinRet = parseInt(document.getElementById('ov-f-minret')?.value || '0', 10) || 0;
-  const list = document.getElementById('ov-list');
-  const info = document.getElementById('ov-info');
-
+// Lignes de la Vue d'ensemble, filtrées et triées comme à l'écran (partagé avec l'export CSV
+// et l'impression : l'export reproduit ce que l'on voit).
+function _overviewRows(fClass, fMinAbs, fMinRet) {
   // Aggrège tous les élèves
   let rows = [];
   const classIds = fClass ? [fClass] : Object.keys(S.classes || {});
@@ -17078,6 +17090,19 @@ function renderOverview() {
     if (c === 'ret')    return (a.ret - b.ret) * dir || a.nom.localeCompare(b.nom);
     return 0;
   });
+
+  return rows;
+}
+
+function renderOverview() {
+  const fClass  = document.getElementById('ov-f-class')?.value || '';
+  const fMinAbs = parseInt(document.getElementById('ov-f-minabs')?.value || '0', 10) || 0;
+  const fMinRet = parseInt(document.getElementById('ov-f-minret')?.value || '0', 10) || 0;
+  const list = document.getElementById('ov-list');
+  const info = document.getElementById('ov-info');
+
+  const rows = _overviewRows(fClass, fMinAbs, fMinRet);
+  const _ovConf = !!_conf.on;
 
   if (info && _ovConf) {
     info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🔒 mode confidentiel (filtres et tris par compteur désactivés)`;
@@ -17406,7 +17431,7 @@ function exportAttStatsCSV() {
 
   // Échappement CSV (Excel-friendly avec ;)
   const esc = v => {
-    const s = String(v ?? '');
+    const s = _csvCellGuard(String(v ?? ''));
     if (/[;"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
@@ -17441,6 +17466,36 @@ function exportAttStatsCSV() {
   a.click();
   URL.revokeObjectURL(a.href);
   toast(`💾 ${filename} téléchargé (${rows.length} ligne${rows.length>1?'s':''})`);
+}
+
+// Export CSV de la Vue d'ensemble (v2.71.0) — filtres et tri de l'écran.
+function exportOverviewCSV() {
+  if (_conf.on) { toast('🔒 Mode confidentiel — export désactivé', 'warn'); return; }
+  const fClass = document.getElementById('ov-f-class')?.value || '';
+  const rows = _overviewRows(fClass,
+    parseInt(document.getElementById('ov-f-minabs')?.value || '0', 10) || 0,
+    parseInt(document.getElementById('ov-f-minret')?.value || '0', 10) || 0);
+  if (!rows.length) return toast('Rien à exporter (aucun élève dans les filtres actuels).');
+  const esc = v => { const x = _csvCellGuard(String(v ?? '')); return /[;"\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+  const grp = g => g === 1 ? 'G1' : g === 2 ? 'G2' : g === 3 ? 'G3' : '';
+  const lines = [['Classe', 'Nom', 'Prénom', 'Groupe', 'Matériel oublié', 'Travail non fait', 'Absences', 'Retards'].join(';')];
+  for (const r of rows) lines.push([r.className, r.nom, r.prenom, grp(r.groupe), r.oublis, r.non_travail, r.abs, r.ret].map(esc).join(';'));
+  const filename = `vue-ensemble-${fClass ? (S.classes[fClass]?.nom || fClass).replace(/[^\w-]+/g, '_') : 'toutes-classes'}-${todayKey()}.csv`;
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+  toast(`💾 ${filename} téléchargé (${rows.length} ligne${rows.length > 1 ? 's' : ''})`);
+}
+function printOverview() {
+  if (_conf.on) { toast('🔒 Mode confidentiel — impression désactivée', 'warn'); return; }
+  const fClass = document.getElementById('ov-f-class')?.value || '';
+  _printConsultation({
+    table: document.querySelector('#ov-list table'),
+    title: "Vue d'ensemble — " + (fClass ? (S.classes[fClass]?.nom || fClass) : 'toutes les classes'),
+    sub: document.getElementById('ov-info')?.textContent || '',
+    docTitle: "Vue d'ensemble - " + (fClass ? (S.classes[fClass]?.nom || fClass) : 'toutes les classes'),
+    orientation: 'portrait',
+  });
 }
 
 // tab (facultatif) : 'incidents' | 'notes' | 'attendance' ; periode (onglet notes) : code
@@ -30977,6 +31032,15 @@ function renderMemo() {
 let _tvClassId = null;
 const _tvStudents = cid => _memoActive(S.classes[cid])
   .sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr'));
+// Depuis 🖨 Imprimer du Plan (audit § 5.3) : même impression que la modale 🖼, sans l'ouvrir.
+async function printTrombiCurrent() {
+  const c = getCls();
+  if (!c) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  if (!_photos.ready && dirHandle) await _photosRefresh(true);
+  if (!_tvStudents(c.id).some(s => _photoHas(s.id))) return toast('⚠️ Aucune photo pour cette classe — importe-les depuis Élèves → 📷 Photos.', 'warn');
+  _tvClassId = c.id;
+  printTrombi(false);
+}
 function openTrombiView() {
   _tvClassId = getCls()?.id || _memoRealClasses()[0]?.id || null;
   if (!_photos.ready && dirHandle) _photosRefresh(true).then(() => renderTrombiView());
@@ -31039,6 +31103,100 @@ async function printTrombi(all) {
   document.title = all ? `Trombinoscopes - toutes les classes - ${today.replace(/\//g, '-')}` : `Trombinoscope - ${S.classes[ids[0]].nom}`;
   _setPrintOrientation('portrait');
   setTimeout(() => { window.print(); document.title = _ot; pa.style.display = 'none'; pa.innerHTML = ''; }, 200);
+}
+
+// ═══════════════ Impression d'un écran de consultation (Bilans, Vue d'ensemble) ═══════════════
+// Audit 2026-10-03, § 5.3 : les deux Bilans — données du conseil de classe — n'avaient
+// aucune impression (Ctrl+P = page brute du navigateur, barres d'outils comprises).
+// On RECOPIE le tableau rendu plutôt que de le reconstruire : l'impression montre
+// exactement ce que l'on voit (tri, colonnes masquées, évals d'autres classes, couleurs).
+// Les champs deviennent du texte, les boutons disparaissent (mentions de conseil : on
+// garde les abréviations actives, lues dans data-active), le collant est neutralisé.
+function _printSanitizeClone(root) {
+  root.querySelectorAll('.bilan-conseil-cell').forEach(td => { td.textContent = td.getAttribute('data-active') || ''; });
+  root.querySelectorAll('textarea').forEach(t => {
+    const d = document.createElement('div');
+    d.textContent = t.value; d.style.whiteSpace = 'pre-wrap'; d.style.fontSize = '8pt';
+    t.replaceWith(d);
+  });
+  root.querySelectorAll('input').forEach(i => {
+    if (i.type === 'checkbox' || i.type === 'radio' || i.type === 'hidden') { i.remove(); return; }
+    const sp = document.createElement('span'); sp.textContent = i.value; i.replaceWith(sp);
+  });
+  root.querySelectorAll('select').forEach(sel => {
+    const sp = document.createElement('span'); sp.textContent = sel.selectedOptions[0]?.textContent || ''; sel.replaceWith(sp);
+  });
+  root.querySelectorAll('button').forEach(b => {
+    if (b.closest('thead,tbody,tfoot') && b.textContent.trim().length > 2) { const sp = document.createElement('span'); sp.textContent = b.textContent; b.replaceWith(sp); }
+    else b.remove();
+  });
+  root.querySelectorAll('.bilan-rem-count,.fiche-ico,.fiche-photo-add,.fiche-photo-acts').forEach(e => e.remove());
+  root.querySelectorAll('.fiche-click').forEach(e => e.classList.remove('fiche-click'));
+  root.querySelectorAll('[onclick],[oncontextmenu],[title]').forEach(e => { e.removeAttribute('onclick'); e.removeAttribute('oncontextmenu'); e.removeAttribute('title'); });
+  root.querySelectorAll('th,td').forEach(c => { c.style.position = 'static'; c.style.cursor = ''; });
+  root.querySelectorAll('tfoot').forEach(f => { f.style.display = 'table-row-group'; f.style.position = 'static'; }); // une seule fois, en fin
+  if (!_printColors) root.querySelectorAll('th,td,span,div').forEach(c => { c.style.background = 'none'; c.style.backgroundColor = 'transparent'; c.style.color = '#000'; });
+  return root;
+}
+function _printConsultation({ table, node, extra, title, sub, docTitle, orientation }) {
+  const src = table || node;
+  if (!src) { toast('⚠️ Rien à imprimer.', 'warn'); return; }
+  const today = new Date().toLocaleDateString('fr-FR');
+  const t = _printSanitizeClone(src.cloneNode(true));
+  t.removeAttribute('id');
+  if (table) { t.style.width = '100%'; t.style.fontSize = '7.5pt'; t.style.borderCollapse = 'collapse'; }
+  else { t.style.maxHeight = 'none'; t.style.overflow = 'visible'; t.style.fontSize = '9.5pt'; }
+  const pa = document.getElementById('pa');
+  pa.innerHTML = `<div style="font-family:Arial,sans-serif;color:#0e1a26;padding:2mm">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #1a252f;padding-bottom:4px;margin-bottom:6px">
+      <h1 style="font-size:14pt;margin:0">${_esc(title)}</h1>
+      <span style="font-size:9pt;color:#56697f">${_esc(sub || '')}${sub ? ' · ' : ''}imprimé le ${today}</span>
+    </div><div class="pc-tbl"></div><div class="pc-extra" style="margin-top:8px;font-size:8.5pt"></div></div>`;
+  pa.querySelector('.pc-tbl').appendChild(t);
+  if (extra) pa.querySelector('.pc-extra').appendChild(_printSanitizeClone(extra.cloneNode(true)));
+  pa.style.display = 'block';
+  const _ot = document.title;
+  document.title = docTitle || title;
+  _setPrintOrientation(orientation || 'landscape');
+  setTimeout(() => { window.print(); document.title = _ot; pa.style.display = 'none'; pa.innerHTML = ''; }, 150);
+}
+function _printCtxSub(tabKey) {
+  const el = document.getElementById('tabctx-' + tabKey);
+  return el ? el.textContent : '';
+}
+function printFiche() {
+  const s = S.eleves[_ficheSid];
+  if (!s) return;
+  const cls = S.classes?.[s.classe_id];
+  const nom = `${(s.nom || '').toUpperCase()} ${s.prenom || ''}`.trim();
+  _printConsultation({
+    node: document.getElementById('mfiche-body'),
+    title: 'Fiche élève — ' + nom, sub: cls ? cls.nom : '',
+    docTitle: `Fiche - ${nom}${cls ? ' - ' + cls.nom : ''}`.replace(/[\\/:*?"<>|]/g, ''),
+    orientation: 'portrait',
+  });
+}
+function printBilanNotes() {
+  const cls = getCls();
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  const sub = _printCtxSub('bilan');
+  _printConsultation({
+    table: document.getElementById('bilan-tbl'),
+    extra: document.querySelector('#bilan-wrap .bilan-bottom-section'),
+    title: 'Bilan des notes — ' + cls.nom, sub: sub.replace(/^[^·]*·\s*/, ''),
+    docTitle: `Bilan des notes - ${cls.nom} - ${sub.split('·')[1]?.trim() || ''}`.replace(/[\\/:*?"<>|]/g, ''),
+  });
+}
+function printBilanComp() {
+  const cls = getCls();
+  if (!cls) return toast('⚠️ Sélectionnez une classe.', 'warn');
+  const sub = _printCtxSub('comp');
+  _printConsultation({
+    table: document.querySelector('#comp-wrap table'),
+    extra: document.querySelector('#comp-wrap .bilan-bottom-section'),
+    title: 'Bilan des compétences — ' + cls.nom, sub: sub.replace(/^[^·]*·\s*/, ''),
+    docTitle: `Bilan des compétences - ${cls.nom} - ${sub.split('·')[1]?.trim() || ''}`.replace(/[\\/:*?"<>|]/g, ''),
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -36392,7 +36550,9 @@ document.addEventListener('keydown', e => {
     if (curTab === 'eleves')  { e.preventDefault(); printElevesList(); return; }
     if (curTab === 'classes') { e.preventDefault(); printClassesBilan(); return; }
     if (curTab === 'qcmcam')  { e.preventDefault(); openQcmMarkersDialog(); return; }
-    if (curTab === 'notes')   { e.preventDefault(); toast('🖨 Pour imprimer une évaluation : bouton 👀 Projeter de sa ligne, puis 🖨 dans la projection. Les moyennes s\'impriment depuis le Bilan des notes (📋 Copier tout / 💾 CSV).', 'info'); return; }
+    if (curTab === 'bilan')   { e.preventDefault(); printBilanNotes(); return; }
+    if (curTab === 'comp')    { e.preventDefault(); printBilanComp(); return; }
+    if (curTab === 'notes')   { e.preventDefault(); toast('🖨 Pour imprimer une évaluation : bouton 👀 Projeter de sa ligne, puis 🖨 dans la projection. Les moyennes s\'impriment depuis le Bilan des notes (🖨 Imprimer).', 'info'); return; }
   }
 
   // Zoom et filtres groupe sur Plan Prof / Vue Élève
@@ -38516,7 +38676,7 @@ function renderEvalNotes() {
         <button class="btn btn-g btn-sm" onclick="_evalDuplicate('${_esc(ev.id)}')" title="Dupliquer cette évaluation (même structure, notes vides)">📋</button>
         ${_evalListEvaluatedCompetences(ev, 'code').length > 0 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenBilanCompsForEval('${_esc(ev.id)}')" title="Bilan compétences : niveau atteint par élève sur chaque compétence évaluée">📊</button>` : ''}
         ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🔀</button>` : ''}
-        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV">💾</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV">📤</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Projeter les notes : vue épurée à projeter en plein écran (grands caractères pour le fond de la salle) ou à imprimer">👀</button>
         <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">✕</button>
       </div>
@@ -50441,6 +50601,35 @@ function _bilanCompExportEnt() {
   );
 }
 
+// Export ENT du Bilan des notes (v2.71.0) : 1 ligne par élève AFFICHÉ, moyenne /20
+// (granulométrie meanGranularity, virgule décimale) et remarque bulletin, par période
+// (une paire de colonnes par période en mode « Toutes »). Discipline courante.
+function _bilanNotesExportEnt() {
+  const cls = getCls();
+  if (!cls) { toast('⚠️ Sélectionnez une classe.', 'warn'); return; }
+  const periode = document.getElementById('bilan-period-filter')?.value || '';
+  const pers = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
+  const did = _currentDiscipline(cls.id);
+  const sids = [...document.querySelectorAll('#bilan-tbl tbody tr[data-sid]')].map(tr => tr.getAttribute('data-sid')).filter(sid => S.eleves[sid]);
+  if (!sids.length) { toast('⚠️ Aucun élève dans le bilan affiché.', 'warn'); return; }
+  sids.sort((a, b) => ((S.eleves[a].nom || '') + (S.eleves[a].prenom || '')).localeCompare((S.eleves[b].nom || '') + (S.eleves[b].prenom || ''), 'fr'));
+  const mg = (S.evalPrefs?.meanGranularity ?? 0.01);
+  const fmt = v => v == null ? '' : _fmtNote(mg > 0 ? Math.round(v / mg) * mg : v).replace('.', ',');
+  const tsvEsc = x => _csvCellGuard(String(x ?? '')).replace(/[\t\r\n]+/g, ' ');
+  const header = ['Élève'];
+  pers.forEach(p => { const sfx = pers.length > 1 ? ' ' + p : ''; header.push('Moyenne /20' + sfx, 'Remarque' + sfx); });
+  const lines = [header.map(tsvEsc).join('\t')];
+  for (const sid of sids) {
+    const stu = S.eleves[sid];
+    const row = [`${(stu.nom || '').toUpperCase()} ${stu.prenom || ''}`.trim()];
+    pers.forEach(p => { row.push(fmt(_computeStudentMeanForPeriod(cls.id, sid, p, did)), _getBulletinRemarque(cls.id, sid, p)); });
+    lines.push(row.map(tsvEsc).join('\t'));
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(
+    () => toast(`📤 Export ENT copié : moyennes et remarques de ${sids.length} élèves`),
+    () => toast('⚠ Copie auto impossible — utilise 💾 CSV', 'warn'));
+}
+
 // ═══════════════ EXPORT ENT (phase 10) ═══════════════
 // Pour une éval donnée : tableau triable et copiable au format TSV/CSV avec :
 // - Élève (Nom Prénom)
@@ -50456,7 +50645,7 @@ function _evalExportOpen() {
   const ev = S.evaluations?.[evalId];
   if (!ev) return;
   document.getElementById('meval-export-evalid').value = evalId;
-  document.getElementById('meval-export-title').textContent = `💾 Export ENT — ${ev.nomCourt}${ev.nomLong ? ' · ' + ev.nomLong : ''}`;
+  document.getElementById('meval-export-title').textContent = `📤 Export ENT — ${ev.nomCourt}${ev.nomLong ? ' · ' + ev.nomLong : ''}`;
   // Peuple le sélecteur de classe (uniquement si l'éval couvre plusieurs classes vivantes)
   const classSel = document.getElementById('meval-export-class');
   const classLbl = document.getElementById('meval-export-class-label');
