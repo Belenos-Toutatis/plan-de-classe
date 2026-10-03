@@ -4360,6 +4360,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55"><strong>Recommandation pour les enseignants français</strong> : sauvegarde le fichier JSON dans ton <strong>Nextcloud académique professionnel</strong> — <a href="https://nuage03.apps.education.fr/" target="_blank" rel="noopener">nuage03.apps.education.fr</a> (Apps Education de l'Éducation nationale). C'est l'environnement institutionnel adapté pour héberger des données personnelles d'élèves (hébergement souverain, conforme RGPD). Active alors la <strong>🔄 Sync auto</strong> en pointant vers le dossier synchronisé localement par le client Nextcloud : tu retrouves tes données sur toutes tes machines (poste prof / portable / domicile) sans transmission à un service tiers.</p>
       <p style="margin:0 0 6px;font-size:.92em;line-height:1.55">⚠️ Si tu stockes des données pédagogiques sensibles (PPRE, PPS, PAI, ULIS, absences récurrentes), pense à <strong>déclarer cet outil à ton DPO d'établissement</strong> (un mail à <code>dpo@ac-&lt;ton-académie&gt;.fr</code> suffit en général). Détails complets : <a href="https://github.com/Belenos-Toutatis/plan-de-classe#-vie-privée--rgpd" target="_blank" rel="noopener">README → Vie privée &amp; RGPD</a>.</p>
       <p style="margin:0 0 10px;font-size:.92em;line-height:1.55">🎙 <strong>Sonomètre</strong> : si tu actives la surveillance du niveau sonore (bouton 🎙 du bandeau), le micro est analysé <strong>en temps réel et en local</strong> — aucun son n'est enregistré ni transmis. L'accès micro exige un contexte sécurisé (HTTPS ou <code>localhost</code>).</p>
+      <p style="margin:0 0 10px;font-size:.92em;line-height:1.55">📷 <strong>Photos des élèves</strong> : le trombinoscope PDF est lu <strong>dans ton navigateur</strong>, rien n'est envoyé. Les photos sont enregistrées dans le sous-dossier <code>photos/</code> de ton dossier de sauvegarde — avec la sync Nextcloud, elles suivent le même chemin que tes JSON. Une photo d'identité est une donnée personnelle : mentionne-la aussi dans ta déclaration au DPO, et supprime ce dossier quand tu n'en as plus l'usage (la réinitialisation de fin d'année ne le vide pas).</p>
       <!-- Jauge d'occupation — peuplée par _renderStorageGauge() à l'ouverture de la modale.
            Le quota affiché vient de navigator.storage.estimate(), pas d'une estimation en dur. -->
       <div id="about-storage" class="sto-box">
@@ -6900,11 +6901,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.64.0';
+const APP_VERSION    = '2.64.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T08:16:48Z';
+const APP_BUILD_DATE = '2026-10-03T08:21:20Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29662,12 +29663,22 @@ function _trombiParseHeader(lines) {
     if (!h.classLabel && (m = /t?r?o?m?binoscope\b.*?\bclasse\s*:?\s*(.+)$/i.exec(t))) h.classLabel = m[1].trim();
     else if (!h.classLabel && (m = /^classe\s*:?\s*(.+)$/i.exec(t))) h.classLabel = m[1].trim();
     if (h.count == null && (m = /^(\d+)\s+[ée]l[èe]ves?\b/i.exec(t))) h.count = +m[1];
-    if (!h.pp && (m = /professeur(?:e|s|es)?\s+principa(?:l|le|ux|les)\s*:\s*(.+)$/i.exec(t))) h.pp = m[1].trim();
+    if (!h.pp && (m = /professeur(?:e|s|es)?\s+principa(?:l|le|ux|les)\s*:\s*(.+)$/i.exec(t))) h.pp = _trombiDedupNames(m[1]);
     if (!h.year && /ann[ée]e\s+scolaire/i.test(t) && (m = /(\d{4})\s*[-–\/]\s*(\d{4})/.exec(t))) h.year = `${m[1]}-${m[2]}`;
     if (!h.date && (m = /[ée]dit[ée]e?\s+le\s+(\d{1,2}\/\d{1,2}\/\d{4})/i.exec(t))) h.date = m[1];
     if (!h.school && /^(coll[èe]ge|lyc[ée]e|[ée]cole|cit[ée] scolaire|ensemble scolaire)\b/i.test(t)) h.school = t;
   }
   return h;
+}
+// MBN écrit parfois deux fois le même professeur principal (« Mme X, Mme X ») : on garde
+// chaque nom une seule fois, dans l'ordre, en comparant sans accents ni casse.
+function _trombiDedupNames(txt) {
+  const seen = new Set(), out = [];
+  for (const part of String(txt || '').split(/\s*[,;]\s*|\s+et\s+/i)) {
+    const p = part.trim(), k = _trombiNorm(p);
+    if (p && !seen.has(k)) { seen.add(k); out.push(p); }
+  }
+  return out.join(', ');
 }
 // « DE LA TOUR Jean-Marc » → { nom: 'DE LA TOUR', prenom: 'Jean-Marc' } : les mots tout en
 // majuscules en tête font le nom. Tout en majuscules : le dernier mot est le prénom.

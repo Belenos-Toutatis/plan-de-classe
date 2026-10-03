@@ -31,6 +31,9 @@ test('trombinoscope : en-tête réel de MBN (formes du rapport de diagnostic)', 
   assert.strictEqual(h.count, 28);
   assert.strictEqual(h.pp, 'Mme Durand, Mme Petit');
   assert.strictEqual(h.date, '02/10/2026');
+  // MBN répète parfois le même professeur principal
+  assert.strictEqual(ev(`_trombiParseHeader(['Professeur principal : Mme Durand, Mme Durand']).pp`), 'Mme Durand');
+  assert.strictEqual(ev(`_trombiParseHeader(['Professeur principal : Mme Durand, mme DURAND, M. Leroy']).pp`), 'Mme Durand, M. Leroy');
 });
 
 test('trombinoscope : découpe NOM / Prénom', () => {
