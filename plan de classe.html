@@ -121,10 +121,21 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 #hdr-pp{color:var(--pencil);font-size:.82em;white-space:nowrap;margin-left:2px}
 #hdr-pp:empty{display:none}
 .cipad{font-size:.85em;color:var(--cell-meta);margin-top:1px}
-/* Vignette photo en bas à droite d'une case du Plan Prof (sous le zoom du plan : en px, elle suit). */
-.cphoto{position:absolute;right:3px;bottom:3px;width:30px;height:30px;object-fit:cover;border-radius:3px;border:1px solid var(--rule-line);cursor:zoom-in}
+/* Vignette photo en bas à droite d'une case du Plan Prof. Taille PROPORTIONNELLE à la largeur de
+   la case (le % se rapporte à la case, position:relative), bornée 28–40 px : 40 px tiennent dans une
+   case de 198 px mais mordent sur les compteurs dans une case de 128 px (écran plus étroit), où seuls
+   28 px passent. Au-delà de 40, un nom très long (« DE LA TOUR-DUVERNOY ») passe sous la photo. */
+.cphoto{position:absolute;right:3px;bottom:3px;width:clamp(28px,22%,40px);height:auto;aspect-ratio:1;object-fit:cover;border-radius:3px;border:1px solid var(--rule-line);cursor:zoom-in}
 .cphoto:not([src]){visibility:hidden}
-@media print{.cphoto{display:none}}
+/* Mode trombinoscope du Plan Prof : la photo occupe toute la largeur de la case (bornée à 170 px). */
+#tg.tg-trombi .cell{justify-content:flex-start;padding:4px 4px 5px}
+#tg.tg-trombi .cell.em{min-height:96px}
+.ctrombi-img,.ctrombi-none{display:block;width:100%;max-width:170px;aspect-ratio:1;object-fit:cover;border-radius:4px;margin:0 auto 4px}
+.ctrombi-img:not([src]){visibility:hidden}
+.ctrombi-none{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--cell-meta);color:var(--cell-meta);font-size:2em;opacity:.6;cursor:default}
+#tg.tg-trombi .cn{font-size:1.25em}
+.ctrombi-state{font-size:1.1em;font-weight:700}
+@media print{.cphoto,.ctrombi-img{display:none}}
 .cpos{font-size:.72em;color:var(--cell-meta);font-weight:600;position:absolute;top:2px;left:3px}
 .spec-badges{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px}
 .spec-badge{display:inline-block;font-size:.58em;font-weight:700;padding:0 3px;border-radius:3px;line-height:1.4;cursor:default;white-space:nowrap}
@@ -6913,11 +6924,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.65.0';
+const APP_VERSION    = '2.66.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T08:46:50Z';
+const APP_BUILD_DATE = '2026-10-03T08:55:30Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19879,6 +19890,7 @@ function buildCell(cls, row, col) {
         <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
         ${_cellPhotoHTML(stu.id)}
         ${isAbsent ? '<div style="font-size:1.4em;margin-top:2px">🚫</div>' : ''}`;
+      if (_planTrombi()) cell.innerHTML = _trombiCellHTML(stu, isAbsent, lateTime);
       return cell;
     }
 
@@ -20016,6 +20028,12 @@ function buildCell(cls, row, col) {
     cell.innerHTML = `<span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>`;
   }
 
+  // Mode trombinoscope (bouton 📷, 3ᵉ état) : la case ne garde que photo, prénom et nom. Les
+  // écouteurs posés sur la case (glisser, clic droit, appel) restent ; seuls ses boutons internes partent.
+  if (stu && _planTrombi() && !cell.classList.contains('em')) {
+    const post = _isPostAppelForCls(cls);
+    cell.innerHTML = _trombiCellHTML(stu, post && _absentToday.has(stu.id), post && !_absentToday.has(stu.id) ? _lateToday.get(stu.id) : null);
+  }
   return cell;
 }
 
@@ -29786,26 +29804,42 @@ function _photoHas(sid) { return _photos.sids.has(sid); }
 // Vignette dans une case du Plan Prof (en bas à droite), si le bouton 📷 Photos est actif. La source est posée après coup :
 // la lecture du fichier est asynchrone, la construction de la case ne l'est pas.
 let _cphotoSeq = 0;
-// Bouton « 📷 Photos » du Plan Prof : vignettes affichées ou non, mémorisé (défaut : masquées).
-var _planPhotosOn = (() => { try { return localStorage.getItem('planClasse_planPhotos') === '1'; } catch (e) { return false; } })();
+// Bouton « 📷 Photos » du Plan Prof : un CYCLE à trois états, mémorisé (défaut : 0).
+//   0 = pas de photo · 1 = vignette en bas à droite de chaque case ·
+//   2 = trombinoscope : chaque case ne montre plus que la photo (en grand), le prénom et le nom.
+var _planPhotosMode = (() => { try { const v = +localStorage.getItem('planClasse_planPhotos'); return v === 1 || v === 2 ? v : 0; } catch (e) { return 0; } })();
 function togglePlanPhotos() {
-  _planPhotosOn = !_planPhotosOn;
-  try { localStorage.setItem('planClasse_planPhotos', _planPhotosOn ? '1' : '0'); } catch (e) {}
+  _planPhotosMode = (_planPhotosMode + 1) % 3;
+  try { localStorage.setItem('planClasse_planPhotos', String(_planPhotosMode)); } catch (e) {}
   renderTeacherGrid();
 }
+const _PLAN_PHOTO_LABELS = ['📷 Photos', '📷 Vignettes', '📷 Trombinoscope'];
 // La puce n'apparaît que s'il existe au moins une photo (sinon elle ne servirait à rien).
 function _updatePhotoChipUI() {
   const c = document.getElementById('pl-chip-photo');
+  const mode = _photos.sids.size ? _planPhotosMode : 0;
+  document.getElementById('tg')?.classList.toggle('tg-trombi', mode === 2);
   if (!c) return;
   c.style.display = _photos.sids.size ? '' : 'none';
-  c.classList.toggle('on', _planPhotosOn);
+  c.classList.toggle('on', mode > 0);
+  c.textContent = _PLAN_PHOTO_LABELS[mode];
 }
-function _cellPhotoHTML(sid) {
-  if (!_planPhotosOn || !_photoHas(sid)) return '';
+function _cellPhotoHTML(sid, big) {
+  if (!(big || _planPhotosMode === 1) || !_photoHas(sid)) return '';
   const id = 'cph' + (++_cphotoSeq);
   _photoUrl(sid).then(u => { const im = document.getElementById(id); if (!im) return; if (u) im.src = u; else im.remove(); });
+  // La grande photo du mode trombinoscope n'a ni agrandissement ni clic propre : elle couvre presque
+  // toute la case, qui doit rester cliquable (mode appel : clic = absent / présent).
+  if (big) return `<img class="ctrombi-img" id="${id}" alt="" draggable="false">`;
   return `<img class="cphoto" id="${id}" alt="" draggable="false" data-photo-sid="${_escAttr(sid)}" onclick="_cphotoClick(event,'${_escAttr(sid)}')" title="Clic : agrandir la photo">`;
 }
+// Contenu d'une case en mode trombinoscope : photo, prénom, nom — et l'état d'appel s'il y en a un.
+function _trombiCellHTML(stu, isAbsent, lateTime) {
+  const ph = _cellPhotoHTML(stu.id, true) || '<div class="ctrombi-none" title="Pas de photo pour cet élève">📷</div>';
+  return `${ph}<div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>`
+    + (isAbsent ? '<div class="ctrombi-state">🚫</div>' : lateTime ? `<div class="ctrombi-state">⏰ ${_escAttr(lateTime)}</div>` : '');
+}
+const _planTrombi = () => _planPhotosMode === 2 && _photos.sids.size > 0;
 // Après un import, un ajout ou un retrait : rafraîchir le plan s'il est affiché.
 function _photosChanged() {
   if (document.getElementById('tab-plan')?.classList.contains('on') && typeof renderTeacherGrid === 'function') renderTeacherGrid();
@@ -30003,7 +30037,7 @@ function _photoSidFromTarget(t) {
   if (us) return us.getAttribute('data-sid');
   const nm = t.closest('.cn, .svname');
   // Plan Prof avec les vignettes affichées : c'est la vignette qu'on survole, plus le nom.
-  if (nm && !_viewingSnapshot && !(_planPhotosOn && nm.closest('#tg'))) {
+  if (nm && !_viewingSnapshot && !(_planPhotosMode > 0 && nm.closest('#tg'))) {
     const cell = nm.closest('[data-key]');
     const cls = getCls();
     if (cell && cls && (cell.closest('#tg') || cell.closest('#svg'))) return cls.seating?.[cell.getAttribute('data-key')] || null;
