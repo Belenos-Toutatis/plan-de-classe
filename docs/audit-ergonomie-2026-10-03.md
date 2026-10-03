@@ -329,6 +329,16 @@ Trois façons de présenter l'aide selon l'onglet :
 > - bibliothèques de commentaires et de motifs ouvertes par-dessus, sans perte de saisie (§ 1.10) ;
 > - Réglages : sections « 🖨 Impression » et « 🧭 Autres réglages, rangés là où ils servent », phrase d'en-tête corrigée (§ 3.2).
 >
+> **Lot C — fait en v2.69.0 :**
+> - fiche complète cliquable : groupe, rôle, tags, dates (→ Modifier l'élève sur le bon champ), place (sélecteur de place), tablette (sélecteur), AESH et nouvelle ligne Contraintes (→ Config Salle) (§ 2.1) ;
+> - tags d'un élève : ligne à cases dans Modifier l'élève, pastilles cliquables dans l'onglet Élèves, sous-menu au clic droit du plan (§ 2.2) ;
+> - clic droit du plan : 👥 Groupe, 🏷 Tags, 🤝 AESH, ✏️ Modifier l'élève ; avertissement quand on règle le groupe depuis une classe recomposée (§ 1.7, à court terme) ;
+> - rappels visibles et cliquables dans l'onglet Élèves et la liste des non placés ; départ prévu visible dans l'onglet Élèves ;
+> - nom → fiche dans les 4 tableurs, la Vue d'ensemble, les stats d'absence, l'onglet Tablettes ;
+> - dispense rétablie (Types A et C) : case au clic droit sur la cellule, cellule hachurée « disp. » (§ 1.4).
+>
+> **Reste ouvert du lot C :** date de rattrapage pour les Types A, B et D ; dispense pour B et D (pas de modèle) ; le groupe par classe (lot G).
+>
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
 | Lot | Contenu | Risque | Taille |

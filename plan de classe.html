@@ -127,6 +127,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
    28 px passent. Au-delà de 40, un nom très long (« DE LA TOUR-DUVERNOY ») passe sous la photo. */
 .cphoto{position:absolute;right:3px;bottom:3px;width:clamp(28px,22%,40px);height:auto;aspect-ratio:1;object-fit:cover;border-radius:3px;border:1px solid var(--rule-line);cursor:zoom-in}
 .cphoto:not([src]){visibility:hidden}
+/* Case « dispensé·e » du tableur (Types A/C) */
+td.meval-cell-disp{text-align:center;font-family:var(--font-mono);font-size:.78em;color:var(--pencil);font-style:italic;cursor:context-menu;
+  background:repeating-linear-gradient(135deg,var(--paper-warm) 0 5px,var(--paper) 5px 10px);border-bottom:1px solid var(--rule-line-soft)}
 /* Place réservée à un élève pas encore arrivé (audit 2026-10-03, § 1.1) */
 .cell.em.reserved{border-style:dashed;border-color:var(--cell-meta)}
 .creserved{font-size:.95em;color:var(--cell-meta);font-style:italic;line-height:1.3}
@@ -3726,6 +3729,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Rôle dans la classe <span style="font-size:.78em;color:var(--pencil)">(délégué·es élu·es — nom souligné sur le plan)</span></label>
       <select id="es-delegue"><option value="">— Aucun —</option><option value="T">🗳 Délégué·e (souligné)</option><option value="S">🗳 Suppléant·e (souligné en pointillé)</option></select>
     </div>
+    <div class="fg"><label>🏷 Tags <span style="font-size:.78em;color:var(--pencil)">(cumulables — DF, DNL… ; clic pour cocher ou décocher)</span></label>
+      <div id="es-tags" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>
+    </div>
     <div class="fg"><label>Classe <span style="font-size:.78em;color:var(--pencil)">(en cas de changement de classe en cours d'année — l'historique, les compteurs et les appels passés sont conservés)</span></label>
       <select id="es-cls"></select>
     </div>
@@ -5225,6 +5231,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <code>-1pt</code> = malus · <code>+1pt</code> = bonus · <code>0pt tricherie</code> = remplacement.
     </p>
 
+    <label id="meval-comments-disp-wrap" style="display:none;align-items:center;gap:8px;margin:0 0 12px;padding:7px 10px;border:1px dashed var(--rule-line);border-radius:6px;background:var(--paper-warm);font-size:.9em;cursor:pointer">
+      <input type="checkbox" id="meval-comments-disp" onchange="_evalCommentsToggleDisp(this.checked)">
+      <span>🚫 <b>Dispensé·e de cette question</b> — elle sort de son barème (la note est calculée sur le reste)</span>
+    </label>
     <div style="margin-bottom:12px">
       <div style="font-size:.85em;color:var(--pencil);text-transform:uppercase;letter-spacing:0.08em;font-family:var(--font-mono);margin-bottom:6px">📋 Commentaires actifs</div>
       <div id="meval-comments-list" style="display:flex;flex-direction:column;gap:4px"></div>
@@ -6815,6 +6825,22 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div class="ctx-item" id="ctx-role-s"    onclick="ctxSetDelegue('S')"><span id="ctx-role-s-lbl">○</span> Suppléant·e <span style="color:var(--pencil);font-size:.85em">(<span class="dlg-s">pointillé</span>)</span></div>
     </div>
   </div>
+  <!-- Groupe et tags réglables depuis le plan, écran principal en cours (audit 2026-10-03, § 2.2) -->
+  <div class="ctx-item has-sub" id="ctx-grp" onclick="ctxToggleSubmenu(event,this)">👥 Groupe
+    <div class="ctx-submenu">
+      <div class="ctx-item" onclick="ctxSetGroupe(null)"><span id="ctx-grp-0">○</span> Aucun</div>
+      <div class="ctx-item" onclick="ctxSetGroupe(1)"><span id="ctx-grp-1">○</span> 🔵 G1</div>
+      <div class="ctx-item" onclick="ctxSetGroupe(2)"><span id="ctx-grp-2">○</span> 🟠 G2</div>
+      <div class="ctx-item" onclick="ctxSetGroupe(3)"><span id="ctx-grp-3">○</span> 🟣 G3</div>
+    </div>
+  </div>
+  <div class="ctx-item has-sub" id="ctx-tags" onclick="ctxToggleSubmenu(event,this)">🏷 Tags
+    <div class="ctx-submenu" id="ctx-tags-sub"></div>
+  </div>
+  <div class="ctx-item has-sub" id="ctx-aesh" onclick="ctxToggleSubmenu(event,this)">🤝 AESH
+    <div class="ctx-submenu" id="ctx-aesh-sub"></div>
+  </div>
+  <div class="ctx-item" id="ctx-edit"     onclick="ctxOpenEdit()">✏️ Modifier l'élève…</div>
   <div class="ctx-item" id="ctx-fiche"    onclick="ctxOpenFiche()">🪪 Fiche complète</div>
   <div class="ctx-item" id="ctx-notes"    onclick="ctxEditNotes()">📋 Informations</div>
   <div class="ctx-item" id="ctx-rem"      onclick="ctxOpenReminders()">🔔 <span id="ctx-rem-lbl">Rappels / À vérifier…</span></div>
@@ -7021,11 +7047,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.68.2';
+const APP_VERSION    = '2.69.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T15:50:54Z';
+const APP_BUILD_DATE = '2026-10-03T16:00:37Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -9834,6 +9860,32 @@ function showCtxMenu(e, cls, key, sid) {
     const el = document.getElementById(lblId);
     if (el) el.textContent = ((s?.delegue || null) === code) ? '●' : '○';
   }
+  // 👥 Groupe : état courant
+  for (const g of [0, 1, 2, 3]) {
+    const el = document.getElementById('ctx-grp-' + g);
+    if (el) el.textContent = ((s?.groupe || 0) === g) ? '●' : '○';
+  }
+  // 🏷 Tags : liste du catalogue, ● = porté par l'élève
+  const tagSub = document.getElementById('ctx-tags-sub');
+  if (tagSub) {
+    const mine = new Set(Array.isArray(s?.tags) ? s.tags : []);
+    const tags = Object.values(S.tags || {}).sort((a, b) => String(a.abbr).localeCompare(String(b.abbr), 'fr'));
+    tagSub.innerHTML = tags.map(t => `<div class="ctx-item" onclick="ctxToggleTag('${_escJsAttr(t.id)}')">${mine.has(t.id) ? '●' : '○'} <b style="font-family:var(--font-mono)">${_escName(t.abbr)}</b> ${_escName(t.name || '')}</div>`).join('')
+      + (tags.length ? '<div class="ctx-sep"></div>' : '<div class="ctx-item disabled">Aucun tag défini</div>')
+      + `<div class="ctx-item" onclick="closeCtxMenu();openTagsModal()">⚙ Gérer les tags…</div>`;
+  }
+  // 🤝 AESH : lier / délier l'élève depuis le plan (jusqu'ici : Config Salle seulement)
+  const aeshSub = document.getElementById('ctx-aesh-sub');
+  if (aeshSub) {
+    const room = cls ? activeRoomData(cls) : null;
+    const idxs = room ? aeshIndices(room) : [];
+    const cur = cls ? aeshHelpingSid(cls, sid) : -1;
+    aeshSub.innerHTML = (idxs.length
+      ? `<div class="ctx-item" onclick="ctxSetAesh(-1)">${cur < 0 ? '●' : '○'} Aucune</div>`
+        + idxs.map(i => `<div class="ctx-item" onclick="ctxSetAesh(${i})">${cur === i ? '●' : '○'} ${_escName(aeshLabel(i, idxs.length))}</div>`).join('')
+      : '<div class="ctx-item disabled">Aucune AESH dans cette salle</div>')
+      + `<div class="ctx-sep"></div><div class="ctx-item" onclick="ctxAeshConfig()">⚙ Régler les AESH…</div>`;
+  }
   // Compteur de rappels actifs
   const remN = Array.isArray(s?.reminders) ? s.reminders.length : 0;
   document.getElementById('ctx-rem-lbl').textContent =
@@ -10032,6 +10084,64 @@ function ctxSetDelegue(code) {
   _setDelegue(ctxTarget.sid, code);
   closeCtxMenu();
 }
+// Groupe G1/G2/G3 d'un élève. ⚠️ Le groupe est unique pour l'élève : réglé depuis une classe
+// recomposée, il change aussi dans sa classe d'origine — on le dit (audit 2026-10-03, § 1.7).
+function _setGroupe(sid, g) {
+  const s = S.eleves[sid];
+  if (!s) return;
+  g = [1, 2, 3].includes(g) ? g : null;
+  if ((s.groupe || null) === g) return;
+  pushUndo();
+  s.groupe = g;
+  save();
+  renderStudents();
+  renderTeacherGrid();
+  const cur = getCls();
+  if (cur?.virtual && s.classe_id !== cur.id) {
+    toast(`👥 Groupe ${g ? 'G' + g : 'retiré'} — il vaut aussi dans sa classe d'origine (${S.classes[s.classe_id]?.nom || '?'}).`, 'warn');
+  }
+}
+function ctxSetGroupe(g) { if (!ctxTarget) return; const sid = ctxTarget.sid; closeCtxMenu(); _setGroupe(sid, g); }
+function ctxToggleTag(tagId) {
+  if (!ctxTarget) return;
+  const s = S.eleves[ctxTarget.sid];
+  closeCtxMenu();
+  if (!s || !S.tags?.[tagId]) return;
+  pushUndo();
+  s.tags = Array.isArray(s.tags) ? s.tags : [];
+  const had = s.tags.includes(tagId);
+  s.tags = had ? s.tags.filter(t => t !== tagId) : [...s.tags, tagId];
+  save();
+  renderStudents();
+  renderTeacherGrid();
+  toast(`🏷 ${S.tags[tagId].abbr} ${had ? 'retiré' : 'ajouté'} — ${s.prenom}`);
+}
+// Lie l'élève à l'AESH `idx` de la salle active (-1 = aucune). Un élève n'a qu'une AESH.
+function ctxSetAesh(idx) {
+  if (!ctxTarget) return;
+  const { cls, sid } = ctxTarget;
+  closeCtxMenu();
+  const room = activeRoomData(cls);
+  if (!room) return;
+  if (idx >= 0 && !aeshIndices(room).includes(idx)) return;   // AESH inexistante dans cette salle
+  if (aeshHelpingSid(cls, sid) === idx) return;
+  pushUndo();
+  room.aeshLinks = room.aeshLinks || {};
+  for (const k of Object.keys(room.aeshLinks)) room.aeshLinks[k] = (room.aeshLinks[k] || []).filter(x => x !== sid);
+  if (idx >= 0) { if (!Array.isArray(room.aeshLinks[idx])) room.aeshLinks[idx] = []; room.aeshLinks[idx].push(sid); }
+  save();
+  renderTeacherGrid();
+  const st = S.eleves[sid];
+  toast(idx >= 0 ? `🤝 ${st?.prenom} accompagné·e par ${aeshLabel(idx, aeshIndices(room).length)}` : `🤝 ${st?.prenom} n'est plus lié·e à une AESH`);
+}
+function ctxAeshConfig() {
+  const cls = ctxTarget?.cls;
+  closeCtxMenu();
+  switchTab('config');
+  if (cls?.activeRoom) cfgSelectSalle(cls.activeRoom);
+  setCfgMode('aesh');
+}
+function ctxOpenEdit() { if (!ctxTarget) return; const sid = ctxTarget.sid; closeCtxMenu(); openEdit(sid); }
 function ctxToggleAgrandissement() { _ctxToggleStatus('agrandissement', 'Agrandissement', '📄'); }
 function ctxToggleTiersTemps()     { _ctxToggleStatus('tiers_temps',    'Tiers-temps',    '⏱'); }
 function ctxToggleUlis()      { _ctxToggleStatus('ulis',       'ULIS',            '🟢'); }
@@ -10334,10 +10444,39 @@ function _ficheGo(what, tab, periode) {
   if (!target) return;
   closeMod2('mfiche');
   _modalReturnTo[target] = () => { if (S.eleves[sid]) openFiche(sid); };
-  if (what === 'edit') openEdit(sid);
+  if (what === 'edit') {
+    openEdit(sid);
+    // `tab` = id du champ à mettre sous les yeux (groupe, rôle, tags, dates…)
+    if (tab) setTimeout(() => { const el = document.getElementById(tab); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus?.(); }, 80);
+  }
   else if (what === 'hist') openHist(sid, tab, periode);
   else if (what === 'rem') openReminders(sid);
   else openStuNotes(sid);
+}
+// Raccourcis de la fiche vers les outils de réglage (audit 2026-10-03, § 2.1).
+function _ficheSeat() {
+  const sid = _ficheSid; if (!sid) return;
+  closeMod2('mfiche');
+  _modalReturnTo['mseatpick'] = () => { if (S.eleves[sid]) openFiche(sid); };
+  openSeatPicker(null, sid);
+}
+function _ficheIpad(key) {
+  const sid = _ficheSid; if (!sid) return;
+  closeMod2('mfiche');
+  _modalReturnTo['mipad-picker'] = () => { if (S.eleves[sid]) openFiche(sid); };
+  openIpadPicker(key, 0);
+}
+function _ficheConfig(mode) {
+  const sid = _ficheSid, s = S.eleves[sid], cls = s ? S.classes[s.classe_id] : null;
+  closeMod2('mfiche');
+  if (cls && S.cur !== cls.id) switchClass(cls.id);
+  switchTab('config');
+  if (cls?.activeRoom) cfgSelectSalle(cls.activeRoom);
+  setCfgMode(mode);
+  if (mode === 'contraintes') {
+    const sel = document.getElementById('cfg-contraintes-stu');
+    if (sel && [...sel.options].some(o => o.value === sid)) { sel.value = sid; renderConfigGrid(); }
+  }
 }
 function _ficheSpecBadges(s) {
   const b = (cls, title, txt) => `<span class="spec-badge ${cls}" style="margin-right:3px" title="${_escAttr(title)}">${txt}</span>`;
@@ -10364,6 +10503,9 @@ function renderFiche() {
   // ici une information (« rien de saisi »), pas un ornement.
   const dash = '<span style="color:var(--pencil)">—</span>';
   const row = (k, v) => `<tr><th style="text-align:left;padding:3px 14px 3px 0;color:var(--pencil);font-weight:600;white-space:nowrap;vertical-align:top;font-size:.9em;width:1%">${k}</th><td style="padding:3px 0;vertical-align:top">${v}</td></tr>`;
+  // Ligne cliquable : la fiche montre presque tout, elle doit aussi mener là où on le règle
+  // (audit 2026-10-03, § 2.1). Même apparence que la ligne « Informations ».
+  const rowc = (k, v, onclick, title) => `<tr class="fiche-click" onclick="${onclick}" title="${_escAttr(title)}"><th style="text-align:left;padding:3px 14px 3px 0;color:var(--pencil);font-weight:600;white-space:nowrap;vertical-align:top;font-size:.9em;width:1%">${k}</th><td style="padding:3px 0;vertical-align:top">${v} <span class="fiche-click-hint">✎</span></td></tr>`;
   const sec = (title, inner) => `<div class="about-section" style="margin-bottom:10px;padding:8px 12px"><h3 style="margin:0 0 6px;font-size:.95em">${title}</h3><table style="border-collapse:collapse;width:100%">${inner}</table></div>`;
 
   // ── En-tête
@@ -10386,10 +10528,10 @@ function renderFiche() {
   const identite = sec('👤 Identité & scolarité',
     row('Classe', cls ? _escName(cls.nom) : dash) +
     (otherCls.length ? row('Aussi dans', otherCls.map(c => `<span class="spec-badge spec-ulis-incl" style="margin-right:3px">🔀 ${_escName(c.nom)}</span>`).join('')) : '') +
-    row('Groupe', s.groupe ? `<span class="gbdg g${s.groupe}">G${s.groupe}</span>` : dash) +
-    row('Rôle', _delegueInfo(s) ? `<span class="${_delegueInfo(s).cls}">🗳 ${_delegueInfo(s).label}</span>` : dash) +
-    row('Tags', tags || dash) +
-    (dates ? row('Dates', dates) : '') +
+    rowc('Groupe', s.groupe ? `<span class="gbdg g${s.groupe}">G${s.groupe}</span>` : dash, "_ficheGo('edit','es-grp')", 'Modifier le groupe') +
+    rowc('Rôle', _delegueInfo(s) ? `<span class="${_delegueInfo(s).cls}">🗳 ${_delegueInfo(s).label}</span>` : dash, "_ficheGo('edit','es-delegue')", 'Modifier le rôle dans la classe') +
+    rowc('Tags', tags || dash, "_ficheGo('edit','es-tags')", 'Modifier les tags') +
+    rowc('Dates', dates || dash, "_ficheGo('edit','es-arrival')", 'Modifier les dates d\'arrivée et de départ') +
     (prev ? row('Classes précédentes', prev) : ''));
 
   // ── Aménagements
@@ -10411,11 +10553,19 @@ function renderFiche() {
     const aIdx = aeshHelpingSid(cls, s.id);
     const aLbl = aIdx >= 0 ? `🤝 ${aeshLabel(aIdx, aeshIndices(room).length)}` : dash;
     const nbRooms = Object.keys(cls.rooms || {}).length;
+    // Contraintes de placement : absentes de la fiche jusqu'ici (audit 2026-10-03, § 2.1).
+    const allowedN = (room?.allowedFor?.[s.id] || []).length;
+    const pairs = (cls.noNeighbors || []).filter(p => p.split('|').includes(s.id))
+      .map(p => S.eleves[p.split('|').find(x => x !== s.id)]).filter(Boolean)
+      .map(o => _escName(o.prenom + ' ' + o.nom));
+    const cstrLbl = [allowedN ? `${allowedN} place(s) autorisée(s)` : '', pairs.length ? `à séparer de : ${pairs.join(', ')}` : ''].filter(Boolean).join(' · ');
+    const isCur = cls === getCls();   // place et tablette se règlent sur la classe affichée
     place = sec('📍 Place & matériel',
       row('Salle', salle ? `${_escName(salle.nom)}${nbRooms > 1 ? ` <span style="color:var(--pencil);font-size:.85em">(salle active, ${nbRooms} au total)</span>` : ''}` : dash) +
-      row('Place', posLbl) +
-      (_featureEnabled('tablettes') ? row('Tablette', ipLbl) : '') +
-      row('AESH', aLbl));
+      (isCur ? rowc('Place', posLbl, "_ficheSeat()", 'Choisir sa place sur le plan') : row('Place', posLbl)) +
+      (_featureEnabled('tablettes') ? (isCur && pos ? rowc('Tablette', ipLbl, `_ficheIpad('${pos.k}')`, 'Changer sa tablette') : row('Tablette', ipLbl)) : '') +
+      rowc('AESH', aLbl, "_ficheConfig('aesh')", 'Régler les AESH de cette salle (Config Salle)') +
+      rowc('Contraintes', cstrLbl || dash, "_ficheConfig('contraintes')", 'Places autorisées et élèves à séparer (Config Salle)'));
   }
 
   // ── Incidents & appel
@@ -14005,11 +14155,7 @@ function setGroupFilter(g, chip) {
 function cycleGroupe(sid) {
   const s = S.eleves[sid];
   if (!s) return;
-  pushUndo();
-  s.groupe = s.groupe === 1 ? 2 : s.groupe === 2 ? 3 : s.groupe === 3 ? null : 1;
-  save();
-  renderStudents();
-  renderTeacherGrid();
+  _setGroupe(sid, s.groupe === 1 ? 2 : s.groupe === 2 ? 3 : s.groupe === 3 ? null : 1);
 }
 
 // Cycle civilité : null → M → F → null
@@ -16604,6 +16750,7 @@ function openEdit(id) {
   document.getElementById('es-civ').value            = s.civilite || '';
   document.getElementById('es-grp').value            = s.groupe || '';
   document.getElementById('es-delegue').value        = s.delegue || '';
+  _renderEditTags(s);
   // Peuple le sélecteur de classe (uniquement les classes réelles, jamais les recomposées)
   const clsSel = document.getElementById('es-cls');
   if (clsSel) {
@@ -16637,6 +16784,15 @@ function saveEdit() {
   s.civilite = document.getElementById('es-civ').value || null;
   s.groupe  = parseInt(document.getElementById('es-grp').value) || null;
   s.delegue = DELEGUE_ROLES[document.getElementById('es-delegue').value] ? document.getElementById('es-delegue').value : null;
+  // Tags : ceux qui ne sont plus au catalogue sont conservés tels quels (rien à afficher, rien à perdre).
+  {
+    const box = document.getElementById('es-tags');
+    if (box && box.dataset.ready === '1') {
+      const on = [...box.querySelectorAll('input[data-tag]:checked')].map(i => i.dataset.tag);
+      const orphans = (Array.isArray(s.tags) ? s.tags : []).filter(t => !S.tags?.[t]);
+      s.tags = [...orphans, ...on];
+    }
+  }
   // Statuts exclusifs intra-groupe (groupe A scolarité + groupe B linguistique UPE2A indépendants)
   _readAndApplyStatusGroup(s, 'es', STATUS_GROUP_A);
   _readAndApplyStatusGroup(s, 'es', STATUS_GROUP_B);
@@ -16693,6 +16849,45 @@ function saveEdit() {
   }
 
   _finish();
+}
+
+// Tags de l'élève dans « Modifier l'élève » : jusqu'ici on ne pouvait les régler que par
+// la sélection multiple de l'onglet Élèves (audit 2026-10-03, § 2.2).
+function _renderEditTags(s, keepChecks) {
+  const box = document.getElementById('es-tags');
+  if (!box) return;
+  const tags = Object.values(S.tags || {}).sort((a, b) => String(a.abbr).localeCompare(String(b.abbr), 'fr'));
+  // keepChecks : re-rendu après « ⚙ Gérer » — on garde les cases cochées mais pas encore enregistrées.
+  const mine = new Set(keepChecks && box.dataset.ready === '1'
+    ? [...box.querySelectorAll('input[data-tag]:checked')].map(i => i.dataset.tag)
+    : (Array.isArray(s.tags) ? s.tags : []));
+  box.innerHTML = tags.length
+    ? tags.map(t => {
+        const c = _safeColor(t.color);
+        return `<label title="${_escAttr(t.name || t.abbr)}" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:2px 8px 2px 4px;border-radius:12px;border:1.5px solid ${c};font-size:.88em">
+          <input type="checkbox" data-tag="${_escAttr(t.id)}"${mine.has(t.id) ? ' checked' : ''} style="accent-color:${c};margin:0">
+          <span style="background:${c};color:${_contrastTextColor(c)};padding:0 5px;border-radius:3px;font-weight:600;font-family:var(--font-mono)">${_escName(t.abbr)}</span>
+          <span>${_escName(t.name || '')}</span></label>`;
+      }).join('') + ` <button type="button" class="btn btn-g btn-sm" onclick="_editTagsManage()" title="Créer, renommer ou supprimer des tags">⚙ Gérer</button>`
+    : `<span style="font-size:.85em;color:var(--pencil)">Aucun tag défini.</span> <button type="button" class="btn btn-g btn-sm" onclick="_editTagsManage()">⚙ Gérer les tags</button>`;
+  box.dataset.ready = '1';
+}
+// Pastille 🔔 des rappels, dans les listes où l'élève n'a pas de case (onglet Élèves, non
+// placés) : avant, un rappel ne se voyait que sur la case d'un élève PLACÉ (audit § 2.2).
+function _remBadgeInline(s) {
+  const n = Array.isArray(s?.reminders) ? s.reminders.length : 0;
+  if (!n) return '';
+  const tip = 'Rappels à vérifier :\n' + s.reminders.map(r => '• ' + r.label).join('\n') + '\n\n(Clic = gérer)';
+  return ` <span class="crem-badge" style="font-size:.72em;margin-left:4px;vertical-align:middle" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();openReminders('${_escJsAttr(s.id)}')" title="${_escAttr(tip)}">🔔 ${n}</span>`;
+}
+// Ouvre « Modifier l'élève » directement sur ses tags (clic sur une pastille de tag).
+function _openEditTags(sid) {
+  openEdit(sid);
+  setTimeout(() => document.getElementById('es-tags')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+}
+function _editTagsManage() {
+  openTagsModal();   // par-dessus « Modifier l'élève », qui reste ouverte
+  _modalReturnTo['mtags'] = () => { const s = S.eleves[document.getElementById('es-id')?.value]; if (s) _renderEditTags(s, true); };
 }
 
 // Couleur de fond du compteur d'oublis selon le nombre
@@ -16815,7 +17010,7 @@ function renderOverview() {
               : '<span class="gbdg gn">—</span>';
     return `<tr data-sid="${_escAttr(r.sid)}">
       <td><span style="background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600">${_escName(r.className)}</span></td>
-      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
+      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')||openFiche('${_escAttr(r.sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
       <td>${grp}</td>
       <td style="text-align:center" title="📦 Matériel oublié : ${r.oublis}"><span class="badge" style="background:${oubliColor(r.oublis)};color:#222">${r.oublis}</span></td>
       <td style="text-align:center" title="📝 Travail non fait : ${r.non_travail}"><span class="badge" style="background:${oubliColor(r.non_travail)};color:#222">${r.non_travail}</span></td>
@@ -17054,7 +17249,7 @@ function renderAttStats() {
               : '<span class="gbdg gn">—</span>';
     return `<tr data-sid="${_escAttr(r.sid)}">
       ${showClassCol ? `<td><span style="background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600">${_escName(r.className)}</span></td>` : ''}
-      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
+      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')||openFiche('${_escAttr(r.sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
       <td>${grp}</td>
       <td style="text-align:center" title="🚫 Absences sur la période : ${r.abs}"><span class="badge" style="background:${oubliColor(r.abs)};color:#222">${r.abs}</span></td>
       <td style="text-align:center" title="⏰ Retards sur la période : ${r.ret}"><span class="badge" style="background:${oubliColor(r.ret)};color:#222">${r.ret}</span></td>
@@ -18277,13 +18472,13 @@ function renderStudents() {
     const tagBadgesEl = (Array.isArray(s.tags) ? s.tags : [])
       .map(tid => S.tags?.[tid])
       .filter(Boolean)
-      .map(t => `<span class="gbdg-tag" style="background:${_safeColor(t.color)};color:${_contrastTextColor(_safeColor(t.color))}" title="${_escAttr(t.name)}">${_escAttr(t.abbr)}</span>`)
+      .map(t => `<span class="gbdg-tag" style="background:${_safeColor(t.color)};color:${_contrastTextColor(_safeColor(t.color))};cursor:pointer" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_openEditTags('${s.id}')" title="${_escAttr(t.name)} — clic pour modifier les tags">${_escAttr(t.abbr)}</span>`)
       .join('');
     // Boutons de statut — 2 groupes indépendants :
     // - Groupe scolarité (PPRE / PPS / ULIS / ULIS+) exclusifs entre eux
     // - Groupe UPE2A (UPE2A / UPE2A+) exclusifs entre eux
     // Cumul possible entre les 2 groupes (ex. UPE2A+ + PPRE)
-    const exclScolaire = '— exclusif avec PPRE / PPS / ULIS';
+    const exclScolaire = '— exclusif avec PPRE / PAP / PPS / ULIS';
     const exclUpe2a    = '— exclusif avec l\'autre statut UPE2A';
     // Style d'une pastille de statut : accent quand marqué, fond neutre themé sinon ;
     // texte TOUJOURS dérivé du fond. Avant, l'état marqué imposait du blanc (illisible sur
@@ -18352,13 +18547,15 @@ function renderStudents() {
     const _inactive = _isFuture || _isGone;
     const _fmtFr = (ymd) => { if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd || ''; const [y,m,d]=ymd.split('-'); return `${d}/${m}/${y}`; };
     let _lifeBadge = '';
-    if (_isFuture) _lifeBadge = `<span title="Arrive le ${_fmtFr(s.arrivalDate)}" style="background:#dbeafe;color:#1e40af;font-size:.7em;font-family:var(--font-mono);padding:1px 5px;border-radius:8px;margin-left:6px;font-weight:600">📅 ${_fmtFr(s.arrivalDate)}</span>`;
+    if (_isFuture) _lifeBadge = `<span title="Arrive le ${_fmtFr(s.arrivalDate)}" style="background:var(--info-bg);color:var(--link-fg);font-size:.7em;font-family:var(--font-mono);padding:1px 5px;border-radius:8px;margin-left:6px;font-weight:600">📅 ${_fmtFr(s.arrivalDate)}</span>`;
     else if (_isGone) _lifeBadge = `<span title="Parti le ${_fmtFr(s.departureDate)}" style="background:var(--alert-bg);color:var(--alert-fg);font-size:.7em;font-family:var(--font-mono);padding:1px 5px;border-radius:8px;margin-left:6px;font-weight:600">🚪 ${_fmtFr(s.departureDate)}</span>`;
+    // Départ PRÉVU (pas encore effectif) : on ne le voyait que dans la fiche (audit 2026-10-03, § 2.1).
+    else if (s.departureDate) _lifeBadge = `<span title="Départ prévu : dernier jour la veille du ${_fmtFr(s.departureDate)}" style="background:var(--paper-warm);color:var(--pencil);border:1px dashed var(--rule-line);font-size:.7em;font-family:var(--font-mono);padding:0 5px;border-radius:8px;margin-left:6px">🚪 part le ${_fmtFr(s.departureDate)}</span>`;
     const _rowStyle = _inactive ? 'opacity:.55;font-style:italic' : '';
     return `
       <tr data-sid="${s.id}" class="${sel.trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)">
-        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}</td>
+        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}${_remBadgeInline(s)}</td>
         <td class="conf-keep">${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>
@@ -20740,6 +20937,7 @@ function renderUnplaced() {
       ${s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.7em">G${s.groupe}</span>` : ''}
       ${specBdgs.join('')}
       ${_escAttr(s.prenom)} ${_escAttr(s.nom)}
+      ${_remBadgeInline(s)}
     </div>`;
   }).join('');
   // Glisser tactile (Touch Events) sur chaque élève non placé : appui maintenu →
@@ -25246,7 +25444,7 @@ function renderIpads() {
       const label = ipadN ? `Tab. ${ipadN}` : 'Tab. —';
 
       return `<tr style="${rowStyle}"${titleAttr}>
-        <td style="${dimText}"${stu ? ` data-photo-sid="${_escAttr(stu.id)}"` : ''}>${name || '<em style="color:var(--pencil-soft)">(siège vide)</em>'}</td>
+        <td style="${dimText}${stu ? ';cursor:pointer' : ''}"${stu ? ` data-photo-sid="${_escAttr(stu.id)}" onclick="openFiche('${_escAttr(stu.id)}')" title="Ouvrir la fiche complète de l'élève"` : ''}>${name || '<em style="color:var(--pencil-soft)">(siège vide)</em>'}</td>
         <td style="text-align:center">
           <span class="cipad-clickable" style="display:inline-block;${numStyle};padding:3px 9px;border:1px solid var(--rule-line);border-radius:4px;cursor:pointer;background:var(--paper)"
                 onclick="openIpadPicker('${key}', ${m.gf})">${label}</span>${warnIcon}
@@ -41502,11 +41700,20 @@ function _evalTableurRender() {
     const values = ev.notes?.[sid]?.values || {};
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer;padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     mnOrder.forEach((mn, ci) => {
       if (_subSkippedFor(mn, cls.id)) {
         const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
         html += `<td class="meval-cell-skip" data-ci="${ci}" data-mnid="${_esc(mn.id)}" style="${exoBdr}" title="⊘ ${_esc(mn.label || '?')} non faite par ${_esc(cls.nom)}"></td>`;
+        return;
+      }
+      // Dispense de cette question pour cet élève (hors barème). Elle comptait dans le calcul
+      // mais ne se voyait ni ne se réglait plus nulle part depuis le retrait de la fiche de
+      // saisie (audit 2026-10-03, § 1.4) : case hachurée, réglage au clic droit.
+      if ((ev.notes?.[sid]?.excluded || []).includes(mn.id)) {
+        const exoBdr = exoBoundarySet.has(ci) ? 'border-left:2px solid var(--ink-blue-soft);' : '';
+        const dispTip = (stu.prenom || '') + ' est dispensé·e de ' + (mn.label || 'cette question') + ' — hors barème.\nClic droit pour retirer la dispense.';
+        html += `<td class="meval-cell-disp" data-ci="${ci}" data-mnid="${_esc(mn.id)}" style="${exoBdr}" title="${_escAttr(dispTip)}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')">disp.</td>`;
         return;
       }
       const v = values[mn.id];
@@ -42384,7 +42591,7 @@ function _tableurBlockAt(ev, ci, byExo) {
   // Les cellules repliées (colonne « non faite par cette classe ») n'ont pas d'input
   // mais portent data-ci/data-mnid : elles comptent dans le bloc, sinon un exercice
   // dont une question est sautée se scinderait en deux.
-  row.querySelectorAll('input[data-ci], td.meval-cell-skip[data-ci], td.meval-cell-out[data-ci]').forEach(inp => {
+  row.querySelectorAll('input[data-ci], td.meval-cell-skip[data-ci], td.meval-cell-out[data-ci], td.meval-cell-disp[data-ci]').forEach(inp => {
     const i = parseInt(inp.getAttribute('data-ci'));
     if (!Number.isFinite(i)) return;
     const qid = inp.getAttribute('data-mnid') || inp.getAttribute('data-passid') || '';
@@ -43200,7 +43407,7 @@ function _evalRenderBilanComps() {
     if (!stu) continue;
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr style="background:${bgRow}">`;
-    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer;padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     for (const c of comps) {
       const niv = _evalStudentLevelForComp(ev, sid, c.id);
       // Comp non évaluée → afficher "0" (niveau "non évalué"), pas "—"
@@ -43720,7 +43927,7 @@ function _evalTableurRenderB(ev, cls) {
     if (!stu) return;
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer;padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     let ci = 0;
     for (const p of sortedPass) {
       p.niveaux = p.niveaux || {};
@@ -44485,7 +44692,7 @@ function _evalTableurRenderD(ev, cls) {
     const bgRow = ri % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     const levels = ev.notes?.[sid]?.levels || {};
     html += `<tr data-ri="${ri}" data-sid="${_esc(sid)}" style="background:${bgRow}">`;
-    html += `<td onclick="_confNameClick('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer;padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bgRow};z-index:1;font-family:var(--font-serif);white-space:nowrap">${_fmtStuNameInnerHtml(stu)}</td>`;
     let ci = 0;
     for (const g of exoGroups) {
       g.mns.forEach((q, qi) => {
@@ -51584,6 +51791,22 @@ function _qcmcamNextMnLabel(ev, baseMn) {
 
 // Contexte courant des commentaires (set par les callers — fiche supprimée, tableur uniquement maintenant)
 const _commentsCtx = { evalId: null, sid: null, mnId: null };
+function _evalCommentsToggleDisp(on) {
+  const { evalId, sid, mnId } = _commentsCtx;
+  const ev = S.evaluations?.[evalId];
+  if (!ev || !sid || !mnId) return;
+  pushUndo();
+  ev.notes = ev.notes || {};
+  const rec = ev.notes[sid] = ev.notes[sid] || { values: {} };
+  const set = new Set(Array.isArray(rec.excluded) ? rec.excluded : []);
+  if (on) set.add(mnId); else set.delete(mnId);
+  rec.excluded = [...set];
+  if (!rec.excluded.length) delete rec.excluded;
+  ev.updatedAt = Date.now();
+  save();
+  if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
+  toast(on ? '🚫 Dispense posée — question hors barème pour cet élève' : 'Dispense retirée');
+}
 
 // ═══════════════ Ajustement de la note finale — modale ═══════════════
 // Catalogue vivant des motifs proposés : réglable par l'enseignant (Réglages → ⚖ Motifs
@@ -51787,6 +52010,16 @@ function _evalCommentsGetList() {
 function _evalCommentsRender() {
   const ctx = _evalCommentsGetList();
   if (!ctx) return;
+  // Dispense : Types A et C seulement (le modèle `excluded` porte sur une question entière),
+  // donc seulement pour une clé simple (pas de couple question|compétence).
+  {
+    const ev = S.evaluations?.[_commentsCtx.evalId];
+    const wrap = document.getElementById('meval-comments-disp-wrap');
+    const ok = ev && (ev.type === 'A' || ev.type === 'C') && !String(_commentsCtx.mnId).includes('|');
+    if (wrap) wrap.style.display = ok ? 'flex' : 'none';
+    const chk = document.getElementById('meval-comments-disp');
+    if (ok && chk) chk.checked = (ev.notes?.[_commentsCtx.sid]?.excluded || []).includes(_commentsCtx.mnId);
+  }
   const wrap = document.getElementById('meval-comments-list');
   if (ctx.list.length === 0) {
     wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;margin:0;font-size:.88em">Aucun commentaire pour l\'instant — ajoutez-en un ci-dessous (champ libre ou bibliothèque).</p>';
