@@ -7165,11 +7165,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.75.0';
+const APP_VERSION    = '2.75.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T22:31:58Z';
+const APP_BUILD_DATE = '2026-10-03T22:32:50Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30748,7 +30748,9 @@ function _photoSidFromTarget(t) {
   }
   return null;
 }
-const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false, plan: false };
+const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false, plan: false, skipRoom: null };
+// Sur le Plan Prof et la Vue Élève, la salle affichée est déjà sous les yeux : pas de mini-plan pour elle.
+function _photoPopSkipRoom(t) { return t && t.closest && t.closest('#tab-plan, #tab-svue') ? (getCls()?.activeRoom || null) : null; }
 function _photoPopHide() {
   clearTimeout(_photoPop.timer); _photoPop.timer = null; _photoPop.sid = null; _photoPop.pinned = false;
   if (_photoPop.el) _photoPop.el.style.display = 'none';
@@ -30770,7 +30772,7 @@ async function _photoPopShow(sid) {
   if (_photoPop.sid !== sid) return;
   // Mini-plans sous la photo, un par salle. Dans le tableur d'éval : plan du jour du devoir.
   const ctx = _photoPop.plan ? _mnpCtx() : null;
-  const plans = _mnpAllRooms(sid, ctx, 130);
+  const plans = _mnpAllRooms(sid, ctx, 130, _photoPop.skipRoom);
   if (!url && !plans.length) return;
   if (!_photoPop.el) {
     _photoPop.el = document.createElement('div');
@@ -30790,6 +30792,7 @@ document.addEventListener('mouseover', e => {
   _photoPopHide();
   if (!sid || !S.eleves?.[sid] || _confHides(sid)) return;
   _photoPop.plan = !!(e.target.closest && e.target.closest('#meval-tableur'));
+  _photoPop.skipRoom = _photoPopSkipRoom(e.target);
   // Autorisation accordée entre-temps (geste sur la sync, import…) : on relit le dossier, sans insister.
   if (!_photos.ready && dirHandle && Date.now() - _photos.lastTry > 30000) _photosRefresh(false);
   // La bulle montre la photo ET les mini-plans : elle s'affiche même sans photo
@@ -30804,7 +30807,7 @@ function _cphotoClick(e, sid) {
   if (!S.eleves[sid] || _confHides(sid)) return;
   _photoPopHide();
   _photoPop.x = e.clientX; _photoPop.y = e.clientY;
-  _photoPop.sid = sid; _photoPop.pinned = true; _photoPop.plan = false;
+  _photoPop.sid = sid; _photoPop.pinned = true; _photoPop.plan = false; _photoPop.skipRoom = _photoPopSkipRoom(e.target);
   _photoPopShow(sid);
 }
 document.addEventListener('mousedown', e => { if (!(e.target.closest && e.target.closest('.cphoto'))) _photoPopHide(); }, { passive: true });
@@ -37018,12 +37021,12 @@ function _mnpBuild(ev, cls, sid, maxW, roomId, seating) {
 // Un mini-plan par salle de la classe (salle active d'abord), pour la bulle photo.
 // Classe : celle du tableur d'éval, sinon la classe affichée si l'élève en fait partie
 // (classe recomposée), sinon sa classe d'inscription.
-function _mnpAllRooms(sid, ctx, maxW) {
+function _mnpAllRooms(sid, ctx, maxW, skipRoom) {
   const stu = S.eleves[sid];
   let cls = ctx ? ctx.cls : null;
   if (!cls) { const cur = getCls(); cls = cur && cur.eleves?.includes(sid) ? cur : S.classes?.[stu?.classe_id]; }
   if (!cls || !cls.eleves?.includes(sid)) return [];
-  const ids = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id]);
+  const ids = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id] && id !== skipRoom);
   ids.sort((a, b) => (b === cls.activeRoom) - (a === cls.activeRoom));
   return ids.map(id => _mnpBuild(ctx ? ctx.ev : null, cls, sid, maxW, id)).filter(Boolean);
 }
