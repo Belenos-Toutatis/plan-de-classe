@@ -399,6 +399,11 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 /* Le tableau d'identité (largeur 100 %) passerait SOUS la photo flottante au lieu de l'entourer. */
 #fiche-photo + .about-section table{width:auto !important}
 #fiche-photo img{display:block;width:110px;height:110px;object-fit:cover;border-radius:6px;border:1px solid var(--rule-line)}
+#fiche-photo.drop img,#fiche-photo.drop .fiche-photo-add{outline:3px dashed var(--ink-blue);outline-offset:2px}
+.fiche-photo-acts{display:flex;justify-content:center;gap:4px;margin-top:4px}
+.fiche-photo-acts .fiche-ico{font-size:.8em;width:auto;padding:2px 6px}
+.fiche-photo-add{width:110px;height:110px;border:1.5px dashed var(--rule-line);border-radius:6px;background:var(--paper-warm);color:var(--pencil);font:inherit;font-size:.82em;line-height:1.5;cursor:pointer}
+.fiche-photo-add:hover{border-color:var(--ink-blue);color:var(--ink-blue)}
 .muted-line{color:var(--pencil);font-size:.88em;margin:0 0 8px}
 .trombi-head{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;padding:8px 12px;background:var(--paper-warm);border-radius:6px}
 .trombi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
@@ -6901,11 +6906,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.64.1';
+const APP_VERSION    = '2.64.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T08:21:20Z';
+const APP_BUILD_DATE = '2026-10-03T08:34:34Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29789,9 +29794,9 @@ async function _photoWrite(dir, sid, bytes) {
 }
 // Suppression best-effort (élève supprimé) : un fichier orphelin ne gêne rien, il ne
 // serait simplement plus jamais affiché.
-async function _photoDelete(sid) {
+async function _photoDelete(sid, ask) {
   if (!_photos.sids.has(sid)) return;
-  const d = await _photosDir(true, false);
+  const d = await _photosDir(true, !!ask);
   if (!d) return;
   try { await d.removeEntry(sid + '.jpg'); } catch (e) {}
   const u = _photos.urls.get(sid); if (u) URL.revokeObjectURL(u);
@@ -30021,8 +30026,93 @@ async function _fichePhotoFill(sid) {
   }
   const url = _photoHas(sid) ? await _photoUrl(sid) : null;
   if (_ficheSid !== sid) return;
-  box.innerHTML = url ? `<img src="${url}" alt="Photo de l'élève">` : '';
-  box.style.display = url ? '' : 'none';
+  // Avec photo : la photo + « Changer » / « Retirer ». Sans : une case « Ajouter une photo ».
+  // La case accepte aussi un fichier glissé dessus.
+  box.innerHTML = (url
+    ? `<img src="${url}" alt="Photo de l'élève">
+       <div class="fiche-photo-acts">
+         <button type="button" class="fiche-ico" onclick="_fichePhotoPick()" title="Remplacer la photo par une image de l'ordinateur (ou Ctrl+V pour coller, ou glisser une image ici)">📷 Changer</button>
+         <button type="button" class="fiche-ico" onclick="_fichePhotoPaste()" title="Remplacer la photo par l'image du presse-papier (Ctrl+V marche aussi)">📋</button>
+         <button type="button" class="fiche-ico" onclick="_fichePhotoRemove()" title="Retirer la photo de cet élève">🗑</button>
+       </div>`
+    : `<button type="button" class="fiche-photo-add" onclick="_fichePhotoPick()" title="Ajouter une photo : fichier de l'ordinateur, image glissée ici, ou Ctrl+V pour coller">📷<br>Ajouter une photo<br><span style="font-size:.85em">ou Ctrl+V</span></button>
+       <div class="fiche-photo-acts"><button type="button" class="fiche-ico" onclick="_fichePhotoPaste()" title="Coller l'image du presse-papier">📋 Coller</button></div>`)
+    + `<input type="file" id="fiche-photo-file" accept="image/*" hidden onchange="_fichePhotoChosen(this.files[0])">`;
+  box.style.display = '';
+  box.ondragover = e => { e.preventDefault(); box.classList.add('drop'); };
+  box.ondragleave = () => box.classList.remove('drop');
+  box.ondrop = e => { e.preventDefault(); box.classList.remove('drop'); _fichePhotoChosen(e.dataTransfer?.files?.[0]); };
+}
+function _fichePhotoPick() { document.getElementById('fiche-photo-file')?.click(); }
+// Bouton « 📋 Coller » : lecture du presse-papier par l'API asynchrone (le navigateur peut
+// demander l'autorisation la première fois). Ctrl+V, lui, passe par l'événement paste ci-dessous.
+async function _fichePhotoPaste() {
+  if (!navigator.clipboard?.read) { toast('⚠️ Ce navigateur ne permet pas de lire le presse-papier : utilise Ctrl+V.', 'warn'); return; }
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find(t => t.startsWith('image/'));
+      if (type) { const blob = await item.getType(type); return _fichePhotoChosen(new File([blob], 'presse-papier', { type })); }
+    }
+    toast("⚠️ Le presse-papier ne contient pas d'image.", 'warn');
+  } catch (e) {
+    toast("⚠️ Lecture du presse-papier refusée ou impossible : essaie Ctrl+V.", 'warn');
+  }
+}
+// Ctrl+V dans la fiche ouverte : une image du presse-papier devient la photo de l'élève.
+// Ignoré si on colle dans un champ texte (aucun aujourd'hui dans la fiche, mais par principe).
+document.addEventListener('paste', e => {
+  if (!document.getElementById('mfiche')?.classList.contains('on') || !_ficheSid) return;
+  if (document.querySelector('.mo.on:not(#mfiche)')) return;   // une autre modale par-dessus
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const f = [...(e.clipboardData?.items || [])].find(it => it.kind === 'file' && it.type.startsWith('image/'))?.getAsFile();
+  if (!f) { toast("⚠️ Le presse-papier ne contient pas d'image.", 'warn'); return; }
+  e.preventDefault();
+  _fichePhotoChosen(f);
+});
+// Image quelconque (JPEG, PNG, WebP…) → JPEG d'au plus 400 px de côté, proportions gardées.
+// Les photos MBN font ~200 px : inutile de stocker une photo de téléphone de 4 000 px.
+async function _photoFileToJpeg(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 400 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(bmp.width * k)); cv.height = Math.max(1, Math.round(bmp.height * k));
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);   // fond blanc sous un PNG transparent
+  ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+  bmp.close && bmp.close();
+  const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.88));
+  if (!blob) throw new Error('Conversion impossible');
+  return new Uint8Array(await blob.arrayBuffer());
+}
+async function _fichePhotoChosen(file) {
+  const sid = _ficheSid;
+  if (!file || !sid || !S.eleves[sid]) return;
+  if (!/^image\//.test(file.type)) { toast("⚠️ Ce fichier n'est pas une image.", 'warn'); return; }
+  if (!dirHandle) {
+    _uiConfirm({ title: '📂 Dossier de sauvegarde', okLabel: '📂 Choisir le dossier',
+      message: "Les photos sont rangées dans le sous-dossier photos/ du dossier de sauvegarde, qui n'est pas encore choisi.\nChoisis-le, puis ajoute la photo à nouveau.",
+      onOk: async () => { await _trombiPickDir(); renderFiche(); } });
+    return;
+  }
+  let bytes;
+  try { bytes = await _photoFileToJpeg(file); }
+  catch (e) { toast("⚠️ Image illisible (format non pris en charge par le navigateur ?).", 'warn'); return; }
+  const dir = await _photosDir(true, true);
+  if (!dir) { toast("⚠️ Accès au dossier de sauvegarde refusé : photo non enregistrée.", 'warn'); return; }
+  try { await _photoWrite(dir, sid, bytes); }
+  catch (e) { console.warn('Photo non écrite', e); toast('⚠️ Écriture de la photo impossible.', 'warn'); return; }
+  _photos.ready = true;
+  try { localStorage.setItem('planClasse_photosKnown', '1'); } catch (e) {}
+  toast('📷 Photo enregistrée.');
+  if (_ficheSid === sid) _fichePhotoFill(sid);
+}
+function _fichePhotoRemove() {
+  const sid = _ficheSid, s = S.eleves[sid];
+  if (!s) return;
+  _uiConfirm({ title: '🗑 Retirer la photo', okLabel: 'Retirer', okClass: 'btn-d',
+    message: `Supprimer la photo de ${s.prenom} ${s.nom} ?\nLe fichier est effacé du dossier photos/ — Ctrl+Z ne le ramène pas.`,
+    onOk: async () => { await _photoDelete(sid, true); if (_photoHas(sid)) { toast('⚠️ Photo non supprimée (accès au dossier refusé).', 'warn'); return; } toast('🗑 Photo retirée.'); if (_ficheSid === sid) _fichePhotoFill(sid); } });
 }
 
 // ═══════════════════════════════════════════════════════════
