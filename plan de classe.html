@@ -4811,6 +4811,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <div><input type="number" id="evalprefs-maxNote" min="1" max="100" step="1" style="width:90px;padding:4px 8px;font-family:var(--font-mono)"> <span style="color:var(--pencil);font-size:.85em">points</span></div>
         <label>Coefficient</label>
         <div><input type="number" id="evalprefs-defaultCoef" min="0" max="20" step="0.5" style="width:90px;padding:4px 8px;font-family:var(--font-mono)"></div>
+        <div style="grid-column:1/-1;font-size:.86em;color:var(--pencil);margin-top:4px">Saisie au tableur — <b>valeurs de départ</b>. Ensuite le tableur retient ton choix sur cette machine ; enregistrer ici une nouvelle valeur la réapplique.</div>
         <label>Tri des élèves</label>
         <select id="evalprefs-defaultSort" style="padding:4px 8px;font-size:.9em">
           <option value="nom-prenom">Nom Prénom (défaut ENT)</option>
@@ -6052,7 +6053,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div class="mb" style="max-width:680px;width:100%">
     <h2>⚙ Réglages</h2>
     <p style="font-size:.85em;color:var(--pencil);margin:0 0 14px;line-height:1.45">
-      Tous les réglages de l'app en un seul endroit. Les boutons d'accès directs dans les onglets restent disponibles.
+      Les réglages généraux de l'app. Ceux qui dépendent d'une salle ou d'un outil restent à leur place : des liens y mènent, en bas de cette fenêtre. Les boutons d'accès directs dans les onglets restent disponibles.
     </p>
     <div style="display:flex;flex-direction:column;gap:8px">
       <!-- Fonctionnalités -->
@@ -6148,6 +6149,25 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <h3>🎨 Apparence</h3>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
           <button class="btn btn-g btn-sm" onclick="toggleAppTheme();_settingsRefreshLabels()" id="msettings-theme-btn">◐ Thème : …</button>
+        </div>
+      </div>
+      <!-- Impression : réglage GLOBAL, rangé jusqu'ici seulement dans le menu 🖨 du Plan (audit 2026-10-03, § 3.2) -->
+      <div class="about-section">
+        <h3>🖨 Impression</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
+          <button class="btn btn-g btn-sm" onclick="togglePrintColors()" title="Bascule couleurs / noir et blanc"><span class="pc-tog-lbl">🎨 Couleurs : ON</span></button>
+          <span style="font-size:.85em;color:var(--pencil)">Vaut pour toutes les impressions : plans, listes, fiche de prêt, bilan des classes… (aussi dans le menu 🖨 Imprimer du Plan).</span>
+        </div>
+      </div>
+      <!-- Réglages rangés là où ils servent : liens (audit 2026-10-03, § 3.2) -->
+      <div class="about-section">
+        <h3>🧭 Autres réglages, rangés là où ils servent</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
+          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');switchTab('config')" title="Dimensions, places sans table, îlots, horaires de la journée, patterns de ramassage — salle par salle">🏫 Salles et horaires</button>
+          <button class="btn btn-g btn-sm ff-tablettes" onclick="closeMod2('msettings');switchTab('ipads')" title="Classes mobiles : nom, nombre de tablettes, lots, tablettes indisponibles (bas de l'onglet Tablettes)">📱 Classes mobiles</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mtimer', openTimerSettings)" title="Durées, annonces vocales, sonnerie, tiers-temps">⏲ Minuteur</button>
+          <button class="btn btn-g btn-sm" onclick="_settingsOpenChild('mnoise', openNoiseSettings)" title="Seuil, plancher de silence, sonnerie (le sonomètre se lance par 🎙 dans le bandeau)">🎙 Sonomètre</button>
+          <button class="btn btn-g btn-sm" onclick="closeMod2('msettings');openTrombiImport()" title="Les photos sont rangées dans le sous-dossier photos/ du dossier de sauvegarde">📷 Photos des élèves</button>
         </div>
       </div>
       <!-- À propos -->
@@ -7001,11 +7021,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.68.1';
+const APP_VERSION    = '2.68.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T15:44:59Z';
+const APP_BUILD_DATE = '2026-10-03T15:50:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31020,18 +31040,24 @@ function openSettingsMenu() {
 // modale Réglages (au lieu de fermer tout). Ainsi l'utilisateur enchaîne
 // plusieurs réglages sans devoir rouvrir le menu à chaque fois.
 function _settingsOpenChild(childId, openerFn) {
-  if (typeof _modalReturnTo !== 'undefined') {
-    _modalReturnTo[childId] = () => {
-      try { _settingsRefreshLabels(); } catch (_) {}
-      openMod('msettings');
-    };
-  }
+  const back = () => {
+    try { _settingsRefreshLabels(); } catch (_) {}
+    openMod('msettings');
+  };
+  if (typeof _modalReturnTo !== 'undefined') _modalReturnTo[childId] = back;
   closeMod2('msettings');
-  setTimeout(() => { try { openerFn(); } catch (_) {} }, 50);
+  setTimeout(() => {
+    try { openerFn(); } catch (_) {}
+    // Certaines modales posent leur propre action de fermeture (minuteur, sonomètre : couper
+    // le son d'essai) : on l'enchaîne avec le retour aux Réglages au lieu de la perdre.
+    const own = _modalReturnTo[childId];
+    if (own && own !== back) _modalReturnTo[childId] = () => { try { own(); } catch (_) {} back(); };
+  }, 50);
 }
 
 // Met à jour les libellés dynamiques (état Sync auto + Thème courant).
 function _settingsRefreshLabels() {
+  if (typeof updatePrintColorsUI === 'function') updatePrintColorsUI();
   const syncBtn = document.getElementById('msettings-sync-btn');
   if (syncBtn) syncBtn.textContent = autoSyncEnabled ? '🔄 Sync auto : ON (clic = OFF)' : '🔄 Sync auto : OFF (clic = ON)';
   const themeBtn = document.getElementById('msettings-theme-btn');
@@ -37227,8 +37253,15 @@ function _evalPrefsSave() {
   // Défauts éval
   const dCoef = parseFloat(document.getElementById('evalprefs-defaultCoef')?.value);
   S.evalPrefs.defaultCoef = (Number.isFinite(dCoef) && dCoef >= 0) ? dCoef : 1;
-  S.evalPrefs.defaultSort = document.getElementById('evalprefs-defaultSort')?.value || 'nom-prenom';
-  S.evalPrefs.defaultEnterBehavior = _normalizeEnterBehavior(document.getElementById('evalprefs-defaultEnter')?.value);
+  const _newSort  = document.getElementById('evalprefs-defaultSort')?.value || 'nom-prenom';
+  const _newEnter = _normalizeEnterBehavior(document.getElementById('evalprefs-defaultEnter')?.value);
+  // Une valeur de départ modifiée ici doit s'appliquer : on oublie le choix retenu par le tableur.
+  try {
+    if (_newSort !== S.evalPrefs.defaultSort) localStorage.removeItem('planClasse_evalTableurSort');
+    if (_newEnter !== S.evalPrefs.defaultEnterBehavior) localStorage.removeItem('planClasse_evalTableurEnter');
+  } catch (e) {}
+  S.evalPrefs.defaultSort = _newSort;
+  S.evalPrefs.defaultEnterBehavior = _newEnter;
   const dGran = parseFloat(document.getElementById('evalprefs-defaultGranularity')?.value);
   S.evalPrefs.defaultGranularity = (Number.isFinite(dGran) && dGran >= 0) ? dGran : 0;
   const mGran = parseFloat(document.getElementById('evalprefs-meanGranularity')?.value);
@@ -38616,6 +38649,41 @@ let _evalEditOpenTableurAfterSave = null;
 // ── Modale "Éditeur d'évaluation" ──
 let _evalEditDirty = false;
 function _evalEditMarkDirty() { _evalEditDirty = true; }
+// Réglages d'une évaluation = BROUILLON jusqu'à « ✓ Enregistrer » (audit 2026-10-03, § 1.6).
+// Classes et dates par classe s'écrivent tout de suite dans l'éval (elles pilotent l'aperçu
+// des dates et le pré-remplissage des absents) ; on garde donc une copie de l'éval à
+// l'ouverture, remise en place si l'on ferme sans enregistrer. Toute fermeture d'une modale
+// modifiée (Annuler, fond, Échap) demande confirmation avant d'abandonner.
+let _evalEditBackup = null;   // { id, json, undoLen }
+function _evalEditOnClose() {
+  const b = _evalEditBackup;
+  if (!b) return;
+  const ev = S.evaluations?.[b.id];
+  const changed = _evalEditDirty || (ev && JSON.stringify(ev) !== b.json);
+  if (!changed) { _evalEditBackup = null; return; }
+  // Rouvre la modale telle quelle (les champs n'ont pas été re-rendus) et demande.
+  openMod('meval-edit');
+  _modalReturnTo['meval-edit'] = _evalEditOnClose;
+  _uiConfirm({
+    title: '⚙ Modifications non enregistrées', okLabel: 'Abandonner les modifications', okClass: 'btn-w',
+    message: 'Les réglages de cette évaluation ont été modifiés.\nAbandonner revient à l\'état d\'avant l\'ouverture (classes et dates comprises).\nPour les garder, choisis Annuler puis « ✓ Enregistrer ».',
+    onOk: () => _evalEditDiscard(),
+  });
+}
+function _evalEditDiscard() {
+  const b = _evalEditBackup;
+  _evalEditBackup = null;
+  if (b && S.evaluations?.[b.id]) {
+    if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
+    S.evaluations[b.id] = JSON.parse(b.json);
+    if (undoStack.length > b.undoLen) undoStack.length = b.undoLen;   // les étapes du brouillon disparaissent avec lui
+    save();
+    renderEvalNotes();
+  }
+  _evalEditDirty = false;
+  delete _modalReturnTo['meval-edit'];
+  closeMod2('meval-edit');
+}
 
 // Ouvre la modale Structure (mini-notes, exercices ou passations selon le type).
 // Utilise le hidden input #meval-edit-id partagé entre Réglages et Structure.
@@ -38700,6 +38768,15 @@ function _evalOpenEditor(evalId) {
   }
   _evalEditToggleFacMode();
   _evalEditDirty = false;
+  _evalEditBackup = { id: evalId, json: JSON.stringify(ev), undoLen: undoStack.length };
+  const mod = document.getElementById('meval-edit');
+  if (mod && !mod.dataset.dirtyHook) {
+    // Toute saisie (cases, boutons radio, listes comprises) rend la modale « modifiée ».
+    mod.addEventListener('input', () => { if (_evalEditBackup) _evalEditDirty = true; });
+    mod.addEventListener('change', () => { if (_evalEditBackup) _evalEditDirty = true; });
+    mod.dataset.dirtyHook = '1';
+  }
+  _modalReturnTo['meval-edit'] = _evalEditOnClose;
   openMod('meval-edit');
 }
 
@@ -40124,6 +40201,7 @@ function _evalEditSave() {
   _evalEditDirty = false;
   save();
   renderEvalNotes();
+  _evalEditBackup = null;
   closeMod2('meval-edit');
   // Si l'éval vient d'être créée/dupliquée, on enchaîne directement sur le tableur
   if (_evalEditOpenTableurAfterSave === evalId) {
@@ -40151,6 +40229,7 @@ function _evalEditDelete() {
       pushUndo();
       delete S.evaluations[evalId];
       save();
+      _evalEditBackup = null;
       closeMod2('meval-edit');
       renderEvalNotes();
       toast('🗑 Évaluation supprimée');
@@ -40695,7 +40774,18 @@ function _evalOpenTableur(forcedId) {
     opt.textContent = `Pattern ramassage : ${p.nom}`;
     sortSel.appendChild(opt);
   }
+  // Tri et touche Entrée : le choix fait dans le tableur est RETENU sur cette machine ; la
+  // valeur des Paramètres sert de départ, et l'enregistrer de nouveau efface le choix local
+  // (_evalPrefsSave). Avant : le tri des Paramètres était réimposé à chaque ouverture, et
+  // le défaut « Entrée » n'avait plus d'effet dès qu'on avait touché au tableur (audit § 1.9).
+  let storedSort = null;
+  try { storedSort = localStorage.getItem('planClasse_evalTableurSort'); } catch (e) {}
   sortSel.value = S.evalPrefs?.defaultSort || 'nom-prenom';
+  if (storedSort && [...sortSel.options].some(o => o.value === storedSort)) sortSel.value = storedSort;
+  sortSel.onchange = () => {
+    try { localStorage.setItem('planClasse_evalTableurSort', sortSel.value); } catch (e) {}
+    _evalTableurRender();
+  };
   // Persistance du comportement de la touche Entrée
   const enterSel = document.getElementById('meval-tableur-enter');
   if (enterSel) {
@@ -51809,14 +51899,11 @@ function _evalCommentsRemove(idx) {
 function openAdjustPresets(from) {
   if (from === true) from = 'adjust';
   delete _modalReturnTo['madjlib'];   // pas d'héritage d'une ouverture précédente
+  // La bibliothèque s'ouvre PAR-DESSUS la modale d'origine, sans la fermer : la rouvrir
+  // ensuite la re-rendait depuis S et faisait perdre la saisie en cours (Paramètres non
+  // enregistrés, motif d'ajustement tapé). Audit 2026-10-03, § 1.10.
   if (from === 'adjust' && _evalAdjustCtx) {
-    // Sans ce retour, l'enseignant perdrait la copie qu'il était en train d'ajuster.
-    const ctx = { sid: _evalAdjustCtx.sid, evalId: _evalAdjustCtx.evalId };
-    closeMod2('meval-adjust');
-    _modalReturnTo['madjlib'] = () => _evalAdjustOpen(ctx.sid, ctx.evalId);
-  } else if (from === 'prefs') {
-    closeMod2('mevalprefs');
-    _modalReturnTo['madjlib'] = () => openEvalPrefs();
+    _modalReturnTo['madjlib'] = () => _evalAdjustRender();   // la liste de motifs a pu changer
   }
   _adjLibRender();
   openMod('madjlib');
@@ -51925,13 +52012,9 @@ function _adjLibReset() {
 // était en train d'annoter pour aller chercher un texte, et on ne la retrouvait plus.
 function openCommentLibrary(from) {
   delete _modalReturnTo['mcomlib'];
+  // Par-dessus la modale d'origine, sans la fermer (cf. openAdjustPresets).
   if (from === 'comments' && _commentsCtx && _commentsCtx.mnId) {
-    const ctx = { mnId: _commentsCtx.mnId, sid: _commentsCtx.sid, evalId: _commentsCtx.evalId };
-    closeMod2('meval-comments');
-    _modalReturnTo['mcomlib'] = () => _evalCommentsOpen(ctx.mnId, ctx.sid, ctx.evalId);
-  } else if (from === 'prefs') {
-    closeMod2('mevalprefs');
-    _modalReturnTo['mcomlib'] = () => openEvalPrefs();
+    _modalReturnTo['mcomlib'] = () => _evalCommentsRender();
   }
   _comLibRender();
   openMod('mcomlib');

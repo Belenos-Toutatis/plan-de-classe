@@ -323,6 +323,12 @@ Trois façons de présenter l'aide selon l'onglet :
 > - pied de « Mélanger tout » corrigé, et règles de mélange écrites après `pushUndo` (annulables) ;
 > - textes du § 6.3 corrigés (Informations, menus déroulants des tablettes, aides de Config Salle et des Réglages, anciens noms d'onglet, « moyenne de la période », « une ou plusieurs compétences », infobulle de la touche Entrée, « clic » sur le code d'une évaluation).
 >
+> **Lot B — fait en v2.68.2 :**
+> - Réglages d'une évaluation en brouillon : copie à l'ouverture, confirmation à la fermeture d'une modale modifiée, abandon complet (classes et dates comprises) (§ 1.6) ;
+> - tri des élèves et touche Entrée : le tableur retient le choix, les Paramètres donnent la valeur de départ et la réappliquent quand on les change (§ 1.9) ;
+> - bibliothèques de commentaires et de motifs ouvertes par-dessus, sans perte de saisie (§ 1.10) ;
+> - Réglages : sections « 🖨 Impression » et « 🧭 Autres réglages, rangés là où ils servent », phrase d'en-tête corrigée (§ 3.2).
+>
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
 | Lot | Contenu | Risque | Taille |
