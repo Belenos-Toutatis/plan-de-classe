@@ -2511,3 +2511,25 @@ test('Remise à zéro des compteurs : les rappels traités restent dans l\'histo
   ev(`S.eleves.z1.history = null; _clearIncidents(S.eleves.z1);`);
   assert.equal(ev('JSON.stringify(S.eleves.z1.history)'), '[]', 'historique absent : tableau vide, pas d\'erreur');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Niveau de classe réglable (v2.70.0, audit 2026-10-03 § 2.3)
+// ─────────────────────────────────────────────────────────────────────────────
+test('niveau de classe : cls.niveau prime sur le nom, valeur inconnue purgée au chargement', () => {
+  setState({
+    cur: 'c1',
+    classes: {
+      c1: { id: 'c1', nom: 'Sixième A', eleves: [], activeRoom: 'r1', rooms: { r1: { seating: {} } } },
+      c2: { id: 'c2', nom: 'Bilingue', eleves: [], activeRoom: 'r1', rooms: { r1: { seating: {} } }, niveau: 60 },
+      c3: { id: 'c3', nom: '5B', eleves: [], activeRoom: 'r1', rooms: { r1: { seating: {} } }, niveau: 42 },
+    },
+    eleves: {}, salles: { r1: { nom: 'S', rows: 2, cols: 2, positions_vides: [] } },
+    evaluations: {}, attendance: {}, snapshots: {}, movedHighlights: {},
+  });
+  ev('postLoadHook()');
+  assert.equal(get('clsLevel(S.classes.c1)'), 999, 'nom non reconnu, pas de réglage → Autre');
+  assert.equal(get('clsLevel(S.classes.c2)'), 60, 'le réglage prime sur le nom');
+  assert.equal(get("'niveau' in S.classes.c3"), false, 'niveau inconnu supprimé');
+  assert.equal(get('clsLevel(S.classes.c3)'), 70, 'puis déduit du nom');
+  assert.equal(get('clsLevel(null)'), 999);
+});

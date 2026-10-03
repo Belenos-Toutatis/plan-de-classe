@@ -357,6 +357,10 @@ Onglets sortis de la navigation principale (accessibles via bouton) :
 
 **Désactivation visuelle des chips G1/G2** (`_updateGroupChipsState()`) : si la classe courante n'a aucun élève dans le groupe G1 (resp. G2), le chip correspondant reçoit la classe `.disabled` (opacity .35 + cursor:not-allowed + tooltip explicatif). Empêche le piège « grille entièrement fantôme » qui survenait quand le filtre persisté G1 atterrissait sur une classe sans élève en G1 (toutes les cellules `.ghost`, click handlers non attachés, mode appel inopérant). Appelée au début de `renderTeacherGrid()` et `renderStudentView()`. Le clic sur un chip désactivé est ignoré dans `setGroupFilter()` (early return) et dans le raccourci clavier `1`/`2`.
 
+## Bandeau de contexte des onglets (v2.70.0)
+
+`<span class="tab-ctx" id="tabctx-<onglet>">` à côté du titre d'Élèves, Devoirs, Bilan des notes et Bilan des compétences : « **6e A** · Semestre 1 · 🎓 Physique-chimie » (classe seule pour Élèves). Rempli par `_renderTabCtx(key)`, appelé par des **enveloppes** posées sur `renderStudents` / `renderEvalNotes` / `renderBilanTab` / `renderCompetencesTab` **juste avant `init()`** (pour couvrir le premier rendu). La période est lue dans le sélecteur de l'onglet, la discipline par `_currentDiscipline` — affichée même quand son sélecteur est masqué, puisque remarques et éléments travaillés sont rangés par discipline. Tableur : titre en pleine largeur (la barre d'outils passe à la ligne, elle le tronquait à « Déma… ») et ligne `#meval-tableur-ctx` (« classe · période · date de la classe · discipline ») posée par `_evalTableurRenderCtx` à chaque rendu, donc à chaque changement de classe.
+
 ## Réglages (`msettings`) — ce qu'ils contiennent
 
 Sections : 🧩 Fonctionnalités · 📊 Évaluations · 🎓 Conseil de classe · 🎓 Disciplines · 🧩 Compétences · 🏷 Tags · 🔔 Rappels · 💾 Sauvegarde · 🔗 Liens · 🎨 Apparence · **🖨 Impression** (couleurs / N&B, réglage global — aussi dans 🖨 Imprimer du Plan, le libellé `.pc-tog-lbl` est rafraîchi partout par `updatePrintColorsUI`) · **🧭 Autres réglages, rangés là où ils servent** (liens : Salles et horaires → Config Salle, Classes mobiles → Tablettes, ⏲ Minuteur, 🎙 Sonomètre, 📷 Photos) · ℹ À propos. Les deux sections en gras datent de v2.68.2 (audit 2026-10-03, § 3.2) : la phrase d'en-tête promettait « tous les réglages en un seul endroit » alors qu'il en manquait une dizaine. `_settingsOpenChild` **enchaîne** l'action de fermeture propre à la modale fille (minuteur, sonomètre : couper le son d'essai) avec le retour aux Réglages, au lieu de la perdre.
@@ -1582,6 +1586,16 @@ Le zoom du Plan Prof et de la Vue Élève est **persisté** (`localStorage.planC
 - **Bouton 📊 Export positions** : ouvre l'onglet caché `tab-notes` (tableau triable Position · Groupe · Nom · Prénom + export CSV). Bouton ↩ Retour Élèves dans le header de l'onglet ramène ici.
 - **Bouton 🖨 Imprimer la liste** : impression portrait (Élève · Groupe · 📦 · 📝)
 
+## Config Salle — portée des modes (v2.70.0)
+
+Les modes sont présentés en **deux groupes** : « Salle (toutes classes) : Tables, Îlots » et « Classe **<nom>** dans cette salle : Groupes, Tags, Contraintes, AESH » (`_CFG_CLASS_MODES`, nom posé par `_renderCfgClsName`). **La salle affichée suit la classe** : `renderConfigGrid` l'aligne sur `cls.activeRoom` quand la classe diffère de `_cfgSyncedCls` (remis à `null` par `showTab('config')`) — donc à l'entrée dans l'onglet et au changement de classe, mais un choix fait dans l'onglet survit aux re-rendus. Un mode « classe » sur une salle que la classe n'a pas affiche **« ➕ Rattacher cette salle à <classe> »** (`_cfgAttachToCurrent`, annulable) au lieu de l'ancien « Activez-la depuis Plan Prof », impossible à suivre.
+
+## Niveau d'une classe (`cls.niveau`, v2.70.0)
+
+Optionnel : code de `LEVEL_CODES` (10 … 120, 999 = Autre). Absent = déduit du nom (`classLevelOrder`), ce qui laissait « Sixième A », « Bilingue 6e », « ULIS » en « Autre ». ⚠️ **Toute lecture de niveau passe par `clsLevel(cls)`**, jamais `classLevelOrder(cls.nom)` : couleur et tri des cartes, sélecteur de classes du jeu de mémorisation et ses propositions, filtre par niveau de la classe recomposée, Comparer classes. Réglé par `<select>` (`_levelSelectHTML`, 1re option « Auto — d'après le nom (6e) ») à la création (`#nc-niveau`) et dans Modifier la classe (`#ec-niveau`). Valeur inconnue supprimée au chargement. Pas encore pour les classes recomposées.
+
+**Salles dans Modifier la classe** (`#ec-salle-checks`, `_ecRenderSalleChecks`) : une case par salle du catalogue, appliquées à « Sauvegarder » (pas tout de suite : la modale est un formulaire), au moins une gardée, **une seule confirmation** regroupant disciplines retirées et salles retirées dont le plan serait perdu. La carte de classe liste ses salles (📍, gras = salle affichée quand il y en a plusieurs).
+
 ## Config Salle — « Classes utilisant cette salle »
 
 Sous la barre de la salle (nom, dimensions), un bloc `#cfg-salle-classes` (`_renderCfgSalleClasses`, appelé par `renderConfigGrid`) affiche **une case par classe**, cochée si la classe a cette salle dans ses `rooms`. C'est le réglage global « quelle classe a quelle salle », placé **là où on nomme la salle** : après un import qui a créé plusieurs classes, on coche celles qui partagent la salle physique sans passer classe par classe par la modale `madds` du Plan Prof (qui ne connaît que la classe courante).
@@ -2121,9 +2135,13 @@ Choix persistés dans `_qcmcamState.userPicks = { [rawCsvName]: sid | '__skip__'
 
 **Date appliquée per-classe** (corrige un bug où la date ne « prenait » pas) : le modèle de dates est per-classe (`_mnDateFor(mn, classId)` lit `mn.dates[classId]` **en priorité**, puis `mn.date`). L'import écrit donc `mn.dates[_clsActive.id] = dateDétectée` et recale `mn.date` globale = max des dates per-classe (cascade fallback). L'aperçu (« remplace … » / « déjà appliquée ») lit aussi `_mnDateFor(mn, cls.id)` — sinon écrire la date globale était sans effet visible quand une date per-classe existait déjà.
 
+### Date de rattrapage (Types C et D, v2.70.0)
+
+`ev.notes[sid].dateIndiv` — date individuelle d'un élève qui a composé plus tard. **Affichage seul** : aucun calcul ne la lit. Colonne « 📅 Rattrapage » en fin de tableur C **et D** (cellule commune `_rattrapCellHTML`, calendrier maison `_evalRattrapOpen`, borné à l'écran). Pas en A ni en B : plusieurs dates par évaluation (une par mini-note ou passation), une date individuelle n'y aurait pas de sens unique. En Type D, **pas de dispense** par question : le code NN sort déjà la cellule du barème et des niveaux (arbitrage de l'utilisateur).
+
 ### Dispense d'une question (Types A et C, v2.69.0)
 
-`ev.notes[sid].excluded = [mnId…]` : la question sort du barème de l'élève (déjà appliqué par les calculs). ⚠️ **Ne se réglait plus nulle part** depuis le retrait de la fiche de saisie `meval-saisie` (code mort : `_evalOpenSaisie`, `_evalSaisieToggleExcluded`) — audit 2026-10-03 § 1.4. Désormais : **clic droit sur la cellule** → la modale des commentaires porte une case **« 🚫 Dispensé·e de cette question »** (`_evalCommentsToggleDisp`, seulement A/C et clé simple) ; la cellule dispensée est rendue **hachurée « disp. »** (`td.meval-cell-disp`, sans champ, comptée par `_tableurBlockAt` comme les cases repliées), clic droit pour retirer. Types B et D : sans objet (pas de modèle de dispense par question). La date de rattrapage reste limitée au Type C.
+`ev.notes[sid].excluded = [mnId…]` : la question sort du barème de l'élève (déjà appliqué par les calculs). ⚠️ **Ne se réglait plus nulle part** depuis le retrait de la fiche de saisie `meval-saisie` (code mort : `_evalOpenSaisie`, `_evalSaisieToggleExcluded`) — audit 2026-10-03 § 1.4. Désormais : **clic droit sur la cellule** → la modale des commentaires porte une case **« 🚫 Dispensé·e de cette question »** (`_evalCommentsToggleDisp`, seulement A/C et clé simple) ; la cellule dispensée est rendue **hachurée « disp. »** (`td.meval-cell-disp`, sans champ, comptée par `_tableurBlockAt` comme les cases repliées), clic droit pour retirer. Types B et D : sans objet (pas de modèle de dispense par question). La date de rattrapage existe en Types C et D (cf. ci-dessus).
 
 ### Ajustement de la note finale (sanction / bonification, tous types)
 

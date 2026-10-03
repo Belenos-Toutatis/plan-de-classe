@@ -148,6 +148,11 @@ td.meval-cell-disp{text-align:center;font-family:var(--font-mono);font-size:.78e
 .spec-ppre{background:#f39c12;color:#fff}
 .spec-pap{background:#3f51b5;color:#fff}
 .spec-gev{background:#23689a;color:#fff}
+.cfg-mode-lbl{font-size:.82em;color:var(--ink-blue-soft)}
+.cfg-mode-lbl strong{color:var(--ink-blue)}
+.tab-ctx{font-size:.86em;color:var(--pencil);white-space:nowrap}
+.tab-ctx:empty{display:none}
+.tab-ctx b{color:var(--ink-blue);font-family:var(--font-serif)}
 .rattrap-btn.rattrap-set{font-weight:700;border-color:var(--ink-blue)}
 #eval-rattrap-pop .rattrap-day:hover{background:var(--paper-deep)}
 .spec-pai{background:#ec4899;color:#fff}
@@ -2999,6 +3004,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="sh">
       <h2>👥 Élèves</h2>
+      <span class="tab-ctx" id="tabctx-eleves"></span>
       <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
       <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
       <button class="btn btn-g btn-sm" onclick="openTrombiImport()" title="Importer les photos des élèves depuis le trombinoscope PDF exporté de MBN — elles s'affichent dans la fiche et au survol des noms">📷 Photos</button>
@@ -3179,22 +3185,24 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <!-- ── TAB: Config Salle ── -->
   <div id="tab-config" class="tab">
     <div class="sh">
-      <h2>⚙️ Salles</h2>
-      <span style="font-size:.85em;color:var(--pencil)">Catalogue partagé entre toutes les classes</span>
+      <h2>⚙️ Config Salle</h2>
+      <span style="font-size:.85em;color:var(--pencil)">Salles partagées entre les classes — la disposition vaut pour toutes ; groupes, tags, contraintes et AESH sont propres à chaque classe</span>
     </div>
     <!-- Liste des salles -->
     <div id="cfg-salle-list" class="tb" style="margin-bottom:8px"></div>
     <!-- Mode + dimensions + suppression -->
     <div class="tb">
-      <span style="display:flex;gap:6px;align-items:center">
+      <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="cfg-mode-lbl" title="La disposition vaut pour toutes les classes qui utilisent cette salle">Salle (toutes classes) :</span>
         <span class="gchip gc-all on" id="cfg-mode-tables" onclick="setCfgMode('tables',this)" data-tip="Bascule table / sans-table (allée). Clic sur une cellule pour activer ou désactiver.">Tables</span>
         <span class="gchip gc-i"      id="cfg-mode-ilots" onclick="setCfgMode('ilots',this)" data-tip="Regroupe des tables en îlots (ensembles physiques). Sélectionne des cases puis '+ Nouvel îlot' ou '✓ Affecter à…'.">Îlots</span>
+        <span class="cfg-mode-lbl" style="margin-left:10px;padding-left:10px;border-left:1px solid var(--rule-line)" title="Ces réglages sont propres à la classe choisie dans le bandeau">Classe <strong id="cfg-cls-name"></strong> dans cette salle :</span>
         <span class="gchip gc-1"      id="cfg-mode-groupes" onclick="setCfgMode('groupes',this)" data-tip="Affecte des places aux zones G1, G2 ou G3. Sélectionne plusieurs cases puis clic sur G1 / G2 / G3. — Utile uniquement si tes élèves gardent LES MÊMES POSITIONS en classe entière et en demi-groupe (ou tiers-groupe) : la zone G1 indique quelles places sont occupées quand seul le groupe 1 est là. Si tes demi-groupes mélangent des élèves de plusieurs classes ou ont des places totalement différentes, crée plutôt une classe recomposée à part (onglet Classes → Nouvelle classe) avec son propre plan.">Groupes G1/G2/G3</span>
         <span class="gchip gc-3"      id="cfg-mode-tags"     onclick="setCfgMode('tags',this)" data-tip="Affecte un tag (DF, DNL…) à des places. Sélectionne plusieurs cases puis clic sur un bouton de tag.">Tags</span>
         <span class="gchip gc-2"      id="cfg-mode-contraintes" onclick="setCfgMode('contraintes',this)" data-tip="Règles de placement : paires d'élèves à séparer + places autorisées par élève.">Contraintes</span>
         <span class="gchip"           id="cfg-mode-aesh" style="background:#fde2f3;color:#880e4f;border:1px solid #c2185b" onclick="setCfgMode('aesh',this)" data-tip="Place une ou plusieurs AESH dans cette salle pour cette classe, et indique quels élèves elles accompagnent.">🧑‍🏫 AESH</span>
       </span>
-      <button class="btn btn-s btn-sm" id="cfg-auto-grp" style="display:none" onclick="autoGroupConfig()">⚡ Auto G1/G2 (no-tables)</button>
+      <button class="btn btn-s btn-sm" id="cfg-auto-grp" style="display:none" onclick="autoGroupConfig()" title="Répartit les places entre G1 et G2 d'après les allées (cases sans table)">⚡ Répartir G1/G2 selon les allées</button>
       <span style="display:flex;gap:8px;align-items:center;font-size:.87em">
         <label>Nom <input id="cfg-salle" type="text" placeholder="ex : A101" style="width:120px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em" onchange="renameSelectedSalle()"></label>
         <label>Rangées <input id="cfg-rows" type="number" min="1" max="15" value="4" style="width:68px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em;text-align:center" onchange="setCfgDimensions()"></label>
@@ -3505,6 +3513,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div id="tab-notes" class="tab">
     <div class="sh">
       <h2>📊 Devoirs</h2>
+      <span class="tab-ctx" id="tabctx-notes"></span>
       <button class="btn btn-p" onclick="openNewEvalModal()" title="Créer une nouvelle évaluation (choix d'une ou plusieurs classes)">+ Nouvelle évaluation</button>
       <span id="eval-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em;margin-left:24px;flex-wrap:wrap"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
@@ -3530,6 +3539,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div id="tab-bilan" class="tab">
     <div class="sh">
       <h2>📜 Bilan des notes</h2>
+      <span class="tab-ctx" id="tabctx-bilan"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <span id="bilan-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em"></span>
         <button class="btn btn-g btn-sm" id="evhelp-btn-bilan" onclick="_evhelpToggle('bilan')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
@@ -3552,6 +3562,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div id="tab-comp" class="tab">
     <div class="sh">
       <h2>🎯 Bilan des compétences</h2>
+      <span class="tab-ctx" id="tabctx-comp"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <button class="btn btn-g btn-sm" onclick="_bilanCompCopy()" title="Copier le tableau au format TSV (collable dans Excel/LibreOffice/ENT)">📋 Copier</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompCsv()" title="Télécharger un fichier CSV">💾 CSV</button>
@@ -3629,6 +3640,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Identifiant (ex : 3A)</label><input id="nc-id" placeholder="3A" maxlength="10" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
     <div class="fg"><label>Nom complet</label><input id="nc-nom" placeholder="3ème A" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
     <div class="fg"><label>Année scolaire</label><input id="nc-yr" type="number" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
+    <div class="fg"><label>Niveau <span style="font-size:.78em;color:var(--pencil)">(couleur de la carte, tri, récap photocopies)</span></label><select id="nc-niveau"></select></div>
     <div class="fg"><label>Professeur·e principal·e <span style="font-size:.78em;color:var(--pencil)">(optionnel — affiché sur la carte de la classe et dans le bandeau)</span></label><input id="nc-pp" placeholder="Mme Dupont" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
     <div class="fg" id="nc-copy-row">
       <label>Salle initiale</label>
@@ -5823,9 +5835,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- ── MODAL Saisie mode tableur (élèves × mini-notes) ── -->
 <div id="meval-tableur" class="mo" onclick="closeMod(this,event)">
   <div class="mb" id="meval-tableur-mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:10px;overflow-x:auto">
-      <h2 id="meval-tableur-title" style="margin:0;font-size:1.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1">📊 Saisie</h2>
-      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px 8px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="min-width:260px;flex:1 1 260px"><h2 id="meval-tableur-title" style="margin:0;font-size:1.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">📊 Saisie</h2><div id="meval-tableur-ctx" class="tab-ctx" style="display:block;overflow:hidden;text-overflow:ellipsis;font-size:.8em"></div></div>
+      <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-g btn-sm" id="meval-tableur-fullscreen-btn" onclick="_tableurToggleFullscreen()" title="Plein écran / réduit" aria-label="Plein écran ou réduit" style="padding:4px 6px">⛶</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-addmn-btn" onclick="_tableurAddMn()" title="Ajouter une mini-note (Type A) ou une question (Type C)" aria-label="Ajouter une mini-note ou question" style="display:none;padding:4px 6px">+ Q</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-addexo-btn" onclick="_tableurAddExo()" title="Ajouter un exercice (Type C)" aria-label="Ajouter un exercice" style="display:none;padding:4px 6px">+ Exo</button>
@@ -6748,6 +6760,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Identifiant</label><input id="ec-id-disp" disabled style="background:#f0f0f0;color:#888"></div>
     <div class="fg"><label>Nom complet</label><input id="ec-nom"></div>
     <div class="fg"><label>Année scolaire</label><input id="ec-yr" type="number"></div>
+    <div class="fg"><label>Niveau <span style="font-size:.78em;color:var(--pencil)">(couleur de la carte, tri, récap photocopies, propositions du jeu de mémorisation)</span></label><select id="ec-niveau"></select></div>
     <div class="fg"><label>Professeur·e principal·e <span style="font-size:.78em;color:var(--pencil)">(optionnel — affiché sur la carte de la classe et dans le bandeau)</span></label><input id="ec-pp" placeholder="Mme Dupont" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();saveClassEdit()}"></div>
     <div class="about-section" style="margin-top:14px">
       <h3>🎓 Disciplines enseignées</h3>
@@ -6756,6 +6769,13 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         peut être rattaché à une discipline spécifique.
       </p>
       <div id="ec-disc-checks"></div>
+    </div>
+    <div class="about-section" style="margin-top:14px">
+      <h3>🏫 Salles</h3>
+      <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">
+        Salles où cette classe a cours. Chacune a son propre plan. La disposition des tables se règle dans <em>Config Salle</em>.
+      </p>
+      <div id="ec-salle-checks" style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.9em"></div>
     </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mce')">Annuler</button>
@@ -7047,11 +7067,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.69.0';
+const APP_VERSION    = '2.70.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T16:00:37Z';
+const APP_BUILD_DATE = '2026-10-03T16:18:56Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7911,6 +7931,7 @@ function postLoadHook() {
     if (!Array.isArray(cls.noNeighbors)) cls.noNeighbors = [];
     // 👩‍🏫 Professeur·e principal·e : texte libre ou null (jamais un autre type)
     if (typeof cls.profPrincipal !== 'string' || !cls.profPrincipal.trim()) cls.profPrincipal = null;
+    if (cls.niveau != null && !LEVEL_CODES.includes(cls.niveau)) delete cls.niveau;
     // Anciennement : cls.pairsStrictness (1..4). Désormais une seule règle, on
     // nettoie le champ pour qu'il ne traîne pas dans le JSON.
     if ('pairsStrictness' in cls) delete cls.pairsStrictness;
@@ -9411,6 +9432,10 @@ function getPlacementViolations(cls, sid, key) {
 
 let cfgMode = 'tables'; // 'tables' | 'groupes' | 'tags'
 let cfgSelectedSalle = null; // id de la salle affichée dans Config Salle
+// Classe pour laquelle la salle affichée a été alignée sur sa salle active. Remis à null
+// à l'entrée dans l'onglet : la salle suit la classe à l'entrée et au changement de classe,
+// mais un choix fait dans l'onglet n'est pas écrasé par un simple re-rendu.
+var _cfgSyncedCls = null;
 
 function selectedSalle() {
   return (cfgSelectedSalle && S.salles) ? S.salles[cfgSelectedSalle] || null : null;
@@ -11946,10 +11971,10 @@ function _mvcHasFilter(F = _mvcFilters) {
 // Niveaux présents dans les classes réelles (ordre croissant).
 function _mvcAvailableLevels() {
   const lvls = new Set();
-  for (const cls of realClasses()) lvls.add(classLevelOrder(cls.nom));
+  for (const cls of realClasses()) lvls.add(clsLevel(cls));
   return [...lvls].sort((a,b) => a-b);
 }
-function _mvcClassesOfLevel(n) { return realClasses().filter(c => classLevelOrder(c.nom) === n); }
+function _mvcClassesOfLevel(n) { return realClasses().filter(c => clsLevel(c) === n); }
 // Univers : tous les élèves des classes réelles (un sid une seule fois).
 function _mvcUniverse() {
   const src = new Set();
@@ -14590,6 +14615,7 @@ function showTab(name, btn) {
   if (tab) tab.classList.add('on');
   if (btn) btn.classList.add('on');
   localStorage.setItem('planClasse_tab', name);
+  if (name === 'config') _cfgSyncedCls = null;
   renderTab(name);
   _confRenderBanner();
 }
@@ -14684,6 +14710,7 @@ function renderTab(name) {
 function openMod(id) {
   // Peupler le select de salle initiale pour Nouvelle Classe
   if (id === 'mc') {
+    { const ns = document.getElementById('nc-niveau'); if (ns) ns.innerHTML = _levelSelectHTML(null, ''); }
     const sel = document.getElementById('nc-copy');
     let html = '<option value="">— Nouvelle salle —</option>';
     const salleEntries = Object.entries(S.salles || {});
@@ -14945,6 +14972,7 @@ function createClass() {
 
   const profPrincipal = document.getElementById('nc-pp')?.value.trim() || null;
   S.classes[id] = { id, nom, année: yr, profPrincipal, eleves: [], rooms, activeRoom };
+  { const nv = _readLevelSelect('nc-niveau'); if (nv != null) S.classes[id].niveau = nv; }
   setupClassAccessors(S.classes[id]);
 
   document.getElementById('nc-id').value = '';
@@ -15188,6 +15216,27 @@ function classLevelOrder(nom) {
   return 999;
 }
 
+// Niveau d'une classe : celui choisi dans « Modifier la classe » (cls.niveau), sinon déduit
+// du nom. Le nom seul ne suffit pas : « Sixième A », « Bilingue 6e » ou « ULIS » tombaient
+// en « Autre » (audit 2026-10-03, § 2.3). Toute lecture de niveau passe par ici.
+var LEVEL_CODES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 999];
+function clsLevel(cls) {
+  if (!cls) return 999;
+  if (LEVEL_CODES.includes(cls.niveau)) return cls.niveau;
+  return classLevelOrder(cls.nom || '');
+}
+// Options du <select> « Niveau » : 1re option = déduction automatique depuis le nom.
+function _levelSelectHTML(cur, nom) {
+  const auto = classLevelOrder(nom || '');
+  let h = `<option value="">Auto — d'après le nom (${_levelLabel(auto)})</option>`;
+  for (const c of LEVEL_CODES) h += `<option value="${c}"${cur === c ? ' selected' : ''}>${_levelLabel(c)}</option>`;
+  return h;
+}
+function _readLevelSelect(id) {
+  const v = parseInt(document.getElementById(id)?.value, 10);
+  return LEVEL_CODES.includes(v) ? v : null;
+}
+
 // Libellé court d'un niveau (pour le récap photocopies)
 function _levelLabel(order) {
   return ({
@@ -15235,7 +15284,7 @@ function _classCounts(cls) {
 
 function sortedClasses() {
   return Object.values(S.classes).sort((a, b) => {
-    const lo = classLevelOrder(a.nom) - classLevelOrder(b.nom);
+    const lo = clsLevel(a) - clsLevel(b);
     return lo !== 0 ? lo : a.nom.localeCompare(b.nom, 'fr');
   });
 }
@@ -15256,7 +15305,7 @@ function renderClasses() {
   let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0, totDocStd = 0;
 
   const cards = arr.map(cls => {
-    const order = classLevelOrder(cls.nom);
+    const order = clsLevel(cls);
     const secIdx = levelCount[order] ?? 0;
     levelCount[order] = secIdx + 1;
     const bg = levelBgColor(order, secIdx);
@@ -15301,12 +15350,14 @@ function renderClasses() {
       : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
     const _ppLine  = cls.profPrincipal ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.9" title="Professeur·e principal·e">👩‍🏫 PP : ${_escName(cls.profPrincipal)}</div>` : '';
     const _dlgLine = _classDeleguesLine(cls);
+    const _salleIds = Object.keys(cls.rooms || {}).filter(sid => S.salles?.[sid]);
+    const _salleLine = _salleIds.length ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.9" title="Salles de la classe (gras = salle affichée) — se changent dans Éditer">📍 ${_salleIds.map(sid => sid === cls.activeRoom && _salleIds.length > 1 ? `<strong>${_esc(S.salles[sid].nom)}</strong>` : _esc(S.salles[sid].nom)).join(' · ')}</div>` : '';
     return `
       <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg};border-left:6px solid ${levelAccentColor(order)};--cc-fg:${_contrastTextColor(bg)};color:${_contrastTextColor(bg)}" onclick="switchClass('${cls.id}');renderClasses()">
         <div class="cc-info">
           <div class="cc-name">${_escAttr(cls.nom)}</div>
           <div class="cc-meta">${cls.année}–${cls.année+1} &nbsp;·&nbsp; ${detail}</div>
-          ${_discLine}${_ppLine}${_dlgLine}
+          ${_salleLine}${_discLine}${_ppLine}${_dlgLine}
         </div>
         <div style="display:flex;gap:4px">
           <button class="btn btn-s btn-sm" onclick="event.stopPropagation();editClass('${cls.id}')">Éditer</button>
@@ -15469,8 +15520,26 @@ function editClass(id) {
   document.getElementById('ec-nom').value = cls.nom;
   document.getElementById('ec-yr').value  = cls.année;
   document.getElementById('ec-pp').value  = cls.profPrincipal || '';
+  document.getElementById('ec-niveau').innerHTML = _levelSelectHTML(LEVEL_CODES.includes(cls.niveau) ? cls.niveau : null, cls.nom);
+  _ecRenderSalleChecks(cls);
   _ecRenderDisciplineChecks(cls);
   document.getElementById('mce').classList.add('on');
+}
+
+// Cases « Salles » de Modifier la classe. Appliquées à « Sauvegarder », pas tout de suite :
+// la modale est un formulaire, « Annuler » ne doit rien laisser derrière lui.
+function _ecRenderSalleChecks(cls) {
+  const wrap = document.getElementById('ec-salle-checks');
+  if (!wrap) return;
+  const entries = Object.entries(S.salles || {}).sort((a, b) => String(a[1].nom).localeCompare(String(b[1].nom), 'fr', { numeric: true }));
+  if (!entries.length) { wrap.innerHTML = '<span style="color:var(--pencil);font-style:italic">Aucune salle au catalogue.</span>'; return; }
+  wrap.innerHTML = entries.map(([sid, sa]) => {
+    const on = !!cls.rooms?.[sid];
+    const placed = on ? Object.keys(cls.rooms[sid].seating || {}).length : 0;
+    const act = cls.activeRoom === sid ? ' <span style="color:var(--pencil);font-size:.85em">(affichée)</span>' : '';
+    const tip = on ? (placed ? `${placed} élève(s) placé(s) dans cette salle — décocher efface ce plan` : 'Aucun élève placé') : 'Ajouter cette salle à la classe';
+    return `<label style="display:inline-flex;gap:5px;align-items:center;cursor:pointer" title="${_escAttr(tip)}"><input type="checkbox" class="ec-salle-cb" data-salle-id="${_escAttr(sid)}"${on ? ' checked' : ''}>${_esc(sa.nom)}${act}</label>`;
+  }).join('');
 }
 
 // Rend les checkboxes "Disciplines enseignées" pour la modale Modifier classe.
@@ -15513,6 +15582,13 @@ function saveClassEdit() {
   const nom = document.getElementById('ec-nom').value.trim();
   const yr  = parseInt(document.getElementById('ec-yr').value) || cls.année;
   const pp  = document.getElementById('ec-pp').value.trim() || null;   // lu ici : _commit peut tourner après une confirmation
+  const niveau = _readLevelSelect('ec-niveau');
+  const salleCbs = Array.from(document.querySelectorAll('#ec-salle-checks input.ec-salle-cb'));
+  const wantSalles = salleCbs.filter(cb => cb.checked).map(cb => cb.getAttribute('data-salle-id')).filter(sid => S.salles?.[sid]);
+  if (salleCbs.length && !wantSalles.length) return toast('⚠️ Une classe doit garder au moins une salle.', 'warn');
+  const salleAdd = wantSalles.filter(sid => !cls.rooms?.[sid]);
+  const salleDel = salleCbs.length ? Object.keys(cls.rooms || {}).filter(sid => !wantSalles.includes(sid)) : [];
+  const salleDelPlaced = salleDel.map(sid => ({ sid, n: Object.keys(cls.rooms[sid]?.seating || {}).length })).filter(x => x.n > 0);
   if (!nom) { toast('⚠️ Le nom ne peut pas être vide.', 'warn'); document.getElementById('ec-nom')?.focus(); return; }
   // Lit les disciplines cochées
   const allDiscs = Object.values(S.disciplines || {});
@@ -15538,6 +15614,9 @@ function saveClassEdit() {
   cls.année = yr;
   cls.profPrincipal = pp;
   cls.disciplineIds = checkedIds;
+  if (niveau != null) cls.niveau = niveau; else delete cls.niveau;
+  for (const sid of salleAdd) _attachSalleToClass(cls, sid, false);
+  for (const sid of salleDel) _detachSalleFromClass(cls, sid);
   // Si la discipline actuellement affichée pour cette classe a été retirée, reset
   try {
     const raw = localStorage.getItem('planClasse_currentDiscipline');
@@ -15556,13 +15635,24 @@ function saveClassEdit() {
   // Refresh des toolbars et sélecteurs dans les onglets eval ouverts
   try { _refreshSubgroupSelectors(); } catch (_) {}
   if (S.cur === id) _refreshHdrClassInfo(cls);
+  if (salleAdd.length || salleDel.length) {
+    if (typeof renderTab === 'function') renderTab(localStorage.getItem('planClasse_tab') || 'classes');
+  }
   toast('Classe mise à jour.');
   };
-  if (removedWithEvals.length) {
-    const lines = removedWithEvals.map(r => `• « ${_disciplineLabel(r.oldId)} » (${r.nbEvs} évaluation(s))`).join('\n');
+  if (removedWithEvals.length || salleDelPlaced.length) {
+    const parts = [];
+    if (removedWithEvals.length) {
+      const lines = removedWithEvals.map(r => `• « ${_disciplineLabel(r.oldId)} » (${r.nbEvs} évaluation(s))`).join('\n');
+      parts.push(`Disciplines retirées :\n${lines}\nLes évaluations rattachées seront invisibles tant que la discipline ne sera pas réactivée. Aucune donnée n'est perdue.`);
+    }
+    if (salleDelPlaced.length) {
+      const lines = salleDelPlaced.map(x => `• « ${S.salles[x.sid]?.nom} » : ${x.n} élève(s) placé(s)`).join('\n');
+      parts.push(`Salles retirées :\n${lines}\nLe plan de la classe dans ces salles sera perdu (annulable par Ctrl+Z).`);
+    }
     _uiConfirm({
-      title: '🎓 Retirer des disciplines', okLabel: 'Retirer quand même', okClass: 'btn-w',
-      message: `Vous retirez de cette classe :\n${lines}\n\nLes évaluations rattachées seront invisibles tant que la discipline ne sera pas réactivée. Aucune donnée n'est perdue.\n\nContinuer ?`,
+      title: '✏️ Modifier la classe', okLabel: 'Enregistrer quand même', okClass: 'btn-w',
+      message: parts.join('\n\n') + '\n\nContinuer ?',
       onOk: _commit,
     });
     return;
@@ -21483,7 +21573,7 @@ function cfgApplyToSelection(kind, value) {
   const cls = getCls();
   if (!cls) return;
   const room = selectedRoomFor(cls);
-  if (!room) { toast('⚠️ Salle non utilisée par cette classe — activez-la d\'abord depuis Plan Prof.', 'warn'); return; }
+  if (!room) { toast('⚠️ Cette salle n\'est pas une salle de la classe — rattachez-la d\'abord (bouton ➕ Rattacher).', 'warn'); return; }
   if (!_cfgSelected.size) return;
   pushUndo();
   for (const key of _cfgSelected) {
@@ -21524,7 +21614,7 @@ function cfgAeshSetCount(delta) {
   const cls = getCls();
   if (!cls) return;
   const room = selectedRoomFor(cls);
-  if (!room) { toast('⚠️ Salle non utilisée par cette classe — activez-la d\'abord depuis Plan Prof.', 'warn'); return; }
+  if (!room) { toast('⚠️ Cette salle n\'est pas une salle de la classe — rattachez-la d\'abord (bouton ➕ Rattacher).', 'warn'); return; }
   const cur = room.aeshCount || 0;
   const next = Math.max(0, Math.min(6, cur + (delta > 0 ? 1 : -1)));
   if (next === cur) return;
@@ -21639,7 +21729,7 @@ function renderAeshConfigBar() {
   const pickEl = document.getElementById('cfg-aesh-active-pick');
   if (!cls || !room) {
     if (cntEl) cntEl.textContent = '0';
-    if (listEl) listEl.innerHTML = '<span style="color:var(--pencil);font-size:.85em;font-style:italic">Cette salle n\'est pas utilisée par la classe sélectionnée — active-la d\'abord depuis Plan Prof.</span>';
+    if (listEl) listEl.innerHTML = '<span style="color:var(--pencil);font-size:.85em;font-style:italic">Cette salle n\'est pas une salle de cette classe — utilise le bouton « ➕ Rattacher » au-dessus.</span>';
     if (pickEl) pickEl.textContent = '';
     return;
   }
@@ -22804,7 +22894,7 @@ function deleteSelectedSalle() {
   if (!salle) return;
   const users = classesUsingSalle(cfgSelectedSalle);
   if (users.length) {
-    return appAlert('🏫 Salle encore utilisée', `Impossible de supprimer "${salle.nom}" : ${users.length} classe(s) l'utilisent (${users.map(c => c.nom).join(', ')}).\nRetirez-la d'abord depuis Plan Prof.`, 'warn');
+    return appAlert('🏫 Salle encore utilisée', `Impossible de supprimer "${salle.nom}" : ${users.length} classe(s) l'utilisent (${users.map(c => c.nom).join(', ')}).\nDécochez-les d'abord dans « Classes utilisant cette salle », sous la barre.`, 'warn');
   }
   _uiConfirm({
     title: '🗑 Supprimer la salle', okLabel: '🗑 Supprimer', okClass: 'btn-d',
@@ -22821,7 +22911,39 @@ function deleteSelectedSalle() {
   });
 }
 
+// Modes de Config Salle propres à UNE classe (les autres — Tables, Îlots — valent pour
+// toutes les classes qui utilisent la salle). Audit 2026-10-03, § 3.1.
+var _CFG_CLASS_MODES = ['groupes', 'tags', 'contraintes', 'aesh'];
+function _renderCfgClsName(cls) {
+  const el = document.getElementById('cfg-cls-name');
+  if (el) el.textContent = cls ? cls.nom : '(aucune classe)';
+}
+function _cfgNotAttachedHTML(cls, salle) {
+  return `<div style="padding:20px;text-align:center;color:var(--pencil)">
+    <p style="margin:0 0 10px">« ${_esc(salle.nom)} » n'est pas une salle de <strong>${_esc(cls.nom)}</strong> : il n'y a donc ni groupes, ni tags, ni contraintes, ni AESH à y régler pour cette classe.</p>
+    <button class="btn btn-p btn-sm" onclick="_cfgAttachToCurrent()">➕ Rattacher cette salle à ${_esc(cls.nom)}</button>
+  </div>`;
+}
+function _cfgAttachToCurrent() {
+  const cls = getCls();
+  const salle = selectedSalle();
+  if (!cls || !salle) return;
+  pushUndo();
+  if (!_attachSalleToClass(cls, cfgSelectedSalle, false)) return;
+  save();
+  renderConfigGrid();
+  if (cfgMode === 'aesh') renderAeshConfigBar();
+  toast(`➕ « ${salle.nom} » rattachée à ${cls.nom}.`);
+}
+
 function renderConfigGrid() {
+  {
+    const c0 = getCls();
+    if (c0 && c0.id !== _cfgSyncedCls) {
+      _cfgSyncedCls = c0.id;
+      if (c0.activeRoom && S.salles?.[c0.activeRoom]) cfgSelectedSalle = c0.activeRoom;
+    }
+  }
   ensureCfgSelectedSalle();
   renderSalleCatalog();
 
@@ -22850,8 +22972,12 @@ function renderConfigGrid() {
 
   const cls = getCls();
   const room = selectedRoomFor(cls);
-  if ((cfgMode === 'groupes' || cfgMode === 'tags') && !room) {
-    g.innerHTML = `<p style="color:var(--pencil);padding:20px;text-align:center">Cette salle n'est pas utilisée par la classe sélectionnée. Activez-la depuis l'onglet <strong>Plan Prof</strong> pour configurer ses groupes ou tags.</p>`;
+  _renderCfgClsName(cls);
+  if (_CFG_CLASS_MODES.includes(cfgMode) && !room) {
+    g.className = 'gc cgrid';
+    g.style.gridTemplateColumns = '';
+    g.innerHTML = cls ? _cfgNotAttachedHTML(cls, salle)
+      : `<p style="color:var(--pencil);padding:20px;text-align:center">Choisissez une classe dans le bandeau : ce mode règle une classe dans cette salle.</p>`;
     _renderCfgBulkBar();
     return;
   }
@@ -28894,7 +29020,7 @@ function printClassesBilan() {
 
   // Tableau détaillé par classe
   const classesRows = arr.map(cls => {
-    const order = classLevelOrder(cls.nom);
+    const order = clsLevel(cls);
     const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
     if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[] };
@@ -30594,7 +30720,7 @@ function _memoPrefs() {
 }
 function _memoSavePrefs(p) { try { localStorage.setItem(MEMO_PREFS_KEY, JSON.stringify(p)); } catch (e) {} }
 const _memoRealClasses = () => Object.values(S.classes || {}).filter(c => c && !c.virtual)
-  .sort((a, b) => classLevelOrder(a.nom || '') - classLevelOrder(b.nom || '') || String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+  .sort((a, b) => clsLevel(a) - clsLevel(b) || String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
 const _memoActive = cls => (cls?.eleves || []).map(id => S.eleves[id]).filter(s => s && _stuActiveOn(s));
 function _memoPool(p) {
   const ids = p.scope === 'all' ? _memoRealClasses().map(c => c.id)
@@ -30630,14 +30756,14 @@ function _memoChoices(s, answer) {
     }
     return out;
   };
-  const cls = S.classes[s.classe_id], lvl = classLevelOrder(cls?.nom || '');
+  const cls = S.classes[s.classe_id], lvl = clsLevel(cls);
   const civ = s.civilite === 'M' || s.civilite === 'F' ? s.civilite : null;
   const sameCiv = o => !civ || o.civilite === civ;
   const noCiv = o => civ && o.civilite !== 'M' && o.civilite !== 'F';
   const sameAll = _memoActive(cls).filter(o => o.id !== s.id);
   const others = _memoRealClasses().filter(c => c.id !== cls?.id);
-  const sameLvlAll = others.filter(c => classLevelOrder(c.nom || '') === lvl).flatMap(_memoActive);
-  const anyOtherAll = others.filter(c => classLevelOrder(c.nom || '') !== lvl).flatMap(_memoActive);
+  const sameLvlAll = others.filter(c => clsLevel(c) === lvl).flatMap(_memoActive);
+  const anyOtherAll = others.filter(c => clsLevel(c) !== lvl).flatMap(_memoActive);
   const out = [];
   const take = (cands, n) => { const before = out.length; pick(cands, before + n, out); return out.length - before; };
   // 1) même genre : 3 de la classe, 6 du même niveau, puis compléments
@@ -36469,6 +36595,54 @@ window.addEventListener('beforeunload', () => {
   window.addEventListener('scroll', hide, true);
 })();
 
+// ═══════════════ Bandeau de contexte des onglets (audit 2026-10-03, § 4) ═══════════════
+// « 6e A · S1 · Physique-chimie » à côté du titre : la classe ne se lisait que dans le
+// sélecteur du bandeau, et la discipline n'apparaissait nulle part quand son sélecteur
+// est masqué (une seule discipline) — alors que remarques et éléments travaillés sont
+// rangés par discipline.
+var _TAB_CTX_PERIOD = { notes: 'eval-period-filter', bilan: 'bilan-period-filter', comp: 'comp-period-filter' };
+function _periodeLongLabel(code) {
+  if (!code) return "toute l'année";
+  const o = _periodeOptions().find(x => x.code === code);
+  return o ? o.label.replace(/^\S+ — /, '') : code;
+}
+function _renderTabCtx(key) {
+  const el = document.getElementById('tabctx-' + key);
+  if (!el) return;
+  const cls = getCls();
+  if (!cls) { el.innerHTML = ''; return; }
+  const parts = [`<b>${_esc(cls.nom)}</b>`];
+  let title = 'Classe affichée — se change dans le sélecteur du bandeau';
+  const selId = _TAB_CTX_PERIOD[key];
+  if (selId) {
+    const sel = document.getElementById(selId);
+    parts.push(_esc(_periodeLongLabel(sel ? sel.value : '')));
+    const dId = _currentDiscipline(cls.id);
+    if (dId) {
+      parts.push('🎓 ' + _esc(_disciplineLabel(dId)));
+      title += '\nPériode : partagée entre Devoirs et les deux Bilans.\nDiscipline : notes, remarques de bulletin et éléments travaillés sont rangés par discipline.';
+    }
+  }
+  el.innerHTML = parts.join(' · ');
+  el.title = title;
+}
+function _evalTableurRenderCtx(ev, cls) {
+  const el = document.getElementById('meval-tableur-ctx');
+  if (!el) return;
+  const parts = [`<b>${_esc(cls.nom)}</b>`, _esc(_periodeLongLabel(ev.periode))];
+  const d = _evalDateFor(ev, cls.id);
+  if (d) parts.push('📅 ' + _esc(_fmtDateFr(d)));
+  const dId = _evalDisciplineId(ev);
+  if (dId) parts.push('🎓 ' + _esc(_disciplineLabel(dId)));
+  el.innerHTML = parts.join(' · ');
+}
+// Enveloppes posées AVANT init() pour couvrir aussi le premier rendu.
+[['renderStudents', 'eleves'], ['renderEvalNotes', 'notes'], ['renderBilanTab', 'bilan'], ['renderCompetencesTab', 'comp']].forEach(([fn, key]) => {
+  const orig = window[fn];
+  if (typeof orig !== 'function') return;
+  window[fn] = function (...args) { const r = orig.apply(this, args); try { _renderTabCtx(key); } catch (e) {} return r; };
+});
+
 init();
 
 // ═══════════════ HINTS → infobulles (texte du span .tb-hint → attribut title) ═══════════════
@@ -38985,8 +39159,8 @@ function _evalEditRenderClasses(ev) {
   if (!wrap) return;
   // Niveau de référence : niveau de la 1re classe de l'éval (n'importe laquelle)
   const refCls = S.classes?.[_evalClassIds(ev)[0]] || S.classes?.[ev.classId];
-  const refLvl = refCls ? classLevelOrder(refCls.nom) : 999;
-  const sameLevelClasses = Object.values(S.classes || {}).filter(c => classLevelOrder(c.nom) === refLvl);
+  const refLvl = refCls ? clsLevel(refCls) : 999;
+  const sameLevelClasses = Object.values(S.classes || {}).filter(c => clsLevel(c) === refLvl);
   sameLevelClasses.sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'));
   const currentIds = new Set(_evalClassIds(ev));
   let html = '';
@@ -40943,10 +41117,13 @@ function _evalOpenTableur(forcedId) {
     const _refClsCh = S.classes?.[_evalPrimaryAliveClassId(ev)];
     const _chHTML = _evalChannelPillHTML(ev, _refClsCh);
     _tTitle.innerHTML = _esc(_baseTxt) + ' ' + _chHTML;
+    _tTitle.title = (ev.nomLong || ev.nomCourt || '') + ' — saisie tableur';
   }
   // Classe active initiale : classe courante si elle fait partie de l'éval, sinon primaire
   const initCls = (getCls() && _evalIncludesClass(ev, getCls().id)) ? getCls() : S.classes?.[ev.classId];
   if (initCls) document.getElementById('meval-tableur').dataset.classid = initCls.id;
+  if (initCls && getCls() && initCls.id !== getCls().id)
+    toast(`ℹ Cette évaluation n'est pas rattachée à ${getCls().nom} : elle s'ouvre sur ${initCls.nom}.`);
   // Boutons toolbar : +Q (A/C), +Exo (C uniquement), Plan classe (B uniquement)
   const planBtn  = document.getElementById('meval-tableur-plan-btn');
   const addMnBtn = document.getElementById('meval-tableur-addmn-btn');
@@ -41456,6 +41633,7 @@ function _evalTableurRender() {
   if (_evalCaptureTodaySeating(ev, cls)) save();
   _evalTableurRenderClassPicker(ev, cls);
   _evalTableurRenderGroupChips(cls);
+  _evalTableurRenderCtx(ev, cls);
   _evalTableurSobrRestore();
   _evalTableurUpdateHelpForType(ev);
   if (ev.type === 'B') { _evalTableurRenderB(ev, cls); return; }
@@ -41821,9 +41999,7 @@ function _evalTableurRender() {
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft);background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="${remark ? _escAttr(remark) : 'Remarque facultative pour cet élève'}"></td>`;
     // Rattrapage (Type C — en dernier, après les compétences et la remarque)
     if (isTypeC) {
-      const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
-      const dispLbl = dateIndiv ? _esc(_fmtDateFr(dateIndiv)) : '📅 —';
-      html += `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><button type="button" class="rattrap-btn${dateIndiv ? ' rattrap-set' : ''}" data-rattrap-sid="${_esc(sid)}" onclick="_evalRattrapOpen(event,'${_esc(sid)}')" title="Date individuelle pour cet élève (rattrapage après absence). Clic = choisir. Vide = date globale de l'éval." style="font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px;padding:2px 6px;cursor:pointer;min-width:96px">${dispLbl}</button></td>`;
+      html += _rattrapCellHTML(ev, sid, bgRow);
     }
     html += '</tr>';
   });
@@ -42094,6 +42270,15 @@ function _evalSetStudentRemark(inputEl) {
   ev.updatedAt = Date.now();
   if (_evalRemarkSaveTimer) clearTimeout(_evalRemarkSaveTimer);
   _evalRemarkSaveTimer = setTimeout(() => save(), 800);
+}
+
+// Cellule « 📅 Rattrapage » d'une ligne élève — Types C et D (une seule date par
+// classe : une date individuelle a un sens). Commun aux deux tableurs.
+var _RATTRAP_TH_TITLE = "Date individuelle si l'élève a rattrapé après une absence";
+function _rattrapCellHTML(ev, sid, bgRow) {
+  const dateIndiv = ev.notes?.[sid]?.dateIndiv || '';
+  const dispLbl = dateIndiv ? _esc(_fmtDateFr(dateIndiv)) : '📅 —';
+  return `<td style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bgRow}"><button type="button" class="rattrap-btn${dateIndiv ? ' rattrap-set' : ''}" data-rattrap-sid="${_esc(sid)}" onclick="_evalRattrapOpen(event,'${_esc(sid)}')" title="Date individuelle pour cet élève (rattrapage après absence). Clic = choisir. Vide = date globale de l'éval." style="font-family:var(--font-mono);font-size:.82em;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:3px;padding:2px 6px;cursor:pointer;min-width:96px">${dispLbl}</button></td>`;
 }
 
 // Saisie d'une date individuelle (rattrapage Type C)
@@ -43041,8 +43226,8 @@ function _bilanCrossTabBuild() {
     classIds = _bilanClassesWithEvals(periode);
     const curCls = getCls();
     if (curCls) {
-      const curLevel = classLevelOrder(curCls.nom);
-      classIds = classIds.filter(cid => classLevelOrder(S.classes[cid]?.nom || '') === curLevel);
+      const curLevel = clsLevel(curCls);
+      classIds = classIds.filter(cid => clsLevel(S.classes[cid]) === curLevel);
     }
   }
   classIds = classIds.slice().sort((a, b) =>
@@ -44643,6 +44828,7 @@ function _evalTableurRenderD(ev, cls) {
     html += `<th rowspan="3" style="padding:5px 5px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:44px;font-family:var(--font-mono);font-size:.74em;font-weight:600;color:var(--pencil);background:var(--paper-warm);${_exoCompLead(i)}" title="${_escAttr('Niveau entier sur ' + x.code + ' restreint à ' + x.exoLabel + ' — informatif, sans effet sur les bilans')}">${_esc(x.exoLabel)}<br>${_esc(x.code)}</th>`;
   });
   html += `<th rowspan="3" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;min-width:160px;background:var(--paper-warm);font-family:var(--font-serif);font-size:.85em;color:var(--ink-blue);${SEPD}" title="Remarque facultative par élève">📝 Remarque</th>`;
+  html += `<th rowspan="3" style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil);min-width:120px" title="${_escAttr(_RATTRAP_TH_TITLE)}">📅 Rattrapage</th>`;
   html += '</tr>';
 
   // ── Ligne 2 : questions (colspan = nb de compétences) ──
@@ -44754,6 +44940,7 @@ function _evalTableurRenderD(ev, cls) {
     });
     const remark = ev.studentRemarks?.[sid] || ev.notes?.[sid]?.remarque || '';
     html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${SEPD}background:${bgRow}"><input type="text" data-sid="${_esc(sid)}" maxlength="240" value="${_esc(remark)}" oninput="_evalSetStudentRemark(this)" placeholder="(facultatif)" style="width:100%;padding:2px 4px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em" title="${remark ? _escAttr(remark) : 'Remarque facultative pour cet élève'}"></td>`;
+    html += _rattrapCellHTML(ev, sid, bgRow);
     html += '</tr>';
   });
   html += '</tbody>';
@@ -44784,6 +44971,7 @@ function _evalTableurRenderD(ev, cls) {
   });
   exoComps.forEach((x, i) => { html += `<th style="border-top:2px solid var(--rule-line);${_exoCompLead(i)}"></th>`; });
   html += `<th style="border-top:2px solid var(--rule-line)"></th>`;
+  html += `<th style="border-top:2px solid var(--rule-line)"></th>`; // Rattrapage
   html += '</tr></tfoot></table>';
 
   wrap.innerHTML = html;

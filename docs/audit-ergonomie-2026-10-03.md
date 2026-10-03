@@ -337,7 +337,17 @@ Trois façons de présenter l'aide selon l'onglet :
 > - nom → fiche dans les 4 tableurs, la Vue d'ensemble, les stats d'absence, l'onglet Tablettes ;
 > - dispense rétablie (Types A et C) : case au clic droit sur la cellule, cellule hachurée « disp. » (§ 1.4).
 >
-> **Reste ouvert du lot C :** date de rattrapage pour les Types A, B et D ; dispense pour B et D (pas de modèle) ; le groupe par classe (lot G).
+> **Reste ouvert du lot C :** date de rattrapage pour les Types A et B (plusieurs dates par éval, sans objet) ; dispense pour B et D (pas de modèle — en D, le code NN fait déjà sortir la question du barème et des niveaux) ; le groupe par classe (lot G).
+>
+> **Lot D — fait en v2.70.0 :**
+> - date de rattrapage aussi en Type D (même colonne et même calendrier que le C) ;
+> - bandeau de contexte « classe · période · 🎓 discipline » à côté du titre de Devoirs et des deux Bilans, classe dans le titre d'Élèves (§ 4) ;
+> - tableur : titre sur toute sa largeur (la barre d'outils passe à la ligne au lieu de le tronquer) et ligne « classe · période · date · discipline » dessous ; avis quand une évaluation s'ouvre sur une autre classe que celle du bandeau (§ 4) ;
+> - Config Salle : modes en deux groupes, « Salle (toutes classes) » et « Classe **6e A** dans cette salle » ; la salle affichée suit la classe à l'entrée dans l'onglet et au changement de classe ; bouton « ➕ Rattacher cette salle à 6e A » à la place du message faux, pour Groupes, Tags, Contraintes **et** AESH ; titre « Config Salle » comme dans la navigation ; « Auto G1/G2 (no-tables) » renommé ; message de suppression d'une salle corrigé (§ 3.1) ;
+> - salles de la classe sur sa carte (gras = salle affichée) et cases « 🏫 Salles » dans Modifier la classe, appliquées à l'enregistrement avec confirmation si un plan serait perdu (§ 2.3) ;
+> - niveau de classe réglable (`cls.niveau`, « Auto — d'après le nom » par défaut) à la création et dans Modifier la classe ; toute lecture passe par `clsLevel(cls)` (§ 2.3).
+>
+> **Reste ouvert du lot D :** niveau d'une classe recomposée (toujours déduit du nom) ; panneau « détail du calcul » au clic sur une note du Bilan (§ 4) ; Vue Élève sans onglet allumé.
 >
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
