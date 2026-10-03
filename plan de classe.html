@@ -421,6 +421,21 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 /* 📷 Photos d'élèves : infobulle au survol d'un nom, photo de la fiche, modale d'import */
 #photo-pop{position:fixed;z-index:10050;display:none;pointer-events:none;background:var(--paper);border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);box-shadow:var(--shadow-pop,0 6px 18px rgba(0,0,0,.25));padding:5px;text-align:center;font-size:.8em;color:var(--ink-deep);max-width:150px}
 #photo-pop img{display:block;width:120px;height:120px;object-fit:cover;border-radius:3px;margin-bottom:3px}
+#photo-pop .mnp{margin:4px auto 2px}
+#photo-pop .mnp-lbl{color:var(--pencil);font-size:.92em}
+/* Mini-plan « où est assis l'élève corrigé » (tableur d'éval) — orientation Plan Prof, bureau en bas */
+.mnp{display:grid;gap:1px;width:max-content}
+.mnp-c{width:var(--mnp-sz,8px);height:var(--mnp-sz,8px);border-radius:1px;background:var(--paper-deep);border:1px solid var(--rule-line)}
+.mnp-c.nt{background:transparent;border-color:transparent}
+.mnp-c.occ{background:var(--rule-line)}
+.mnp-c.me{background:#1f9d55;border-color:#14703b;box-shadow:0 0 0 1px #1f9d55}
+.mnp-desk{grid-column:1/-1;height:3px;margin-top:2px;border-radius:2px;background:var(--pencil-soft);width:40%;justify-self:center}
+#meval-miniplan{display:flex;align-items:center;gap:6px;padding:3px 6px;border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);background:var(--paper-warm);font-size:.78em;color:var(--ink-deep);min-height:30px;max-width:340px}
+#meval-miniplan img{width:42px;height:42px;object-fit:cover;border-radius:3px;display:block}
+#meval-miniplan .mnp-txt{line-height:1.25;max-width:120px;overflow:hidden}
+#meval-miniplan .mnp-txt small{color:var(--pencil)}
+#meval-miniplan .mnp-x{border:none;background:none;cursor:pointer;color:var(--pencil);padding:0 2px;font-size:1em;align-self:flex-start}
+#meval-miniplan.folded{padding:0;border:none;background:none;min-height:0}
 #fiche-photo{float:right;margin:0 0 8px 12px}
 /* Le tableau d'identité (largeur 100 %) passerait SOUS la photo flottante au lieu de l'entourer. */
 #fiche-photo + .about-section table{width:auto !important}
@@ -5915,6 +5930,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <div class="mb" id="meval-tableur-mb" style="max-width:min(96vw,1100px);width:100%;max-height:94vh;overflow:hidden;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:6px 8px;flex-wrap:wrap;margin-bottom:10px">
       <div style="min-width:260px;flex:1 1 260px"><h2 id="meval-tableur-title" style="margin:0;font-size:1.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">📊 Saisie</h2><div id="meval-tableur-ctx" class="tab-ctx" style="display:block;overflow:hidden;text-overflow:ellipsis;font-size:.8em"></div></div>
+      <div id="meval-miniplan" style="display:none"></div>
       <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-g btn-sm" id="meval-tableur-fullscreen-btn" onclick="_tableurToggleFullscreen()" title="Plein écran / réduit" aria-label="Plein écran ou réduit" style="padding:4px 6px">⛶</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-addmn-btn" onclick="_tableurAddMn()" title="Ajouter une mini-note (Type A) ou une question (Type C)" aria-label="Ajouter une mini-note ou question" style="display:none;padding:4px 6px">+ Q</button>
@@ -7147,11 +7163,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.73.0';
+const APP_VERSION    = '2.74.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T17:05:25Z';
+const APP_BUILD_DATE = '2026-10-03T22:27:05Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30730,7 +30746,7 @@ function _photoSidFromTarget(t) {
   }
   return null;
 }
-const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false };
+const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false, plan: false };
 function _photoPopHide() {
   clearTimeout(_photoPop.timer); _photoPop.timer = null; _photoPop.sid = null; _photoPop.pinned = false;
   if (_photoPop.el) _photoPop.el.style.display = 'none';
@@ -30748,15 +30764,20 @@ document.addEventListener('mousemove', e => {
   if (_photoPop.el && _photoPop.el.style.display === 'block' && !_photoPop.pinned) _photoPopPlace();
 }, { passive: true });
 async function _photoPopShow(sid) {
-  const url = await _photoUrl(sid);
-  if (!url || _photoPop.sid !== sid) return;
+  const url = (_photos.ready && _photoHas(sid)) ? await _photoUrl(sid) : null;
+  if (_photoPop.sid !== sid) return;
+  // Dans le tableur d'éval : mini-plan sous la photo (plan du jour du devoir).
+  const ctx = _photoPop.plan ? _mnpCtx() : null;
+  const m = ctx && ctx.cls.eleves?.includes(sid) ? _mnpBuild(ctx.ev, ctx.cls, sid, 140) : null;
+  if (!url && !m) return;
   if (!_photoPop.el) {
     _photoPop.el = document.createElement('div');
     _photoPop.el.id = 'photo-pop';
     document.body.appendChild(_photoPop.el);
   }
   const s = S.eleves[sid];
-  _photoPop.el.innerHTML = `<img src="${url}" alt=""><div>${_escName(s.prenom)} ${_escName(s.nom)}</div>`;
+  _photoPop.el.innerHTML = (url ? `<img src="${url}" alt="">` : '') + `<div>${_escName(s.prenom)} ${_escName(s.nom)}</div>`
+    + (m ? m.html + `<div class="mnp-lbl">${_esc(m.label)}</div>` : '');
   _photoPop.el.style.display = 'block';
   _photoPopPlace();
 }
@@ -30766,6 +30787,12 @@ document.addEventListener('mouseover', e => {
   if (sid === _photoPop.sid) return;
   _photoPopHide();
   if (!sid || !S.eleves?.[sid] || _confHides(sid)) return;
+  _photoPop.plan = !!(e.target.closest && e.target.closest('#meval-tableur'));
+  if (_photoPop.plan) {   // tableur : la bulle montre au moins le mini-plan, photo ou pas
+    _photoPop.sid = sid;
+    _photoPop.timer = setTimeout(() => _photoPopShow(sid), 250);
+    return;
+  }
   if (!_photos.ready) {
     // Autorisation accordée entre-temps (geste sur la sync, import…) : on relit le dossier, sans insister.
     if (dirHandle && Date.now() - _photos.lastTry > 30000) _photosRefresh(false);
@@ -30782,7 +30809,7 @@ function _cphotoClick(e, sid) {
   if (!S.eleves[sid] || _confHides(sid)) return;
   _photoPopHide();
   _photoPop.x = e.clientX; _photoPop.y = e.clientY;
-  _photoPop.sid = sid; _photoPop.pinned = true;
+  _photoPop.sid = sid; _photoPop.pinned = true; _photoPop.plan = false;
   _photoPopShow(sid);
 }
 document.addEventListener('mousedown', e => { if (!(e.target.closest && e.target.closest('.cphoto'))) _photoPopHide(); }, { passive: true });
@@ -36954,6 +36981,82 @@ function _evalTableurRenderCtx(ev, cls) {
   const dId = _evalDisciplineId(ev);
   if (dId) parts.push('🎓 ' + _esc(_disciplineLabel(dId)));
   el.innerHTML = parts.join(' · ');
+  _mnpRender();
+}
+// ─── Mini-plan : où est assis l'élève qu'on corrige ──────────────────────────
+// Plan DU JOUR DU DEVOIR (même source que le tri par ordre de ramassage :
+// _evalPatternSeatingFor, à défaut le plan courant), orientation Plan Prof
+// (fond de salle en haut, bureau en bas, col 0 à droite). Deux surfaces :
+// l'encart #meval-miniplan de l'en-tête, qui suit la ligne qui a le curseur,
+// et la bulle photo au survol d'un nom dans le tableur.
+let _mnpSid = null, _mnpEvId = null;
+function _mnpCtx() {
+  const ev = S.evaluations?.[document.getElementById('meval-tableur-evalid')?.value];
+  const cls = ev ? _evalTableurActiveCls(ev) : null;
+  return ev && cls ? { ev, cls } : null;
+}
+// {salle, key, html, label} pour un élève — html = grille de carrés (cellule ≤ maxW px au total).
+function _mnpBuild(ev, cls, sid, maxW) {
+  const salle = S.salles?.[cls.activeRoom];
+  if (!salle) return null;
+  const seating = _evalPatternSeatingFor(ev, cls.id) || cls.rooms?.[cls.activeRoom]?.seating || {};
+  const rows = salle.rows || 4, cols = salle.cols || 10;
+  const sz = Math.max(4, Math.min(9, Math.floor(maxW / cols) - 3));
+  const vides = new Set(salle.positions_vides || []);
+  let key = null;
+  for (const k in seating) if (seating[k] === sid) { key = k; break; }
+  let h = `<div class="mnp" style="--mnp-sz:${sz}px;grid-template-columns:repeat(${cols},${sz + 2}px)">`;
+  for (let r = rows - 1; r >= 0; r--) for (let c = cols - 1; c >= 0; c--) {
+    const k = r + ',' + c;
+    const cl = vides.has(k) ? 'nt' : k === key ? 'me' : seating[k] ? 'occ' : '';
+    h += `<div class="mnp-c ${cl}"></div>`;
+  }
+  h += '<div class="mnp-desk"></div></div>';
+  let label;
+  if (key) { const [r, c] = key.split(',').map(Number); label = `${salle.nom} · place n° ${_qcmDisplayLabel(cls, r, c, cols)}`; }
+  else label = `${salle.nom} · non placé·e`;
+  return { key, html: h, label };
+}
+function _mnpFolded() { try { return localStorage.getItem('planClasse_evalMiniPlan') === '0'; } catch (e) { return false; } }
+function _mnpToggle(show) {
+  try { localStorage.setItem('planClasse_evalMiniPlan', show ? '1' : '0'); } catch (e) {}
+  _mnpRender();
+}
+function _mnpFocus(t) {
+  const tr = t && t.closest && t.closest('tr[data-sid]');
+  const sid = tr ? tr.getAttribute('data-sid') : null;
+  if (!sid || sid === _mnpSid) return;
+  _mnpSid = sid;
+  _mnpRender();
+}
+async function _mnpRender() {
+  const box = document.getElementById('meval-miniplan');
+  if (!box) return;
+  const ctx = _mnpCtx();
+  if (!ctx) { box.style.display = 'none'; return; }
+  if (ctx.ev.id !== _mnpEvId) { _mnpEvId = ctx.ev.id; _mnpSid = null; }   // autre devoir : on repart de zéro
+  box.style.display = '';
+  if (_mnpFolded()) {
+    box.className = 'folded';
+    box.innerHTML = `<button class="btn btn-g btn-sm" style="padding:4px 6px" onclick="_mnpToggle(true)" title="Afficher le mini-plan : où est assis l'élève que tu corriges">🗺</button>`;
+    return;
+  }
+  box.className = '';
+  const x = `<button class="mnp-x" onclick="_mnpToggle(false)" title="Masquer le mini-plan" aria-label="Masquer le mini-plan">✕</button>`;
+  const sid = _mnpSid;
+  const stu = sid && S.eleves[sid];
+  if (!stu || !ctx.cls.eleves?.includes(sid) || _confHides(sid)) {
+    box.innerHTML = `<span class="mnp-txt"><small>🗺 Place de l'élève : clique dans sa ligne</small></span>${x}`;
+    return;
+  }
+  const m = _mnpBuild(ctx.ev, ctx.cls, sid, 110);
+  const txt = `<span class="mnp-txt"><b>${_escName(stu.prenom)}</b> ${_escName(stu.nom)}<br><small>${m ? _esc(m.label) : 'aucune salle'}</small></span>`;
+  box.innerHTML = `<span class="mnp-ph"></span>${m ? m.html : ''}${txt}${x}`;
+  box.title = 'Plan du jour du devoir, vu du bureau (bureau en bas). En vert : la place de l\'élève dont la ligne a le curseur.';
+  if (_photos.ready && _photoHas(sid)) {
+    const url = await _photoUrl(sid);
+    if (url && _mnpSid === sid) { const ph = box.querySelector('.mnp-ph'); if (ph) ph.innerHTML = `<img src="${url}" alt="">`; }
+  }
 }
 // ═══════════════ Aides repliables + pastilles « ? » au toucher (audit § 5.2) ═══════════════
 function _helpHidden(key) { try { return localStorage.getItem('planClasse_help_' + key) === '0'; } catch (e) { return false; } }
@@ -43326,6 +43429,7 @@ function _evalTableurEnsureInputVisible(inputEl) {
       if (!t) return;
       if (t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') return;
       _evalTableurEnsureInputVisible(t);
+      _mnpFocus(t);
       // Surligne la ligne ET la colonne active en Type C (correction plus facile à suivre).
       const evalId = document.getElementById('meval-tableur-evalid')?.value;
       const ev = S.evaluations?.[evalId];

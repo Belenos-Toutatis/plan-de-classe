@@ -2274,6 +2274,13 @@ Sur une éval multi-classes, une classe peut ne pas avoir passé une mini-note, 
 
 Un élève figure au tableur s'il était actif à AU MOINS UNE date de l'éval (`_stuActiveOnAnyEvalRef`) — donc un élève parti entre deux passations y reste. Sur les colonnes datées **après son départ** (ou avant son arrivée), les tableurs **A** (mini-notes) et **B** (passations) ne proposent plus de saisie : case hachurée `.meval-cell-out` avec 🚪 (ou 📅) et une infobulle datée, **hors calcul** (une case vide ne compte pas). `_stuOutOnSubDate(stu, sub, classId, isPass)` lit la date par groupe de l'élève puis par classe (`_passDateFor` / `_mnDateFor`) ; `_stuOutCellHTML` rend la case. Demandé en usage réel : on proposait un niveau à deux élèves déjà partis. Garde : seulement si la case (en B : toutes les compétences de la passation) est **vide** — une saisie existante reste visible et éditable. Les cases portent `data-ci` + `data-mnid`/`data-passid` : la navigation clavier les enjambe (pas d'input) et `_tableurBlockAt` les compte (sinon un bloc se scinderait quand le 1er élève est parti). C et D non concernés : une seule date par classe, déjà filtrée par la présence.
 
+### Mini-plan « où est assis l'élève corrigé » (tableurs A/B/C/D, v2.74.0)
+
+Deux surfaces, à l'essai (l'utilisateur peut en supprimer une après usage) :
+- **Encart `#meval-miniplan`** dans l'en-tête du tableur : photo (si disponible) + mini-plan + « Prénom NOM · salle · place n° ». Suit la **ligne qui a le curseur** (`_mnpFocus`, appelé par le `focusin` du wrap), remis à zéro quand on change de devoir (`_mnpEvId`). Repliable (✕ / 🗺, `localStorage.planClasse_evalMiniPlan`). Rendu par `_mnpRender`, appelé depuis `_evalTableurRenderCtx`.
+- **Bulle photo `#photo-pop`** : au survol d'un nom **dans `#meval-tableur`** (`_photoPop.plan`), le mini-plan s'ajoute sous la photo — et la bulle s'affiche même sans photo.
+- `_mnpBuild(ev, cls, sid, maxW)` : plan **du jour du devoir** (`_evalPatternSeatingFor`, à défaut le plan courant de la salle active), orientation Plan Prof (r décroissant, c décroissant), place de l'élève en vert `.mnp-c.me` (vert fixe, lisible dans les deux thèmes), places occupées grisées, places sans table transparentes, trait de bureau en bas. Taille de case calculée pour tenir dans `maxW`. Masqué pour un élève caché en mode confidentiel.
+
 ### Plan de classe du Type B (`meval-plan-overlay`, bouton 🪑) — deux pièges
 
 `_evalPlanOverlayOpen` regroupe les passations par **date per-classe** (`_passDateFor(p, cls.id)`) et `_evalPlanOverlayRender` ne montre que celles de la date choisie.
