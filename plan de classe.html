@@ -7165,11 +7165,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.75.1';
+const APP_VERSION    = '2.75.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T22:32:50Z';
+const APP_BUILD_DATE = '2026-10-03T22:37:32Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -36993,14 +36993,39 @@ function _mnpCtx() {
   const cls = ev ? _evalTableurActiveCls(ev) : null;
   return ev && cls ? { ev, cls } : null;
 }
+// Salle et plan DU DEVOIR pour une classe : {roomId, seating}.
+// Éval passée : la salle enregistrée sur le devoir (ev.seatingRoomIds, posée avec la
+// photo du plan) si la classe l'a encore, sinon la salle active. Plan : appel du jour
+// pris dans cette salle, puis photo enregistrée sur le devoir, puis plan courant.
+// Éval du jour, à venir ou sans date : la salle active et son plan courant (c'est
+// celui qu'on a sous les yeux — même règle que _evalPatternSeatingFor).
+function _mnpEvalSeating(ev, cls) {
+  const act = cls.activeRoom;
+  const date = _evalDateFor(ev, cls.id);
+  const rec = ev.seatingRoomIds?.[cls.id];
+  const past = date && date < todayKey();
+  const roomId = past && rec && rec !== act && cls.rooms?.[rec] && S.salles?.[rec] ? rec : act;
+  const cur = cls.rooms?.[roomId]?.seating || {};
+  if (roomId === act) return { roomId, seating: _evalPatternSeatingFor(ev, cls.id) || cur };
+  // Salle du devoir ≠ salle active : _evalPatternSeatingFor raisonne sur la salle active,
+  // on cherche donc nous-mêmes une photo prise DANS la salle du devoir.
+  const slot = _evalSlotIdFor(ev, cls.id);
+  const recs = Object.values(S.attendance?.[cls.id] || {})
+    .filter(r => r && r.date === date && r.seatingHash && r.aeshSalleIdSnap === roomId && !(slot && r.slotId && r.slotId !== slot))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  for (const r of recs) { const snap = _getSeatingSnapshot(r.seatingHash); if (snap && Object.keys(snap).length) return { roomId, seating: snap }; }
+  const hash = _evalSeatingHashFor(ev, cls.id);
+  const snap = hash ? _getSeatingSnapshot(hash) : null;
+  return { roomId, seating: snap && Object.keys(snap).length ? snap : cur };
+}
 // {key, html, label} pour un élève dans une salle — html = grille de carrés (≤ maxW px de large).
-// Sans `seating`, prend le plan du jour du devoir (ev fourni et salle active), sinon le plan courant.
+// Avec `ev` et sans salle imposée : salle et plan du devoir (_mnpEvalSeating). Sinon plan courant.
 function _mnpBuild(ev, cls, sid, maxW, roomId, seating) {
+  if (ev && !roomId && !seating) ({ roomId, seating } = _mnpEvalSeating(ev, cls));
   roomId = roomId || cls.activeRoom;
   const salle = S.salles?.[roomId];
   if (!salle) return null;
-  seating = seating || (ev && roomId === cls.activeRoom ? _evalPatternSeatingFor(ev, cls.id) : null)
-    || cls.rooms?.[roomId]?.seating || {};
+  seating = seating || cls.rooms?.[roomId]?.seating || {};
   const rows = salle.rows || 4, cols = salle.cols || 10;
   const sz = Math.max(4, Math.min(9, Math.floor(maxW / cols) - 3));
   const vides = new Set(salle.positions_vides || []);
@@ -37026,9 +37051,11 @@ function _mnpAllRooms(sid, ctx, maxW, skipRoom) {
   let cls = ctx ? ctx.cls : null;
   if (!cls) { const cur = getCls(); cls = cur && cur.eleves?.includes(sid) ? cur : S.classes?.[stu?.classe_id]; }
   if (!cls || !cls.eleves?.includes(sid)) return [];
+  // Tableur d'éval : seulement la salle du devoir, comme l'encart.
+  if (ctx) { const m = _mnpBuild(ctx.ev, cls, sid, maxW); return m ? [m] : []; }
   const ids = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id] && id !== skipRoom);
   ids.sort((a, b) => (b === cls.activeRoom) - (a === cls.activeRoom));
-  return ids.map(id => _mnpBuild(ctx ? ctx.ev : null, cls, sid, maxW, id)).filter(Boolean);
+  return ids.map(id => _mnpBuild(null, cls, sid, maxW, id)).filter(Boolean);
 }
 function _mnpFolded() { try { return localStorage.getItem('planClasse_evalMiniPlan') === '0'; } catch (e) { return false; } }
 function _mnpToggle(show) {

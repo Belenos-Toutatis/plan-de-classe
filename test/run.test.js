@@ -1973,6 +1973,33 @@ test('pattern de ramassage : une éval PASSÉE garde la photo d\'alors', () => {
   assert.deepEqual(order, ['s1', 's2'], 'ordre du plan de CE jour-là');
 });
 
+// Mini-plan du tableur : salle et plan DU DEVOIR (_mnpEvalSeating).
+function _mnpFixture(evalDate) {
+  _patternFixture(evalDate);
+  // Seconde salle « sb », devenue la salle active ; le devoir a eu lieu en « sa ».
+  ev(`S.salles.sb = { nom: 'S2', rows: 1, cols: 2, positions_vides: [], schedule: {} };
+      S.classes.c1.rooms.sb = _newRoomTemplate(); S.classes.c1.rooms.sb.seating = { '0,1': 's1' };
+      S.classes.c1.activeRoom = 'sb';
+      S.evaluations.e1.seatingRoomIds = { c1: 'sa' };`);
+}
+test('mini-plan : éval passée → salle enregistrée sur le devoir et sa photo, pas la salle active', () => {
+  _mnpFixture('2020-01-06');
+  const r = get(`_mnpEvalSeating(S.evaluations.e1, S.classes.c1)`);
+  assert.equal(r.roomId, 'sa');
+  assert.deepEqual(r.seating, { '0,0': 's1', '0,1': 's2' });
+});
+test('mini-plan : éval du jour → salle active et plan courant', () => {
+  _mnpFixture(ev('todayKey()'));
+  const r = get(`_mnpEvalSeating(S.evaluations.e1, S.classes.c1)`);
+  assert.equal(r.roomId, 'sb');
+  assert.deepEqual(r.seating, { '0,1': 's1' });
+});
+test('mini-plan : salle du devoir retirée de la classe → salle active', () => {
+  _mnpFixture('2020-01-06');
+  ev(`delete S.classes.c1.rooms.sa;`);
+  assert.equal(get(`_mnpEvalSeating(S.evaluations.e1, S.classes.c1)`).roomId, 'sb');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Mode auto : le créneau doit suivre la date.
 // Régression du 2026-09-09 : _evalAutoUpdateDate ne dérivait que la date, donc
