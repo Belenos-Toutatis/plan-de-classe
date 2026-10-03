@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnostic PDF thrombinoscope</title>
+<!--
+  Outil de diagnostic du PDF « thrombinoscope » exporté de MBN.
+  Le PDF est lu DANS LE NAVIGATEUR, rien n'est envoyé nulle part. Le rapport produit
+  est anonymisé (forme des textes, positions, dimensions et format des images — jamais
+  de nom en clair ni de pixel) : c'est lui, et lui seul, qui peut être partagé.
+  Seule ressource externe : la bibliothèque pdf.js (Mozilla), chargée depuis cdnjs.
+  Outil annexe, non lié à l'application.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{--paper:#f4f6fa;--warm:#e6ebf2;--ink:#0e1a26;--pencil:#56697f;--rule:#c8d2e0;--red:#b03d2e;--blue:#1d5fa8;--ok:#1b5e20}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--paper);color:var(--ink)}
+header{padding:14px 20px;background:#1a252f;color:#f4f6fa}
+header h1{margin:0;font-size:1.25em}
+header p{margin:4px 0 0;font-size:.88em;opacity:.85}
+main{padding:16px 20px;max-width:1500px;margin:0 auto}
+.card{background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px 16px;margin-bottom:14px}
+.drop{border:2px dashed var(--rule);border-radius:8px;padding:26px;text-align:center;color:var(--pencil);cursor:pointer}
+.drop.over{border-color:var(--blue);background:#eaf2fc}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;padding:7px 13px;border-radius:5px;border:1px solid var(--rule);background:#fff;cursor:pointer}
+.btn-p{background:#1a252f;color:#fff;border-color:#1a252f}
+.muted{color:var(--pencil);font-size:.88em}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.page-wrap{position:relative;display:inline-block;margin:0 0 18px;border:1px solid var(--rule);background:#fff}
+.page-wrap canvas{display:block}
+.page-wrap.blank canvas{visibility:hidden}
+.page-title{font-weight:600;margin:6px 0}
+.box{position:absolute;border:1.5px solid;cursor:pointer}
+.box.t{border-color:var(--blue);background:rgba(29,95,168,.08)}
+.box.i{border-color:var(--red);background:rgba(176,61,46,.10)}
+.box.sel{outline:3px solid #f5b400;outline-offset:1px}
+.page-wrap{user-select:none;touch-action:none}
+.band{position:absolute;border:1.5px dashed #f5b400;background:rgba(245,180,0,.12);pointer-events:none;z-index:5}
+.box .tag{position:absolute;left:0;top:-15px;font-size:10px;line-height:13px;padding:0 3px;background:#f5b400;color:#1a252f;white-space:nowrap;border-radius:2px}
+.side{position:sticky;top:12px}
+textarea{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px;min-height:340px}
+label{font-size:.9em}
+select{font:inherit;padding:4px}
+.legend span{display:inline-block;width:12px;height:12px;border:2px solid;margin-right:4px;vertical-align:-1px}
+.warn{background:#fef9e7;border:1px solid #e9c46a;border-radius:6px;padding:8px 10px;font-size:.88em}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔎 Diagnostic du PDF thrombinoscope</h1>
+  <p>Le fichier est analysé dans ce navigateur et n'est envoyé nulle part. Seul le <strong>rapport anonymisé</strong> en bas à droite est destiné à être partagé.</p>
+</header>
+<main>
+  <div class="card">
+    <div class="drop" id="drop">📄 Dépose ici le PDF exporté de MBN, ou <u>clique pour le choisir</u>.
+      <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    </div>
+    <p class="muted" id="status" style="margin:10px 0 0"></p>
+  </div>
+
+  <div class="layout" id="layout" hidden>
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <label><input type="checkbox" id="show-content" checked> Afficher le contenu du PDF (visible par toi seul)</label>
+        <span class="legend muted"><span style="border-color:var(--blue)"></span>texte <span style="border-color:var(--red);margin-left:10px"></span>image</span>
+      </div>
+      <p class="muted" style="margin:0 0 6px"><b>Sélection :</b> clic sur un cadre · <b>Ctrl+clic</b> pour en ajouter ou en retirer · <b>glisser</b> pour entourer plusieurs cadres (Ctrl+glisser pour ajouter) · « ➕ Les semblables » pour prendre d'un coup toutes les photos ou tous les noms.
+        Le cadre de sélection prend : <label><input type="checkbox" id="band-t" checked> textes</label> <label><input type="checkbox" id="band-i" checked> images</label></p>
+      <p class="muted" style="margin:0 0 10px">Indiquer ce que contient chaque cadre est facultatif. Si un nom ou une photo n'a <strong>aucun cadre</strong>, signale-le : c'est une information importante.</p>
+      <div id="pages"></div>
+    </div>
+    <div class="side">
+      <div class="card" id="sel-card">
+        <div class="page-title">Zone sélectionnée</div>
+        <div id="sel-info" class="muted">Aucune — clique sur un cadre.</div>
+        <div id="sel-tools" class="row" style="margin-top:8px;gap:8px" hidden>
+          <button class="btn" id="btn-similar" title="Ajoute toutes les images de même taille, ou tous les textes de même police et même corps">➕ Les semblables</button>
+          <button class="btn" id="btn-clear">✕ Désélectionner</button>
+        </div>
+        <div id="sel-role" style="margin-top:8px" hidden>
+          <label>Ce cadre contient :<br>
+            <select id="role-select"></select>
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="page-title">Rapport anonymisé</div>
+        <p class="muted" style="margin:0 0 8px">Les noms sont remplacés par leur forme (« DUPONT Léa » → « XXXXXX Xxx »), les chiffres par 9. Relis-le avant de le copier.</p>
+        <textarea id="report" readonly></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="btn btn-p" id="copy">📋 Copier le rapport</button>
+          <span class="muted" id="copy-status"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+'use strict';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const OPS = pdfjsLib.OPS;
+
+// ─── Anonymisation ────────────────────────────────────────────────────────────
+// Mots d'étiquette conservés en clair (comparés sans accents ni casse) : ils décrivent
+// la mise en page, pas une personne. Tout autre mot est réduit à sa forme.
+const KEEP = new Set(('etablissement college lycee ecole annee scolaire classe classes eleve eleves nombre nb ' +
+  'professeur professeurs principal principale pp date edition edite editee imprime imprimee genere generee ' +
+  'et par pour page sur trombinoscope tombinoscope trombi mbn liste groupe groupes division effectif total ' +
+  'mme m mr mlle madame monsieur enseignant enseignante photo photos nom prenom noms prenoms ne nee naissance ' +
+  'monbureaunumerique bureau numerique mon niveau periode semestre trimestre').split(' '));
+const norm = w => w.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function shapeWord(w) {
+  return w.replace(/[\p{L}\p{N}]/gu, c => /\p{N}/u.test(c) ? '9' : /\p{Lu}/u.test(c) ? 'X' : 'x');
+}
+function anon(s) {
+  return String(s).split(/([^\p{L}\p{N}]+)/u).map((tok, i) => {
+    if (i % 2 === 1 || !tok) return tok;            // séparateur : gardé tel quel
+    return KEEP.has(norm(tok)) ? tok : shapeWord(tok);
+  }).join('');
+}
+// Description de la casse d'un mot : MAJ / Capitalisé / min / mixte / nombre
+function caseOf(tok) {
+  if (/^\p{N}+$/u.test(tok)) return 'nombre';
+  if (/^\p{Lu}+$/u.test(tok)) return 'MAJ';
+  if (/^\p{Lu}\p{Ll}+$/u.test(tok)) return 'Capitalisé';
+  if (/^\p{Ll}+$/u.test(tok)) return 'min';
+  return 'mixte';
+}
+
+// ─── Lecture brute du fichier (filtres d'images, polices, flux d'objets) ──────
+async function inflate(bytes) {
+  try {
+    const ds = new DecompressionStream('deflate');
+    const out = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+    return new Uint8Array(out);
+  } catch (e) { return null; }
+}
+const latin1 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return s; };
+function dictOf(objText) { const k = objText.indexOf('stream'); return k >= 0 ? objText.slice(0, k) : objText; }
+async function rawScan(u8) {
+  const bin = latin1(u8);
+  const res = { encrypted: /\/Encrypt\b/.test(bin), objStreams: 0, images: [], fonts: [], producer: null, creator: null, version: (bin.match(/%PDF-(\d\.\d)/) || [])[1] || '?' };
+  const dicts = [];
+  const re = /(\d+)\s+(\d+)\s+obj\b([\s\S]*?)endobj/g;
+  let m;
+  while ((m = re.exec(bin))) {
+    const body = m[3];
+    const d = dictOf(body);
+    dicts.push(d);
+    if (/\/Type\s*\/ObjStm/.test(d)) {
+      res.objStreams++;
+      const sIdx = m.index + m[0].indexOf('stream') + 6;
+      let start = sIdx; if (bin[start] === '\r') start++; if (bin[start] === '\n') start++;
+      const end = bin.indexOf('endstream', start);
+      const raw = u8.subarray(start, end);
+      const dec = /FlateDecode/.test(d) ? await inflate(raw) : raw;
+      if (dec) {
+        const txt = latin1(dec);
+        const first = +((d.match(/\/First\s+(\d+)/) || [])[1] || 0);
+        const head = txt.slice(0, first).trim().split(/\s+/).map(Number);
+        for (let i = 0; i < head.length; i += 2) {
+          const a = first + head[i + 1], b = i + 3 < head.length ? first + head[i + 3] : txt.length;
+          dicts.push(txt.slice(a, b));
+        }
+      }
+    }
+  }
+  const val = (d, k) => { const mm = d.match(new RegExp('/' + k + '\\s*(\\[[^\\]]*\\]|/[^\\s/<>\\[\\]()]+|\\d+\\s+\\d+\\s+R|\\d+)')); return mm ? mm[1].replace(/\s+/g, ' ') : null; };
+  for (const d of dicts) {
+    if (/\/Subtype\s*\/Image/.test(d)) {
+      res.images.push({ w: val(d, 'Width'), h: val(d, 'Height'), bpc: val(d, 'BitsPerComponent'), cs: val(d, 'ColorSpace'),
+        filter: val(d, 'Filter') || 'aucun', smask: /\/SMask/.test(d), mask: /\/Mask\b/.test(d), len: val(d, 'Length') });
+    } else if (/\/Type\s*\/Font/.test(d) && /\/Subtype/.test(d)) {
+      const base = (val(d, 'BaseFont') || '?').replace(/^\/[A-Z]{6}\+/, '/');
+      res.fonts.push({ sub: val(d, 'Subtype'), base, enc: val(d, 'Encoding') || 'aucun', toUnicode: /\/ToUnicode/.test(d) });
+    }
+  }
+  const asciiOnly = s => s ? s.replace(/[^\x20-\x7e]/g, '').slice(0, 60) : null;
+  res.producer = asciiOnly((bin.match(/\/Producer\s*\(([^)]*)\)/) || [])[1]);
+  res.creator = asciiOnly((bin.match(/\/Creator\s*\(([^)]*)\)/) || [])[1]);
+  return res;
+}
+
+// ─── Analyse par pdf.js ──────────────────────────────────────────────────────
+const mul = (m, n) => [m[0]*n[0]+m[2]*n[1], m[1]*n[0]+m[3]*n[1], m[0]*n[2]+m[2]*n[3], m[1]*n[2]+m[3]*n[3], m[0]*n[4]+m[2]*n[5]+m[4], m[1]*n[4]+m[3]*n[5]+m[5]];
+const apply = (m, x, y) => [m[0]*x + m[2]*y + m[4], m[1]*x + m[3]*y + m[5]];
+
+async function analysePage(page, pageNo) {
+  const [vx0, vy0, vx1, vy1] = page.view;
+  const W = vx1 - vx0, H = vy1 - vy0;
+  const tc = await page.getTextContent();
+  const texts = [];
+  for (const it of tc.items) {
+    if (!it.str || !it.str.trim()) continue;
+    const t = it.transform, fs = Math.hypot(t[2], t[3]) || it.height || 0;
+    const x = t[4] - vx0, yBase = H - (t[5] - vy0);
+    const font = tc.styles[it.fontName]?.fontFamily || '?';
+    texts.push({ id: `p${pageNo}-t${texts.length + 1}`, raw: it.str, x, y: yBase - fs, w: it.width, h: fs, fs, font, fontId: it.fontName });
+  }
+  const ol = await page.getOperatorList();
+  const images = []; let ctm = [1,0,0,1,0,0]; const stack = []; let pathOps = 0, textOps = 0;
+  for (let i = 0; i < ol.fnArray.length; i++) {
+    const fn = ol.fnArray[i], a = ol.argsArray[i];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) ctm = stack.pop() || [1,0,0,1,0,0];
+    else if (fn === OPS.transform) ctm = mul(ctm, a);
+    else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm); if (a && a[0]) ctm = mul(ctm, a[0]); }
+    else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() || [1,0,0,1,0,0];
+    else if (fn === OPS.constructPath) pathOps++;
+    else if (fn === OPS.showText || fn === OPS.showSpacedText) textOps++;
+    else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject || fn === OPS.paintJpegXObject || fn === OPS.paintImageXObjectRepeat) {
+      const pts = [[0,0],[1,0],[0,1],[1,1]].map(([x, y]) => apply(ctm, x, y));
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      let pw = null, ph = null;
+      if (fn === OPS.paintInlineImageXObject && a[0]) { pw = a[0].width; ph = a[0].height; }
+      else if (a && typeof a[1] === 'number') { pw = a[1]; ph = a[2]; }
+      const kind = fn === OPS.paintImageMaskXObject ? 'masque' : fn === OPS.paintInlineImageXObject ? 'inline' : 'xobject';
+      images.push({ id: `p${pageNo}-i${images.length + 1}`, x: Math.min(...xs) - vx0, y: H - (Math.max(...ys) - vy0),
+        w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), pw, ph, kind });
+    }
+  }
+  return { pageNo, W, H, rotate: page.rotate, texts, images, pathOps, textOps };
+}
+
+// Pour chaque image, les textes juste en dessous (centre horizontal dans l'image élargie, haut à moins de 1,2 × la hauteur de l'image).
+function pairUnder(p) {
+  return p.images.map(img => {
+    const under = p.texts.filter(t => {
+      const cx = t.x + t.w / 2, dy = t.y - (img.y + img.h);
+      return cx >= img.x - img.w * .3 && cx <= img.x + img.w * 1.3 && dy >= -2 && dy <= Math.max(40, img.h * 1.2);
+    }).sort((a, b) => a.y - b.y || a.x - b.x);
+    return { img, under };
+  });
+}
+
+// ─── État + rendu ────────────────────────────────────────────────────────────
+// Rôles proposés. `short` = étiquette affichée sur le cadre (courte : une page compte ~30 photos).
+const TEXT_ROLES = [
+  ['', ''], ['Établissement', 'Étab.'], ['Année scolaire', 'Année'], ['Classe', 'Classe'], ["Nombre d'élèves", 'Nb'],
+  ['Professeur principal', 'PP'], ["Date d'édition", 'Date'],
+  ['Élève : nom complet sur une ligne', 'Élève'], ['Élève : 1re ligne (nom sur deux lignes)', 'Élève L1'],
+  ['Élève : 2e ligne (nom sur deux lignes)', 'Élève L2'],
+  ['Titre / autre en-tête', 'Titre'], ['Pied de page', 'Pied'], ['Autre (à ignorer)', '—']];
+const IMG_ROLES = [['', ''], ["Photo d'élève", 'Photo'], ['Logo / décor', 'Logo'], ['Autre (à ignorer)', '—']];
+const ROLE_SHORT = Object.fromEntries([...TEXT_ROLES, ...IMG_ROLES].filter(r => r[0]));
+let state = null;
+const roles = {};
+const sel = new Set();          // ids sélectionnés
+
+const $ = id => document.getElementById(id);
+function setStatus(msg) { $('status').textContent = msg; }
+
+async function handleFile(file) {
+  if (!file) return;
+  setStatus('Lecture…');
+  const u8 = new Uint8Array(await file.arrayBuffer());
+  try {
+    const raw = await rawScan(u8);
+    const doc = await pdfjsLib.getDocument({ data: u8.slice() }).promise;
+    const pages = [];
+    for (let n = 1; n <= doc.numPages; n++) pages.push(await analysePage(await doc.getPage(n), n));
+    state = { doc, raw, pages, size: u8.length };
+    for (const k of Object.keys(roles)) delete roles[k];
+    sel.clear();
+    await renderPages();
+    $('layout').hidden = false;
+    setStatus(`${doc.numPages} page(s) analysée(s).`);
+    refreshSel();
+    buildReport();
+  } catch (e) {
+    console.error(e);
+    setStatus('❌ Lecture impossible : ' + (e && e.message || e));
+  }
+}
+
+async function renderPages() {
+  const host = $('pages'); host.innerHTML = '';
+  for (const p of state.pages) {
+    const page = await state.doc.getPage(p.pageNo);
+    const maxW = Math.min(900, host.clientWidth - 4 || 900);
+    const scale = maxW / p.W;
+    const vp = page.getViewport({ scale });
+    const title = document.createElement('div'); title.className = 'page-title'; title.textContent = `Page ${p.pageNo}`;
+    const wrap = document.createElement('div'); wrap.className = 'page-wrap' + ($('show-content').checked ? '' : ' blank');
+    const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+    wrap.appendChild(cv);
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    const addBox = (o, cls) => {
+      const b = document.createElement('div'); b.className = 'box ' + cls; b.dataset.id = o.id;
+      Object.assign(b.style, { left: o.x * scale + 'px', top: o.y * scale + 'px', width: Math.max(4, o.w * scale) + 'px', height: Math.max(4, o.h * scale) + 'px' });
+      b.title = o.id;
+      wrap.appendChild(b);
+    };
+    p.images.forEach(o => addBox(o, 'i'));
+    p.texts.forEach(o => addBox(o, 't'));
+    attachBand(wrap);
+    host.append(title, wrap);
+  }
+  refreshTags();
+}
+
+// Clic = sélectionner un cadre (Ctrl / Maj = ajouter ou retirer) ; glisser = cadre de sélection
+// (Ctrl / Maj = ajouter à la sélection). Clic dans le vide = tout désélectionner.
+function attachBand(wrap) {
+  let st = null;
+  wrap.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const r = wrap.getBoundingClientRect();
+    st = { x: e.clientX - r.left, y: e.clientY - r.top, add: e.ctrlKey || e.metaKey || e.shiftKey, moved: false, target: e.target.closest('.box'), band: null };
+    wrap.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  wrap.addEventListener('pointermove', e => {
+    if (!st) return;
+    const r = wrap.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    if (!st.moved && Math.hypot(x - st.x, y - st.y) < 5) return;
+    st.moved = true;
+    if (!st.band) { st.band = document.createElement('div'); st.band.className = 'band'; wrap.appendChild(st.band); }
+    Object.assign(st.band.style, { left: Math.min(x, st.x) + 'px', top: Math.min(y, st.y) + 'px', width: Math.abs(x - st.x) + 'px', height: Math.abs(y - st.y) + 'px' });
+  });
+  const end = e => {
+    if (!st) return;
+    const s0 = st; st = null;
+    if (s0.band) {
+      const br = s0.band.getBoundingClientRect(); s0.band.remove();
+      if (!s0.add) sel.clear();
+      const wantT = $('band-t').checked, wantI = $('band-i').checked;
+      wrap.querySelectorAll('.box').forEach(b => {
+        if (b.classList.contains('t') ? !wantT : !wantI) return;
+        const bb = b.getBoundingClientRect(), cx = bb.left + bb.width / 2, cy = bb.top + bb.height / 2;
+        if (cx >= br.left && cx <= br.right && cy >= br.top && cy <= br.bottom) sel.add(b.dataset.id);
+      });
+    } else if (s0.target) {
+      const id = s0.target.dataset.id;
+      if (s0.add) { sel.has(id) ? sel.delete(id) : sel.add(id); }
+      else { sel.clear(); sel.add(id); }
+    } else if (!s0.add) sel.clear();
+    refreshSel();
+  };
+  wrap.addEventListener('pointerup', end);
+  wrap.addEventListener('pointercancel', () => { if (st?.band) st.band.remove(); st = null; });
+}
+
+function findItem(id) {
+  for (const p of state.pages) {
+    const t = p.texts.find(x => x.id === id); if (t) return { kind: 't', o: t };
+    const i = p.images.find(x => x.id === id); if (i) return { kind: 'i', o: i };
+  }
+  return null;
+}
+// Ajoute à la sélection les cadres SEMBLABLES : images de même taille affichée, textes de même police et même corps.
+function selectSimilar() {
+  const items = [...sel].map(findItem).filter(Boolean);
+  for (const p of state.pages) {
+    for (const im of p.images) if (items.some(f => f.kind === 'i' && Math.abs(f.o.w - im.w) < 2 && Math.abs(f.o.h - im.h) < 2)) sel.add(im.id);
+    for (const t of p.texts) if (items.some(f => f.kind === 't' && f.o.font === t.font && Math.abs(f.o.fs - t.fs) < .3)) sel.add(t.id);
+  }
+  refreshSel();
+}
+function refreshSel() {
+  document.querySelectorAll('.box').forEach(b => b.classList.toggle('sel', sel.has(b.dataset.id)));
+  const items = [...sel].map(findItem).filter(Boolean);
+  const nT = items.filter(f => f.kind === 't').length, nI = items.length - nT;
+  const rs = $('role-select');
+  $('sel-tools').hidden = !items.length;
+  if (!items.length) { $('sel-info').textContent = 'Aucune — clique sur un cadre, ou glisse pour en entourer plusieurs.'; $('sel-role').hidden = true; return; }
+  if (items.length === 1) {
+    const { kind, o } = items[0];
+    $('sel-info').innerHTML = kind === 't'
+      ? `<b>${o.id}</b> — texte<br>Forme : <code>${esc(anon(o.raw))}</code><br>Police ${esc(o.font)}, ${o.fs.toFixed(1)} pt`
+      : `<b>${o.id}</b> — image<br>${o.w.toFixed(0)} × ${o.h.toFixed(0)} pt affichés, ${o.pw ?? '?'} × ${o.ph ?? '?'} px`;
+  } else {
+    $('sel-info').innerHTML = `<b>${items.length} cadres</b> sélectionnés — ${nT} texte(s), ${nI} image(s)`;
+  }
+  if (nT && nI) {
+    $('sel-role').hidden = true;
+    $('sel-info').innerHTML += '<br><span style="color:var(--red)">Sélection mixte : garde seulement des textes OU seulement des images pour leur donner un rôle (cases « le cadre prend » ci-contre).</span>';
+    return;
+  }
+  const list = nT ? TEXT_ROLES : IMG_ROLES;
+  rs.innerHTML = list.map(([r]) => `<option value="${esc(r)}">${r ? esc(r) : '— non précisé —'}</option>`).join('');
+  const cur = new Set(items.map(f => roles[f.o.id] || ''));
+  if (cur.size === 1) rs.value = [...cur][0];
+  else { rs.insertAdjacentHTML('afterbegin', '<option value="__mixed">— rôles différents —</option>'); rs.value = '__mixed'; }
+  $('sel-role').hidden = false;
+}
+$('role-select').onchange = e => {
+  const v = e.target.value; if (v === '__mixed') return;
+  for (const id of sel) { if (v) roles[id] = v; else delete roles[id]; }
+  refreshTags(); refreshSel(); buildReport();
+};
+function refreshTags() {
+  document.querySelectorAll('.box').forEach(b => {
+    b.querySelector('.tag')?.remove();
+    const r = roles[b.dataset.id];
+    if (r) { const s = document.createElement('span'); s.className = 'tag'; s.textContent = ROLE_SHORT[r] || r; s.title = r; b.appendChild(s); }
+  });
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ─── Rapport ─────────────────────────────────────────────────────────────────
+function buildReport() {
+  const { raw, pages, size } = state;
+  const r1 = n => Math.round(n * 10) / 10;
+  const L = [];
+  L.push('=== DIAGNOSTIC PDF THROMBINOSCOPE (anonymisé) ===');
+  L.push(`PDF ${raw.version} · ${(size / 1024).toFixed(0)} Ko · ${pages.length} page(s) · chiffré: ${raw.encrypted ? 'oui' : 'non'} · flux d'objets: ${raw.objStreams}`);
+  L.push(`Producer: ${raw.producer ?? '—'} · Creator: ${raw.creator ?? '—'}`);
+  L.push('');
+  L.push(`--- Polices (${raw.fonts.length}) ---`);
+  const fk = new Map();
+  raw.fonts.forEach(f => { const k = `${f.sub} ${f.base} enc=${f.enc} ToUnicode=${f.toUnicode ? 'oui' : 'NON'}`; fk.set(k, (fk.get(k) || 0) + 1); });
+  for (const [k, n] of fk) L.push(`${n}× ${k}`);
+  L.push('');
+  L.push(`--- Images dans le fichier (${raw.images.length}) ---`);
+  const ik = new Map();
+  raw.images.forEach(im => { const k = `${im.w}×${im.h} bpc=${im.bpc} cs=${im.cs} filtre=${im.filter}${im.smask ? ' +SMask' : ''}${im.mask ? ' +Mask' : ''}`; ik.set(k, (ik.get(k) || 0) + 1); });
+  for (const [k, n] of ik) L.push(`${n}× ${k}`);
+  for (const p of pages) {
+    L.push('');
+    L.push(`=== Page ${p.pageNo} : ${r1(p.W)} × ${r1(p.H)} pt, rotation ${p.rotate}° · textes ${p.texts.length} · images ${p.images.length} · ops showText ${p.textOps} · ops tracé ${p.pathOps}`);
+    L.push('(coordonnées en points, origine en HAUT à gauche ; x y l h)');
+    L.push('-- Images affichées --');
+    p.images.forEach(im => L.push(`${im.id} [${im.kind}] ${r1(im.x)} ${r1(im.y)} ${r1(im.w)} ${r1(im.h)} · ${im.pw ?? '?'}×${im.ph ?? '?'} px${roles[im.id] ? ' · RÔLE: ' + roles[im.id] : ''}`));
+    L.push('-- Textes --');
+    p.texts.forEach(t => {
+      const toks = t.raw.split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(caseOf).join(' ');
+      L.push(`${t.id} ${r1(t.x)} ${r1(t.y)} ${r1(t.w)} ${r1(t.h)} · ${t.font} ${r1(t.fs)}pt · "${anon(t.raw)}" · casse: ${toks}${roles[t.id] ? ' · RÔLE: ' + roles[t.id] : ''}`);
+    });
+    L.push('-- Image → textes juste en dessous --');
+    pairUnder(p).forEach(({ img, under }) => {
+      L.push(`${img.id} → ${under.length ? under.map(t => `${t.id}(+${r1(t.y - img.y - img.h)}) "${anon(t.raw)}"`).join(' | ') : 'AUCUN texte dessous'}`);
+    });
+  }
+  $('report').value = L.join('\n');
+}
+
+// ─── Branchements ────────────────────────────────────────────────────────────
+const drop = $('drop'), inp = $('file');
+drop.onclick = () => inp.click();
+inp.onchange = () => handleFile(inp.files[0]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); handleFile(e.dataTransfer.files[0]); };
+$('btn-similar').onclick = selectSimilar;
+$('btn-clear').onclick = () => { sel.clear(); refreshSel(); };
+$('show-content').onchange = e => document.querySelectorAll('.page-wrap').forEach(w => w.classList.toggle('blank', !e.target.checked));
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('report').value); $('copy-status').textContent = '✓ Copié'; }
+  catch (e) { $('report').select(); document.execCommand('copy'); $('copy-status').textContent = '✓ Copié'; }
+  setTimeout(() => $('copy-status').textContent = '', 2500);
+};
+if (!window.pdfjsLib) setStatus('❌ La bibliothèque pdf.js n\'a pas pu être chargée (connexion internet nécessaire au premier chargement).');
+</script>
+</body>
+</html>

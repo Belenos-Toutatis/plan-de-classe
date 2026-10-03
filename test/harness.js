@@ -88,6 +88,7 @@ function loadApp(htmlPath) {
     Map, Set, WeakMap, WeakSet, Symbol, parseInt, parseFloat, isNaN, isFinite,
     encodeURIComponent, decodeURIComponent, URL, TextEncoder, TextDecoder,
     Blob: global.Blob || function () {}, crypto: global.crypto,
+    DecompressionStream: global.DecompressionStream,
     localStorage,
     navigator: { serviceWorker: undefined, mediaDevices: undefined, userAgent: 'node', language: 'fr' },
     location: { hostname: 'localhost', href: '', protocol: 'http:', reload() {}, replace() {} },
