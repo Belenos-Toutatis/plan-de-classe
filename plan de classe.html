@@ -121,6 +121,10 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 #hdr-pp{color:var(--pencil);font-size:.82em;white-space:nowrap;margin-left:2px}
 #hdr-pp:empty{display:none}
 .cipad{font-size:.85em;color:var(--cell-meta);margin-top:1px}
+/* Vignette photo en bas à droite d'une case du Plan Prof (sous le zoom du plan : en px, elle suit). */
+.cphoto{position:absolute;right:3px;bottom:3px;width:30px;height:30px;object-fit:cover;border-radius:3px;border:1px solid var(--rule-line);cursor:zoom-in}
+.cphoto:not([src]){visibility:hidden}
+@media print{.cphoto{display:none}}
 .cpos{font-size:.72em;color:var(--cell-meta);font-weight:600;position:absolute;top:2px;left:3px}
 .spec-badges{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px}
 .spec-badge{display:inline-block;font-size:.58em;font-weight:700;padding:0 3px;border-radius:3px;line-height:1.4;cursor:default;white-space:nowrap}
@@ -719,6 +723,7 @@ body.el-bulk-on.noise-widget-on:has(#tab-eleves.on) #toast, body.el-bulk-on.time
 .gchip.on,.tgchip.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
 .amchip.am-agr.on{background:var(--agr-fg);border-color:var(--agr-fg);color:#fff}
 .amchip.am-tt.on{background:var(--tt-fg);border-color:var(--tt-fg);color:#fff}
+.amchip.am-photo.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
 html[data-theme="dark"] .amchip.am-agr.on,
 html[data-theme="dark"] .amchip.am-tt.on{color:#1a252f}
 /* Surlignage des aménagements d'examen (Plan Prof) : les concernés gardent leur
@@ -3030,6 +3035,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
               title="Mettre en évidence les élèves qui reçoivent un sujet agrandi — les autres s'estompent (touche D)">📄 Agrandissement</span>
         <span class="amchip am-tt" id="am-chip-tt" onclick="toggleAmHighlight('tt')"
               title="Mettre en évidence les élèves qui ont un tiers-temps — les autres s'estompent (touche T)">⏱ Tiers-temps</span>
+        <span class="amchip am-photo" id="pl-chip-photo" onclick="togglePlanPhotos()" style="display:none"
+              title="Afficher la photo de chaque élève en bas à droite de sa case">📷 Photos</span>
       </span>
       <select id="tg-color-mode" onchange="setPlanColorMode(this.value)" title="Choisir comment les cases sont colorées" style="font-size:.82em;padding:2px 4px;border:1px solid #ccc;border-radius:3px">
         <option value="groupe">🎨 Couleur : Groupe</option>
@@ -6906,11 +6913,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.64.2';
+const APP_VERSION    = '2.65.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T08:34:34Z';
+const APP_BUILD_DATE = '2026-10-03T08:46:50Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -18917,6 +18924,7 @@ function renderTeacherGrid() {
   _updateGroupChipsState();
   // Pastilles de surlignage des aménagements (état restauré du localStorage au démarrage)
   _updateAmChipsUI();
+  _updatePhotoChipUI();
   // Synchronise le sélecteur de mode de coloration avec _planColorMode (utile au démarrage
   // ou quand le mode est changé par programme via setPlanColorMode)
   const colorSel = document.getElementById('tg-color-mode');
@@ -19869,6 +19877,7 @@ function buildCell(cls, row, col) {
         ${stu.groupe ? `<span class="gbadge g${stu.groupe}">G${stu.groupe}</span>` : ''}
         ${lateTime && !isAbsent ? `<span class="late-time">⏰ ${lateTime}</span>` : ''}
         <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+        ${_cellPhotoHTML(stu.id)}
         ${isAbsent ? '<div style="font-size:1.4em;margin-top:2px">🚫</div>' : ''}`;
       return cell;
     }
@@ -19944,6 +19953,7 @@ function buildCell(cls, row, col) {
       ${specBadges}
       <button class="cell-unplace" onclick="event.stopPropagation();removeSeat(getCls(),'${key}')" title="Retirer de sa place">✕</button>
       <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+        ${_cellPhotoHTML(stu.id)}
       <div class="cell-ctrs">
         <span class="cctr" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié">📦 ${stu.oublis}</span>
         <span class="cctr" style="background:${oubliColor(stu.non_travail)};border-radius:3px" onclick="event.stopPropagation();incNT('${stu.id}')" title="Travail non fait">📝 ${stu.non_travail}</span>
@@ -29765,12 +29775,41 @@ async function _photosRefresh(ask) {
       if (m && h.kind === 'file') found.add(m[1]);
     }
   } catch (e) { return false; }
+  const changed = found.size !== _photos.sids.size || [...found].some(x => !_photos.sids.has(x));
   _photos.sids = found;
   _photos.ready = true;
+  if (changed) _photosChanged();
   if (found.size) { try { localStorage.setItem('planClasse_photosKnown', '1'); } catch (e) {} }
   return true;
 }
 function _photoHas(sid) { return _photos.sids.has(sid); }
+// Vignette dans une case du Plan Prof (en bas à droite), si le bouton 📷 Photos est actif. La source est posée après coup :
+// la lecture du fichier est asynchrone, la construction de la case ne l'est pas.
+let _cphotoSeq = 0;
+// Bouton « 📷 Photos » du Plan Prof : vignettes affichées ou non, mémorisé (défaut : masquées).
+var _planPhotosOn = (() => { try { return localStorage.getItem('planClasse_planPhotos') === '1'; } catch (e) { return false; } })();
+function togglePlanPhotos() {
+  _planPhotosOn = !_planPhotosOn;
+  try { localStorage.setItem('planClasse_planPhotos', _planPhotosOn ? '1' : '0'); } catch (e) {}
+  renderTeacherGrid();
+}
+// La puce n'apparaît que s'il existe au moins une photo (sinon elle ne servirait à rien).
+function _updatePhotoChipUI() {
+  const c = document.getElementById('pl-chip-photo');
+  if (!c) return;
+  c.style.display = _photos.sids.size ? '' : 'none';
+  c.classList.toggle('on', _planPhotosOn);
+}
+function _cellPhotoHTML(sid) {
+  if (!_planPhotosOn || !_photoHas(sid)) return '';
+  const id = 'cph' + (++_cphotoSeq);
+  _photoUrl(sid).then(u => { const im = document.getElementById(id); if (!im) return; if (u) im.src = u; else im.remove(); });
+  return `<img class="cphoto" id="${id}" alt="" draggable="false" data-photo-sid="${_escAttr(sid)}" onclick="_cphotoClick(event,'${_escAttr(sid)}')" title="Clic : agrandir la photo">`;
+}
+// Après un import, un ajout ou un retrait : rafraîchir le plan s'il est affiché.
+function _photosChanged() {
+  if (document.getElementById('tab-plan')?.classList.contains('on') && typeof renderTeacherGrid === 'function') renderTeacherGrid();
+}
 async function _photoUrl(sid) {
   if (!_photos.sids.has(sid)) return null;
   if (_photos.urls.has(sid)) return _photos.urls.get(sid);
@@ -29945,6 +29984,7 @@ async function _trombiSave() {
   }
   _trombiRelease(); _trombi = null;
   closeMod2('mtrombi');
+  _photosChanged();
   toast(ko ? `📷 ${ok} photo(s) enregistrée(s), ${ko} en échec (voir la console).` : `📷 ${ok} photo${ok > 1 ? 's' : ''} enregistrée${ok > 1 ? 's' : ''}.`, ko ? 'warn' : undefined);
 }
 
@@ -29954,7 +29994,7 @@ async function _trombiSave() {
 // la Vue Élève, élément de la liste des non placés.
 function _photoSidFromTarget(t) {
   if (!t || !t.closest) return null;
-  const ex = t.closest('[data-photo-sid]');
+  const ex = t.closest('[data-photo-sid]');   // dont la vignette .cphoto du Plan Prof
   if (ex) return ex.getAttribute('data-photo-sid');
   const td = t.closest('td');
   const tr = td && td.parentElement && td.parentElement.matches && td.parentElement.matches('tr[data-sid]') ? td.parentElement : null;
@@ -29962,16 +30002,17 @@ function _photoSidFromTarget(t) {
   const us = t.closest('.us[data-sid]');
   if (us) return us.getAttribute('data-sid');
   const nm = t.closest('.cn, .svname');
-  if (nm && !_viewingSnapshot) {
+  // Plan Prof avec les vignettes affichées : c'est la vignette qu'on survole, plus le nom.
+  if (nm && !_viewingSnapshot && !(_planPhotosOn && nm.closest('#tg'))) {
     const cell = nm.closest('[data-key]');
     const cls = getCls();
     if (cell && cls && (cell.closest('#tg') || cell.closest('#svg'))) return cls.seating?.[cell.getAttribute('data-key')] || null;
   }
   return null;
 }
-const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0 };
+const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false };
 function _photoPopHide() {
-  clearTimeout(_photoPop.timer); _photoPop.timer = null; _photoPop.sid = null;
+  clearTimeout(_photoPop.timer); _photoPop.timer = null; _photoPop.sid = null; _photoPop.pinned = false;
   if (_photoPop.el) _photoPop.el.style.display = 'none';
 }
 function _photoPopPlace() {
@@ -29984,9 +30025,23 @@ function _photoPopPlace() {
 }
 document.addEventListener('mousemove', e => {
   _photoPop.x = e.clientX; _photoPop.y = e.clientY;
-  if (_photoPop.el && _photoPop.el.style.display === 'block') _photoPopPlace();
+  if (_photoPop.el && _photoPop.el.style.display === 'block' && !_photoPop.pinned) _photoPopPlace();
 }, { passive: true });
+async function _photoPopShow(sid) {
+  const url = await _photoUrl(sid);
+  if (!url || _photoPop.sid !== sid) return;
+  if (!_photoPop.el) {
+    _photoPop.el = document.createElement('div');
+    _photoPop.el.id = 'photo-pop';
+    document.body.appendChild(_photoPop.el);
+  }
+  const s = S.eleves[sid];
+  _photoPop.el.innerHTML = `<img src="${url}" alt=""><div>${_escName(s.prenom)} ${_escName(s.nom)}</div>`;
+  _photoPop.el.style.display = 'block';
+  _photoPopPlace();
+}
 document.addEventListener('mouseover', e => {
+  if (_photoPop.pinned) return;            // agrandie par un clic : reste jusqu'au prochain clic ailleurs
   const sid = _photoSidFromTarget(e.target);
   if (sid === _photoPop.sid) return;
   _photoPopHide();
@@ -29998,21 +30053,19 @@ document.addEventListener('mouseover', e => {
   }
   if (!_photoHas(sid)) return;
   _photoPop.sid = sid;
-  _photoPop.timer = setTimeout(async () => {
-    const url = await _photoUrl(sid);
-    if (!url || _photoPop.sid !== sid) return;
-    if (!_photoPop.el) {
-      _photoPop.el = document.createElement('div');
-      _photoPop.el.id = 'photo-pop';
-      document.body.appendChild(_photoPop.el);
-    }
-    const s = S.eleves[sid];
-    _photoPop.el.innerHTML = `<img src="${url}" alt=""><div>${_escName(s.prenom)} ${_escName(s.nom)}</div>`;
-    _photoPop.el.style.display = 'block';
-    _photoPopPlace();
-  }, 250);
+  _photoPop.timer = setTimeout(() => _photoPopShow(sid), 250);
 }, { passive: true });
-document.addEventListener('mousedown', _photoPopHide, { passive: true });
+// Clic sur une vignette du plan : la photo agrandie reste affichée (utile au doigt, sans survol).
+// Le clic ne doit pas atteindre la case (en mode appel, il marquerait l'élève absent).
+function _cphotoClick(e, sid) {
+  e.stopPropagation();
+  if (!S.eleves[sid] || _confHides(sid)) return;
+  _photoPopHide();
+  _photoPop.x = e.clientX; _photoPop.y = e.clientY;
+  _photoPop.sid = sid; _photoPop.pinned = true;
+  _photoPopShow(sid);
+}
+document.addEventListener('mousedown', e => { if (!(e.target.closest && e.target.closest('.cphoto'))) _photoPopHide(); }, { passive: true });
 document.addEventListener('scroll', _photoPopHide, { passive: true, capture: true });
 
 // Photo de la fiche complète : remplie après coup (lecture asynchrone du fichier). L'ouverture
@@ -30105,6 +30158,7 @@ async function _fichePhotoChosen(file) {
   _photos.ready = true;
   try { localStorage.setItem('planClasse_photosKnown', '1'); } catch (e) {}
   toast('📷 Photo enregistrée.');
+  _photosChanged();
   if (_ficheSid === sid) _fichePhotoFill(sid);
 }
 function _fichePhotoRemove() {
@@ -30112,7 +30166,7 @@ function _fichePhotoRemove() {
   if (!s) return;
   _uiConfirm({ title: '🗑 Retirer la photo', okLabel: 'Retirer', okClass: 'btn-d',
     message: `Supprimer la photo de ${s.prenom} ${s.nom} ?\nLe fichier est effacé du dossier photos/ — Ctrl+Z ne le ramène pas.`,
-    onOk: async () => { await _photoDelete(sid, true); if (_photoHas(sid)) { toast('⚠️ Photo non supprimée (accès au dossier refusé).', 'warn'); return; } toast('🗑 Photo retirée.'); if (_ficheSid === sid) _fichePhotoFill(sid); } });
+    onOk: async () => { await _photoDelete(sid, true); if (_photoHas(sid)) { toast('⚠️ Photo non supprimée (accès au dossier refusé).', 'warn'); return; } toast('🗑 Photo retirée.'); _photosChanged(); if (_ficheSid === sid) _fichePhotoFill(sid); } });
 }
 
 // ═══════════════════════════════════════════════════════════
