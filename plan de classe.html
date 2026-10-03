@@ -6975,11 +6975,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.67.0';
+const APP_VERSION    = '2.67.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T09:42:48Z';
+const APP_BUILD_DATE = '2026-10-03T09:46:20Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30330,6 +30330,8 @@ function _memoNeedsFull(s, answer) {
 function _memoShuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // 10 propositions : la bonne, 3 de la même classe, 6 d'autres classes du même niveau ; on complète
 // au besoin par d'autres classes, puis par la classe. Jamais deux libellés identiques.
+// Toutes du MÊME GENRE que l'élève (sinon le genre trahit la réponse) : jamais le genre opposé ;
+// un élève sans civilité renseignée ne sert qu'en dernier recours.
 function _memoChoices(s, answer) {
   const full = _memoNeedsFull(s, answer) ? 'full' : answer;
   const lab = o => _memoLabel(o, full);
@@ -30344,15 +30346,23 @@ function _memoChoices(s, answer) {
     return out;
   };
   const cls = S.classes[s.classe_id], lvl = classLevelOrder(cls?.nom || '');
-  const same = _memoActive(cls).filter(o => o.id !== s.id);
+  const civ = s.civilite === 'M' || s.civilite === 'F' ? s.civilite : null;
+  const sameCiv = o => !civ || o.civilite === civ;
+  const noCiv = o => civ && o.civilite !== 'M' && o.civilite !== 'F';
+  const sameAll = _memoActive(cls).filter(o => o.id !== s.id);
   const others = _memoRealClasses().filter(c => c.id !== cls?.id);
-  const sameLvl = others.filter(c => classLevelOrder(c.nom || '') === lvl).flatMap(_memoActive);
-  const anyOther = others.filter(c => classLevelOrder(c.nom || '') !== lvl).flatMap(_memoActive);
-  const fromCls = pick(same, 3, []);
-  const fromLvl = pick(sameLvl, 6, []);
-  const extra = pick(anyOther, 9 - fromCls.length - fromLvl.length, []);
-  const rest = pick(same, 9 - fromCls.length - fromLvl.length - extra.length, []);
-  return _memoShuffle([s, ...fromCls, ...fromLvl, ...extra, ...rest]).map(o => ({ sid: o.id, label: lab(o) }));
+  const sameLvlAll = others.filter(c => classLevelOrder(c.nom || '') === lvl).flatMap(_memoActive);
+  const anyOtherAll = others.filter(c => classLevelOrder(c.nom || '') !== lvl).flatMap(_memoActive);
+  const out = [];
+  const take = (cands, n) => { const before = out.length; pick(cands, before + n, out); return out.length - before; };
+  // 1) même genre : 3 de la classe, 6 du même niveau, puis compléments
+  const nCls = take(sameAll.filter(sameCiv), 3);
+  take(sameLvlAll.filter(sameCiv), 6 + (3 - nCls));
+  take(anyOtherAll.filter(sameCiv), 9 - out.length);
+  take(sameAll.filter(sameCiv), 9 - out.length);
+  // 2) dernier recours : civilité non renseignée (jamais le genre opposé)
+  for (const pool of [sameAll, sameLvlAll, anyOtherAll]) take(pool.filter(noCiv), 9 - out.length);
+  return _memoShuffle([s, ...out]).map(o => ({ sid: o.id, label: lab(o) }));
 }
 // Ordre de passage : tirage pondéré par la progression (si c'est moi), sinon au hasard.
 function _memoDeck(pool, count, me) {

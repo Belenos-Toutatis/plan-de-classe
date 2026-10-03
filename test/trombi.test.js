@@ -94,6 +94,23 @@ test('mémorisation : 10 propositions — 3 de la classe, 6 du même niveau, lib
   assert.ok(full.every(c => / NOM/.test(c.label)), 'variante prénom + nom');
 });
 
+test('mémorisation : propositions toutes du même genre que l\'élève', () => {
+  // Une fille sur deux, plus deux élèves sans civilité : jamais de garçon proposé pour une fille.
+  ev(`Object.values(S.eleves).forEach((s, i) => { s.civilite = i % 2 ? 'M' : 'F'; });
+      S.eleves['6B_7'].civilite = null; S.eleves['6C_7'].civilite = null;`);
+  for (let k = 0; k < 20; k++) {
+    const ch = JSON.parse(ev(`JSON.stringify(_memoChoices(S.eleves['6A_0'], 'prenom').map(c => S.eleves[c.sid].civilite))`));
+    assert.equal(ch.length, 10);
+    assert.ok(ch.every(c => c === 'F'), 'que des filles quand il y en a assez : ' + ch.join(','));
+  }
+  // Peu de filles disponibles : on complète par des civilités inconnues, JAMAIS par des garçons.
+  ev(`Object.values(S.eleves).forEach(s => { if (s.id !== '6A_0' && s.civilite === 'F' && !/^6A_[24]$/.test(s.id)) s.civilite = 'M'; })`);
+  const few = JSON.parse(ev(`JSON.stringify(_memoChoices(S.eleves['6A_0'], 'prenom').map(c => S.eleves[c.sid].civilite))`));
+  assert.ok(!few.includes('M'), 'aucun garçon : ' + few.join(','));
+  assert.deepEqual(few.slice().sort(), ['F', 'F', 'F', null, null].sort());
+  ev(`Object.values(S.eleves).forEach(s => { s.civilite = null; })`);
+});
+
 test('mémorisation : homonyme dans la classe → le nom est exigé', () => {
   ev(`S.eleves['6A_1'].prenom = 'A0'`);
   assert.equal(ev(`_memoNeedsFull(S.eleves['6A_0'], 'prenom')`), true);
