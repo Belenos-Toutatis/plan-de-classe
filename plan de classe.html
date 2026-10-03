@@ -431,6 +431,13 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .trombi-st{font-size:.85em;color:var(--pencil)}
 .trombi-st.ok{color:var(--ok-fg)}
 .trombi-st.bad{color:var(--danger-fg)}
+/* 🖼 Trombinoscope (affichage) */
+.tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.tv-card{text-align:center;cursor:pointer;border-radius:6px;padding:4px}
+.tv-card:hover{background:var(--paper-warm)}
+.tv-card img,.tv-none{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--rule-line);background:var(--paper-deep);display:block}
+.tv-none{display:flex;align-items:center;justify-content:center;font-size:2em;color:var(--pencil);border-style:dashed}
+.tv-name{font-size:.9em;margin-top:4px;line-height:1.25}
 /* 🧠 Jeu de mémorisation */
 .memo-setup{display:flex;flex-direction:column;gap:10px}
 .memo-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -2989,6 +2996,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
       <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
       <button class="btn btn-g btn-sm" onclick="openTrombiImport()" title="Importer les photos des élèves depuis le trombinoscope PDF exporté de MBN — elles s'affichent dans la fiche et au survol des noms">📷 Photos</button>
+      <button class="btn btn-g btn-sm" id="btn-trombiview" onclick="openTrombiView()" style="display:none" title="Afficher le trombinoscope d'une classe, et l'imprimer (cette classe ou toutes)">🖼 Trombinoscope</button>
       <button class="btn btn-g btn-sm" id="btn-memo" onclick="openMemoGame()" style="display:none" title="Jeu de mémorisation : retrouver le prénom (ou le nom) de chaque élève à partir de sa photo">🧠 Mémoriser</button>
       <button class="btn btn-p btn-sm" onclick="startSeatingEntry()">📍 Saisir les positions</button>
       <button class="btn btn-w btn-sm" onclick="resetAll()">↺ Réinitialiser compteurs</button>
@@ -3886,6 +3894,21 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-g" onclick="closeMod2('mtrombi')" style="margin-left:auto">Annuler</button>
       <button class="btn btn-p" id="trombi-go" onclick="_trombiSave()" disabled>📷 Enregistrer les photos</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🖼 Trombinoscope d'une classe (affichage + impression) -->
+<div id="mtrombiview" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:1000px;width:100%">
+    <h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">🖼 Trombinoscope
+      <select id="mtrombiview-cls" onchange="_tvClassId=this.value;renderTrombiView()" style="font-size:.6em"></select>
+      <span id="mtrombiview-count" class="muted-line" style="margin:0;font-size:.55em;font-weight:400"></span></h2>
+    <div id="mtrombiview-body" style="max-height:66vh;overflow-y:auto;padding-right:4px"></div>
+    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="printTrombi(false)" title="Une page A4 pour la classe affichée">🖨 Imprimer cette classe</button>
+      <button class="btn btn-g" onclick="printTrombi(true)" title="Une page A4 par classe (classes qui ont au moins une photo)">🖨 Imprimer toutes les classes</button>
+      <button class="btn btn-g" onclick="closeMod2('mtrombiview')" style="margin-left:auto">Fermer</button>
     </div>
   </div>
 </div>
@@ -6975,11 +6998,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.67.1';
+const APP_VERSION    = '2.68.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T09:46:20Z';
+const APP_BUILD_DATE = '2026-10-03T15:14:46Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30376,8 +30399,10 @@ function _memoDeck(pool, count, me) {
 }
 
 function _updateMemoBtn() {
-  const b = document.getElementById('btn-memo');
-  if (b) b.style.display = _photos.sids.size ? '' : 'none';
+  for (const id of ['btn-memo', 'btn-trombiview']) {
+    const b = document.getElementById(id);
+    if (b) b.style.display = _photos.sids.size ? '' : 'none';
+  }
 }
 function openMemoGame() {
   _memo = { stage: 'setup', prefs: _memoPrefs() };
@@ -30556,6 +30581,76 @@ function renderMemo() {
   _photoUrl(c.sid).then(u => { const im = document.getElementById('memo-ph'); if (im && u && _memo?.cur?.sid === c.sid) im.src = u; });
   if (!a && p.level === 'hard') setTimeout(() => document.getElementById('memo-input')?.focus(), 30);
   if (a && !a.ok) setTimeout(() => document.getElementById('memo-next')?.focus(), 30);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🖼 TROMBINOSCOPE — affichage par classe + impression (modale mtrombiview)
+// ═══════════════════════════════════════════════════════════
+let _tvClassId = null;
+const _tvStudents = cid => _memoActive(S.classes[cid])
+  .sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr'));
+function openTrombiView() {
+  _tvClassId = getCls()?.id || _memoRealClasses()[0]?.id || null;
+  if (!_photos.ready && dirHandle) _photosRefresh(true).then(() => renderTrombiView());
+  renderTrombiView();
+  openMod('mtrombiview');
+}
+function renderTrombiView() {
+  const box = document.getElementById('mtrombiview-body'); if (!box) return;
+  const classes = _memoRealClasses();
+  if (_tvClassId && !S.classes[_tvClassId]) _tvClassId = classes[0]?.id || null;
+  const sel = document.getElementById('mtrombiview-cls');
+  if (sel) sel.innerHTML = classes.map(c => `<option value="${_escAttr(c.id)}"${c.id === _tvClassId ? ' selected' : ''}>${_escName(c.nom)}</option>`).join('');
+  if (!_tvClassId) { box.innerHTML = _emptyStateHTML('🖼', 'Aucune classe', 'Crée ou importe d\'abord une classe.'); return; }
+  const studs = _tvStudents(_tvClassId);
+  const withPh = studs.filter(s => _photoHas(s.id)).length;
+  document.getElementById('mtrombiview-count').textContent = `${studs.length} élève${studs.length > 1 ? 's' : ''} · ${withPh} avec photo`;
+  box.innerHTML = studs.length ? `<div class="tv-grid">${studs.map(s => `
+    <div class="tv-card" onclick="closeMod2('mtrombiview');_modalReturnTo['mfiche']=()=>openTrombiView();openFiche('${_escAttr(s.id)}')" title="Ouvrir la fiche">
+      ${_photoHas(s.id) ? `<img data-tv-ph="${_escAttr(s.id)}" alt="">` : '<div class="tv-none">📷</div>'}
+      <div class="tv-name${_delegueNameCls(s)}">${_escName(s.prenom)}<br><b>${_escName((s.nom || '').toLocaleUpperCase('fr'))}</b></div>
+    </div>`).join('')}</div>` : _emptyStateHTML('👥', 'Aucun élève dans cette classe', '');
+  box.querySelectorAll('img[data-tv-ph]').forEach(im => _photoUrl(im.dataset.tvPh).then(u => { if (u) im.src = u; }));
+}
+// Impression : une page par classe (A4 portrait, 6 colonnes de photos de 27 mm — mesuré : en 5 colonnes de
+// 30 mm, une classe de 32 élèves faisait 305 mm, plus qu'une page ; en 6 colonnes elle tient jusqu'à ~40 élèves). Couleurs LITTÉRALES (convention
+// des constructeurs d'impression : un token suivrait le thème de l'écran). Les photos sont des
+// URL blob: lues de façon asynchrone — on attend qu'elles soient toutes décodées avant print().
+async function printTrombi(all) {
+  const ids = all ? _memoRealClasses().filter(c => _tvStudents(c.id).some(s => _photoHas(s.id))).map(c => c.id)
+                  : [_tvClassId].filter(Boolean);
+  if (!ids.length) { toast('⚠️ Aucune classe avec photo à imprimer.', 'warn'); return; }
+  const today = new Date().toLocaleDateString('fr-FR');
+  const pages = ids.map((cid, i) => {
+    const cls = S.classes[cid], studs = _tvStudents(cid);
+    const sub = [cls.année ? `Année ${cls.année}` : '', cls.profPrincipal ? `PP : ${cls.profPrincipal}` : '', `${studs.length} élèves`].filter(Boolean).join(' · ');
+    return `<div style="${i ? 'page-break-before:always;break-before:page;' : ''}font-family:Arial,sans-serif">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #1a252f;padding-bottom:4px;margin-bottom:8px">
+        <h1 style="font-size:15pt;margin:0;color:#0e1a26">Trombinoscope — ${_escName(cls.nom)}</h1>
+        <span style="font-size:9pt;color:#56697f">${_escName(sub)} · imprimé le ${today}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:3mm 2.5mm">
+        ${studs.map(s => `<div style="text-align:center;break-inside:avoid;page-break-inside:avoid">
+          ${_photoHas(s.id) ? `<img data-tp-ph="${_escAttr(s.id)}" alt="" style="width:27mm;height:27mm;object-fit:cover;border:0.3mm solid #c8d2e0;border-radius:1.5mm;display:block;margin:0 auto">`
+                            : `<div style="width:27mm;height:27mm;border:0.3mm dashed #9aa6b5;border-radius:1.5mm;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8pt;color:#56697f">pas de photo</div>`}
+          <div style="font-size:8.5pt;line-height:1.2;margin-top:1mm;color:#0e1a26">${_escName(s.prenom)}<br><b>${_escName((s.nom || '').toLocaleUpperCase('fr'))}</b></div>
+        </div>`).join('')}
+      </div></div>`;
+  }).join('');
+  const pa = document.getElementById('pa');
+  pa.innerHTML = `<div style="padding:2mm">${pages}</div>`;
+  const imgs = [...pa.querySelectorAll('img[data-tp-ph]')];
+  await Promise.all(imgs.map(async im => {
+    const u = await _photoUrl(im.dataset.tpPh);
+    if (!u) { im.remove(); return; }
+    im.src = u;
+    try { await im.decode(); } catch (e) {}
+  }));
+  pa.style.display = 'block';
+  const _ot = document.title;
+  document.title = all ? `Trombinoscopes - toutes les classes - ${today.replace(/\//g, '-')}` : `Trombinoscope - ${S.classes[ids[0]].nom}`;
+  _setPrintOrientation('portrait');
+  setTimeout(() => { window.print(); document.title = _ot; pa.style.display = 'none'; pa.innerHTML = ''; }, 200);
 }
 
 // ═══════════════════════════════════════════════════════════
