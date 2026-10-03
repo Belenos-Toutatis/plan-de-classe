@@ -91,6 +91,9 @@ Encodées en `data:font/woff2;base64,...` via 3 blocs `@font-face` en tête du `
 - **Nav à 2 niveaux** matérialisée par un séparateur vertical (`border-right` sur `.tab-group:not(:last-child)`)
 - Variables d'espacement `--sp-1..8` (4 → 64 px), radius `--radius-sm/md/lg` (3, 5, 8 px), ombres `--shadow-card` et `--shadow-pop`
 
+### Aides repliables (`data-help`, v2.73.0)
+Tout bloc d'aide marqué `data-help="clé"` reçoit un ✕ et un bouton « ❔ Aide » (inséré avant le premier bloc de la clé) le réaffiche ; mémorisé dans `localStorage.planClasse_help_<clé>` (`_helpInit` après `init()`, `_helpSet`, `_helpApplyAll`). Le pliage passe par la classe `.help-folded` (`display:none !important`) : Config Salle affiche ses aides par `style.display` selon le mode, une classe les masque toutes sans se battre avec lui. Clés : `qcm` (3 bandeaux de l'onglet QCMcam), `ipads` (rappel légal), `cfg` (aides des 6 modes de Config Salle). Les onglets Évaluations gardent leur mécanisme `evhelp` historique. **Pastilles `?` au toucher** : un clic ou un toucher sur `.tb-hint` affiche son texte dans une bulle `#help-bubble` (l'infobulle native est invisible au doigt).
+
 ### Hints en pastilles `?`
 Les anciens textes d'astuce `<span class="tb-hint">…</span>` sont visuellement convertis en **pastilles rondes grises** avec leur contenu transformé en infobulle native (`title=`). Conversion faite au runtime par `_initHints()` (parcourt les `.tb-hint`, déplace le textContent dans `title`, vide le texte visible). Appelé à `init()` puis re-déclenché après chaque `renderStudents()` via un wrapper sur la fonction d'origine. Pastille stylée via `.tb-hint::after { content: "?" }`.
 
@@ -828,7 +831,7 @@ Sous le récap dans l'onglet **Tablettes**, section **"⚙️ Configuration des 
 - `printSuiviPret()` itère `pool.count` lignes, étiquette via `poolLabel()`, lot via `findPoolLot()`. Les numéros dans `pool.unavailable` apparaissent grisés avec mention "🚫 indisponible" en colspan sur les colonnes Élève/Remarque (le prof voit qu'elles sont HS au moment du prêt). **Nom du fichier PDF** (`document.title`, repris comme nom par défaut à l'impression) : `Suivi_Pret_Tablettes-<pool>-<classe+G?>-<AAAA-MM-JJ>-<horaire>`, parties vides omises (`.filter(Boolean)`), chaque morceau assaini (`[\\/:*?"<>|]` retirés, espaces → `_`). La date utilise `dateVal` (format ISO, tri chronologique).
 
 ### Réinitialisation du fichier (modal `mreset`)
-Bouton **🗑 Réinitialiser…** dans le header de l'onglet **Classes** (en danger, à droite). Ouvre la modale `mreset` (récap des compteurs actuels + 3 options). Refondue le 2026-08-02 : les deux premières options n'étaient ni cohérentes ni utiles — « conserver les salles » ne conservait QUE les salles et les classes mobiles, en jetant les disciplines, le référentiel, les commentaires types et les motifs d'ajustement, c'est-à-dire précisément ce qu'un enseignant paramètre une fois pour toutes.
+Entrée **🗑 Réinitialiser le fichier…** du menu **💾 Données ▾** (v2.73.0 — avant, bouton de l'onglet Classes : il agit sur tout le fichier, pas sur les classes). Ouvre la modale `mreset` (récap des compteurs actuels + 3 options). Refondue le 2026-08-02 : les deux premières options n'étaient ni cohérentes ni utiles — « conserver les salles » ne conservait QUE les salles et les classes mobiles, en jetant les disciplines, le référentiel, les commentaires types et les motifs d'ajustement, c'est-à-dire précisément ce qu'un enseignant paramètre une fois pour toutes.
 
 - **🎓 Fin d'année scolaire** (`resetEndOfYear()` → modale `mresetyear` → `_doResetEndOfYear(exportFirst)`) :
   - ⚠️ **La frontière est : indexé par élève ou par classe → part ; paramétré une fois pour toutes → reste.** **Toute nouvelle section de `S` doit être rangée dans l'un des deux camps** — une section oubliée SURVIT par défaut, ce qui est le mauvais côté pour une donnée d'année. Un test (`run.test.js`) monte un état maximal et vérifie les deux camps.
@@ -1611,6 +1614,8 @@ Sous la barre de la salle (nom, dimensions), un bloc `#cfg-salle-classes` (`_ren
 - `_cfgToggleSalleClass` : cocher rattache (sans changer la salle active de la classe) ; décocher détache, avec `_uiConfirm` si des élèves y sont placés — et **recoche la case** si l'utilisateur annule ou si le retrait est refusé, sinon l'affichage mentirait.
 
 ## Config Salles — édition des horaires
+
+**Horaires de l'établissement (v2.73.0)** : bouton **⧉ Appliquer à toutes les salles** (`applyScheduleToAllSalles`, confirmation, annulable) — l'emploi du temps est celui de l'établissement, on ne le ressaisit plus salle par salle. Une nouvelle salle créée sans source reprend les horaires de la salle affichée.
 
 L'onglet Config Salle a une sous-section **"📅 Horaires de la journée"** sous la grille :
 - Onglets de jour (Lundi → Dimanche) avec compteur de créneaux par jour
@@ -2601,6 +2606,12 @@ Bouton **🎓 Disciplines** dans la toolbar de l'onglet **Devoirs** (uniquement 
 
 ## Classes recomposées (virtual classes)
 
+### Groupes G1/G2/G3 propres à la recomposée (v2.73.0)
+`cls.stuGroups = { sid: 1|2|3 }`, **seulement sur une classe recomposée**. Classe réelle : `stu.groupe`, inchangé. Régler un groupe depuis une recomposée (pastille G de l'onglet Élèves, clic droit, actions en lot) ne touche plus la classe d'origine (avant, si — avec un avertissement depuis v2.69).
+- ⚠️ **Toute lecture du groupe dans le contexte d'une classe passe par `_grp(stu|sid, cls)`** (cls par défaut = `getCls()`), toute écriture par `_setGrp(stu, g, cls)`. Une soixantaine de sites convertis : plan, Vue Élève, filtres de groupe, compteurs, appel, mélange (zones de groupe), tablettes (modes G1/G2/G3, auto-affectation, plan de débordement), interroger, impressions du plan, Plusieurs plans, liste imprimée, tableau des positions, Vue d'ensemble et stats (par la classe de la ligne), tableurs (filtre, dates par groupe, absents, cases 🚪), exports XLSX/ODS. `stu.groupe` direct ne vaut plus que pour la **classe d'origine** : fiche (qui ajoute « · DNL : G2 » pour chaque recomposée), Modifier l'élève (`#es-grp-hint` le dit quand on l'ouvre depuis une recomposée), import, archives d'instantanés, démo.
+- Initialisation : à la création d'une recomposée et pour un membre ajouté ensuite, **copie du groupe d'origine** ; à la migration (fichier antérieur), même copie — l'affichage ne change pas, seule l'indépendance arrive. Entrées hors 1..3 ou d'un non-membre supprimées au chargement ; la table est retirée d'une classe réelle.
+- Purge : `_purgeStudentRefs` ; `mvcSave` ne garde que les membres restants. Test dans `run.test.js`.
+
 Une « classe recomposée » est une `cls` avec `cls.virtual = true` créée via l'onglet Classes (bouton **+ Nouvelle classe recomposée**). Elle a son propre roster (sids issus de n'importe quelle(s) classe(s) réelle(s)), sa propre salle/plan, ses propres bilans et disciplines.
 
 ### Modale `mvc` — filtres et présence par période
@@ -2770,6 +2781,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - ⚠️ Non testable en aperçu desktop sur le ressenti réel iPad — validation finale sur l'appareil. Les `TouchEvent` synthétiques permettent toutefois de vérifier la logique (saisie, échange, annulation, menu contextuel) automatiquement.
 
 ## Conventions de développement
+- **Barres d'outils groupées (v2.73.0)** : `.tb-grp` (filet gauche) + `.tb-grp-lbl` (petit libellé mono). Élèves : Élèves · Photos · Positions · Suivi, et un menu **⚠ Remettre à zéro ▾** à droite (compteurs, positions) au lieu de deux boutons orange/rouge au milieu ; « 📊 Export » → **🗒 Tableau des positions**. Plan : Plan · Séance · Placement · ↩ ↪ · Zoom / Afficher. Classes : « 🖨 Bilan » → **🖨 Effectifs**. Un nouveau bouton s'ajoute DANS le groupe qui lui correspond.
 - **Ton et vocabulaire (v2.72.0, arbitrage de l'utilisateur)** : **tutoiement partout** (« Clique », « Tu peux »), jamais de vouvoiement dans un nouveau texte. Mots fixés (glossaire dans ⓘ → « 📖 Les mots de l'application ») : ⚙ *Réglages* (toute l'app) · ⚙ *Réglages des évaluations* (communs) · ⚙ *Réglages de l'évaluation* (un devoir) ; *Arrondi* (pas « granulométrie ») ; bouton **✓ Enregistrer** (pas « Sauvegarder ») ; **✏️ Modifier** (pas « Éditer ») ; *Instantané* (pas « snapshot ») ; *Ordre de ramassage* (pas « pattern ») ; **QCMcam** (graphie officielle, nom de l'onglet compris). ⚠️ Les noms INTERNES (`snapshots`, `collectPatterns`, `meanGranularity`, `qcm*`) ne changent pas — seul le texte visible. ⚠️ Une apostrophe ajoutée dans une chaîne JS entre `'…'` casse tout le script (« l'instantané » → `l\'instantané`) : `node --check` sur le script extrait, ou `npm test`, le détecte.
 - **Une icône par concept** : ⧉ Copier / Dupliquer · 📋 **seulement** Informations · 📥 Coller · 🗑 supprimer un objet (✕ = retirer une ligne / fermer) · ⛓ Contraintes · 🔒 **seulement** mode confidentiel · 🔀 placement aléatoire / mélange · 🎲 **seulement** Interroger · 📤 Export ENT · 🗂 Ordres de ramassage.
 - **Palette des statuts** : une seule, celle des `.spec-*` (cf. *Pastilles d'aménagement*). Toute surface d'écran qui colore un statut lit ces classes — par la classe elle-même, ou par **`_specColors(cls)`** (fond + encre calculés, cache par thème) quand il faut une couleur en style inline (boutons de l'onglet Élèves) ; pastilles `.ctx-sw` dans le menu clic droit.

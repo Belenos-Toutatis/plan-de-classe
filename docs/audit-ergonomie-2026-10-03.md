@@ -369,6 +369,15 @@ Trois façons de présenter l'aide selon l'onglet :
 >
 > **Reste ouvert du lot F :** « mini-note » (Type A) gardé, distinct de « question » ; « Tags » gardé ; lisibilité de la carte de classe (§ 6.5) et légende des mentions F E AT AC ; « Fiche » : couleurs « parti » et « Aussi dans » (§ 6.4).
 >
+> **Lot G — fait en v2.73.0** (arbitrages de l'utilisateur : quatre chantiers sur cinq) :
+> - **groupe propre aux classes recomposées** (`cls.stuGroups`, lu par `_grp`) : régler G1/G2 dans une recomposée ne touche plus la classe d'origine (§ 1.7) ; la fiche montre les deux ;
+> - **horaires de l'établissement** : « ⧉ Appliquer à toutes les salles » ; une nouvelle salle reprend les horaires de la salle affichée ;
+> - **aide repliable généralisée** (✕ / ❔ Aide) sur les bandeaux de QCMcam, Tablettes et Config Salle ; **pastilles « ? » ouvertes au toucher** (§ 5.2) ;
+> - **barres d'outils regroupées** : Élèves (Élèves · Photos · Positions · Suivi, remises à zéro dans un menu à droite) et Plan (Plan · Séance · Placement · ↩ ↪ · Zoom / Afficher) ; « 🖨 Effectifs » ; « Réinitialiser le fichier » déplacé dans 💾 Données (§ 5.1) ;
+> - en passant : « 📤 ENT » écrit en toutes lettres dans le tableur, il se confondait avec 📥 (coller).
+>
+> **Non retenu :** couleurs de groupe en Vue Élève.
+>
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
 | Lot | Contenu | Risque | Taille |

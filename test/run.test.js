@@ -2533,3 +2533,34 @@ test('niveau de classe : cls.niveau prime sur le nom, valeur inconnue purgée au
   assert.equal(get('clsLevel(S.classes.c3)'), 70, 'puis déduit du nom');
   assert.equal(get('clsLevel(null)'), 999);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Groupes propres aux classes recomposées (v2.73.0, audit 2026-10-03 § 1.7)
+// ─────────────────────────────────────────────────────────────────────────────
+test('groupes recomposée : initialisés depuis l\'origine, indépendants ensuite, purgés à la suppression', () => {
+  setState({
+    cur: 'v1',
+    classes: {
+      c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2'], activeRoom: 'r1', rooms: { r1: { seating: {} } } },
+      v1: { id: 'v1', nom: 'DNL', virtual: true, eleves: ['s1', 's2'], activeRoom: 'r1', rooms: { r1: { seating: {} } } },
+    },
+    eleves: {
+      s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1', groupe: 1 },
+      s2: { id: 's2', nom: 'B', prenom: 'b', classe_id: 'c1', groupe: 2 },
+    },
+    salles: { r1: { nom: 'S', rows: 2, cols: 2, positions_vides: [] } },
+    evaluations: {}, attendance: {}, snapshots: {}, movedHighlights: {},
+  });
+  ev('postLoadHook()');
+  assert.deepEqual(get('S.classes.v1.stuGroups'), { s1: 1, s2: 2 }, 'migration : copie du groupe d\'origine');
+  assert.equal(get("'stuGroups' in S.classes.c1"), false, 'pas de table sur une classe réelle');
+  ev("_setGroupe('s1', 3)");                          // classe affichée = la recomposée
+  assert.equal(get("_grp('s1', S.classes.v1)"), 3);
+  assert.equal(get('S.eleves.s1.groupe'), 1, 'la classe d\'origine garde G1');
+  assert.equal(get("_grp('s1', S.classes.c1)"), 1);
+  ev("S.cur = 'c1'; _setGroupe('s2', null)");
+  assert.equal(get('S.eleves.s2.groupe'), null, 'dans la classe réelle on règle stu.groupe');
+  assert.equal(get("_grp('s2', S.classes.v1)"), 2, 'la recomposée garde son G2');
+  ev("_purgeStudentRefs('s1')");
+  assert.equal(get("'s1' in S.classes.v1.stuGroups"), false, 'purge');
+});

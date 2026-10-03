@@ -2191,6 +2191,16 @@ input[type="text"].meval-niveau-input:focus { background: transparent !important
 }
 
 /* Pastille de couleur d'un statut dans le menu clic droit : la couleur vient de la classe .spec-* (une seule palette). */
+/* Aides repliables génériques (data-help="clé") — audit 2026-10-03, § 5.2. Classe et non
+   style inline : Config Salle affiche/masque ses aides par style.display selon le mode. */
+[data-help]{position:relative;padding-right:30px !important}
+.help-folded{display:none !important}
+.help-x{position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1}
+.help-show{display:inline-block;margin:0 0 8px;font-size:.8em;padding:2px 10px !important}
+#help-bubble{position:fixed;z-index:10060;max-width:min(320px,90vw);background:var(--ink-blue);color:var(--paper);font-size:.85em;line-height:1.4;padding:8px 10px;border-radius:6px;box-shadow:var(--shadow-pop);display:none;white-space:pre-line}
+.tb-grp{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;padding:1px 0 1px 8px;border-left:2px solid var(--rule-line)}
+.tb-grp:first-of-type{border-left:none;padding-left:0}
+.tb-grp-lbl{font-family:var(--font-mono);font-size:.66em;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-blue-soft);margin-right:2px}
 .about-sc-grp{font-family:var(--font-mono);font-size:.78em;text-transform:uppercase;letter-spacing:.06em;color:var(--pencil);padding-top:8px !important}
 .ctx-sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px;padding:0 !important}
 /* ─── Badges pédagogiques (.spec-badge) ─── */
@@ -2904,6 +2914,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="ff-eval" onclick="closeAllDd();openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe, mis en forme avec couleurs">📤 Exporter les notes</button>
         <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
         <button onclick="closeAllDd();openBackupSettings()" title="Stratégie de sauvegarde automatique : intervalle minimum + politique de rétention des backups horodatés">⚙ Sauvegarde auto…</button>
+        <div style="border-top:1px dashed var(--rule-line);margin:4px 0"></div>
+        <button onclick="closeAllDd();openResetModal()" title="Fin d'année scolaire (vider classes et élèves, garder les réglages), tout effacer, ou charger la démo" style="color:var(--danger-fg)">🗑 Réinitialiser le fichier…</button>
       </div>
     </span>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -2989,10 +3001,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="sh">
       <h2>🏫 Gestion des Classes</h2>
       <button class="btn btn-p" onclick="openMod('mc')">+ Nouvelle classe</button>
-      <button class="btn btn-g btn-sm" onclick="printClassesBilan()" title="Imprimer le bilan : détail par classe + récap par niveau (portrait — Ctrl+P)">🖨 Bilan</button>
+      <button class="btn btn-g btn-sm" onclick="printClassesBilan()" title="Imprimer les effectifs et le récap photocopies : détail par classe + récap par niveau (portrait — Ctrl+P)">🖨 Effectifs</button>
       <span style="margin-left:auto"></span>
       <button class="btn btn-g btn-sm ff-eval" onclick="openDisciplinesModal()" title="Gérer les disciplines (catalogue global)">🎓 Disciplines</button>
-      <button class="btn btn-d btn-sm" onclick="openResetModal()" title="Réinitialiser tout ou partie du fichier (fin d'année, etc.)">🗑 Réinitialiser…</button>
+      
     </div>
     <div id="cls-list"></div>
   </div>
@@ -3008,20 +3020,33 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="sh">
       <h2>👥 Élèves</h2>
       <span class="tab-ctx" id="tabctx-eleves"></span>
-      <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
-      <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
-      <button class="btn btn-g btn-sm" onclick="openTrombiImport()" title="Importer les photos des élèves depuis le trombinoscope PDF exporté de MBN — elles s'affichent dans la fiche et au survol des noms">📷 Photos</button>
-      <button class="btn btn-g btn-sm" id="btn-trombiview" onclick="openTrombiView()" style="display:none" title="Afficher le trombinoscope d'une classe, et l'imprimer (cette classe ou toutes)">🖼 Trombinoscope</button>
-      <button class="btn btn-g btn-sm" id="btn-memo" onclick="openMemoGame()" style="display:none" title="Jeu de mémorisation : retrouver le prénom (ou le nom) de chaque élève à partir de sa photo">🧠 Mémoriser</button>
-      <button class="btn btn-p btn-sm" onclick="startSeatingEntry()">📍 Saisir les positions</button>
-      <button class="btn btn-w btn-sm" onclick="resetAll()">↺ Réinitialiser compteurs</button>
-      <button class="btn btn-g btn-sm" onclick="openTagsModal()" title="Gérer les tags cumulables (DF, DNL, etc.) — partagés entre toutes les classes">🏷 Tags</button>
-      <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('incidents')" title="Sauvegarder ou consulter l'état des incidents à une date">📸 Instantanés</button>
-      <button class="btn btn-g btn-sm" onclick="openOverviewModal()" title="Vue d'ensemble : tous les élèves de toutes les classes avec absences/retards cumulés">📊 Vue d'ensemble</button>
-      <button class="btn btn-g btn-sm" onclick="goToExportPositions()" title="Tableau complet de la classe (positions, groupes, compteurs, aménagements, informations) — triable, copiable, exportable en CSV">📊 Export</button>
-      <button class="btn btn-g btn-sm" onclick="printElevesList()" title="Imprimer la liste : élève, groupe, oublis, travail non fait (portrait — Ctrl+P)">🖨 Imprimer la liste</button>
-      <button class="btn btn-d btn-sm" onclick="clearAllSeating()">🗑 Retirer toutes les positions</button>
-      <span class="tb-hint" style="margin-left:auto;font-size:.78em">Astuce : clic & glisser sur une ligne pour sélectionner plusieurs élèves</span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Élèves</span>
+        <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
+        <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
+        <button class="btn btn-g btn-sm" onclick="openTagsModal()" title="Gérer les tags cumulables (DF, DNL, etc.) — partagés entre toutes les classes">🏷 Tags</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Photos</span>
+        <button class="btn btn-g btn-sm" onclick="openTrombiImport()" title="Importer les photos des élèves depuis le trombinoscope PDF exporté de MBN — elles s'affichent dans la fiche et au survol des noms">📷 Photos</button>
+        <button class="btn btn-g btn-sm" id="btn-trombiview" onclick="openTrombiView()" style="display:none" title="Afficher le trombinoscope d'une classe, et l'imprimer (cette classe ou toutes)">🖼 Trombinoscope</button>
+        <button class="btn btn-g btn-sm" id="btn-memo" onclick="openMemoGame()" style="display:none" title="Jeu de mémorisation : retrouver le prénom (ou le nom) de chaque élève à partir de sa photo">🧠 Mémoriser</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Positions</span>
+        <button class="btn btn-p btn-sm" onclick="startSeatingEntry()">📍 Saisir les positions</button>
+        <button class="btn btn-g btn-sm" onclick="goToExportPositions()" title="Tableau complet de la classe (positions, groupes, compteurs, aménagements, informations) — triable, copiable, exportable en CSV">🗒 Tableau des positions</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Suivi</span>
+        <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('incidents')" title="Sauvegarder ou consulter l'état des incidents à une date">📸 Instantanés</button>
+        <button class="btn btn-g btn-sm" onclick="openOverviewModal()" title="Vue d'ensemble : tous les élèves de toutes les classes avec absences/retards cumulés">📊 Vue d'ensemble</button>
+        <button class="btn btn-g btn-sm" onclick="printElevesList()" title="Imprimer la liste : élève, groupe, oublis, travail non fait (portrait — Ctrl+P)">🖨 Imprimer la liste</button>
+      </span>
+      <span class="dd" style="margin-left:auto">
+        <button class="btn btn-w btn-sm" onclick="toggleDd(this)" title="Remises à zéro de cette classe">⚠ Remettre à zéro ▾</button>
+        <div class="dd-menu" style="right:0;left:auto">
+          <button onclick="closeAllDd();resetAll()">↺ Réinitialiser les compteurs 📦/📝</button>
+          <button onclick="closeAllDd();clearAllSeating()" style="color:var(--st-upe2a-i-fg)">🗑 Retirer toutes les positions</button>
+        </div>
+      </span>
+      <span class="tb-hint" style="font-size:.78em">Astuce : clic & glisser sur une ligne pour sélectionner plusieurs élèves</span>
     </div>
     <div id="el-bulk-bar" style="display:none;background:#e8f4fd;border:1px solid #3498db;border-radius:4px;padding:6px 10px;margin-bottom:8px;flex-wrap:wrap;gap:6px;align-items:center">
       <strong style="font-size:.9em"><span id="el-bulk-count">0</span> sél.</strong>
@@ -3063,6 +3088,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </span>
     </div>
     <div class="tb">
+      <span class="tb-grp"><span class="tb-grp-lbl">Plan</span>
       <button class="btn btn-p btn-sm" onclick="switchTab('svue')" title="Aller à la Vue Élève">🔄 Vue Élève</button>
       <span class="dd">
         <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Imprimer (Ctrl+P)">🖨 Imprimer ▼</button>
@@ -3088,20 +3114,30 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <button onclick="closeAllDd();clearAllSeating()" style="color:var(--st-upe2a-i-fg)">🗑 Retirer toutes les positions</button>
         </div>
       </span>
-      <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Sauvegarder ou consulter des dispositions de classe">📸 Instantanés</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Séance</span>
       <button class="btn btn-g btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Mode appel : clic = absent/présent (raccourci touche A)">🙋 Mode appel</button>
       <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Consulter les appels enregistrés">📅 Appels passés</button>
-      <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : clique un élève pour ses places autorisées · glisse un élève sur un autre pour les séparer">⛓ Contraintes</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
       <button class="btn btn-g btn-sm" id="btn-class-msg" onclick="openClassMsg()" title="Message à passer à toute la classe en début de séance — affiché en évidence au-dessus du plan tant qu'il n'est pas marqué fait">📣 Message</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Placement</span>
+      <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Sauvegarder ou consulter des dispositions de classe">📸 Instantanés</button>
+      <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : clique un élève pour ses places autorisées · glisse un élève sur un autre pour les séparer">⛓ Contraintes</button>
+      <button class="btn btn-g btn-sm btn-toggle-moved" onclick="toggleMovedHighlight()" oncontextmenu="return moveHighlightContextMenu(event)" style="font-size:1em;padding:2px 6px" title="Masquer / réafficher le surlignage rose des places modifiées — clic droit pour effacer">💡</button>
+      <span class="moved-help-text" style="display:none;font-size:.78em;color:var(--pencil);font-style:italic;margin-left:-2px"></span>
+      </span>
+      <span class="tb-grp">
       <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
       <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Refaire (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Zoom</span>
       <button class="btn btn-g btn-sm" onclick="tgZoomOut()" title="Zoom − (touche −)">🔍−</button>
       <button class="btn btn-g btn-sm" onclick="tgZoomReset()" id="tg-zoom-lbl" title="Zoom 100% (touche =)">100%</button>
       <button class="btn btn-g btn-sm" onclick="tgZoomIn()" title="Zoom + (touche +)">🔍+</button>
-      <button class="btn btn-g btn-sm btn-toggle-moved" onclick="toggleMovedHighlight()" oncontextmenu="return moveHighlightContextMenu(event)" style="font-size:1em;padding:2px 6px" title="Masquer / réafficher le surlignage rose des places modifiées — clic droit pour effacer">💡</button>
-      <span class="moved-help-text" style="display:none;font-size:.78em;color:var(--pencil);font-style:italic;margin-left:-2px"></span>
+      </span>
       <span style="width:100%;height:0"></span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Afficher</span>
       <span class="gchip gc-all on" onclick="setGroupFilter(0,this)" title="Tous (touche 0)">Tous</span>
       <span class="gchip gc-1"      onclick="setGroupFilter(1,this)" title="Groupe 1 (touche 1)">🔵 G1</span>
       <span class="gchip gc-2"      onclick="setGroupFilter(2,this)" title="Groupe 2 (touche 2)">🟠 G2</span>
@@ -3121,6 +3157,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <option value="genre">🎨 Couleur : Genre</option>
         <option value="none">🎨 Couleur : Aucune</option>
       </select>
+      </span>
       <span class="tb-hint" style="margin-left:8px">Clic droit sur un élève (cellule du plan) → menu contextuel (aménagements, rôle, fiche complète, informations, rappels, retirer de sa place…). Glisser un élève depuis sa cellule jusqu'au panneau de droite (« Non placés ») → le retire de sa place et le remet en attente d'affectation.</span>
       <span id="tg-count" style="margin-left:auto;font-size:.85em;color:var(--pencil);white-space:nowrap"></span>
     </div>
@@ -3217,23 +3254,23 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-d btn-sm" onclick="deleteSelectedSalle()">🗑 Supprimer cette salle</button>
     </div>
     <div id="cfg-salle-classes" style="display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:.85em;padding:6px 10px;margin-bottom:8px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px"></div>
-    <div class="al al-i" id="cfg-hint-tables">
+    <div class="al al-i" data-help="cfg" id="cfg-hint-tables">
       <strong>Tables</strong> — indique le <strong>positionnement physique des tables</strong> dans la salle. Clique sur une case (ou clic + glisser sur plusieurs) pour basculer <strong>Avec table ⬜</strong> ↔ <strong>Sans table ✖</strong>. Modifie le catalogue : toutes les classes utilisant cette salle sont impactées.
     </div>
-    <div class="al al-i" id="cfg-hint-groupes" style="display:none">
+    <div class="al al-i" data-help="cfg" id="cfg-hint-groupes" style="display:none">
       <strong>Groupes G1/G2/G3</strong> — réserve des places pour chaque groupe lors du <strong>placement automatique</strong>. Utile quand les élèves conservent les <strong>mêmes places en classe entière et en groupe</strong>. <strong>1.</strong> Sélectionne des cases (clic + glisser). <strong>2.</strong> Bouton <strong style="color:var(--g1-fg)">G1</strong> / <strong style="color:var(--g2-fg)">G2</strong> / <strong style="color:var(--g3-fg)">G3</strong> / Aucun. Une place ne peut être que dans <em>un seul</em> groupe ou tag. Spécifique à la classe sélectionnée. <em>Si les élèves ont des places différentes selon le groupe, utilise plutôt l'onglet <strong>Tags</strong> ci-contre + crée une <strong>classe recomposée</strong> (onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🔀 Classe recomposée</strong>, ou onglet <strong>Classes</strong> → <strong>+ Nouvelle classe recomposée</strong>).</em>
     </div>
-    <div class="al al-i" id="cfg-hint-tags" style="display:none">
+    <div class="al al-i" data-help="cfg" id="cfg-hint-tags" style="display:none">
       <strong>Tags</strong> — réserve des places pour des <strong>sous-ensembles d'élèves taggés</strong> (DF, DNL, etc.). Utile pour les <strong>classes recomposées</strong> (DNL, Devoir Fait, accompagnement…). <strong>1.</strong> Sélectionne des cases. <strong>2.</strong> Bouton de tag. Une place ne peut être que dans <em>un seul</em> groupe ou tag. <em>Gérer les tags : onglet <strong>Élèves</strong> → <strong>🏷 Tags</strong>. Affecter un tag à des élèves : onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🏷 Tags…</strong>.</em><br>
       <strong>Au placement automatique :</strong> un élève taggé T cherche en priorité une place taggée T. Sinon il prend une place sans tag (libre). Sinon (rare) une place taggée différemment, avec popup d'avertissement. Si une place taggée T reste sans candidat T, elle peut accueillir un autre élève en débordement (toast). <strong>Placement manuel</strong> (drag&drop) : aucune contrainte — on place qui on veut où on veut.
     </div>
-    <div class="al al-i" id="cfg-hint-contraintes" style="display:none">
+    <div class="al al-i" data-help="cfg" id="cfg-hint-contraintes" style="display:none">
       <strong>Contraintes</strong> — règles de placement <strong>par élève en particulier</strong>. <strong>Places autorisées</strong> : un élève ne peut s'asseoir qu'à certaines places (ex. élève à mobilité réduite ↔ table d'accès, ou élève qui ne voit pas bien ↔ tables de devant). Sélectionne un élève dans la liste, puis les cases autorisées et clique sur <strong>✓ Autoriser</strong>. Sans contrainte = peut s'asseoir partout. <strong>Paires séparées</strong> : 2 élèves qui ne doivent pas être proches (drag&drop d'un nom sur un autre dans la liste en bas). Une alerte rouge s'affiche sur le Plan en cas de violation.
     </div>
-    <div class="al al-i" id="cfg-hint-ilots" style="display:none">
+    <div class="al al-i" data-help="cfg" id="cfg-hint-ilots" style="display:none">
       <strong>Îlots</strong> — facilite la configuration des salles avec des <strong>blocs de tables sur plusieurs rangées</strong> (regroupements physiques). Sert aussi à <strong>améliorer la séparation des paires d'élèves à éloigner</strong> (les élèves d'un même îlot sont systématiquement considérés comme proches). <strong>1.</strong> Clique sur un bouton <strong>Î1 / Î2 / …</strong> pour activer un îlot, ou sélectionne des cases puis <strong>+ Nouvel îlot</strong> (rattachement direct). <strong>2.</strong> <strong>✓ Affecter à</strong> ajoute la sélection à l'îlot actif. <em>Inutile si tes tables ne forment que des rangées 1D — utilise plutôt l'onglet Tables seul.</em>
     </div>
-    <div class="al al-i" id="cfg-hint-aesh" style="display:none">
+    <div class="al al-i" data-help="cfg" id="cfg-hint-aesh" style="display:none">
       <strong>🧑‍🏫 AESH</strong> — Accompagnant·e d'Élève en Situation de Handicap. Définis le <strong>nombre d'AESH</strong> dans cette salle pour cette classe (peut différer d'une salle à l'autre), <strong>place chaque AESH</strong> sur une case (sélection puis bouton <em>Placer ici</em>) et indique les <strong>élèves qu'elle accompagne</strong>. <em>L'AESH apparaît sur le plan (vue prof + vue élève), n'a pas de tablette, peut être pointée absente en mode appel, et le mélange aléatoire la place en priorité avec ses élèves liés (côté → côté → devant).</em>
     </div>
     <!-- Toolbar Îlots : sélection de l'îlot actif + actions -->
@@ -3443,6 +3480,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <span style="font-size:.9em">Jour :</span>
         <span id="cfg-day-tabs" style="display:flex;gap:4px;flex-wrap:wrap"></span>
         <button class="btn btn-s btn-sm" onclick="copyMondayToWeekdays()" title="Recopier les créneaux du lundi sur mardi, mercredi, jeudi, vendredi" style="margin-left:auto">⧉ Copier lundi → semaine</button>
+        <button class="btn btn-w btn-sm" onclick="applyScheduleToAllSalles()" title="L'emploi du temps est celui de l'établissement : recopier tous les créneaux de cette salle sur toutes les autres salles">⧉ Appliquer à toutes les salles</button>
       </div>
       <div id="cfg-slots-list" style="margin-top:6px"></div>
     </div>
@@ -3464,7 +3502,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-p btn-sm" onclick="openAutoIpads()" title="Affecter automatiquement les tablettes aux élèves placés (avec choix d'étendue : classe mobile active / toutes les classes mobiles, salle active / toutes les salles)">📱 Affecter automatiquement</button>
       <span class="tb-hint" style="margin-left:auto;font-size:.78em">Chaque classe mobile a sa propre affectation de tablettes — les numéros et l'étendue se règlent via le bouton « Affecter automatiquement ».</span>
     </div>
-    <div class="ipad-legal-notice">
+    <div class="ipad-legal-notice" data-help="ipads">
       <strong>⚖️ Pourquoi tracer qui utilise quelle tablette ?</strong> Les tablettes prêtées en classe (et plus largement le matériel numérique mutualisé) ne demandent généralement <em>pas</em> à l'élève de s'identifier dessus à chaque utilisation — c'est le prof qui distribue physiquement le matériel. Or, en cas d'incident (perte, casse, contenu inapproprié, accès non autorisé à un compte…), <strong>l'établissement doit pouvoir reconstituer qui avait quel appareil et quand</strong> — c'est une <strong>obligation légale</strong> (responsabilité de l'établissement vis-à-vis du matériel public + traçabilité des accès numériques). Cette fiche d'affectation et la fiche de prêt PDF imprimée servent exactement à ça : un registre nominatif de la séance, que tu peux garder dans un classeur ou exporter par e-mail à la vie scolaire en cas de besoin.
     </div>
     <div id="ipad-sum"></div>
@@ -3495,7 +3533,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-g btn-sm" onclick="_qcmGoImportResults()" title="Les résultats d'un QCM s'importent dans l'évaluation concernée : Devoirs → ouvrir sa saisie → 📂">📂 Importer des résultats…</button>
       <span id="qcm-dir-info" style="font-size:.78em;color:var(--pencil);align-self:center"></span>
     </div>
-    <div class="qcm-info-banner">
+    <div class="qcm-info-banner" data-help="qcm">
       <p style="margin:0 0 6px"><strong>📷 Qu'est-ce que QCMcam ?</strong> Un outil gratuit de QCM en classe : les élèves répondent en levant une carte papier munie d'un QR code, le professeur les scanne avec la webcam ou un smartphone. Aucun équipement par élève. Plus d'infos sur <a href="https://q2.qcmcam.net/" target="_blank" rel="noopener">q2.qcmcam.net</a>.</p>
       <p style="margin:0 0 6px"><strong>À quoi sert cette vue ?</strong> Elle permet d'<strong>exporter en une seule fois la liste de tous tes élèves</strong> (toutes classes et toutes salles confondues) avec leur numéro de position QCMcam, prête à être importée dans QCMcam. Plus besoin de saisir chaque élève manuellement. L'identifiant utilisé est de la forme <code>classe-salle</code> pour distinguer les contextes.</p>
       <p class="qcm-usage-note" style="margin:0 0 6px;padding:6px 10px;border-radius:2px"><strong>🎯 Usage prévu : un marqueur par <em>place</em>, pas par élève.</strong> Les marqueurs ArUco restent <strong>rangés dans la salle</strong>. Avantages : tu distribues <strong>beaucoup moins de cartes</strong> quand tu as plusieurs classes (un seul jeu par salle, pas un jeu par classe ni par élève) ; et tu n'as plus à gérer les marqueurs oubliés à la maison ou perdus. Côté QCMcam, l'identification se fait par <em>position</em> dans la salle : c'est le plan d'occupation (élève↔place) qui dit qui a répondu quoi.</p>
@@ -3510,8 +3548,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <strong>(2)</strong> jusqu'à <strong>15 colonnes × 8 rangées</strong> → numérotation lisible <em>rangée × 20 + place</em> (ex. r1, place 3 → « 23 »). Max 155, OK. (On laisse un trou de 5 numéros entre rangées pour garder la lisibilité « dizaines = rangée ».)
       <strong>(3)</strong> au-delà → numérotation <strong>séquentielle</strong> 1, 2, 3… dans l'ordre vue prof (rangée la plus proche du prof d'abord, gauche → droite), en sautant les places sans-table. Les places au-delà de la 157<sup>e</sup> sont exclues de l'export — un avertissement apparaît en haut.
     </p>
-    <p class="al al-w" style="margin-bottom:8px"><strong>⚠️ Marqueurs QCMcam&nbsp;2 (157) :</strong> cette version génère le dictionnaire de <strong>QCMcam&nbsp;2</strong>. Il est <strong>incompatible</strong> avec les <strong>125 marqueurs de QCMcam&nbsp;1</strong> : aucun ancien motif ne figure dans le nouveau jeu (vérifié un à un, rotations comprises). Si tes tables portent encore des marqueurs imprimés avec une version antérieure de l'app, il faut <strong>les réimprimer tous</strong> avant d'utiliser QCMcam&nbsp;2 — et inversement, ces nouveaux marqueurs ne seront pas reconnus par l'ancien qcmcam.net.</p>
-    <p class="al al-i" style="margin-bottom:8px">Aperçu ci-dessous : la salle active de la classe sélectionnée. Les boutons d'export couvrent <strong>toutes les salles de toutes les classes</strong>.</p>
+    <p class="al al-w" data-help="qcm" style="margin-bottom:8px"><strong>⚠️ Marqueurs QCMcam&nbsp;2 (157) :</strong> cette version génère le dictionnaire de <strong>QCMcam&nbsp;2</strong>. Il est <strong>incompatible</strong> avec les <strong>125 marqueurs de QCMcam&nbsp;1</strong> : aucun ancien motif ne figure dans le nouveau jeu (vérifié un à un, rotations comprises). Si tes tables portent encore des marqueurs imprimés avec une version antérieure de l'app, il faut <strong>les réimprimer tous</strong> avant d'utiliser QCMcam&nbsp;2 — et inversement, ces nouveaux marqueurs ne seront pas reconnus par l'ancien qcmcam.net.</p>
+    <p class="al al-i" data-help="qcm" style="margin-bottom:8px">Aperçu ci-dessous : la salle active de la classe sélectionnée. Les boutons d'export couvrent <strong>toutes les salles de toutes les classes</strong>.</p>
     <div id="qcm-sum"></div>
   </div>
 
@@ -3747,7 +3785,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="fg"><label>Civilité <span style="font-size:.78em;color:var(--pencil)">(optionnel)</span></label>
       <select id="es-civ"><option value="">— Non spécifié —</option><option value="M">♂ Garçon (M)</option><option value="F">♀ Fille (F)</option></select>
     </div>
-    <div class="fg"><label>Groupe</label>
+    <div class="fg"><label>Groupe <span id="es-grp-hint" style="font-size:.78em;color:var(--pencil)"></span></label>
       <select id="es-grp"><option value="">— Aucun groupe —</option><option value="1">🔵 Groupe 1</option><option value="2">🟠 Groupe 2</option><option value="3">🟣 Groupe 3</option></select>
     </div>
     <div class="fg"><label>Rôle dans la classe <span style="font-size:.78em;color:var(--pencil)">(délégué·es élu·es — nom souligné sur le plan)</span></label>
@@ -5898,7 +5936,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="_evalPasteOpen()" title="📥 Coller des notes (depuis QCMcam, un autre tableur…)" aria-label="Coller des notes" style="padding:4px 6px">📥</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-qcmcam-btn" onclick="_evalQcmcamOpen()" title="📂 Importer un fichier de résultats exporté de QCMcam (v2 ou v1 — matching par prénom)" aria-label="Importer CSV QCMcam" style="display:none;padding:4px 6px">📂</button>
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="⧉ Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">⧉</button>
-        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="📤 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px">📤</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="📤 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px;font-weight:600">📤 ENT</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-sobr-btn" onclick="_evalTableurSobrToggleMenu(event)" title="🎨 Sobriété : retirer les fonds colorés (notes et/ou compétences) — choix indépendants persistés." aria-label="Sobriété" style="padding:4px 6px">🎨</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
@@ -5968,7 +6006,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:4px;padding:10px 14px;margin-bottom:14px;font-size:.9em">
       <strong>🗑 Pour partir d'un fichier vierge</strong> (tes vraies données) :<br>
-      → Onglet <strong>🏫 Classes</strong> → bouton <strong>🗑 Réinitialiser…</strong> en haut à droite → choisir <strong>« 🔥 Tout effacer »</strong>.
+      → Menu <strong>💾 Données ▾</strong> (en haut) → <strong>🗑 Réinitialiser le fichier…</strong> → choisir <strong>« 🔥 Tout effacer »</strong>.
     </div>
 
     <p style="font-size:.85em;color:var(--pencil);margin-bottom:10px">
@@ -7109,11 +7147,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.72.0';
+const APP_VERSION    = '2.73.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T16:49:20Z';
+const APP_BUILD_DATE = '2026-10-03T17:05:25Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7379,7 +7417,7 @@ function _aeshPresentForFilter(cls, idx, filter) {
   const sids = (room.aeshLinks && room.aeshLinks[idx]) || [];
   for (const sid of sids) {
     const stu = S.eleves[sid];
-    if (stu && stu.groupe === filter) return true;
+    if (stu && _grp(stu, cls) === filter) return true;
   }
   return false;
 }
@@ -7973,6 +8011,16 @@ function postLoadHook() {
     if (!Array.isArray(cls.noNeighbors)) cls.noNeighbors = [];
     // 👩‍🏫 Professeur·e principal·e : texte libre ou null (jamais un autre type)
     if (typeof cls.profPrincipal !== 'string' || !cls.profPrincipal.trim()) cls.profPrincipal = null;
+    // Groupes propres à une classe recomposée (v2.73.0). Premier chargement : on part du
+    // groupe d'origine de chaque membre — l'affichage ne change pas, seule l'indépendance arrive.
+    if (cls.virtual) {
+      if (!cls.stuGroups || typeof cls.stuGroups !== 'object' || Array.isArray(cls.stuGroups)) {
+        cls.stuGroups = {};
+        for (const sid of (cls.eleves || [])) { const g = S.eleves?.[sid]?.groupe; if (g === 1 || g === 2 || g === 3) cls.stuGroups[sid] = g; }
+      } else {
+        for (const [sid, g] of Object.entries(cls.stuGroups)) if (!(g === 1 || g === 2 || g === 3) || !(cls.eleves || []).includes(sid)) delete cls.stuGroups[sid];
+      }
+    } else if (cls.stuGroups !== undefined) delete cls.stuGroups;
     if (cls.niveau != null && !LEVEL_CODES.includes(cls.niveau)) delete cls.niveau;
     // Anciennement : cls.pairsStrictness (1..4). Désormais une seule règle, on
     // nettoie le champ pour qu'il ne traîne pas dans le JSON.
@@ -9930,7 +9978,7 @@ function showCtxMenu(e, cls, key, sid) {
   // 👥 Groupe : état courant
   for (const g of [0, 1, 2, 3]) {
     const el = document.getElementById('ctx-grp-' + g);
-    if (el) el.textContent = ((s?.groupe || 0) === g) ? '●' : '○';
+    if (el) el.textContent = ((_grp(s, cls) || 0) === g) ? '●' : '○';
   }
   // 🏷 Tags : liste du catalogue, ● = porté par l'élève
   const tagSub = document.getElementById('ctx-tags-sub');
@@ -10168,22 +10216,44 @@ function ctxSetDelegue(code) {
   _setDelegue(ctxTarget.sid, code);
   closeCtxMenu();
 }
-// Groupe G1/G2/G3 d'un élève. ⚠️ Le groupe est unique pour l'élève : réglé depuis une classe
-// recomposée, il change aussi dans sa classe d'origine — on le dit (audit 2026-10-03, § 1.7).
+// Groupe G1/G2/G3 d'un élève DANS LA CLASSE AFFICHÉE. Une classe recomposée a ses propres
+// groupes (cls.stuGroups, v2.73.0) : les régler ne touche plus la classe d'origine.
+// ── Groupe d'un élève selon la classe (audit 2026-10-03, § 1.7 — lot G) ──
+// Classe réelle : stu.groupe (inchangé). Classe recomposée : cls.stuGroups[sid], propre à
+// elle — régler G1 en DNL ne change plus le G1/G2 de la 6e A. ⚠️ TOUTE lecture du groupe
+// dans le contexte d'une classe passe par _grp(stu, cls) (cls par défaut = classe affichée),
+// toute écriture par _setGrp. stu.groupe direct = groupe dans la classe d'origine seulement
+// (fiche, Modifier l'élève, import, archives).
+function _grp(stu, cls) {
+  if (typeof stu === 'string') stu = S.eleves?.[stu];
+  if (!stu) return null;
+  if (cls === undefined) cls = getCls();
+  if (cls && cls.virtual) {
+    const g = cls.stuGroups?.[stu.id];
+    return (g === 1 || g === 2 || g === 3) ? g : null;
+  }
+  return stu.groupe ?? null;
+}
+function _setGrp(stu, g, cls) {
+  if (!stu) return;
+  g = [1, 2, 3].includes(g) ? g : null;
+  if (cls && cls.virtual) {
+    if (!cls.stuGroups || typeof cls.stuGroups !== 'object') cls.stuGroups = {};
+    if (g) cls.stuGroups[stu.id] = g; else delete cls.stuGroups[stu.id];
+    return;
+  }
+  stu.groupe = g;
+}
 function _setGroupe(sid, g) {
   const s = S.eleves[sid];
   if (!s) return;
   g = [1, 2, 3].includes(g) ? g : null;
-  if ((s.groupe || null) === g) return;
+  if (_grp(s) === (g || null)) return;
   pushUndo();
-  s.groupe = g;
+  _setGrp(s, g, getCls());
   save();
   renderStudents();
   renderTeacherGrid();
-  const cur = getCls();
-  if (cur?.virtual && s.classe_id !== cur.id) {
-    toast(`👥 Groupe ${g ? 'G' + g : 'retiré'} — il vaut aussi dans sa classe d'origine (${S.classes[s.classe_id]?.nom || '?'}).`, 'warn');
-  }
 }
 function ctxSetGroupe(g) { if (!ctxTarget) return; const sid = ctxTarget.sid; closeCtxMenu(); _setGroupe(sid, g); }
 function ctxToggleTag(tagId) {
@@ -10612,7 +10682,7 @@ function renderFiche() {
   const identite = sec('👤 Identité & scolarité',
     row('Classe', cls ? _escName(cls.nom) : dash) +
     (otherCls.length ? row('Aussi dans', otherCls.map(c => `<span class="spec-badge spec-ulis-incl" style="margin-right:3px">🔀 ${_escName(c.nom)}</span>`).join('')) : '') +
-    rowc('Groupe', s.groupe ? `<span class="gbdg g${s.groupe}">G${s.groupe}</span>` : dash, "_ficheGo('edit','es-grp')", 'Modifier le groupe') +
+    rowc('Groupe', (s.groupe ? `<span class="gbdg g${s.groupe}">G${s.groupe}</span>` : dash) + otherCls.filter(c => c.virtual).map(c => { const g = _grp(s, c); return ` <span style="color:var(--pencil);font-size:.88em">· ${_escName(c.nom)} : ${g ? `<span class="gbdg g${g}">G${g}</span>` : '—'}</span>`; }).join(''), "_ficheGo('edit','es-grp')", 'Modifier le groupe') +
     rowc('Rôle', _delegueInfo(s) ? `<span class="${_delegueInfo(s).cls}">🗳 ${_delegueInfo(s).label}</span>` : dash, "_ficheGo('edit','es-delegue')", 'Modifier le rôle dans la classe') +
     rowc('Tags', tags || dash, "_ficheGo('edit','es-tags')", 'Modifier les tags') +
     rowc('Dates', dates || dash, "_ficheGo('edit','es-arrival')", 'Modifier les dates d\'arrivée et de départ') +
@@ -12301,6 +12371,16 @@ function mvcSave() {
         }
       }
     }
+    // Groupes propres : on garde ceux des membres restants ; un nouveau membre part de son
+    // groupe d'origine (comme à la création).
+    {
+      const prev = new Set(cls.eleves || []), oldG = cls.stuGroups || {};
+      cls.stuGroups = {};
+      for (const sid of sids) {
+        const g = prev.has(sid) ? oldG[sid] : S.eleves[sid]?.groupe;
+        if (g === 1 || g === 2 || g === 3) cls.stuGroups[sid] = g;
+      }
+    }
     cls.eleves = sids;
     // Appartenance per-période : ne garder que les entrées des sids encore présents
     cls.membership = {};
@@ -12373,6 +12453,8 @@ function mvcSave() {
       fromTag: fromTag,
       disciplineIds: mvcDiscIds,
       membership,
+      // Groupes propres à la recomposée, initialisés depuis le groupe d'origine.
+      stuGroups: Object.fromEntries(sids.map(sid => [sid, S.eleves[sid]?.groupe]).filter(([, g]) => g === 1 || g === 2 || g === 3)),
     };
     S.classes[newId] = newCls;
     setupClassAccessors(newCls);
@@ -13779,7 +13861,7 @@ function _doOneRandomPlacement(cls, studentsToPlace, opts) {
 
   for (const sid of studentsOrdered) {
     const stu = S.eleves[sid];
-    const myG = stu?.groupe;
+    const myG = _grp(stu, cls);
     const wantsZone = hasGroupZones && grps && (myG === 1 || myG === 2 || myG === 3);
     const inZone = (k) => !wantsZone || grps[k] === myG;
 
@@ -14121,9 +14203,9 @@ function abortSeatingEntry() {
 function _updateGroupChipsState() {
   const cls = getCls();
   const eleves = cls ? (cls.eleves || []).map(id => S.eleves[id]).filter(Boolean) : [];
-  const has1 = eleves.some(s => s.groupe === 1);
-  const has2 = eleves.some(s => s.groupe === 2);
-  const has3 = eleves.some(s => s.groupe === 3);
+  const has1 = eleves.some(s => _grp(s) === 1);
+  const has2 = eleves.some(s => _grp(s) === 2);
+  const has3 = eleves.some(s => _grp(s) === 3);
   // Si aucun groupe n'est utilisé dans la classe, on masque tous les chips (y compris "Tous")
   // — la barre de filtre devient invisible, plus utile.
   const anyGroup = has1 || has2 || has3;
@@ -14239,7 +14321,7 @@ function setGroupFilter(g, chip) {
 function cycleGroupe(sid) {
   const s = S.eleves[sid];
   if (!s) return;
-  _setGroupe(sid, s.groupe === 1 ? 2 : s.groupe === 2 ? 3 : s.groupe === 3 ? null : 1);
+  { const g0 = _grp(s); _setGroupe(sid, g0 === 1 ? 2 : g0 === 2 ? 3 : g0 === 3 ? null : 1); };
 }
 
 // Cycle civilité : null → M → F → null
@@ -16710,6 +16792,7 @@ function _purgeStudentRefs(id) {
       });
     }
     if (c.membership) delete c.membership[id];
+    if (c.stuGroups) delete c.stuGroups[id];
   }
   // Évaluations : notes, remarques élève, niveaux de passation
   for (const ev of Object.values(S.evaluations || {})) {
@@ -16902,6 +16985,12 @@ function openEdit(id) {
   document.getElementById('es-prn').value            = s.prenom;
   document.getElementById('es-civ').value            = s.civilite || '';
   document.getElementById('es-grp').value            = s.groupe || '';
+  {
+    const cur = getCls(), h = document.getElementById('es-grp-hint');
+    if (h) h.textContent = (cur?.virtual && (cur.eleves || []).includes(s.id))
+      ? `(dans ${S.classes[s.classe_id]?.nom || 'sa classe'} — dans ${cur.nom}, le groupe se règle par la pastille G de l'onglet Élèves ou le clic droit)`
+      : '';
+  }
   document.getElementById('es-delegue').value        = s.delegue || '';
   _renderEditTags(s);
   // Peuple le sélecteur de classe (uniquement les classes réelles, jamais les recomposées)
@@ -17112,7 +17201,7 @@ function _overviewRows(fClass, fMinAbs, fMinRet) {
       const stats = getStudentAttendanceStats(cid, sid);
       rows.push({
         sid, classId: cid, className: cls.nom,
-        nom: stu.nom, prenom: stu.prenom, groupe: stu.groupe,
+        nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu, cls),
         oublis: stu.oublis || 0, non_travail: stu.non_travail || 0,
         abs: stats.abs, ret: stats.ret,
       });
@@ -17370,7 +17459,7 @@ function renderAttStats() {
       if (!_conf.on && hideZero && stats.abs === 0 && stats.ret === 0) continue;
       rows.push({
         sid, classId: cid, className: cls.nom,
-        nom: stu.nom, prenom: stu.prenom, groupe: stu.groupe,
+        nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu, cls),
         abs: stats.abs, ret: stats.ret, tot: stats.abs + stats.ret,
       });
     }
@@ -17456,7 +17545,7 @@ function exportAttStatsCSV() {
       if (hideZero && stats.abs === 0 && stats.ret === 0) continue;
       rows.push({
         classId: cid, className: cls.nom,
-        nom: stu.nom, prenom: stu.prenom, groupe: stu.groupe,
+        nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu, cls),
         abs: stats.abs, ret: stats.ret, tot: stats.abs + stats.ret,
       });
     }
@@ -18658,8 +18747,8 @@ function renderStudents() {
   const hasActiveRoom = cls.activeRoom && S.salles?.[cls.activeRoom];
 
   const rows = list.map((s, idx) => {
-    const grpBadge = s.groupe
-      ? `<span class="gbdg g${s.groupe}" onclick="cycleGroupe('${s.id}')" title="Cliquer pour changer">G${s.groupe}</span>`
+    const _g = _grp(s), grpBadge = _g
+      ? `<span class="gbdg g${_g}" onclick="cycleGroupe('${s.id}')" title="Cliquer pour changer">G${_g}</span>`
       : `<span class="gbdg gn" onclick="cycleGroupe('${s.id}')" title="Cliquer pour assigner un groupe">—</span>`;
     const tagBadgesEl = (Array.isArray(s.tags) ? s.tags : [])
       .map(tid => S.tags?.[tid])
@@ -19029,7 +19118,7 @@ function bulkSetGroupe(g) {
   if (!selectedEleves.size) return;
   pushUndo();
   selectedEleves.forEach(sid => {
-    if (S.eleves[sid]) S.eleves[sid].groupe = g;
+    if (S.eleves[sid]) _setGrp(S.eleves[sid], g, getCls());
   });
   save();
   renderStudents();
@@ -19516,7 +19605,7 @@ function renderTeacherGrid() {
   _absencesAutoReset();
   const allEleves = effectiveClassEleves(cls).map(id => S.eleves[id]).filter(Boolean);
   const inFilter  = allEleves.filter(s =>
-    (groupFilter === 0 || s.groupe === groupFilter)
+    (groupFilter === 0 || _grp(s, cls) === groupFilter)
     && (_tagFilter.size === 0 || studentHasAllTags(s, _tagFilter))
     // Élève inactif aujourd'hui (pas encore arrivé / déjà parti) : exclu du compteur
     && _stuActiveOn(s)
@@ -19527,9 +19616,9 @@ function renderTeacherGrid() {
   // ULIS et UPE2A "hors classe" sont par définition exclusifs des autres statuts (s.ulis_incl, etc.)
   const ulisOut   = inFilter.filter(s => s.ulis).length;
   const upe2aOut  = inFilter.filter(s => s.upe2a).length;
-  const g1N       = allEleves.filter(s => s.groupe === 1).length;
-  const g2N       = allEleves.filter(s => s.groupe === 2).length;
-  const g3N       = allEleves.filter(s => s.groupe === 3).length;
+  const g1N       = allEleves.filter(s => _grp(s, cls) === 1).length;
+  const g2N       = allEleves.filter(s => _grp(s, cls) === 2).length;
+  const g3N       = allEleves.filter(s => _grp(s, cls) === 3).length;
   // Absents / retards : sous-ensembles des élèves placés et dans le filtre actif
   const placedInFilter = inFilter.filter(s => placedSet.has(s.id));
   const absentN = placedInFilter.filter(s => _absentToday.has(s.id)).length;
@@ -20299,7 +20388,7 @@ function buildCell(cls, row, col) {
   let gcls = '';
   let inlineColorStyle = '';
   if (_planColorMode === 'groupe') {
-    const g = (stu && stu.groupe) || seatG;
+    const g = (stu && _grp(stu, cls)) || seatG;
     gcls = g === 1 ? 'cg1' : g === 2 ? 'cg2' : g === 3 ? 'cg3' : '';
   } else if (_planColorMode === 'tag') {
     const stuTag = (stu && Array.isArray(stu.tags) && stu.tags.length > 0)
@@ -20346,7 +20435,7 @@ function buildCell(cls, row, col) {
     }
 
     // Filtre groupe : fantôme si l'élève n'appartient pas au groupe actif
-    const isGhost = (groupFilter !== 0 && stu.groupe !== groupFilter)
+    const isGhost = (groupFilter !== 0 && _grp(stu, cls) !== groupFilter)
                  || (_tagFilter.size > 0 && !studentHasAllTags(stu, _tagFilter));
     if (isGhost) cell.classList.add('ghost');
 
@@ -20401,7 +20490,7 @@ function buildCell(cls, row, col) {
       cell.title = `${stu.prenom} ${stu.nom} — ${stateLbl}\nClic gauche = absent/présent · Clic droit ou appui long = retard (heure d'arrivée)`;
       cell.innerHTML = `
         <span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>
-        ${stu.groupe ? `<span class="gbadge g${stu.groupe}">G${stu.groupe}</span>` : ''}
+        ${_grp(stu, cls) ? `<span class="gbadge g${_grp(stu, cls)}">G${_grp(stu, cls)}</span>` : ''}
         ${lateTime && !isAbsent ? `<span class="late-time">⏰ ${lateTime}</span>` : ''}
         <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
         ${_cellPhotoHTML(stu.id)}
@@ -20425,7 +20514,7 @@ function buildCell(cls, row, col) {
     // L'affectation se fait désormais via openIpadPicker (clic sur "Tab. N" dans la cellule).
     // Le <select class="isel"> historique a été supprimé pour éliminer le doublon visuel.
 
-    const stuG = stu.groupe;
+    const stuG = _grp(stu, cls);
     // Rappels / À vérifier — badge orange pulsant pour attirer le regard
     const remList = Array.isArray(stu.reminders) ? stu.reminders : [];
     const remCount = remList.length;
@@ -21129,7 +21218,7 @@ function renderUnplaced() {
       ondragend="this.classList.remove('dragging')"
       onclick="_confNameClick('${_escAttr(s.id)}')||unplToggleSelect(event,'${_escAttr(s.id)}')">
       ${otherClsBdg}
-      ${s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.7em">G${s.groupe}</span>` : ''}
+      ${_grp(s) ? `<span class="gbdg g${_grp(s)}" style="font-size:.7em">G${_grp(s)}</span>` : ''}
       ${specBdgs.join('')}
       ${_escAttr(s.prenom)} ${_escAttr(s.nom)}
       ${_remBadgeInline(s)}
@@ -21167,7 +21256,7 @@ function renderAttendanceSide() {
   const elevesAll = effectiveClassEleves(cls).map(id => S.eleves[id]).filter(Boolean);
   const inFilter = elevesAll.filter(s =>
     _stuActiveOn(s)                       // parti / pas encore arrivé → jamais dans les listes d'appel
-    && (groupFilter === 0 || s.groupe === groupFilter)
+    && (groupFilter === 0 || _grp(s) === groupFilter)
     && (_tagFilter.size === 0 || studentHasAllTags(s, _tagFilter))
   );
   const inFilterIds = new Set(inFilter.map(s => s.id));
@@ -21182,7 +21271,7 @@ function renderAttendanceSide() {
     .sort(cmpNom)
     .map(s => ({ s, hhmm: _lateToday.get(s.id) }));
 
-  const grpLbl = s => s.groupe ? `<span class="gbdg g${s.groupe}" style="font-size:.7em">G${s.groupe}</span>` : '';
+  const grpLbl = s => _grp(s) ? `<span class="gbdg g${_grp(s)}" style="font-size:.7em">G${_grp(s)}</span>` : '';
 
   let html = '';
 
@@ -21471,7 +21560,7 @@ function renderStudentView() {
           cell.innerHTML = `<div class="svname" style="color:var(--aesh-fg)">${_escAttr(aeshLabel(aeshIdxHere, _total))}</div>`;
         }
       } else if (stu) {
-        const ghost = (groupFilter !== 0 && stu.groupe !== groupFilter)
+        const ghost = (groupFilter !== 0 && _grp(stu, cls) !== groupFilter)
                    || (_tagFilter.size > 0 && !studentHasAllTags(stu, _tagFilter));
         cell.classList.add(ghost ? 'em' : 'oc');
         if (gcls2 && !ghost) cell.classList.add(gcls2);
@@ -22908,7 +22997,9 @@ function confirmNewSalle() {
         return r < rows && c < cols;
       })
     : [];
-  const sched = src && src.schedule ? src.schedule : null;
+  // Sans salle source, la nouvelle salle reprend les horaires de la salle affichée (ceux de
+  // l'établissement, en pratique) plutôt que le planning par défaut — audit 2026-10-03, § 2.3.
+  const sched = src && src.schedule ? src.schedule : (S.salles?.[cfgSelectedSalle]?.schedule || Object.values(S.salles || {})[0]?.schedule || null);
   const id = createSalle(nom, rows, cols, posVides, sched);
   cfgSelectedSalle = id;
   if (addToClass) {
@@ -23423,6 +23514,24 @@ function deleteSalleSlot(idx) {
   });
 }
 
+function applyScheduleToAllSalles() {
+  const salle = selectedSalle();
+  if (!salle?.schedule) return;
+  const others = Object.entries(S.salles || {}).filter(([id]) => id !== cfgSelectedSalle);
+  if (!others.length) return toast('ℹ Il n\'y a pas d\'autre salle.', 'info');
+  const nb = Object.values(salle.schedule).reduce((a, d) => a + (Array.isArray(d) ? d.length : 0), 0);
+  _uiConfirm({
+    title: '⧉ Horaires de l\'établissement', okLabel: '⧉ Appliquer', okClass: 'btn-w',
+    message: `Recopier les ${nb} créneaux de « ${salle.nom} » (tous les jours) sur ${others.length} autre${others.length > 1 ? 's' : ''} salle${others.length > 1 ? 's' : ''} :\n${others.map(([, x]) => '• ' + x.nom).join('\n')}\n\nLeurs horaires actuels seront remplacés (annulable par Ctrl+Z). Les appels déjà enregistrés gardent leur créneau.`,
+    onOk: () => {
+      pushUndo();
+      for (const [, x] of others) x.schedule = JSON.parse(JSON.stringify(salle.schedule));
+      save();
+      renderSalleSchedule();
+      toast(`⧉ Horaires recopiés sur ${others.length} salle${others.length > 1 ? 's' : ''}.`);
+    },
+  });
+}
 function copyMondayToWeekdays() {
   const salle = selectedSalle();
   if (!salle?.schedule) return;
@@ -23862,7 +23971,7 @@ function _renderIpmModes(cls) {
   // active) — l'affectation peut porter sur d'autres salles.
   const counts = { 1: 0, 2: 0, 3: 0 };
   for (const sid of (cls.eleves || [])) {
-    const g = S.eleves?.[sid]?.groupe;
+    const g = _grp(S.eleves?.[sid], cls);
     if (g === 1 || g === 2 || g === 3) counts[g]++;
   }
   const modes = [
@@ -24012,7 +24121,7 @@ function _groupTargets(cls, allSeats, grp, keepKeys) {
     if (isAesh) return false;   // une AESH n'a pas de tablette
     if (keepKeys && !keepKeys.has(key)) return false;
     const sid = cls.seating[key];
-    return sid && S.eleves[sid] && S.eleves[sid].groupe === grp;
+    return sid && S.eleves[sid] && _grp(S.eleves[sid], cls) === grp;
   });
 }
 
@@ -24320,9 +24429,9 @@ function _openIpovfModal(needed, available) {
     const wanted = new Set(modes);
     candidates = allSeats.filter(s => {
       const sid = cls.seating[s.key];
-      return sid && wanted.has(S.eleves[sid]?.groupe);
+      return sid && wanted.has(_grp(S.eleves[sid], cls));
     }).map(s => ({ key: s.key, label: s.label, sid: cls.seating[s.key],
-                   grp: S.eleves[cls.seating[s.key]]?.groupe || 0 }));
+                   grp: _grp(S.eleves[cls.seating[s.key]], cls) || 0 }));
   }
 
   state.candidates = candidates;
@@ -24368,9 +24477,9 @@ function _renderIpovfPlan() {
       const isCandidate = candidateKeys.has(key);
       const isChecked = checkedKeys.has(key);
       const name = stu ? `${_escName(stu.prenom)}<br>${_escName(stu.nom)}` : '<em class="ipovf-empty">vide</em>';
-      const grpBadge = stu?.groupe === 1 ? '<span class="ipovf-gbadge g1">G1</span>'
-                    : stu?.groupe === 2 ? '<span class="ipovf-gbadge g2">G2</span>'
-                    : stu?.groupe === 3 ? '<span class="ipovf-gbadge g3">G3</span>'
+      const grpBadge = _grp(stu, state.cls) === 1 ? '<span class="ipovf-gbadge g1">G1</span>'
+                    : _grp(stu, state.cls) === 2 ? '<span class="ipovf-gbadge g2">G2</span>'
+                    : _grp(stu, state.cls) === 3 ? '<span class="ipovf-gbadge g3">G3</span>'
                     : '';
 
       if (!isCandidate) {
@@ -25334,8 +25443,8 @@ function renderExportPositions() {
       sid,
       pos:        pos ? _qcmDisplayLabel(cls, pos.r, pos.c, cc) : '',
       posOrder:   pos ? seatOrder(pos.r, pos.c, cc) : Infinity,
-      groupe:     stu.groupe ? `G${stu.groupe}` : '',
-      groupeKey:  stu.groupe || 99, // pour le tri (vides en dernier)
+      groupe:     _grp(stu) ? `G${_grp(stu)}` : '',
+      groupeKey:  _grp(stu) || 99, // pour le tri (vides en dernier)
       nom:        stu.nom || '',
       prenom:     stu.prenom || '',
       oublis:     stu.oublis || 0,
@@ -25569,9 +25678,9 @@ function renderIpads() {
 
   // Sids placés dans la salle active
   const placedSids = Object.values(cls.seating).filter(Boolean);
-  const hasPlacedG1 = placedSids.some(sid => S.eleves[sid]?.groupe === 1);
-  const hasPlacedG2 = placedSids.some(sid => S.eleves[sid]?.groupe === 2);
-  const hasPlacedG3 = placedSids.some(sid => S.eleves[sid]?.groupe === 3);
+  const hasPlacedG1 = placedSids.some(sid => _grp(S.eleves[sid]) === 1);
+  const hasPlacedG2 = placedSids.some(sid => _grp(S.eleves[sid]) === 2);
+  const hasPlacedG3 = placedSids.some(sid => _grp(S.eleves[sid]) === 3);
 
   // Un mode est affiché s'il a au moins un élève placé pertinent OU une affectation existante
   const modes = [
@@ -25629,7 +25738,7 @@ function renderIpads() {
       const stu = S.eleves[sid];
       if (!stu) continue;
       // Mode CE : tous les élèves placés ; G1/G2 : seulement ceux du groupe
-      if (m.gf !== 0 && stu.groupe !== m.gf) continue;
+      if (m.gf !== 0 && _grp(stu) !== m.gf) continue;
       entries.push({
         key, ipadN: 0, sid, stu,
         name: `${stu.prenom} ${stu.nom}`,
@@ -25997,7 +26106,7 @@ const IPRINT_POOL_BUTTONS_THRESHOLD = 4; // au-delà : dropdown
 function updateIprintGroupe() {
   const clsId = document.getElementById('iprint-class').value;
   const cls = clsId ? S.classes[clsId] : null;
-  const hasGroups = cls && (cls.eleves || []).some(sid => S.eleves[sid]?.groupe);
+  const hasGroups = cls && (cls.eleves || []).some(sid => _grp(S.eleves[sid], cls));
   document.getElementById('iprint-grp-row').style.display = hasGroups ? '' : 'none';
   if (!hasGroups) { iprintState.groupe = 0; setIprintGroupe(0); }
 
@@ -26946,7 +27055,7 @@ function pickRandomStudent() {
   const eligible = (cls.eleves || [])
     .map(id => S.eleves[id])
     .filter(s => s && placedSet.has(s.id))
-    .filter(s => groupFilter === 0 || s.groupe === groupFilter)
+    .filter(s => groupFilter === 0 || _grp(s) === groupFilter)
     .filter(s => !s.ulis && !s.upe2a)
     .filter(s => !_absentToday.has(s.id));
 
@@ -27154,7 +27263,7 @@ function _pickShow(result) {
   const cc = cls?.configuration?.cols || 10;
   const pos = cls ? getPos(stu.id, cls) : null;
   const posLabel = pos ? `Place n°${seatLabel(pos.r, pos.c, cc)}` : '';
-  const grpStr = stu.groupe ? `<span class="gbdg g${stu.groupe}" style="margin-left:8px;font-size:.55em;vertical-align:middle">G${stu.groupe}</span>` : '';
+  const grpStr = _grp(stu) ? `<span class="gbdg g${_grp(stu)}" style="margin-left:8px;font-size:.55em;vertical-align:middle">G${stu.groupe}</span>` : '';
   document.getElementById('pf-name').innerHTML  = `${_escAttr(stu.prenom)}<br><span style="text-transform:uppercase">${_escAttr(stu.nom)}</span>${grpStr}`;
   document.getElementById('pf-place').textContent = posLabel;
   const cycleEl = document.getElementById('pf-cycle');
@@ -28110,7 +28219,7 @@ function renderMattPlan() {
       // Si on filtre par groupe et que l'élève (live) n'appartient pas à ce groupe → cellule vide.
       // Cas particulier : élève archivé (stu null) et présent dans abs/retards → on le garde quand même.
       const wasInRecord = isAbsent || lateTime;
-      const wrongGroup = filterGroupe !== 0 && stu && stu.groupe !== filterGroupe && !wasInRecord;
+      const wrongGroup = filterGroupe !== 0 && stu && _grp(stu, cls) !== filterGroupe && !wasInRecord;
 
       const aeshIdxHere = _aeshAtKeyMap[key];
       let cellClass = 'mp-cell' + aisleCls;
@@ -28541,7 +28650,7 @@ function snapshotCreateConfirm() {
     // On capture les infos minimales des élèves placés (au cas où ils seraient supprimés plus tard)
     for (const sid of Object.values(seating)) {
       const stu = S.eleves[sid];
-      if (stu) eleves[sid] = { nom: stu.nom, prenom: stu.prenom, groupe: stu.groupe ?? null };
+      if (stu) eleves[sid] = { nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu) };
     }
     // AESH (Phase 2) : capture l'état AESH de la salle active (count + placement + liaisons)
     const _room = activeRoomData(cls);
@@ -28560,7 +28669,7 @@ function snapshotCreateConfirm() {
       const stu = S.eleves[sid];
       if (!stu) continue;
       eleves[sid] = {
-        nom: stu.nom, prenom: stu.prenom, groupe: stu.groupe ?? null,
+        nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu),
         oublis: stu.oublis || 0,
         non_travail: stu.non_travail || 0,
         history: JSON.parse(JSON.stringify(stu.history || []))
@@ -28965,7 +29074,7 @@ function printElevesList() {
     list = (cls.eleves || []).map(id => S.eleves[id]).filter(Boolean).map(s => ({
       id: s.id, nom: s.nom, prenom: s.prenom,
       oublis: s.oublis || 0, non_travail: s.non_travail || 0,
-      groupe: s.groupe ?? null,
+      groupe: _grp(s),
       ppre:       !!s.ppre,
       pap:        !!s.pap,
       gevasco:    !!s.gevasco,
@@ -29417,7 +29526,7 @@ function doPrint(mode) {  // 't'=teacher, 's'=student
           if (seatG === 1) cl += ' cg1';
           else if (seatG === 2) cl += ' cg2';
           else if (seatG === 3) cl += ' cg3';
-          const stuG = stu.groupe;
+          const stuG = _grp(stu);
           const aeshIdxLink = _sidToAeshIdx[stu.id];
           const aeshBadge = (typeof aeshIdxLink === 'number')
             ? `<span class="pinc" style="background:#c2185b;color:#fff;border-radius:3px;padding:0 4px;font-size:.7em;font-weight:700">🤝 ${_escAttr(aeshLabel(aeshIdxLink, _aeshTotal))}</span>`
@@ -29539,7 +29648,7 @@ function buildTeacherPageHTML(cls) {
         if (seatG === 1) cl += ' cg1';
         else if (seatG === 2) cl += ' cg2';
         else if (seatG === 3) cl += ' cg3';
-        const stuG = stu.groupe;
+        const stuG = _grp(stu, cls);
         const aeshIdxLink = _sidToAeshIdx[stu.id];
         const aeshBadge = (typeof aeshIdxLink === 'number')
           ? `<span class="pinc" style="background:#c2185b;color:#fff;border-radius:3px;padding:0 4px;font-size:.7em;font-weight:700">🤝 ${_escAttr(aeshLabel(aeshIdxLink, _aeshTotal))}</span>`
@@ -33139,7 +33248,7 @@ const _NotesExport = (function () {
       r.push(S0(n, { align: 'center' }));
       r.push(S0(stu.nom || ''));
       r.push(S0(stu.prenom || ''));
-      r.push(S0(stu.groupe ? 'G' + stu.groupe : ''));
+      r.push(S0(_grp(stu, cls) ? 'G' + _grp(stu, cls) : ''));
       let sumY = 0, denY = 0;
       for (const p of periods) {
         const moy = _computeStudentMeanForPeriod(cls.id, stu.id, p);
@@ -33253,7 +33362,7 @@ const _NotesExport = (function () {
       r.push(S0(n, { align: 'center' }));
       r.push(S0(stu.nom || ''));
       r.push(S0(stu.prenom || ''));
-      r.push(S0(stu.groupe ? 'G' + stu.groupe : ''));
+      r.push(S0(_grp(stu, cls) ? 'G' + _grp(stu, cls) : ''));
       for (const ev of evs) {
         const note = _computeStudentEvalNote(ev, stu.id);
         if (note == null) {
@@ -33335,7 +33444,7 @@ const _NotesExport = (function () {
     const colSums = compArr.map(() => ({ sum: 0, n: 0 }));
     for (const stu of students) {
       n++;
-      const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+      const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(_grp(stu, cls) ? 'G' + _grp(stu, cls) : '')];
       let rowSum = 0, rowN = 0;
       compArr.forEach((c, idx) => {
         let s = 0, k = 0;
@@ -33434,7 +33543,7 @@ const _NotesExport = (function () {
       let n = 0;
       for (const stu of students) {
         n++;
-        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(_grp(stu, cls) ? 'G' + _grp(stu, cls) : '')];
         const vals = ev.notes?.[stu.id]?.values || {};
         const comms = ev.notes?.[stu.id]?.comments || {};
         const excSet = new Set(ev.notes?.[stu.id]?.excluded || []);
@@ -33513,7 +33622,7 @@ const _NotesExport = (function () {
       let n = 0;
       for (const stu of students) {
         n++;
-        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(_grp(stu, cls) ? 'G' + _grp(stu, cls) : '')];
         for (const col of cols) {
           const niv = col.p.niveaux?.[stu.id]?.[col.cid];
           if (niv === 'A') r.push(S0('A', { align: 'center', italic: true, color: 'B03D2E' }));
@@ -33585,7 +33694,7 @@ const _NotesExport = (function () {
       let n = 0;
       for (const stu of students) {
         n++;
-        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(stu.groupe ? 'G' + stu.groupe : '')];
+        const r = [S0(n, { align: 'center' }), S0(stu.nom || ''), S0(stu.prenom || ''), S0(_grp(stu, cls) ? 'G' + _grp(stu, cls) : '')];
         const dLevels = ev.notes?.[stu.id]?.levels || {};
         for (const col of dCols) {
           const v = dLevels[col.mn.id]?.[col.cid];
@@ -36846,6 +36955,63 @@ function _evalTableurRenderCtx(ev, cls) {
   if (dId) parts.push('🎓 ' + _esc(_disciplineLabel(dId)));
   el.innerHTML = parts.join(' · ');
 }
+// ═══════════════ Aides repliables + pastilles « ? » au toucher (audit § 5.2) ═══════════════
+function _helpHidden(key) { try { return localStorage.getItem('planClasse_help_' + key) === '0'; } catch (e) { return false; } }
+function _helpSet(key, hide) {
+  try { localStorage.setItem('planClasse_help_' + key, hide ? '0' : '1'); } catch (e) {}
+  _helpApplyAll();
+}
+function _helpApplyAll() {
+  document.querySelectorAll('[data-help]').forEach(el => el.classList.toggle('help-folded', _helpHidden(el.dataset.help)));
+  document.querySelectorAll('[data-help-show]').forEach(b => { b.style.display = _helpHidden(b.dataset.helpShow) ? '' : 'none'; });
+}
+function _helpInit() {
+  const firsts = {};
+  document.querySelectorAll('[data-help]').forEach(el => {
+    const key = el.dataset.help;
+    if (!firsts[key]) firsts[key] = el;
+    if (el.dataset.helpInit) return;
+    el.dataset.helpInit = '1';
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'help-x'; x.textContent = '✕';
+    x.title = 'Masquer cette aide (le bouton « ❔ Aide » la réaffiche)';
+    x.addEventListener('click', e => { e.stopPropagation(); _helpSet(key, true); });
+    el.prepend(x);
+  });
+  for (const [key, el] of Object.entries(firsts)) {
+    if (document.querySelector(`[data-help-show="${key}"]`)) continue;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-g btn-sm help-show'; b.dataset.helpShow = key;
+    b.textContent = '❔ Aide'; b.title = 'Réafficher l\'aide de cet écran';
+    b.addEventListener('click', () => _helpSet(key, false));
+    el.parentNode.insertBefore(b, el);
+  }
+  _helpApplyAll();
+}
+// Pastilles « ? » (.tb-hint) : leur texte est en infobulle native, invisible au doigt
+// (Surface en mode tablette, iPad). Un toucher ou un clic l'affiche dans une bulle ;
+// un second toucher ailleurs la ferme.
+function _helpBubble(target) {
+  let b = document.getElementById('help-bubble');
+  if (!b) { b = document.createElement('div'); b.id = 'help-bubble'; document.body.appendChild(b); }
+  if (!target) { b.style.display = 'none'; b._for = null; return; }
+  if (b._for === target && b.style.display === 'block') { b.style.display = 'none'; b._for = null; return; }
+  b.textContent = target.title || target.getAttribute('data-tip') || '';
+  if (!b.textContent) return;
+  b._for = target;
+  b.style.display = 'block';
+  const r = target.getBoundingClientRect(), bw = b.offsetWidth, bh = b.offsetHeight;
+  let left = Math.min(Math.max(8, r.left + r.width / 2 - bw / 2), innerWidth - bw - 8);
+  let top = r.bottom + 6; if (top + bh > innerHeight - 8) top = Math.max(8, r.top - bh - 6);
+  b.style.left = left + 'px'; b.style.top = top + 'px';
+}
+document.addEventListener('click', e => {
+  const h = e.target.closest?.('.tb-hint');
+  if (h) { e.preventDefault(); e.stopPropagation(); _helpBubble(h); return; }
+  if (!e.target.closest?.('#help-bubble')) _helpBubble(null);
+}, true);
+window.addEventListener('scroll', () => _helpBubble(null), true);
+
 // Enveloppes posées AVANT init() pour couvrir aussi le premier rendu.
 [['renderStudents', 'eleves'], ['renderEvalNotes', 'notes'], ['renderBilanTab', 'bilan'], ['renderCompetencesTab', 'comp']].forEach(([fn, key]) => {
   const orig = window[fn];
@@ -36854,6 +37020,7 @@ function _evalTableurRenderCtx(ev, cls) {
 });
 
 init();
+_helpInit();
 
 // ═══════════════ HINTS → infobulles (texte du span .tb-hint → attribut title) ═══════════════
 function _initHints() {
@@ -37215,7 +37382,7 @@ async function _renderStorageGauge(force) {
 
   let note;
   if (pct >= 85) {
-    note = `<div class="sto-note" style="color:var(--danger-fg);font-weight:600">⚠️ ${occupe} Exporte tes données, puis allège : supprime des instantanés, ou réinitialise en conservant les salles (onglet Classes → 🗑 Réinitialiser).<br><span style="font-weight:400">${prov} ${bouton}</span></div>`;
+    note = `<div class="sto-note" style="color:var(--danger-fg);font-weight:600">⚠️ ${occupe} Exporte tes données, puis allège : supprime des instantanés, ou réinitialise en fin d'année (💾 Données → 🗑 Réinitialiser le fichier…).<br><span style="font-weight:400">${prov} ${bouton}</span></div>`;
   } else if (pct >= 60) {
     // --warn-fg (et non un orange littéral) : décliné par thème, cf. section Contraste.
     note = `<div class="sto-note" style="color:var(--warn-fg);font-weight:600">${occupe} À surveiller en fin d'année ; un export régulier reste la meilleure sécurité.<br><span style="color:var(--pencil);font-weight:400">${prov} ${bouton}</span></div>`;
@@ -38726,7 +38893,7 @@ function renderEvalNotes() {
         <button class="btn btn-g btn-sm" onclick="_evalDuplicate('${_esc(ev.id)}')" title="Dupliquer cette évaluation (même structure, notes vides)">⧉</button>
         ${_evalListEvaluatedCompetences(ev, 'code').length > 0 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenBilanCompsForEval('${_esc(ev.id)}')" title="Bilan compétences : niveau atteint par élève sur chaque compétence évaluée">📊</button>` : ''}
         ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🔀</button>` : ''}
-        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV">📤</button>
+        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV" style="font-weight:600">📤 ENT</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Projeter les notes : vue épurée à projeter en plein écran (grands caractères pour le fond de la salle) ou à imprimer">👀</button>
         <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">🗑</button>
       </div>
@@ -41531,7 +41698,7 @@ function _evalTableurChangeSlot(slotId) {
 // sur « Tous » — sinon le tableur serait vide sans explication.
 function _evalTableurGroupCounts(cls) {
   const n = { 1: 0, 2: 0, 3: 0 };
-  for (const sid of (cls?.eleves || [])) { const g = S.eleves?.[sid]?.groupe; if (n[g] != null) n[g]++; }
+  for (const sid of (cls?.eleves || [])) { const g = _grp(S.eleves?.[sid], cls); if (n[g] != null) n[g]++; }
   return n;
 }
 function _evalTableurGroup(cls) {
@@ -41578,7 +41745,7 @@ function _evalTableurSortedSids(cls) {
   // depuis ce tableur, qui montrent ce qui est affiché.
   const _g = _evalTableurGroup(cls);
   const _activeFilter = (sid) => _stuActiveOnAnyEvalRef(S.eleves[sid], _ev, cls.id)
-    && (!_g || S.eleves[sid]?.groupe === _g);
+    && (!_g || _grp(S.eleves[sid], cls) === _g);
   // Pattern de ramassage : mode = 'pat-<patternId>'
   if (mode.startsWith('pat-')) {
     const patternId = mode.slice(4);
@@ -44093,7 +44260,7 @@ function _evalPlanOverlayRender() {
       }
       // Filtre de groupe du tableur : les élèves hors groupe restent à leur place, estompés
       // et sans pastille (on voit qui est là, on ne peut pas saisir pour eux).
-      if (_gPlan && stu.groupe !== _gPlan) {
+      if (_gPlan && _grp(stu, cls) !== _gPlan) {
         html += `<div class="evp-cell evp-cell-stu" style="min-height:${cellMinH}px;opacity:.3;pointer-events:none" title="Hors G${_gPlan} — filtre de groupe du tableur">
           <div class="evp-name"><strong>${_esc(stu.prenom)}</strong><br>${_esc(stu.nom?.toUpperCase() || '')}</div>
         </div>`;
@@ -45737,7 +45904,7 @@ function _tableurMnContextMenu(event, mnId) {
   // Section per-groupe : visible si Type A et si la classe a au moins un élève G1/G2/G3
   const perGroupWrap = document.getElementById('meval-mn-menu-pergroup-wrap');
   const hasGroups = !isC && cls && (cls.eleves || []).some(sid => {
-    const g = S.eleves?.[sid]?.groupe;
+    const g = _grp(S.eleves?.[sid], cls);
     return g === 1 || g === 2 || g === 3;
   });
   if (perGroupWrap) perGroupWrap.style.display = hasGroups ? '' : 'none';
@@ -45806,7 +45973,7 @@ function _tableurMnMenuRenderPerGroupRows() {
   // Détecte les groupes présents dans la classe
   const groupsInCls = new Set();
   for (const sid of (cls.eleves || [])) {
-    const g = S.eleves?.[sid]?.groupe;
+    const g = _grp(S.eleves?.[sid], cls);
     if (g === 1 || g === 2 || g === 3) groupsInCls.add(g);
   }
   const groups = [...groupsInCls].sort();
@@ -46055,7 +46222,7 @@ function _tableurPassContextMenu(event, passId) {
   // Section per-groupe : visible si la classe active a au moins un élève G1/G2/G3
   const pgWrap = document.getElementById('meval-pass-menu-pergroup-wrap');
   const hasGroups = cls && (cls.eleves || []).some(sid => {
-    const g = S.eleves?.[sid]?.groupe;
+    const g = _grp(S.eleves?.[sid], cls);
     return g === 1 || g === 2 || g === 3;
   });
   if (pgWrap) pgWrap.style.display = hasGroups ? '' : 'none';
@@ -46093,7 +46260,7 @@ function _tableurPassMenuRenderPerGroupRows() {
   if (!pass || !cls) { wrap.innerHTML = ''; return; }
   const groupsInCls = new Set();
   for (const sid of (cls.eleves || [])) {
-    const g = S.eleves?.[sid]?.groupe;
+    const g = _grp(S.eleves?.[sid], cls);
     if (g === 1 || g === 2 || g === 3) groupsInCls.add(g);
   }
   const groups = [...groupsInCls].sort();
@@ -46912,7 +47079,7 @@ function _mnDateFor(mn, classId, group) {
 // (une case vide ne compte pas). Date lue par groupe de l'élève, puis par classe.
 function _stuOutOnSubDate(stu, sub, classId, isPass) {
   if (!stu || !sub) return null;
-  const d = isPass ? _passDateFor(sub, classId, stu.groupe) : _mnDateFor(sub, classId, stu.groupe);
+  const d = isPass ? _passDateFor(sub, classId, _grp(stu, S.classes[classId])) : _mnDateFor(sub, classId, _grp(stu, S.classes[classId]));
   if (!d) return null;
   if (stu.departureDate && d >= stu.departureDate) return 'left';
   if (stu.arrivalDate && d < stu.arrivalDate) return 'notyet';
@@ -47053,7 +47220,7 @@ function _evalAutoFillAbsentsForMn(ev, mn, classId) {
   const sids = (cls.eleves || []).filter(sid => S.eleves?.[sid]);
   for (const sid of sids) {
     const stu = S.eleves[sid];
-    const g = stu.groupe || 0;
+    const g = _grp(stu, S.classes[classId]) || 0;
     const effDate = (g && pgDates?.[g]) || defDate;
     const effSlot = (g && pgSlots?.[g]) || defSlot;
     if (!effDate) continue;
@@ -47102,7 +47269,7 @@ function _evalAutoFillAbsentsForPass(ev, pass, classId) {
   const sids = (cls.eleves || []).filter(sid => S.eleves?.[sid]);
   for (const sid of sids) {
     const stu = S.eleves[sid];
-    const g = stu.groupe || 0;
+    const g = _grp(stu, S.classes[classId]) || 0;
     const effDate = (g && pgDates?.[g]) || defDate;
     const effSlot = (g && pgSlots?.[g]) || defSlot;
     if (!effDate) continue;
