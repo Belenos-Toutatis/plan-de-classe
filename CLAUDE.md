@@ -958,13 +958,13 @@ snap = {
 
 ### Type `positions` — onglet Plan Prof
 - Capture le `seating` de la salle active + identité minimale des élèves placés (pour pouvoir consulter même si supprimés depuis)
-- Bouton **"📸 Snapshots"** dans la toolbar Plan Prof
+- Bouton **"📸 Instantanés"** dans la toolbar Plan Prof
 - Actions : 👁 Consulter / **↻ Restaurer** / ✏️ Renommer / 🗑 Supprimer
 - Restauration : `pushUndo()`, ne replace que les élèves qui existent encore dans la classe ; les nouveaux élèves restent en "non placés" ; sort automatiquement du mode consultation
 
 ### Type `incidents` — onglet Élèves
 - Capture pour chaque élève de la classe : `oublis`, `non_travail`, `history`, `groupe`, `nom`, `prenom`
-- Bouton **"📸 Snapshots"** dans la barre d'actions Élèves
+- Bouton **"📸 Instantanés"** dans la barre d'actions Élèves
 - Actions : 👁 Consulter / ✏️ Renommer / 🗑 Supprimer (**pas de restauration**, par choix)
 
 ### Mode consultation (read-only)
@@ -1587,7 +1587,7 @@ Le zoom du Plan Prof et de la Vue Élève est **persisté** (`localStorage.planC
 - **Saisie directe des compteurs 📦/📝** : input numérique cliquable au lieu des anciens boutons +/−. Helpers `setOubli(id, v)` / `setNT(id, v)` → `_setCounter(id, field, type, newVal)` qui ajuste `history` proprement (push/pop selon le delta). Focus auto-select pour remplacer la valeur par frappe directe. Fond coloré via `oubliColor(n)` préservé pour l'oeil. La classe CSS partagée `.counter-input` retire les spinners du navigateur.
 - **Bug de la modale Informations corrigé** : `openStuNotes` ne référence plus les champs `mn-ppre / mn-gevasco / mn-ulis-incl / mn-upe2a / mn-upe2a-incl` qui n'existent plus dans la modale `mnotes` simplifiée — seuls `mn-sid`, `mnotes-name` et `mn-notes` sont accédés. Ces statuts pédagogiques se règlent désormais via les boutons dédiés dans la ligne Élèves ou le menu contextuel.
 - **Bouton 🕓 Historique** : modal à 2 onglets — Incidents (📦/📝) et Absences & retards (toutes classes confondues). Cf. section "Onglet Élèves — historique enrichi".
-- **Bouton 📸 Snapshots** : sauvegarder / consulter l'état des incidents à une date (cf. section Snapshots)
+- **Bouton 📸 Instantanés** : sauvegarder / consulter l'état des incidents à une date (cf. section Snapshots)
 - **Bouton 📊 Vue d'ensemble** : modal cross-classe avec filtres et tri (cf. section dédiée)
 - **Bouton 📊 Export positions** : ouvre l'onglet caché `tab-notes` (tableau triable Position · Groupe · Nom · Prénom + export CSV). Bouton ↩ Retour Élèves dans le header de l'onglet ramène ici.
 - **Bouton 🖨 Imprimer la liste** : impression portrait (Élève · Groupe · 📦 · 📝)
@@ -2770,6 +2770,9 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 - ⚠️ Non testable en aperçu desktop sur le ressenti réel iPad — validation finale sur l'appareil. Les `TouchEvent` synthétiques permettent toutefois de vérifier la logique (saisie, échange, annulation, menu contextuel) automatiquement.
 
 ## Conventions de développement
+- **Ton et vocabulaire (v2.72.0, arbitrage de l'utilisateur)** : **tutoiement partout** (« Clique », « Tu peux »), jamais de vouvoiement dans un nouveau texte. Mots fixés (glossaire dans ⓘ → « 📖 Les mots de l'application ») : ⚙ *Réglages* (toute l'app) · ⚙ *Réglages des évaluations* (communs) · ⚙ *Réglages de l'évaluation* (un devoir) ; *Arrondi* (pas « granulométrie ») ; bouton **✓ Enregistrer** (pas « Sauvegarder ») ; **✏️ Modifier** (pas « Éditer ») ; *Instantané* (pas « snapshot ») ; *Ordre de ramassage* (pas « pattern ») ; **QCMcam** (graphie officielle, nom de l'onglet compris). ⚠️ Les noms INTERNES (`snapshots`, `collectPatterns`, `meanGranularity`, `qcm*`) ne changent pas — seul le texte visible. ⚠️ Une apostrophe ajoutée dans une chaîne JS entre `'…'` casse tout le script (« l'instantané » → `l\'instantané`) : `node --check` sur le script extrait, ou `npm test`, le détecte.
+- **Une icône par concept** : ⧉ Copier / Dupliquer · 📋 **seulement** Informations · 📥 Coller · 🗑 supprimer un objet (✕ = retirer une ligne / fermer) · ⛓ Contraintes · 🔒 **seulement** mode confidentiel · 🔀 placement aléatoire / mélange · 🎲 **seulement** Interroger · 📤 Export ENT · 🗂 Ordres de ramassage.
+- **Palette des statuts** : une seule, celle des `.spec-*` (cf. *Pastilles d'aménagement*). Toute surface d'écran qui colore un statut lit ces classes — par la classe elle-même, ou par **`_specColors(cls)`** (fond + encre calculés, cache par thème) quand il faut une couleur en style inline (boutons de l'onglet Élèves) ; pastilles `.ctx-sw` dans le menu clic droit.
 - ⚠️ **L'app n'est PAS prévue pour un usage 100 % clavier** — décision explicite de l'utilisateur. L'interaction centrale est **spatiale** (glisser un élève sur une table), à la souris, au doigt ou au stylet. Ne pas proposer de rendre focusables les ~150 éléments cliquables de la grille, et ne pas présenter cela comme une lacune. En revanche les **raccourcis existants** (`Échap`, `Ctrl+Z/Y/P`, `+`/`-`/`=`, `0`/`1`/`2`/`3`, `A`) et la validation à `Entrée` dans les modales sont des accélérateurs pour un enseignant en cours : **ne pas les casser**.
 - Tout le code reste dans le fichier HTML unique — ne pas éclater en plusieurs fichiers
 - CSS dans le `<style>`, JS dans le `<script>` en fin de body

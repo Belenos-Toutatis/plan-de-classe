@@ -360,6 +360,15 @@ Trois façons de présenter l'aide selon l'onglet :
 >
 > **Reste ouvert du lot E :** statistiques d'absence par période toujours à trois niveaux (la Vue d'ensemble couvre les cumuls) ; ordre des boutons d'export identique dans les deux Bilans (lot F).
 >
+> **Lot F — fait en v2.72.0 :**
+> - **tutoiement partout** (arbitrage de l'utilisateur) : 152 impératifs et 34 « vous / votre / vos » convertis ;
+> - **une icône par concept** : ⧉ Copier / Dupliquer (📋 réservé aux Informations ; 📥 Coller ; titres qui portaient 📋 : 🗂 ordres de ramassage, 📚 catalogue des disciplines, ☰ liste, 💬 commentaires, 🖼 plan de l'appel, 📝 remarque de classe) · 🗑 pour supprimer une évaluation · ⛓ Contraintes (🔒 réservé au mode confidentiel) · 🔀 tout placement aléatoire (🎲 réservé à Interroger) ;
+> - **mots** : « ⚙ Réglages des évaluations » (ex « Paramètres ») et « ⚙ Réglages de l'évaluation » ; « Arrondi » (ex « Granulométrie ») ; « ✓ Enregistrer » (ex « Sauvegarder ») ; « ✏️ Modifier » (ex « Éditer ») ; « Instantané » (ex « Snapshot ») ; « Ordre de ramassage » (ex « Pattern ») ; graphie officielle « QCMcam » partout ;
+> - **palette unique des statuts** : boutons de l'onglet Élèves et pastilles du menu clic droit lisent les couleurs des `.spec-*` du plan (`_specColors`, thème compris) — ULIS n'est plus vert d'un côté et gris de l'autre ;
+> - **ⓘ** : table des raccourcis complétée et rangée par portée ; nouveau glossaire « 📖 Les mots de l'application ».
+>
+> **Reste ouvert du lot F :** « mini-note » (Type A) gardé, distinct de « question » ; « Tags » gardé ; lisibilité de la carte de classe (§ 6.5) et légende des mentions F E AT AC ; « Fiche » : couleurs « parti » et « Aussi dans » (§ 6.4).
+>
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
 | Lot | Contenu | Risque | Taille |
