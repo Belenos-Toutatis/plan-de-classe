@@ -1179,12 +1179,13 @@ test('Fin d\'année : les données de l\'année partent, les réglages restent',
       S.conseilMentions = { cm_fel: { id: 'cm_fel', nom: 'Félicitations', abbr: 'F', color: '#2563eb', ord: 0 } };
       S.evalPrefs.adjustPresets = [{ id: 'p1', op: 'add', v: -2, label: 'Rendu en retard' }];
       S.evalCommentLibrary = { positive: ['A aidé au rangement'], negative: ['Blouse non fermée'] };
+      S.memoProgress = { e1: { b: 3, ok: 4, ko: 1, t: '2026-10-01' } };
       globalThis.__undoSpy = 0; pushUndo = function () { globalThis.__undoSpy++; };
       _doResetEndOfYear(false);`);
   // — Camp « données de l'année » : tout doit être vide —
   for (const k of ['classes', 'eleves', 'evaluations', 'snapshots', 'attendance', 'seatingSnapshots',
                    'movedHighlights', 'bulletinRemarques', 'bulletinClassRemarques',
-                   'bulletinWorkedItems', 'conseilClasse']) {
+                   'bulletinWorkedItems', 'conseilClasse', 'memoProgress']) {
     assert.equal(ev(`Object.keys(S.${k} || {}).length`), 0, `S.${k} doit être vidé en fin d'année`);
   }
   assert.equal(ev('S.cur'), null);

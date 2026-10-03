@@ -60,3 +60,48 @@ test('trombinoscope : classe désignée par « 6A », « 6e A », « 6ème A »'
   assert.strictEqual(ev(`_trombiResolveClass('5B')`), 'X5B');
   assert.strictEqual(ev(`_trombiResolveClass('4C')`), null);
 });
+
+// ─── 🧠 Jeu de mémorisation ───
+test('mémorisation : saisie au clavier (accents, casse, ordre, faute tolérée)', () => {
+  const ok = (t, e) => ev(`_memoTypedOk(${JSON.stringify(t)}, ${JSON.stringify(e)})`);
+  assert.equal(ok('lea', 'Léa'), true);
+  assert.equal(ok('Lena', 'Léa'), false, 'pas de faute tolérée sous 6 lettres');
+  assert.equal(ok('matheo', 'Mattéo'), true, 'une faute tolérée à partir de 6 lettres');
+  assert.equal(ok('jean baptiste', 'Jean-Baptiste'), true);
+  assert.equal(ok('martin lea', 'Léa MARTIN'), true, 'ordre libre');
+  assert.equal(ok('lea', 'Léa MARTIN'), false, 'le nom est exigé en variante prénom + nom');
+  assert.equal(ok('', 'Léa'), false);
+});
+
+test('mémorisation : 10 propositions — 3 de la classe, 6 du même niveau, libellés uniques', () => {
+  ev(`(() => {
+    S.classes = {}; S.eleves = {};
+    const mk = (cid, nom, n, prefix) => {
+      S.classes[cid] = { id: cid, nom, eleves: [] };
+      for (let i = 0; i < n; i++) { const id = cid + '_' + i; S.eleves[id] = { id, nom: 'NOM' + id, prenom: prefix + i, classe_id: cid }; S.classes[cid].eleves.push(id); }
+    };
+    mk('6A', '6e A', 8, 'A'); mk('6B', '6e B', 8, 'B'); mk('6C', '6e C', 8, 'C'); mk('5A', '5e A', 8, 'F');
+  })()`);
+  const ch = JSON.parse(ev(`JSON.stringify(_memoChoices(S.eleves['6A_0'], 'prenom'))`));
+  assert.equal(ch.length, 10);
+  assert.ok(ch.some(c => c.sid === '6A_0'), 'la bonne réponse est proposée');
+  const cls = id => id.split('_')[0];
+  assert.equal(ch.filter(c => cls(c.sid) === '6A').length, 4, 'la bonne + 3 de la classe');
+  assert.equal(ch.filter(c => ['6B', '6C'].includes(cls(c.sid))).length, 6, '6 d\'autres classes du même niveau');
+  assert.equal(ch.filter(c => cls(c.sid) === '5A').length, 0, 'pas d\'autre niveau quand le même niveau suffit');
+  assert.equal(new Set(ch.map(c => c.label)).size, 10, 'jamais deux libellés identiques');
+  const full = JSON.parse(ev(`JSON.stringify(_memoChoices(S.eleves['6A_0'], 'full'))`));
+  assert.ok(full.every(c => / NOM/.test(c.label)), 'variante prénom + nom');
+});
+
+test('mémorisation : homonyme dans la classe → le nom est exigé', () => {
+  ev(`S.eleves['6A_1'].prenom = 'A0'`);
+  assert.equal(ev(`_memoNeedsFull(S.eleves['6A_0'], 'prenom')`), true);
+  assert.equal(ev(`_memoNeedsFull(S.eleves['6A_2'], 'prenom')`), false);
+});
+
+test('mémorisation : la progression part avec l\'élève supprimé', () => {
+  ev(`S.memoProgress = { '6A_3': { b: 2, ok: 3, ko: 1 }, '6A_4': { b: 0, ok: 0, ko: 2 } }; _deleteStudentInternal('6A_3')`);
+  assert.equal(ev(`'6A_3' in S.memoProgress`), false);
+  assert.equal(ev(`'6A_4' in S.memoProgress`), true);
+});
