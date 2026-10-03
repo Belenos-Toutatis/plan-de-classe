@@ -2004,9 +2004,9 @@ Aussi déclenché lors de l'**import CSV QCMcam** quand la date OU le créneau d
 
 Quand `filled > 0`, le tableur est re-rendu via `_evalTableurRender()` pour faire apparaître les A immédiatement.
 
-### Clic sur le nom dans les bilans → historique élève
+### Clic sur le nom dans les bilans → fiche complète de l'élève
 
-Dans le **Bilan des notes** et le **Bilan des compétences**, la cellule du nom (1re colonne sticky) est cliquable et appelle `openHist(sid)` — la même modale 🕓 que le bouton historique dans l'onglet Élèves. Évite d'avoir à naviguer vers Élèves pour consulter incidents/notes/absences d'un élève. Curseur pointer + tooltip explicatif.
+Dans le **Bilan des notes** et le **Bilan des compétences**, la cellule du nom (1re colonne sticky) ouvre la **🪪 fiche complète** (`openFiche`), comme le nom dans l'onglet Élèves (v2.63.6 — c'était l'historique `openHist` avant ; l'historique reste à un clic depuis la fiche, via les 🕓). Même montage que l'onglet Élèves : le **texte du nom** (`span.stu-name-link`) passe par `_confOpenFiche` et ouvre la fiche même en mode confidentiel ; le **reste de la cellule** fait `_confNameClick(sid)||openFiche(sid)` (en mode confidentiel : afficher / masquer l'élève).
 
 ### Mini-calculatrice dans les cellules (Type A / C, tableur)
 
