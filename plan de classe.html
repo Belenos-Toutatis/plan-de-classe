@@ -4933,8 +4933,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <label>Touche Entrée</label>
         <select id="evalprefs-defaultEnter" style="padding:4px 8px;font-size:.9em">
           <option value="question">Question suivante (→)</option>
-          <option value="byquestion">Question par question</option>
-          <option value="byexo">Exercice par exercice</option>
+          <option value="byquestion">Question par question (Type B : passation par passation)</option>
+          <option value="byexo">Exercice par exercice (Type B : séance par séance)</option>
         </select>
         <label>Arrondi de la note</label>
         <select id="evalprefs-defaultGranularity" style="padding:4px 8px;font-size:.9em" title="Précision d'arrondi pour la note finale (réglable aussi par éval)">
@@ -5946,7 +5946,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <option value="nom-prenom">↕ Nom Prénom</option>
           <option value="prenom-nom">↕ Prénom Nom</option>
         </select>
-        <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Question par question (Passation par passation en Type B) : remplit la question — ou toutes les compétences de la passation — pour un élève, puis descend à l'élève suivant, sur la première case encore vide ; la classe finie, on passe à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier">
+        <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Question par question (Passation par passation en Type B) : remplit la question — ou toutes les compétences de la passation — pour un élève, puis descend à l'élève suivant, sur la première case encore vide ; la classe finie, on passe à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier&#10;• Séance par séance (Type B) : idem, le bloc regroupe les passations qui se suivent avec la même date et le même créneau">
           <option value="question" selected>↩ Question suivante</option>
           <option value="byquestion">↩ Question par question</option>
           <option value="byexo">↩ Exercice par exercice</option>
@@ -7165,11 +7165,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.76.0';
+const APP_VERSION    = '2.76.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-04T18:27:19Z';
+const APP_BUILD_DATE = '2026-10-04T18:59:47Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -42100,7 +42100,10 @@ function _evalTableurUpdateHelpForType(ev) {
   // bloc se réduit à la question, le mode ferait doublon avec « Question par question ».
   const optX = document.querySelector('#meval-tableur-enter option[value="byexo"]');
   if (optX) {
-    const aDesExos = (ev?.type === 'C' || ev?.type === 'D') && (ev.exercices || []).length > 0;
+    // En Type B, ce même mode devient « Séance par séance » (passations de même date et
+    // même créneau saisies d'affilée — cf. _tableurBlockAt).
+    const aDesExos = ev?.type === 'B' || ((ev?.type === 'C' || ev?.type === 'D') && (ev.exercices || []).length > 0);
+    optX.textContent = ev?.type === 'B' ? '↩ Séance par séance' : '↩ Exercice par exercice';
     optX.hidden = !aDesExos;
     if (!aDesExos && document.getElementById('meval-tableur-enter').value === 'byexo') {
       document.getElementById('meval-tableur-enter').value = 'byquestion';
@@ -43297,6 +43300,10 @@ function _tableurBlockAt(ev, ci, byExo) {
   const row = document.querySelector('#meval-tableur-tbl tbody tr[data-sid]');
   if (!row) return null;
   const keys = [];
+  // Type B, « Séance par séance » : le bloc regroupe les passations CONSÉCUTIVES qui ont
+  // la même date ET le même créneau pour la classe (ex. « a2 q2 » puis « a2 q4 », saisies
+  // l'une après l'autre le même jour). Passation sans date : bloc à elle seule.
+  const clsB = (byExo && ev.type === 'B') ? _evalTableurActiveCls(ev) : null;
   // Les cellules repliées (colonne « non faite par cette classe ») n'ont pas d'input
   // mais portent data-ci/data-mnid : elles comptent dans le bloc, sinon un exercice
   // dont une question est sautée se scinderait en deux.
@@ -43305,6 +43312,12 @@ function _tableurBlockAt(ev, ci, byExo) {
     if (!Number.isFinite(i)) return;
     const qid = inp.getAttribute('data-mnid') || inp.getAttribute('data-passid') || '';
     if (!byExo) { keys[i] = 'q:' + qid; return; }
+    if (clsB) {
+      const pass = (ev.passations || []).find(p => p.id === qid);
+      const d = pass ? _passDateFor(pass, clsB.id) : '';
+      keys[i] = d ? ('s:' + d + '|' + (_passSlotIdFor(pass, clsB.id) || '')) : ('q:' + qid);
+      return;
+    }
     const mn = (ev.miniNotes || []).find(m => m.id === qid);
     // Pas d'exercices (Type A/B) : le bloc « exercice » vaut la question — on ne prétend
     // pas à un regroupement qui n'existe pas dans ces types.
