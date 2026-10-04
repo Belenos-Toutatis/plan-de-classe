@@ -5946,7 +5946,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <option value="nom-prenom">↕ Nom Prénom</option>
           <option value="prenom-nom">↕ Prénom Nom</option>
         </select>
-        <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Question par question : remplit la question pour un élève, puis descend — la question est faite pour toute la classe avant de passer à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier">
+        <select id="meval-tableur-enter" style="padding:3px 6px;font-size:.85em" title="Comportement de la touche Entrée (Tab et flèches restent inchangées)&#10;&#10;• Suivante : la cellule à droite, puis l'élève suivant&#10;• Question par question (Passation par passation en Type B) : remplit la question — ou toutes les compétences de la passation — pour un élève, puis descend à l'élève suivant, sur la première case encore vide ; la classe finie, on passe à la suivante&#10;• Exercice par exercice : idem, mais le bloc est l'exercice entier">
           <option value="question" selected>↩ Question suivante</option>
           <option value="byquestion">↩ Question par question</option>
           <option value="byexo">↩ Exercice par exercice</option>
@@ -7165,11 +7165,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.75.2';
+const APP_VERSION    = '2.76.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-03T22:37:32Z';
+const APP_BUILD_DATE = '2026-10-04T18:27:19Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -42092,6 +42092,10 @@ function _evalTableurUpdateHelpForType(ev) {
                      : (ev?.type === 'B') ? '↩ Compétence suivante'
                      : '↩ Question suivante';
   }
+  // « Question par question » : en Type B le bloc est la PASSATION (toutes ses compétences
+  // pour un élève, puis l'élève suivant) — le libellé « question » le cachait.
+  const optBQ = document.querySelector('#meval-tableur-enter option[value="byquestion"]');
+  if (optBQ) optBQ.textContent = (ev?.type === 'B') ? '↩ Passation par passation' : '↩ Question par question';
   // « Exercice par exercice » n'a de sens que si l'éval EN A : sans exercices (A, B) le
   // bloc se réduit à la question, le mode ferait doublon avec « Question par question ».
   const optX = document.querySelector('#meval-tableur-enter option[value="byexo"]');
@@ -43367,8 +43371,17 @@ function _evalTableurKey(e, inputEl) {
         // puis on descend au suivant sur le même bloc — soit la façon dont on corrige
         // réellement : question par question, ou exercice par exercice, sur tout le paquet.
         // Le bloc épuisé pour toute la classe, on passe au bloc suivant, premier élève.
+        // En descendant à l'élève suivant, on se pose sur la PREMIÈRE CELLULE VIDE du bloc
+        // (demande de l'utilisateur, Type B : des compétences de la passation peuvent déjà
+        // être saisies). Bloc entièrement rempli → son début, comme avant.
         if (ci < blk.end) targetCi = ci + 1;
-        else if (ri < numRows - 1) { targetRi = ri + 1; targetCi = blk.start; }
+        else if (ri < numRows - 1) {
+          targetRi = ri + 1; targetCi = blk.start;
+          for (let c = blk.start; c <= blk.end; c++) {
+            const inp = document.querySelector(`#meval-tableur-tbl input[data-ri="${ri + 1}"][data-ci="${c}"]`);
+            if (inp && inp.value.trim() === '') { targetCi = c; break; }
+          }
+        }
         else if (blk.end < numCols - 1) { targetRi = 0; targetCi = blk.end + 1; }
         else return null;
       } else {
