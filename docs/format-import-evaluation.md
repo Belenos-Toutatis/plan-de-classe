@@ -17,9 +17,10 @@ produise le fichier.
 ## Consigne pour l'IA
 
 > Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation, et l'enseignant te dit
-> s'il la veut en **Type C** (questions notées en points) ou en **Type D** (questions évaluées
-> par compétences et niveaux). Sans précision, choisis le Type C si le sujet porte des points,
-> le Type D s'il porte des compétences sans points.
+> s'il la veut en **Type C** (il note chaque question en points) ou en **Type D** (il évalue
+> chaque compétence d'une question par un niveau de maîtrise). **Ne déduis pas le type du
+> sujet** : un sujet avec des points convient aux deux types. Si l'enseignant ne l'a pas
+> précisé, prends le Type C et écris dans `description` : « Type à confirmer (C par défaut) ».
 >
 > Produis **un seul objet JSON** conforme au format ci-dessous, et rien d'autre : pas de texte
 > avant ni après, pas de commentaire dans le JSON. Reprends les exercices et les questions
@@ -27,8 +28,10 @@ produise le fichier.
 >
 > - **Type C** : donne à chaque question le nombre de points indiqué dans le sujet. S'il n'y en
 >   a pas, propose un nombre raisonnable et signale-le dans son champ `description`.
-> - **Type D** : donne à chaque question **au moins une compétence**, et pas de points. Si une
->   compétence compte davantage dans une question, donne-lui un `poids` (2 = compte double).
+> - **Type D** : donne à chaque question **au moins une compétence**, et reprends ses points
+>   du sujet dans `points` : l'application les partage entre ses compétences. Si le sujet fixe
+>   lui-même les points de chaque compétence dans la question, écris-les dans la compétence
+>   (`{ "code": "C1", "points": 2 }`) au lieu de `points` de la question.
 >
 > N'invente pas de compétence : n'utilise que les codes que l'enseignant t'a donnés, ou ceux
 > du référentiel par défaut listé plus bas.
@@ -90,14 +93,14 @@ produise le fichier.
       "titre": "Ex1",
       "description": "Formes d'énergie",
       "questions": [
-        { "titre": "1a", "competences": ["C1"] },
-        { "titre": "1b", "competences": [{ "code": "C1", "poids": 2 }, "C3"], "description": "Chaîne énergétique" }
+        { "titre": "1a", "points": 1, "competences": ["C1"] },
+        { "titre": "1b", "competences": [{ "code": "C1", "points": 2 }, { "code": "C3", "points": 1 }], "description": "Chaîne énergétique" }
       ]
     },
     {
       "titre": "Ex2",
       "questions": [
-        { "titre": "2a", "competences": ["C2", "C3"] }
+        { "titre": "2a", "points": 3, "competences": ["C2", "C3"] }
       ]
     }
   ]
@@ -141,19 +144,29 @@ le créneau, la période et la discipline.
 | Champ | Obligatoire | Type | Rôle |
 |---|---|---|---|
 | `titre` | oui | texte **très court**, 8 caractères conseillés (20 max) | Code de la question, affiché en tête de colonne (ex. `"1a"`, `"Q3"`, `"2.b"`). |
-| `points` | **Type C : oui** · Type D : non (ignoré) | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
-| `competences` | **Type D : oui, au moins une** · Type C : non | liste | Compétences évaluées par la question. Chaque élément est un code (`"C1"`) ou, en Type D, un objet `{ "code": "C1", "poids": 2 }`. En Type C, une liste vide ou absente veut dire que la question ne compte pour aucune compétence. |
+| `points` | **Type C : oui** · Type D : non | nombre > 0, au plus 100 | Type C : barème de la question. Type D : points du sujet, **partagés à parts égales** entre les compétences de la question pour en faire leurs poids (voir plus bas). Décimales acceptées (`0.5`, `1.5`). |
+| `competences` | **Type D : oui, au moins une** · Type C : non | liste | Compétences évaluées par la question. Chaque élément est un code (`"C1"`) ou, en Type D, un objet `{ "code": "C1", "points": 2 }` quand le sujet fixe les points de chaque compétence (`"poids"` est accepté comme synonyme de `"points"`). En Type C, une liste vide ou absente veut dire que la question ne compte pour aucune compétence. |
 | `description` | non | texte, 120 caractères max | Intitulé de la question (infobulle). |
 
 ### Poids d'une compétence (Type D)
 
 Dans une question de Type D, chaque compétence rapporte les points de son niveau multipliés par
-son **poids** (1 par défaut). Un poids de 2 fait compter la compétence double dans cette
-question ; il doit être compris entre 0,5 et 20. Le poids est propre à la question : la même
-compétence peut peser 1 dans une question et 2 dans une autre.
+son **poids**. Un poids de 2 fait compter la compétence double ; il est propre à la question
+(la même compétence peut peser 1 ici et 2 là) et doit être compris entre 0,5 et 20.
 
-Exemple : barème `[0, 1, 2, 3]`, question 1b avec C1 (poids 2) et C3. Un élève au niveau 3 en
-C1 et au niveau 2 en C3 obtient 2 × 2 + 1 = 5 points sur 3 × 3 = 9.
+L'application calcule les poids à partir des points du sujet, dans cet ordre :
+
+1. **Points donnés pour la compétence** (`{ "code": "C1", "points": 2 }`) : ils deviennent son
+   poids. C'est le cas quand le sujet a lui-même décidé du nombre de points par compétence.
+2. Sinon, **les points de la question sont partagés à parts égales** entre ses compétences qui
+   n'ont pas de points propres (ce qui reste après celles qui en ont). Question 2a à 3 points
+   avec C2 et C3 : poids 1,5 chacune.
+3. Ni points de question, ni points de compétence : poids 1.
+
+Seules les proportions comptent : la note est ensuite ramenée sur `noteMax`.
+
+Exemple : barème `[0, 1, 2, 3]`, question 1b avec C1 (2 points) et C3 (1 point). Un élève au
+niveau 3 en C1 et au niveau 2 en C3 obtient 2 × 2 + 1 × 1 = 5 points sur 3 × (2 + 1) = 9.
 
 ### Compétence (liste `competences` de la racine)
 

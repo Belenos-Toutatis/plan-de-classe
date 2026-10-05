@@ -2685,3 +2685,23 @@ test('import éval D : poids, barème, bilan par exercice, compétence obligatoi
   assert.ok(rb.errors.some(x => x.includes('au moins une compétence')));
   assert.ok(rb.warnings.some(x => x.includes('3 valeur')));
 });
+test('import éval D : les points du sujet deviennent des poids (partage, points par compétence prioritaires)', () => {
+  _importState();
+  ev(`S.evalPrefs = Object.assign({}, S.evalPrefs || {}, { nbLevels: 4 });`);
+  const d = { type: 'D', nomCourt: 'X', exercices: [{ titre: 'Ex1', questions: [
+    { titre: 'a', points: 3, competences: ['C1', 'C3'] },                               // partage 1,5 / 1,5
+    { titre: 'b', competences: [{ code: 'C1', points: 2 }, { code: 'C3', points: 1 }] }, // fixés par le sujet
+    { titre: 'c', points: 4, competences: [{ code: 'C1', points: 1 }, 'C3', 'C2'] },     // reste 3 partagé
+    { titre: 'd', competences: ['C2'] },                                                 // ni l'un ni l'autre → 1
+    { titre: 'e', points: 0.5, competences: ['C1', 'C3'] },                              // 0,25 → ramené à 0,5
+  ] }] };
+  const r = get(`_evalImportParse(${JSON.stringify(JSON.stringify(d))})`);
+  assert.deepEqual(r.errors, []);
+  const w = r.spec.exercices[0].questions.map(q => q.weights);
+  assert.deepEqual(w[0], { C1: 1.5, C3: 1.5 });
+  assert.deepEqual(w[1], { C1: 2 });
+  assert.deepEqual(w[2], { C3: 1.5, C2: 1.5 });
+  assert.deepEqual(w[3], {});
+  assert.deepEqual(w[4], { C1: 0.5, C3: 0.5 });
+  assert.ok(r.warnings.some(x => x.includes('ramené')));
+});

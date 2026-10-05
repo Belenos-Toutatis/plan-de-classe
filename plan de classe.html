@@ -7189,9 +7189,10 @@ produise le fichier.
 ## Consigne pour l'IA
 
 > Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation, et l'enseignant te dit
-> s'il la veut en **Type C** (questions notées en points) ou en **Type D** (questions évaluées
-> par compétences et niveaux). Sans précision, choisis le Type C si le sujet porte des points,
-> le Type D s'il porte des compétences sans points.
+> s'il la veut en **Type C** (il note chaque question en points) ou en **Type D** (il évalue
+> chaque compétence d'une question par un niveau de maîtrise). **Ne déduis pas le type du
+> sujet** : un sujet avec des points convient aux deux types. Si l'enseignant ne l'a pas
+> précisé, prends le Type C et écris dans `description` : « Type à confirmer (C par défaut) ».
 >
 > Produis **un seul objet JSON** conforme au format ci-dessous, et rien d'autre : pas de texte
 > avant ni après, pas de commentaire dans le JSON. Reprends les exercices et les questions
@@ -7199,8 +7200,10 @@ produise le fichier.
 >
 > - **Type C** : donne à chaque question le nombre de points indiqué dans le sujet. S'il n'y en
 >   a pas, propose un nombre raisonnable et signale-le dans son champ `description`.
-> - **Type D** : donne à chaque question **au moins une compétence**, et pas de points. Si une
->   compétence compte davantage dans une question, donne-lui un `poids` (2 = compte double).
+> - **Type D** : donne à chaque question **au moins une compétence**, et reprends ses points
+>   du sujet dans `points` : l'application les partage entre ses compétences. Si le sujet fixe
+>   lui-même les points de chaque compétence dans la question, écris-les dans la compétence
+>   (`{ "code": "C1", "points": 2 }`) au lieu de `points` de la question.
 >
 > N'invente pas de compétence : n'utilise que les codes que l'enseignant t'a donnés, ou ceux
 > du référentiel par défaut listé plus bas.
@@ -7262,14 +7265,14 @@ produise le fichier.
       "titre": "Ex1",
       "description": "Formes d'énergie",
       "questions": [
-        { "titre": "1a", "competences": ["C1"] },
-        { "titre": "1b", "competences": [{ "code": "C1", "poids": 2 }, "C3"], "description": "Chaîne énergétique" }
+        { "titre": "1a", "points": 1, "competences": ["C1"] },
+        { "titre": "1b", "competences": [{ "code": "C1", "points": 2 }, { "code": "C3", "points": 1 }], "description": "Chaîne énergétique" }
       ]
     },
     {
       "titre": "Ex2",
       "questions": [
-        { "titre": "2a", "competences": ["C2", "C3"] }
+        { "titre": "2a", "points": 3, "competences": ["C2", "C3"] }
       ]
     }
   ]
@@ -7313,19 +7316,29 @@ le créneau, la période et la discipline.
 | Champ | Obligatoire | Type | Rôle |
 |---|---|---|---|
 | `titre` | oui | texte **très court**, 8 caractères conseillés (20 max) | Code de la question, affiché en tête de colonne (ex. `"1a"`, `"Q3"`, `"2.b"`). |
-| `points` | **Type C : oui** · Type D : non (ignoré) | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
-| `competences` | **Type D : oui, au moins une** · Type C : non | liste | Compétences évaluées par la question. Chaque élément est un code (`"C1"`) ou, en Type D, un objet `{ "code": "C1", "poids": 2 }`. En Type C, une liste vide ou absente veut dire que la question ne compte pour aucune compétence. |
+| `points` | **Type C : oui** · Type D : non | nombre > 0, au plus 100 | Type C : barème de la question. Type D : points du sujet, **partagés à parts égales** entre les compétences de la question pour en faire leurs poids (voir plus bas). Décimales acceptées (`0.5`, `1.5`). |
+| `competences` | **Type D : oui, au moins une** · Type C : non | liste | Compétences évaluées par la question. Chaque élément est un code (`"C1"`) ou, en Type D, un objet `{ "code": "C1", "points": 2 }` quand le sujet fixe les points de chaque compétence (`"poids"` est accepté comme synonyme de `"points"`). En Type C, une liste vide ou absente veut dire que la question ne compte pour aucune compétence. |
 | `description` | non | texte, 120 caractères max | Intitulé de la question (infobulle). |
 
 ### Poids d'une compétence (Type D)
 
 Dans une question de Type D, chaque compétence rapporte les points de son niveau multipliés par
-son **poids** (1 par défaut). Un poids de 2 fait compter la compétence double dans cette
-question ; il doit être compris entre 0,5 et 20. Le poids est propre à la question : la même
-compétence peut peser 1 dans une question et 2 dans une autre.
+son **poids**. Un poids de 2 fait compter la compétence double ; il est propre à la question
+(la même compétence peut peser 1 ici et 2 là) et doit être compris entre 0,5 et 20.
 
-Exemple : barème `[0, 1, 2, 3]`, question 1b avec C1 (poids 2) et C3. Un élève au niveau 3 en
-C1 et au niveau 2 en C3 obtient 2 × 2 + 1 = 5 points sur 3 × 3 = 9.
+L'application calcule les poids à partir des points du sujet, dans cet ordre :
+
+1. **Points donnés pour la compétence** (`{ "code": "C1", "points": 2 }`) : ils deviennent son
+   poids. C'est le cas quand le sujet a lui-même décidé du nombre de points par compétence.
+2. Sinon, **les points de la question sont partagés à parts égales** entre ses compétences qui
+   n'ont pas de points propres (ce qui reste après celles qui en ont). Question 2a à 3 points
+   avec C2 et C3 : poids 1,5 chacune.
+3. Ni points de question, ni points de compétence : poids 1.
+
+Seules les proportions comptent : la note est ensuite ramenée sur `noteMax`.
+
+Exemple : barème `[0, 1, 2, 3]`, question 1b avec C1 (2 points) et C3 (1 point). Un élève au
+niveau 3 en C1 et au niveau 2 en C3 obtient 2 × 2 + 1 × 1 = 5 points sur 3 × (2 + 1) = 9.
 
 ### Compétence (liste `competences` de la racine)
 
@@ -7394,11 +7407,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.78.0';
+const APP_VERSION    = '2.78.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-05T21:36:40Z';
+const APP_BUILD_DATE = '2026-10-05T21:45:27Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -39848,26 +39861,49 @@ function _evalImportParse(text) {
     else x.questions.forEach((q, j) => {
       const qLbl = `${exo.titre}, question ${j + 1}`;
       if (!q || typeof q !== 'object') { errors.push(`${qLbl} : n'est pas un objet.`); return; }
-      // Type C : des points. Type D : pas de points (les niveaux font la note), un poids par compétence.
-      const pts = isD ? NaN : num(q.points ?? q.max);
-      if (!isD && !(Number.isFinite(pts) && pts > 0 && pts <= 100)) errors.push(`${qLbl} : « points » invalide (${JSON.stringify(q.points)}) — un nombre entre 0 et 100 est attendu.`);
-      const codes = [], weights = {};
+      // Type C : des points par question. Type D : les niveaux font la note, et les points du
+      // sujet deviennent des POIDS de compétences (cf. plus bas) — facultatifs.
+      const pts = num(q.points ?? q.max);
+      const hasPts = Number.isFinite(pts) && pts > 0 && pts <= 100;
+      if (!isD && !hasPts) errors.push(`${qLbl} : « points » invalide (${JSON.stringify(q.points)}) — un nombre entre 0 et 100 est attendu.`);
+      if (isD && (q.points ?? q.max) != null && !hasPts) errors.push(`${qLbl} : « points » invalide (${JSON.stringify(q.points)}).`);
+      const codes = [], weights = {}, explicitW = {};
       const rawC = Array.isArray(q.competences) ? q.competences : (typeof q.competences === 'string' && q.competences.trim() ? q.competences.split(/[,;\s]+/) : []);
       for (const c of rawC) {
         // Une compétence : un code ("C1") ou, en Type D, un objet { code, poids }.
         const k = String((c && typeof c === 'object') ? (c.code ?? '') : (c ?? '')).trim();
         if (!k || codes.some(z => z.toUpperCase() === k.toUpperCase())) continue;
         codes.push(k);
-        if (isD && c && typeof c === 'object' && c.poids != null) {
-          const w = num(c.poids);
-          if (Number.isFinite(w) && w > 0) {
-            const wc = Math.min(TYPED_W_MAX, Math.max(TYPED_W_MIN, w));
-            if (wc !== w) warnings.push(`${qLbl} : poids de ${k} ramené à ${wc} (entre ${TYPED_W_MIN} et ${TYPED_W_MAX}).`);
-            if (wc !== 1) weights[k.toUpperCase()] = wc;
-          } else errors.push(`${qLbl} : poids de ${k} invalide (${JSON.stringify(c.poids)}).`);
+        // Poids explicite d'une compétence : « poids », ou « points » quand le sujet fixe
+        // lui-même les points par compétence. Prioritaire sur le partage des points de la question.
+        const ew = (isD && c && typeof c === 'object') ? (c.poids ?? c.points) : null;
+        if (ew != null) {
+          const w = num(ew);
+          if (Number.isFinite(w) && w > 0) explicitW[k.toUpperCase()] = w;
+          else errors.push(`${qLbl} : poids de ${k} invalide (${JSON.stringify(ew)}).`);
         }
       }
       if (isD && codes.length === 0) errors.push(`${qLbl} : en Type D, chaque question doit évaluer au moins une compétence.`);
+      if (isD && codes.length) {
+        // Répartition (arbitrage de l'utilisateur) : les points de la question sont PARTAGÉS
+        // entre ses compétences sans poids explicite — reste des points / nombre de ces
+        // compétences. Ni points ni poids : 1. Bornage TYPED_W_MIN..MAX, avertissement si ramené.
+        const free = codes.filter(c => explicitW[c.toUpperCase()] == null);
+        const used = Object.values(explicitW).reduce((a, b) => a + b, 0);
+        let share = 1;
+        if (hasPts && free.length) {
+          const rest = pts - used;
+          if (rest > 0) share = rest / free.length;
+          else warnings.push(`${qLbl} : les poids donnés épuisent les ${String(pts).replace('.', ',')} pts de la question — poids 1 pour ${free.join(', ')}.`);
+        }
+        for (const c of codes) {
+          const K = c.toUpperCase();
+          const w = explicitW[K] != null ? explicitW[K] : share;
+          let wc = Math.min(TYPED_W_MAX, Math.max(TYPED_W_MIN, Math.round(w * 100) / 100));
+          if (wc !== Math.round(w * 100) / 100) warnings.push(`${qLbl} : poids de ${c} ramené à ${String(wc).replace('.', ',')} (entre ${TYPED_W_MIN} et ${TYPED_W_MAX}).`);
+          if (wc !== 1) weights[K] = wc;
+        }
+      }
       exo.questions.push({ titre: str(q.titre ?? q.label, 20, `Titre de ${qLbl}`) || `Q${j + 1}`, points: pts, description: str(q.description, 120, `Description de ${qLbl}`), codes, weights });
     });
     spec.exercices.push(exo);
