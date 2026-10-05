@@ -4986,6 +4986,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <input type="hidden" id="meval-new-id">
     <input type="hidden" id="meval-new-source-id">
 
+    <div id="meval-new-import-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:var(--radius-md,5px);font-size:.88em">
+      <button class="btn btn-g btn-sm" onclick="_evalImportOpen()" title="Reprendre titres, exercices, questions, barème et compétences d'un fichier — par exemple produit par une IA à partir de ton sujet">📥 Importer une évaluation (Type C)…</button>
+      <span id="meval-new-import-sum" style="color:var(--pencil)">Exercices, questions, barème et compétences depuis un fichier.</span>
+    </div>
+
     <div class="about-section">
       <h3>Type d'évaluation <span id="meval-new-type-lock" style="display:none;color:var(--pencil);font-weight:normal;font-size:.85em">(verrouillé en duplication)</span></h3>
       <label style="display:block;margin:3px 0;cursor:pointer">
@@ -5100,6 +5105,25 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn btn-g" onclick="closeMod2('meval-new')">Annuler</button>
       <button class="btn btn-p" onclick="_evalNewSave()">✓ Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL Import de la structure d'une évaluation Type C ── -->
+<div id="meval-import" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:720px;width:100%;max-height:92vh;overflow-y:auto">
+    <h2>📥 Importer une évaluation (Type C)</h2>
+    <p style="font-size:.88em;color:var(--pencil);margin:0 0 8px">Le fichier décrit la <strong>structure</strong> du devoir : titres, exercices, questions, points et compétences. Les classes, la date et la période se choisissent ensuite, comme pour toute nouvelle évaluation.<br>💡 Donne le <strong>format du fichier</strong> à une IA avec ton sujet : elle produit le texte à coller ci-dessous.</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-import-file').click()">📂 Choisir un fichier…</button>
+      <input type="file" id="meval-import-file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="_evalImportFile(this)">
+      <button class="btn btn-g btn-sm" onclick="_evalImportDownloadSpec()" title="Télécharge la description du format (Markdown), à donner à une IA avec le sujet de l'évaluation">📄 Format du fichier (pour une IA)</button>
+    </div>
+    <textarea id="meval-import-text" rows="8" placeholder="…ou colle ici le texte JSON produit par l'IA" oninput="_evalImportSchedule()" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:.82em;padding:6px 8px;resize:vertical" data-autofocus></textarea>
+    <div id="meval-import-preview" style="margin-top:8px;font-size:.88em"></div>
+    <div class="ma" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="closeMod2('meval-import')">Annuler</button>
+      <button class="btn btn-p" id="meval-import-ok" onclick="_evalImportUse()" disabled>✓ Utiliser cette structure</button>
     </div>
   </div>
 </div>
@@ -7144,6 +7168,153 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="app-version-tag" onclick="checkForUpdate()" title="Cliquer pour vérifier les mises à jour"
   style="position:fixed;bottom:4px;right:6px;z-index:50;background:var(--paper-warm);color:var(--pencil);font-size:10px;font-family:Consolas,Menlo,monospace;padding:1px 6px;border-radius:3px;cursor:pointer;user-select:none;pointer-events:auto;backdrop-filter:blur(2px);border:1px solid rgba(0,0,0,.05)"></div>
 
+<!-- Format d'import d'une évaluation : copie EXACTE de docs/format-import-evaluation.md (test/run.test.js le vérifie). Téléchargée par le bouton « 📄 Format du fichier ». -->
+<script type="text/markdown" id="eval-import-spec">
+# Format d'import d'une évaluation — Plan de classe
+
+Ce document décrit le fichier qui permet d'importer **la structure d'une évaluation de type C**
+(sommative avec exercices, questions notées en points et compétences évaluées) dans
+l'application *Plan de classe*.
+
+Il est écrit pour être donné tel quel à une IA, avec le sujet d'une évaluation, afin qu'elle
+produise le fichier.
+
+---
+
+## Consigne pour l'IA
+
+> Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation. Produis **un seul objet
+> JSON** conforme au format ci-dessous, et rien d'autre : pas de texte avant ni après, pas de
+> commentaire dans le JSON. Reprends les exercices et les questions **dans l'ordre du sujet**,
+> avec le nombre de points de chaque question tel qu'il est indiqué dans le sujet. Si une
+> question n'a pas de barème explicite, propose un nombre de points raisonnable et signale-le
+> dans son champ `description`. N'invente pas de compétence : n'utilise que les codes que
+> l'enseignant t'a donnés, ou ceux du référentiel par défaut listé plus bas.
+
+---
+
+## Exemple complet
+
+```json
+{
+  "format": "plan-de-classe/evaluation",
+  "version": 1,
+  "type": "C",
+  "nomCourt": "DS3",
+  "nomLong": "Contrôle chapitre 4 — La lumière",
+  "description": "Propagation rectiligne, vitesse de la lumière, année-lumière.",
+  "noteMax": 20,
+  "coef": 1,
+  "competences": [
+    { "code": "C1", "nom": "Mobiliser des connaissances", "domaine": "D4" },
+    { "code": "C3", "nom": "Mobiliser des langages scientifiques", "domaine": "D1.3" }
+  ],
+  "exercices": [
+    {
+      "titre": "Ex1",
+      "description": "Propagation de la lumière",
+      "questions": [
+        { "titre": "1a", "points": 1, "competences": ["C1"], "description": "Définir un milieu transparent" },
+        { "titre": "1b", "points": 2, "competences": ["C1", "C3"] }
+      ]
+    },
+    {
+      "titre": "Ex2",
+      "description": "Calcul d'une distance",
+      "questions": [
+        { "titre": "2a", "points": 3, "competences": ["C3"] },
+        { "titre": "2b", "points": 1.5, "competences": [] }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Champs
+
+### Racine
+
+| Champ | Obligatoire | Type | Rôle |
+|---|---|---|---|
+| `format` | oui | texte | Toujours `"plan-de-classe/evaluation"`. |
+| `version` | oui | nombre | Toujours `1`. |
+| `type` | oui | texte | Toujours `"C"` (seul type importable pour l'instant). |
+| `nomCourt` | oui | texte, 20 caractères max | Nom affiché dans les en-têtes de colonnes (ex. `"DS3"`, `"IE2"`). |
+| `nomLong` | non | texte, 80 caractères max | Titre complet de l'évaluation. |
+| `description` | non | texte, 500 caractères max | Notes libres (affichées en infobulle). |
+| `noteMax` | non | nombre > 0 | Note sur laquelle le total est ramené. **Défaut : 20.** Ce n'est pas la somme des points : un sujet sur 25 points peut être noté sur 20. |
+| `coef` | non | nombre ≥ 0 | Coefficient dans la moyenne de la période. **Défaut : 1.** |
+| `competences` | non | liste | Description des compétences utilisées (voir plus bas). Sert seulement à **créer** celles que l'enseignant n'a pas encore. |
+| `exercices` | oui | liste, au moins 1 | Les exercices, dans l'ordre du sujet. |
+
+Ne sont **pas** dans le fichier, et se choisissent au moment de l'import : les classes, la date,
+le créneau, la période et la discipline.
+
+### Exercice
+
+| Champ | Obligatoire | Type | Rôle |
+|---|---|---|---|
+| `titre` | oui | texte court, 20 caractères max | Code de l'exercice (ex. `"Ex1"`, `"A"`, `"Partie 1"`). |
+| `description` | non | texte, 120 caractères max | Intitulé de l'exercice (infobulle). |
+| `questions` | oui | liste, au moins 1 | Les questions de l'exercice, dans l'ordre. |
+
+### Question
+
+| Champ | Obligatoire | Type | Rôle |
+|---|---|---|---|
+| `titre` | oui | texte **très court**, 8 caractères conseillés (20 max) | Code de la question, affiché en tête de colonne (ex. `"1a"`, `"Q3"`, `"2.b"`). |
+| `points` | oui | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
+| `competences` | non | liste de codes | Codes des compétences évaluées par la question (ex. `["C1", "C3"]`). Liste vide ou absente : la question ne compte pour aucune compétence. |
+| `description` | non | texte, 120 caractères max | Intitulé de la question (infobulle). |
+
+### Compétence (liste `competences` de la racine)
+
+| Champ | Obligatoire | Type | Rôle |
+|---|---|---|---|
+| `code` | oui | texte court | Le code utilisé dans les questions (ex. `"C1"`, `"RAI"`). |
+| `nom` | non | texte | Libellé de la compétence. |
+| `domaine` | non | texte | Domaine du socle : `D1.1`, `D1.2`, `D1.3`, `D1.4`, `D2`, `D3`, `D4` ou `D5`. |
+
+---
+
+## Comment l'application lit les compétences
+
+Les codes sont comparés **sans tenir compte des majuscules** à ceux du référentiel de
+l'enseignant (Réglages → Compétences).
+
+- Code **déjà connu** : la question y est rattachée. La description fournie dans `competences`
+  est ignorée (le référentiel de l'enseignant prime).
+- Code **inconnu** : la compétence est **créée** dans le référentiel, avec le nom et le domaine
+  donnés dans `competences` s'ils y figurent. L'aperçu de l'import l'annonce avant de valider.
+
+Référentiel par défaut de l'application (physique-chimie, collège) :
+
+| Code | Nom | Domaine |
+|---|---|---|
+| C1 | Mobiliser des connaissances | D4 |
+| C2 | Pratiquer des démarches scientifiques | D4 |
+| C3 | Mobiliser des langages scientifiques | D1.3 |
+| C4 | Pratiquer la langue française | D1.1 |
+| C5 | Mobiliser des outils et des méthodes | D2 |
+| C6 | Adopter un comportement éthique et responsable | D3 |
+| C7 | Se situer dans l'espace et le temps | D5 |
+| C8 | Langues étrangères et régionales | D1.2 |
+
+L'enseignant a pu modifier ce référentiel : s'il te donne sa liste, utilise-la de préférence.
+
+---
+
+## Tolérances
+
+- Le JSON peut être collé tel quel depuis la réponse d'une IA, **même entouré d'un bloc
+  ` ```json … ``` `** ou de quelques phrases : l'application garde ce qui va de la première `{`
+  à la dernière `}`.
+- Les champs inconnus sont ignorés.
+- Un titre trop long est tronqué ; une question sans points valides est refusée avec un
+  message qui dit laquelle.
+</script>
 <script>
 // Thème : restauration AVANT init() pour que tous les calculs de couleur dérivés
 // (levelBgColor, palette niveau auto, etc.) voient le bon mode dès le 1er rendu.
@@ -7165,11 +7336,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.76.1';
+const APP_VERSION    = '2.77.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-04T18:59:47Z';
+const APP_BUILD_DATE = '2026-10-05T21:17:16Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -39063,6 +39234,10 @@ function openNewEvalModal() {
   const cur = getCls();
   document.getElementById('meval-new-source-id').value = '';
   document.getElementById('meval-new-title').textContent = '+ Nouvelle évaluation';
+  _evalNewImport = null;
+  const _impW = document.getElementById('meval-new-import-wrap');
+  if (_impW) _impW.style.display = 'flex';   // ⚠ 'flex', pas '' : le display est posé en ligne
+  _evalImportRenderSum();
   document.getElementById('meval-new-nomcourt').value = '';
   document.getElementById('meval-new-nomlong').value = '';
   document.getElementById('meval-new-desc').value = '';
@@ -39280,6 +39455,7 @@ function _evalNewOnClassSlotChange(selEl) {
 // Handler radio type : masque la section weighting Type B selon le type choisi.
 function _evalNewOnTypeChange() {
   const type = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
+  _evalImportRenderSum();
   const wW = document.getElementById('meval-new-weighting-wrap');
   if (wW) wW.style.display = (type === 'B') ? '' : 'none';
   // Règle de moyenne : sans objet pour A (pas de compétences) ET pour D (les niveaux sont
@@ -39450,7 +39626,10 @@ function _evalNewSave() {
       compsBeforeTotal: type === 'C' ? true : undefined,
       createdAt: now, updatedAt: now,
     };
+    // Structure importée (📥) : exercices, questions, barème, compétences — Type C seulement.
+    if (type === 'C' && _evalNewImport) _evalImportApply(evObj, _evalNewImport);
   }
+  _evalNewImport = null;
 
   // Options Type D (barème niveau → points + bilan par exercice) : lues depuis les inputs
   // de la modale — EN CRÉATION COMME EN DUPLICATION. ⚠️ Ce bloc vivait dans la branche
@@ -39532,6 +39711,229 @@ function _evalNewSave() {
   // initiale manque). Pour ajuster les réglages avancés plus tard, l'utilisateur
   // peut cliquer sur le bouton ⚙ dans la barre d'outils du tableur.
   setTimeout(() => _evalOpenTableur(id), 80);
+}
+
+// ═══════════════ Import de la structure d'une évaluation Type C ═══════════════
+// Format décrit dans docs/format-import-evaluation.md, embarqué dans la page
+// (<script type="text/markdown" id="eval-import-spec">) pour être téléchargé hors ligne.
+// Le fichier ne porte que la STRUCTURE : classes, dates, période, discipline se choisissent
+// dans « Nouvelle évaluation », qui reçoit la structure analysée (_evalNewImport) et
+// l'applique à ✓ Créer (_evalImportApply, après pushUndo — l'import est donc annulable).
+var _evalNewImport = null;     // spec normalisée en attente (modale meval-new)
+let _evalImportPending = null; // résultat de la dernière analyse (modale meval-import)
+let _evalImportTimer = null;
+
+// Analyse PURE (testable) : texte → { errors[], warnings[], spec }.
+// Tolère un JSON entouré de texte ou d'un bloc ```json (réponse d'IA) : on garde ce qui va
+// de la première { à la dernière }.
+function _evalImportParse(text) {
+  const errors = [], warnings = [];
+  const raw = String(text || '');
+  const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
+  if (a < 0 || b <= a) return { errors: ['Aucun objet JSON trouvé (il doit commencer par { et finir par }).'], warnings, spec: null };
+  let d;
+  try { d = JSON.parse(raw.slice(a, b + 1)); }
+  catch (e) { return { errors: ['JSON illisible : ' + e.message], warnings, spec: null }; }
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return { errors: ['Le fichier doit contenir un objet JSON.'], warnings, spec: null };
+  if (d.format !== undefined && d.format !== 'plan-de-classe/evaluation') warnings.push(`Champ « format » inattendu (« ${d.format} ») : lecture tentée quand même.`);
+  if (d.version !== undefined && d.version !== 1) warnings.push(`Version ${d.version} : seule la version 1 est connue, lecture tentée quand même.`);
+  if (d.type !== undefined && String(d.type).toUpperCase() !== 'C') errors.push(`Type « ${d.type} » : seul le type C s'importe pour l'instant.`);
+  const str = (v, max, what) => {
+    let t = (v == null) ? '' : String(v).trim();
+    if (t.length > max) { warnings.push(`${what} tronqué à ${max} caractères.`); t = t.slice(0, max); }
+    return t;
+  };
+  const num = v => (typeof v === 'number') ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v.replace(',', '.')) : NaN);
+  const spec = {
+    nomCourt: str(d.nomCourt, 20, 'Nom court'),
+    nomLong: str(d.nomLong, 80, 'Nom long'),
+    description: str(d.description ?? d.descriptif, 500, 'Description'),
+    noteMax: 20, coef: 1, exercices: [], compDefs: {},
+  };
+  if (!spec.nomCourt) errors.push('« nomCourt » manquant (ex. "DS3").');
+  if (d.noteMax != null) {
+    const n = num(d.noteMax);
+    if (Number.isFinite(n) && n > 0 && n <= 1000) spec.noteMax = n; else errors.push(`« noteMax » invalide (${JSON.stringify(d.noteMax)}).`);
+  }
+  if (d.coef != null) {
+    const n = num(d.coef);
+    if (Number.isFinite(n) && n >= 0 && n <= 100) spec.coef = n; else errors.push(`« coef » invalide (${JSON.stringify(d.coef)}).`);
+  }
+  if (Array.isArray(d.competences)) {
+    for (const c of d.competences) {
+      const code = c && String(c.code ?? '').trim();
+      if (!code) continue;
+      spec.compDefs[code.toUpperCase()] = { code: code.slice(0, 12), nom: str(c.nom ?? c.name, 120, `Nom de la compétence ${code}`), domaine: String(c.domaine ?? c.domain ?? '').trim() };
+    }
+  }
+  if (!Array.isArray(d.exercices) || d.exercices.length === 0) errors.push('« exercices » manquant ou vide.');
+  else d.exercices.forEach((x, i) => {
+    const exLbl = `Exercice ${i + 1}`;
+    if (!x || typeof x !== 'object') { errors.push(`${exLbl} : n'est pas un objet.`); return; }
+    const exo = { titre: str(x.titre ?? x.label, 20, `Titre de l'${exLbl.toLowerCase()}`) || `Ex${i + 1}`, description: str(x.description, 120, `Description de l'${exLbl.toLowerCase()}`), questions: [] };
+    if (!Array.isArray(x.questions) || x.questions.length === 0) { errors.push(`${exLbl} (${exo.titre}) : aucune question.`); }
+    else x.questions.forEach((q, j) => {
+      const qLbl = `${exo.titre}, question ${j + 1}`;
+      if (!q || typeof q !== 'object') { errors.push(`${qLbl} : n'est pas un objet.`); return; }
+      const pts = num(q.points ?? q.max);
+      if (!(Number.isFinite(pts) && pts > 0 && pts <= 100)) errors.push(`${qLbl} : « points » invalide (${JSON.stringify(q.points)}) — un nombre entre 0 et 100 est attendu.`);
+      const codes = [];
+      const rawC = Array.isArray(q.competences) ? q.competences : (typeof q.competences === 'string' && q.competences.trim() ? q.competences.split(/[,;\s]+/) : []);
+      for (const c of rawC) { const k = String(c ?? '').trim(); if (k && !codes.some(z => z.toUpperCase() === k.toUpperCase())) codes.push(k); }
+      exo.questions.push({ titre: str(q.titre ?? q.label, 20, `Titre de ${qLbl}`) || `Q${j + 1}`, points: pts, description: str(q.description, 120, `Description de ${qLbl}`), codes });
+    });
+    spec.exercices.push(exo);
+  });
+  const total = spec.exercices.reduce((s, e) => s + e.questions.reduce((t, q) => t + (Number.isFinite(q.points) ? q.points : 0), 0), 0);
+  spec.totalPoints = Math.round(total * 100) / 100;
+  return { errors, warnings, spec };
+}
+
+// Codes de compétences → { known: {CODE: cid}, created: [{code, nom, domainId}] }.
+function _evalImportResolveComps(spec) {
+  const byCode = {};
+  for (const c of Object.values(S.competences || {})) if (c?.code) byCode[c.code.trim().toUpperCase()] = c.id;
+  const domByCode = {};
+  for (const dm of Object.values(S.competenceDomains || {})) if (dm?.code) domByCode[dm.code.toUpperCase()] = dm.id;
+  const known = {}, created = [], seen = new Set();
+  for (const e of spec.exercices) for (const q of e.questions) for (const code of q.codes) {
+    const K = code.toUpperCase();
+    if (seen.has(K)) continue;
+    seen.add(K);
+    if (byCode[K]) { known[K] = byCode[K]; continue; }
+    const def = spec.compDefs[K] || {};
+    const dom = def.domaine ? (domByCode[def.domaine.toUpperCase()] || (S.competenceDomains?.[def.domaine] ? def.domaine : '')) : '';
+    created.push({ code: def.code || code, nom: def.nom || '', domainId: dom });
+  }
+  return { known, created };
+}
+
+// Pose exercices, questions et compétences sur une éval Type C neuve. Crée dans le
+// référentiel les compétences inconnues. Sans pushUndo : appelée par _evalNewSave, qui l'a fait.
+function _evalImportApply(evObj, spec) {
+  const { known, created } = _evalImportResolveComps(spec);
+  const ids = Object.assign({}, known);
+  created.forEach((c, i) => {
+    const id = 'comp_' + Date.now().toString(36) + '_' + i + Math.random().toString(36).slice(2, 5);
+    S.competences[id] = { id, code: c.code, name: c.nom, domainId: c.domainId };
+    ids[c.code.toUpperCase()] = id;
+  });
+  evObj.exercices = []; evObj.miniNotes = [];
+  spec.exercices.forEach((x, i) => {
+    const exoId = 'exo_' + Date.now().toString(36) + '_' + i + Math.random().toString(36).slice(2, 5);
+    const exo = { id: exoId, label: x.titre };
+    if (x.description) exo.name = x.description;
+    evObj.exercices.push(exo);
+    x.questions.forEach((q, j) => {
+      const mn = { id: _newMiniNoteId() + i + '_' + j, label: q.titre, max: q.points, exerciceId: exoId,
+        competenceIds: q.codes.map(c => ids[c.toUpperCase()]).filter(Boolean) };
+      if (q.description) mn.name = q.description;
+      evObj.miniNotes.push(mn);
+    });
+  });
+  return created.length;
+}
+
+function _evalImportOpen() {
+  const ta = document.getElementById('meval-import-text');
+  if (ta) ta.value = '';
+  const f = document.getElementById('meval-import-file');
+  if (f) f.value = '';
+  _evalImportPending = null;
+  _evalImportRenderPreview();
+  openMod('meval-import');
+}
+function _evalImportSchedule() {
+  clearTimeout(_evalImportTimer);
+  _evalImportTimer = setTimeout(_evalImportRenderPreview, 250);
+}
+function _evalImportFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const ta = document.getElementById('meval-import-text');
+    if (ta) ta.value = String(r.result || '').replace(/^﻿/, '');
+    _evalImportRenderPreview();
+  };
+  r.onerror = () => toast('⚠ Lecture du fichier impossible', 'warn');
+  r.readAsText(file);
+}
+function _evalImportRenderPreview() {
+  const box = document.getElementById('meval-import-preview');
+  const ok = document.getElementById('meval-import-ok');
+  const text = document.getElementById('meval-import-text')?.value || '';
+  if (!box) return;
+  if (!text.trim()) { box.innerHTML = ''; if (ok) ok.disabled = true; _evalImportPending = null; return; }
+  const res = _evalImportParse(text);
+  _evalImportPending = res.errors.length ? null : res.spec;
+  if (ok) ok.disabled = !!res.errors.length;
+  let h = '';
+  if (res.errors.length) h += `<div style="padding:6px 8px;border:1px solid var(--alert-bd);background:var(--alert-bg);color:var(--alert-fg);border-radius:4px;margin-bottom:6px"><strong>⛔ Impossible d'importer :</strong><ul style="margin:4px 0 0 18px;padding:0">${res.errors.map(e => `<li>${_esc(e)}</li>`).join('')}</ul></div>`;
+  if (res.warnings.length) h += `<div style="padding:6px 8px;border:1px solid var(--caution-bd);background:var(--caution-bg);color:var(--caution-fg);border-radius:4px;margin-bottom:6px"><ul style="margin:0 0 0 18px;padding:0">${res.warnings.map(e => `<li>${_esc(e)}</li>`).join('')}</ul></div>`;
+  const sp = res.spec;
+  if (sp && sp.exercices.length) {
+    const { known, created } = _evalImportResolveComps(sp);
+    const nbQ = sp.exercices.reduce((s, e) => s + e.questions.length, 0);
+    const fmt = n => String(n).replace('.', ',');
+    h += `<div style="margin-bottom:4px"><strong>${_esc(sp.nomCourt || '?')}</strong>${sp.nomLong ? ' — ' + _esc(sp.nomLong) : ''} · ${sp.exercices.length} exercice(s), ${nbQ} question(s) · <strong>${fmt(sp.totalPoints)} pts</strong> ramenés sur ${fmt(sp.noteMax)} · coef ${fmt(sp.coef)}</div>`;
+    h += '<div style="max-height:220px;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;padding:4px 8px;background:var(--paper)">';
+    for (const e of sp.exercices) {
+      const sub = e.questions.reduce((s, q) => s + (Number.isFinite(q.points) ? q.points : 0), 0);
+      h += `<div style="margin:3px 0"><strong>${_esc(e.titre)}</strong>${e.description ? ' — ' + _esc(e.description) : ''} <span style="color:var(--pencil)">(${fmt(Math.round(sub * 100) / 100)} pts)</span><div style="display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 0 12px">`;
+      for (const q of e.questions) {
+        const tip = q.description ? ` title="${_escAttr(q.description)}"` : '';
+        h += `<span${tip} style="font-family:var(--font-mono);font-size:.9em;padding:1px 6px;border:1px solid var(--rule-line);border-radius:10px;background:var(--paper-warm)">${_esc(q.titre)} · ${Number.isFinite(q.points) ? fmt(q.points) : '?'} pt${q.codes.length ? ' · ' + q.codes.map(_esc).join('+') : ''}</span>`;
+      }
+      h += '</div></div>';
+    }
+    h += '</div>';
+    const knownCodes = Object.keys(known);
+    if (knownCodes.length || created.length) {
+      h += `<div style="margin-top:6px">🎯 Compétences : ${knownCodes.map(k => `<span style="font-family:var(--font-mono)">${_esc(S.competences[known[k]]?.code || k)}</span>`).join(', ') || '—'}`;
+      if (created.length) h += `<br><span style="color:var(--warn-fg)">✚ Seront créées dans ton référentiel : ${created.map(c => `<strong style="font-family:var(--font-mono)">${_esc(c.code)}</strong>${c.nom ? ' (' + _esc(c.nom) + ')' : ''}`).join(', ')}</span>`;
+      h += '</div>';
+    }
+  }
+  box.innerHTML = h;
+}
+function _evalImportUse() {
+  const sp = _evalImportPending;
+  if (!sp) return;
+  _evalNewImport = sp;
+  const radio = document.querySelector('input[name="meval-new-type"][value="C"]');
+  if (radio) radio.checked = true;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('meval-new-nomcourt', sp.nomCourt);
+  set('meval-new-nomlong', sp.nomLong);
+  set('meval-new-desc', sp.description);
+  set('meval-new-notemax', sp.noteMax);
+  set('meval-new-coef', sp.coef);
+  _evalNewOnTypeChange();
+  closeMod2('meval-import');
+  toast('📥 Structure importée — choisis les classes et la date, puis ✓ Créer');
+}
+function _evalImportClear() { _evalNewImport = null; _evalImportRenderSum(); }
+function _evalImportRenderSum() {
+  const el = document.getElementById('meval-new-import-sum');
+  if (!el) return;
+  const sp = _evalNewImport;
+  if (!sp) { el.innerHTML = 'Exercices, questions, barème et compétences depuis un fichier.'; el.style.color = 'var(--pencil)'; return; }
+  const type = document.querySelector('input[name="meval-new-type"]:checked')?.value;
+  const nbQ = sp.exercices.reduce((s, e) => s + e.questions.length, 0);
+  el.style.color = 'var(--ink-deep)';
+  el.innerHTML = `✓ <strong>${_esc(sp.nomCourt)}</strong> : ${sp.exercices.length} exercice(s), ${nbQ} question(s), ${String(sp.totalPoints).replace('.', ',')} pts`
+    + (type !== 'C' ? ` <span style="color:var(--warn-fg)">— ne s'applique qu'en Type C</span>` : '')
+    + ` <button class="btn btn-g btn-sm" style="padding:1px 6px" onclick="_evalImportClear()" title="Oublier la structure importée">✕</button>`;
+}
+function _evalImportDownloadSpec() {
+  const md = document.getElementById('eval-import-spec')?.textContent || '';
+  if (!md.trim()) { toast('⚠ Format introuvable dans la page', 'warn'); return; }
+  const url = URL.createObjectURL(new Blob([md.replace(/^\n/, '')], { type: 'text/markdown;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'format-import-evaluation.md';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // Quand on vient de créer/dupliquer une éval, on stocke ici son id pour que le
@@ -41506,6 +41908,10 @@ function _evalDuplicate(evalId) {
   // champs pré-remplis depuis l'éval source, classes pré-cochées sur celles de la source.
   document.getElementById('meval-new-source-id').value = evalId;
   document.getElementById('meval-new-title').textContent = `⧉ Dupliquer "${ev.nomCourt}"`;
+  // Pas d'import en duplication : la structure vient de la source.
+  _evalNewImport = null;
+  const _impW = document.getElementById('meval-new-import-wrap');
+  if (_impW) _impW.style.display = 'none';
   document.getElementById('meval-new-nomcourt').value = (ev.nomCourt || '') + ' (copie)';
   document.getElementById('meval-new-nomlong').value  = ev.nomLong || '';
   document.getElementById('meval-new-desc').value     = ev.description || '';

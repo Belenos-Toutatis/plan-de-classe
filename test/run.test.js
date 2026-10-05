@@ -2591,3 +2591,70 @@ test('groupes recomposée : initialisés depuis l\'origine, indépendants ensuit
   ev("_purgeStudentRefs('s1')");
   assert.equal(get("'s1' in S.classes.v1.stuGroups"), false, 'purge');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Import de la structure d'une évaluation Type C (format docs/format-import-evaluation.md).
+// ─────────────────────────────────────────────────────────────────────────────
+const _fs = require('fs'), _path = require('path');
+const _IMPORT_SAMPLE = {
+  format: 'plan-de-classe/evaluation', version: 1, type: 'C',
+  nomCourt: 'DS3', nomLong: 'Lumière', noteMax: 20, coef: 2,
+  competences: [{ code: 'RAI', nom: 'Raisonner', domaine: 'D4' }],
+  exercices: [
+    { titre: 'Ex1', description: 'Propagation', questions: [
+      { titre: '1a', points: 1, competences: ['c1'] },
+      { titre: '1b', points: 2.5, competences: ['C1', 'RAI'], description: 'Justifier' } ] },
+    { titre: 'Ex2', questions: [ { titre: '2a', points: '3,5', competences: [] } ] },
+  ],
+};
+function _importState() {
+  setState({ classes: {}, eleves: {}, salles: {}, evaluations: {},
+    competences: { cmp_C1: { id: 'cmp_C1', code: 'C1', name: 'Connaissances', domainId: 'D4' } },
+    competenceDomains: { D4: { id: 'D4', code: 'D4', name: 'Systèmes' } } });
+}
+test('import éval C : analyse tolérante (bloc ```json, virgule décimale, total des points)', () => {
+  _importState();
+  const txt = 'Voici :\n```json\n' + JSON.stringify(_IMPORT_SAMPLE) + '\n```\nBonne correction';
+  const r = get(`_evalImportParse(${JSON.stringify(txt)})`);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.spec.nomCourt, 'DS3');
+  assert.equal(r.spec.coef, 2);
+  assert.equal(r.spec.totalPoints, 7);
+  assert.equal(r.spec.exercices[1].questions[0].points, 3.5);
+});
+test('import éval C : erreurs bloquantes nommées', () => {
+  _importState();
+  const bad = JSON.parse(JSON.stringify(_IMPORT_SAMPLE));
+  bad.type = 'B'; delete bad.nomCourt; bad.exercices[0].questions[0].points = 0;
+  const r = get(`_evalImportParse(${JSON.stringify(JSON.stringify(bad))})`);
+  assert.equal(r.errors.length, 3);
+  assert.ok(r.errors.some(e => e.includes('Ex1, question 1')));
+  assert.ok(get(`_evalImportParse('pas de json')`).errors.length === 1);
+});
+test('import éval C : compétences connues (casse ignorée) et inconnues créées, structure posée', () => {
+  _importState();
+  ev(`globalThis.__sp = _evalImportParse(${JSON.stringify(JSON.stringify(_IMPORT_SAMPLE))}).spec;
+      globalThis.__ev = { id:'e1', type:'C', miniNotes:[], exercices:[] };
+      globalThis.__n = _evalImportApply(__ev, __sp);`);
+  assert.equal(get('__n'), 1);
+  const rai = get(`Object.values(S.competences).find(c => c.code === 'RAI')`);
+  assert.equal(rai.name, 'Raisonner');
+  assert.equal(rai.domainId, 'D4');
+  const e = get('__ev');
+  assert.equal(e.exercices.length, 2);
+  assert.equal(e.exercices[0].name, 'Propagation');
+  assert.equal(e.miniNotes.length, 3);
+  assert.deepEqual(e.miniNotes[0].competenceIds, ['cmp_C1']);
+  assert.deepEqual(e.miniNotes[1].competenceIds, ['cmp_C1', rai.id]);
+  assert.equal(e.miniNotes[1].max, 2.5);
+  assert.equal(e.miniNotes[1].name, 'Justifier');
+  assert.equal(e.miniNotes[2].exerciceId, e.exercices[1].id);
+  assert.equal(new Set(e.miniNotes.map(m => m.id)).size, 3, 'ids de questions uniques');
+});
+test('import éval C : la copie embarquée du format est identique à docs/format-import-evaluation.md', () => {
+  const html = _fs.readFileSync(_path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const m = html.match(/<script type="text\/markdown" id="eval-import-spec">\n([\s\S]*?)<\/script>/);
+  assert.ok(m, 'bloc eval-import-spec introuvable');
+  const doc = _fs.readFileSync(_path.join(__dirname, '..', 'docs', 'format-import-evaluation.md'), 'utf8');
+  assert.equal(m[1], doc, 'mettre à jour la copie embarquée dans plan de classe.html (ou le fichier docs)');
+});

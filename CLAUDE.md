@@ -152,6 +152,7 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - `CREDITS.md` — remerciements détaillés à Sébastien COGEZ (QCMcam), à la communauté enseignante, et aux polices embarquées (Fraunces, IBM Plex Sans, JetBrains Mono — toutes sous SIL Open Font License)
 - `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`, `*.bak`, `*.tmp`)
 - `outils/diagnostic-pdf.html` — outil annexe (non lié à l'app) : rapport anonymisé de la mise en page d'un PDF de thrombinoscope, cf. section *📷 Photos des élèves*.
+- `docs/format-import-evaluation.md` — format du fichier d'import d'une évaluation Type C, à donner à une IA (copie exacte embarquée dans la page, cf. section *Import de la structure d'une évaluation*).
 - `docs/` — audits et notes de conception, **versionnés** : `audit-ergonomie-2026-07-29.md` (catalogue Top 12 / six axes / lots A–F sur la v2.20.0 — l'essentiel réalisé depuis, projection et accessibilité clavier écartées ; restent ouverts : saisie de rentrée, couleurs de groupe en Vue Élève — le `thead` sticky de l'onglet Élèves est fait en v2.63.5), `audit-type-d-2026-08-02.md`, `audit-ergonomie-2026-10-03.md` (audit n° 2, architecture de l'information : où trouver / où régler / comment comprendre, sur la v2.68.0 — 15 priorités, plan d'action en lots A–G, rien de codé à sa rédaction), `screenshots/`. Toute note d'audit va là, pas dans un worktree.
 ⚠️ **Les fichiers de données ne sont PAS dans ce dossier** — ils vivent dans le dossier
 VOISIN `../Plan de classe json/` (88 fichiers au 2026-09-10). La distinction n'est pas
@@ -2342,6 +2343,15 @@ La date d'une mini-note (Type A) ou d'une passation (Type B) **peut rester vide*
 ### Affectation de compétences en lot (Type C)
 
 Modale `meval-pick-comp` enrichie d'une section « 📋 Aussi appliquer à » qui liste les autres questions de l'éval, groupées par exercice, avec checkbox + boutons « Tout cocher / Tout décocher ». À l'apply, les compétences cochées sont écrites sur toutes les questions cibles d'un coup. Le picker accepte désormais un index unique (rétro-compat) OU un tableau. Bouton **🎯 Compétences…** ajouté dans la modale contextuelle d'une mini-note du tableur (clic droit).
+
+### 📥 Import de la structure d'une évaluation Type C (v2.77.0)
+
+Bouton **« 📥 Importer une évaluation (Type C)… »** en tête de la modale **+ Nouvelle évaluation** (`#meval-new-import-wrap`, masqué en duplication). Ouvre `meval-import` : fichier (`.json`/`.txt`) **ou** texte collé, aperçu en direct, bouton **📄 Format du fichier (pour une IA)**.
+
+- **Le format est décrit dans `docs/format-import-evaluation.md`**, écrit pour être donné tel quel à une IA avec le sujet. La page en embarque une **copie exacte** (`<script type="text/markdown" id="eval-import-spec">`, juste avant le gros script) que le bouton télécharge hors ligne. ⚠️ **Toute modification du format se fait aux DEUX endroits** — un test (`run.test.js`) compare les deux textes.
+- Le fichier ne porte que la **structure** : `nomCourt`, `nomLong`, `description`, `noteMax` (défaut 20, ≠ somme des points), `coef`, `exercices[{titre, description, questions[{titre, points, competences[codes], description}]}]`, et une liste `competences[{code, nom, domaine}]` qui ne sert qu'à **créer** les codes inconnus. Classes, date, période, discipline se choisissent dans la modale de création.
+- `_evalImportParse(text)` (pure, testée) : garde de la première `{` à la dernière `}` (réponse d'IA entourée de texte ou d'un bloc ```json), virgule décimale acceptée, titres tronqués avec avertissement, **erreurs bloquantes nommées** (« Ex1, question 2 : points invalide »). `_evalImportResolveComps` : codes comparés **sans la casse** au référentiel ; inconnus → créés (nom et domaine du fichier, domaine reconnu par son code `D1.3`…), annoncés dans l'aperçu. `_evalImportApply(evObj, spec)` pose exercices (`label`/`name`) et questions (`label`, `max`, `exerciceId`, `competenceIds`, `name`) — appelée dans `_evalNewSave` **après** `pushUndo`, donc annulable (compétences créées comprises).
+- « ✓ Utiliser cette structure » coche le Type C, remplit nom court, nom long, descriptif, note max et coef ; la structure attend dans `_evalNewImport` (résumé + ✕ dans le bandeau, « ne s'applique qu'en Type C » si on change de type).
 
 ### Réglages d'une évaluation (`meval-edit`) = brouillon jusqu'à « ✓ Enregistrer » (v2.68.2)
 
