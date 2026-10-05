@@ -2658,3 +2658,30 @@ test('import éval C : la copie embarquée du format est identique à docs/forma
   const doc = _fs.readFileSync(_path.join(__dirname, '..', 'docs', 'format-import-evaluation.md'), 'utf8');
   assert.equal(m[1], doc, 'mettre à jour la copie embarquée dans plan de classe.html (ou le fichier docs)');
 });
+test('import éval D : poids, barème, bilan par exercice, compétence obligatoire', () => {
+  _importState();
+  ev(`S.evalPrefs = Object.assign({}, S.evalPrefs || {}, { nbLevels: 4 });`);
+  const d = { type: 'D', nomCourt: 'DS4', bareme: [0, 1, 2, 3], bilanParExercice: true,
+    exercices: [{ titre: 'Ex1', questions: [
+      { titre: '1a', competences: ['C1'] },
+      { titre: '1b', competences: [{ code: 'C1', poids: 2 }, 'RAI'] } ] }],
+    competences: [{ code: 'RAI', nom: 'Raisonner' }] };
+  const r = get(`_evalImportParse(${JSON.stringify(JSON.stringify(d))})`);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.spec.type, 'D');
+  assert.deepEqual(r.spec.bareme, [0, 1, 2, 3]);
+  assert.equal(r.spec.totalPoints, 12, 'max = (1 + 2 + 1) × 3');
+  ev(`globalThis.__sp = _evalImportParse(${JSON.stringify(JSON.stringify(d))}).spec;
+      globalThis.__ev = { id:'e2', type:'D', miniNotes:[], exercices:[] };
+      _evalImportApply(globalThis.__ev, globalThis.__sp);`);
+  const e = get('__ev');
+  assert.equal(e.miniNotes[0].max, undefined, 'pas de points par question en D');
+  assert.deepEqual(e.miniNotes[0].compWeights, {});
+  assert.deepEqual(e.miniNotes[1].compWeights, { cmp_C1: 2 });
+  // question sans compétence → erreur ; barème de mauvaise taille → avertissement
+  const bad = JSON.parse(JSON.stringify(d));
+  bad.exercices[0].questions[0].competences = []; bad.bareme = [0, 1, 2];
+  const rb = get(`_evalImportParse(${JSON.stringify(JSON.stringify(bad))})`);
+  assert.ok(rb.errors.some(x => x.includes('au moins une compétence')));
+  assert.ok(rb.warnings.some(x => x.includes('3 valeur')));
+});

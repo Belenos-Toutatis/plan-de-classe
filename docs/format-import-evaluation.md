@@ -1,8 +1,13 @@
 # Format d'import d'une évaluation — Plan de classe
 
-Ce document décrit le fichier qui permet d'importer **la structure d'une évaluation de type C**
-(sommative avec exercices, questions notées en points et compétences évaluées) dans
-l'application *Plan de classe*.
+Ce document décrit le fichier qui permet d'importer **la structure d'une évaluation** dans
+l'application *Plan de classe*, pour deux types :
+
+- **Type C** — sommative avec exercices : chaque question est notée **en points**, et peut
+  évaluer des compétences.
+- **Type D** — sommative par compétences : même découpage en exercices et questions, mais chaque
+  question évalue **une ou plusieurs compétences par un niveau de maîtrise** (jamais des points).
+  Un barème « niveau → points » convertit ensuite les niveaux en note.
 
 Il est écrit pour être donné tel quel à une IA, avec le sujet d'une évaluation, afin qu'elle
 produise le fichier.
@@ -11,17 +16,26 @@ produise le fichier.
 
 ## Consigne pour l'IA
 
-> Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation. Produis **un seul objet
-> JSON** conforme au format ci-dessous, et rien d'autre : pas de texte avant ni après, pas de
-> commentaire dans le JSON. Reprends les exercices et les questions **dans l'ordre du sujet**,
-> avec le nombre de points de chaque question tel qu'il est indiqué dans le sujet. Si une
-> question n'a pas de barème explicite, propose un nombre de points raisonnable et signale-le
-> dans son champ `description`. N'invente pas de compétence : n'utilise que les codes que
-> l'enseignant t'a donnés, ou ceux du référentiel par défaut listé plus bas.
+> Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation, et l'enseignant te dit
+> s'il la veut en **Type C** (questions notées en points) ou en **Type D** (questions évaluées
+> par compétences et niveaux). Sans précision, choisis le Type C si le sujet porte des points,
+> le Type D s'il porte des compétences sans points.
+>
+> Produis **un seul objet JSON** conforme au format ci-dessous, et rien d'autre : pas de texte
+> avant ni après, pas de commentaire dans le JSON. Reprends les exercices et les questions
+> **dans l'ordre du sujet**.
+>
+> - **Type C** : donne à chaque question le nombre de points indiqué dans le sujet. S'il n'y en
+>   a pas, propose un nombre raisonnable et signale-le dans son champ `description`.
+> - **Type D** : donne à chaque question **au moins une compétence**, et pas de points. Si une
+>   compétence compte davantage dans une question, donne-lui un `poids` (2 = compte double).
+>
+> N'invente pas de compétence : n'utilise que les codes que l'enseignant t'a donnés, ou ceux
+> du référentiel par défaut listé plus bas.
 
 ---
 
-## Exemple complet
+## Exemple complet — Type C
 
 ```json
 {
@@ -58,6 +72,38 @@ produise le fichier.
 }
 ```
 
+## Exemple complet — Type D
+
+```json
+{
+  "format": "plan-de-classe/evaluation",
+  "version": 1,
+  "type": "D",
+  "nomCourt": "DS4",
+  "nomLong": "Contrôle chapitre 5 — Énergie",
+  "noteMax": 20,
+  "coef": 1,
+  "bareme": [0, 1, 2, 3],
+  "bilanParExercice": true,
+  "exercices": [
+    {
+      "titre": "Ex1",
+      "description": "Formes d'énergie",
+      "questions": [
+        { "titre": "1a", "competences": ["C1"] },
+        { "titre": "1b", "competences": [{ "code": "C1", "poids": 2 }, "C3"], "description": "Chaîne énergétique" }
+      ]
+    },
+    {
+      "titre": "Ex2",
+      "questions": [
+        { "titre": "2a", "competences": ["C2", "C3"] }
+      ]
+    }
+  ]
+}
+```
+
 ---
 
 ## Champs
@@ -68,11 +114,13 @@ produise le fichier.
 |---|---|---|---|
 | `format` | oui | texte | Toujours `"plan-de-classe/evaluation"`. |
 | `version` | oui | nombre | Toujours `1`. |
-| `type` | oui | texte | Toujours `"C"` (seul type importable pour l'instant). |
+| `type` | oui | texte | `"C"` ou `"D"`. Absent : `"C"`. |
 | `nomCourt` | oui | texte, 20 caractères max | Nom affiché dans les en-têtes de colonnes (ex. `"DS3"`, `"IE2"`). |
 | `nomLong` | non | texte, 80 caractères max | Titre complet de l'évaluation. |
 | `description` | non | texte, 500 caractères max | Notes libres (affichées en infobulle). |
 | `noteMax` | non | nombre > 0 | Note sur laquelle le total est ramené. **Défaut : 20.** Ce n'est pas la somme des points : un sujet sur 25 points peut être noté sur 20. |
+| `bareme` | non, **Type D seulement** | liste de nombres ≥ 0 | Points rapportés par chaque niveau de maîtrise, du plus bas au plus haut. Ex. `[0, 1, 2, 3]` pour 4 niveaux. Doit avoir **autant de valeurs que de niveaux** réglés dans l'application (4 par défaut) ; sinon il est ignoré. Absent : le barème des Réglages de l'enseignant. |
+| `bilanParExercice` | non, **Type D seulement** | vrai / faux | Affiche aussi, pour chaque exercice, le niveau atteint sur chaque compétence. Absent : réglage par défaut de l'enseignant. |
 | `coef` | non | nombre ≥ 0 | Coefficient dans la moyenne de la période. **Défaut : 1.** |
 | `competences` | non | liste | Description des compétences utilisées (voir plus bas). Sert seulement à **créer** celles que l'enseignant n'a pas encore. |
 | `exercices` | oui | liste, au moins 1 | Les exercices, dans l'ordre du sujet. |
@@ -93,9 +141,19 @@ le créneau, la période et la discipline.
 | Champ | Obligatoire | Type | Rôle |
 |---|---|---|---|
 | `titre` | oui | texte **très court**, 8 caractères conseillés (20 max) | Code de la question, affiché en tête de colonne (ex. `"1a"`, `"Q3"`, `"2.b"`). |
-| `points` | oui | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
-| `competences` | non | liste de codes | Codes des compétences évaluées par la question (ex. `["C1", "C3"]`). Liste vide ou absente : la question ne compte pour aucune compétence. |
+| `points` | **Type C : oui** · Type D : non (ignoré) | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
+| `competences` | **Type D : oui, au moins une** · Type C : non | liste | Compétences évaluées par la question. Chaque élément est un code (`"C1"`) ou, en Type D, un objet `{ "code": "C1", "poids": 2 }`. En Type C, une liste vide ou absente veut dire que la question ne compte pour aucune compétence. |
 | `description` | non | texte, 120 caractères max | Intitulé de la question (infobulle). |
+
+### Poids d'une compétence (Type D)
+
+Dans une question de Type D, chaque compétence rapporte les points de son niveau multipliés par
+son **poids** (1 par défaut). Un poids de 2 fait compter la compétence double dans cette
+question ; il doit être compris entre 0,5 et 20. Le poids est propre à la question : la même
+compétence peut peser 1 dans une question et 2 dans une autre.
+
+Exemple : barème `[0, 1, 2, 3]`, question 1b avec C1 (poids 2) et C3. Un élève au niveau 3 en
+C1 et au niveau 2 en C3 obtient 2 × 2 + 1 = 5 points sur 3 × 3 = 9.
 
 ### Compétence (liste `competences` de la racine)
 
@@ -140,5 +198,5 @@ L'enseignant a pu modifier ce référentiel : s'il te donne sa liste, utilise-la
   ` ```json … ``` `** ou de quelques phrases : l'application garde ce qui va de la première `{`
   à la dernière `}`.
 - Les champs inconnus sont ignorés.
-- Un titre trop long est tronqué ; une question sans points valides est refusée avec un
-  message qui dit laquelle.
+- Un titre trop long est tronqué. Une question de Type C sans points valides, ou de Type D sans
+  compétence, est refusée avec un message qui dit laquelle.

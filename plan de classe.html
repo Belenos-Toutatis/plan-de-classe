@@ -4987,7 +4987,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <input type="hidden" id="meval-new-source-id">
 
     <div id="meval-new-import-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:var(--radius-md,5px);font-size:.88em">
-      <button class="btn btn-g btn-sm" onclick="_evalImportOpen()" title="Reprendre titres, exercices, questions, barème et compétences d'un fichier — par exemple produit par une IA à partir de ton sujet">📥 Importer une évaluation (Type C)…</button>
+      <button class="btn btn-g btn-sm" onclick="_evalImportOpen()" title="Reprendre titres, exercices, questions, barème et compétences d'un fichier — par exemple produit par une IA à partir de ton sujet">📥 Importer une évaluation (Type C ou D)…</button>
       <span id="meval-new-import-sum" style="color:var(--pencil)">Exercices, questions, barème et compétences depuis un fichier.</span>
     </div>
 
@@ -5112,8 +5112,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- ── MODAL Import de la structure d'une évaluation Type C ── -->
 <div id="meval-import" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:720px;width:100%;max-height:92vh;overflow-y:auto">
-    <h2>📥 Importer une évaluation (Type C)</h2>
-    <p style="font-size:.88em;color:var(--pencil);margin:0 0 8px">Le fichier décrit la <strong>structure</strong> du devoir : titres, exercices, questions, points et compétences. Les classes, la date et la période se choisissent ensuite, comme pour toute nouvelle évaluation.<br>💡 Donne le <strong>format du fichier</strong> à une IA avec ton sujet : elle produit le texte à coller ci-dessous.</p>
+    <h2>📥 Importer une évaluation (Type C ou D)</h2>
+    <p style="font-size:.88em;color:var(--pencil);margin:0 0 8px">Le fichier décrit la <strong>structure</strong> du devoir : titres, exercices, questions, points (Type C) ou compétences pondérées et barème niveau → points (Type D). Les classes, la date et la période se choisissent ensuite, comme pour toute nouvelle évaluation.<br>💡 Donne le <strong>format du fichier</strong> à une IA avec ton sujet : elle produit le texte à coller ci-dessous.</p>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-import-file').click()">📂 Choisir un fichier…</button>
       <input type="file" id="meval-import-file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="_evalImportFile(this)">
@@ -7172,9 +7172,14 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <script type="text/markdown" id="eval-import-spec">
 # Format d'import d'une évaluation — Plan de classe
 
-Ce document décrit le fichier qui permet d'importer **la structure d'une évaluation de type C**
-(sommative avec exercices, questions notées en points et compétences évaluées) dans
-l'application *Plan de classe*.
+Ce document décrit le fichier qui permet d'importer **la structure d'une évaluation** dans
+l'application *Plan de classe*, pour deux types :
+
+- **Type C** — sommative avec exercices : chaque question est notée **en points**, et peut
+  évaluer des compétences.
+- **Type D** — sommative par compétences : même découpage en exercices et questions, mais chaque
+  question évalue **une ou plusieurs compétences par un niveau de maîtrise** (jamais des points).
+  Un barème « niveau → points » convertit ensuite les niveaux en note.
 
 Il est écrit pour être donné tel quel à une IA, avec le sujet d'une évaluation, afin qu'elle
 produise le fichier.
@@ -7183,17 +7188,26 @@ produise le fichier.
 
 ## Consigne pour l'IA
 
-> Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation. Produis **un seul objet
-> JSON** conforme au format ci-dessous, et rien d'autre : pas de texte avant ni après, pas de
-> commentaire dans le JSON. Reprends les exercices et les questions **dans l'ordre du sujet**,
-> avec le nombre de points de chaque question tel qu'il est indiqué dans le sujet. Si une
-> question n'a pas de barème explicite, propose un nombre de points raisonnable et signale-le
-> dans son champ `description`. N'invente pas de compétence : n'utilise que les codes que
-> l'enseignant t'a donnés, ou ceux du référentiel par défaut listé plus bas.
+> Tu reçois le sujet (ou le corrigé, ou le barème) d'une évaluation, et l'enseignant te dit
+> s'il la veut en **Type C** (questions notées en points) ou en **Type D** (questions évaluées
+> par compétences et niveaux). Sans précision, choisis le Type C si le sujet porte des points,
+> le Type D s'il porte des compétences sans points.
+>
+> Produis **un seul objet JSON** conforme au format ci-dessous, et rien d'autre : pas de texte
+> avant ni après, pas de commentaire dans le JSON. Reprends les exercices et les questions
+> **dans l'ordre du sujet**.
+>
+> - **Type C** : donne à chaque question le nombre de points indiqué dans le sujet. S'il n'y en
+>   a pas, propose un nombre raisonnable et signale-le dans son champ `description`.
+> - **Type D** : donne à chaque question **au moins une compétence**, et pas de points. Si une
+>   compétence compte davantage dans une question, donne-lui un `poids` (2 = compte double).
+>
+> N'invente pas de compétence : n'utilise que les codes que l'enseignant t'a donnés, ou ceux
+> du référentiel par défaut listé plus bas.
 
 ---
 
-## Exemple complet
+## Exemple complet — Type C
 
 ```json
 {
@@ -7230,6 +7244,38 @@ produise le fichier.
 }
 ```
 
+## Exemple complet — Type D
+
+```json
+{
+  "format": "plan-de-classe/evaluation",
+  "version": 1,
+  "type": "D",
+  "nomCourt": "DS4",
+  "nomLong": "Contrôle chapitre 5 — Énergie",
+  "noteMax": 20,
+  "coef": 1,
+  "bareme": [0, 1, 2, 3],
+  "bilanParExercice": true,
+  "exercices": [
+    {
+      "titre": "Ex1",
+      "description": "Formes d'énergie",
+      "questions": [
+        { "titre": "1a", "competences": ["C1"] },
+        { "titre": "1b", "competences": [{ "code": "C1", "poids": 2 }, "C3"], "description": "Chaîne énergétique" }
+      ]
+    },
+    {
+      "titre": "Ex2",
+      "questions": [
+        { "titre": "2a", "competences": ["C2", "C3"] }
+      ]
+    }
+  ]
+}
+```
+
 ---
 
 ## Champs
@@ -7240,11 +7286,13 @@ produise le fichier.
 |---|---|---|---|
 | `format` | oui | texte | Toujours `"plan-de-classe/evaluation"`. |
 | `version` | oui | nombre | Toujours `1`. |
-| `type` | oui | texte | Toujours `"C"` (seul type importable pour l'instant). |
+| `type` | oui | texte | `"C"` ou `"D"`. Absent : `"C"`. |
 | `nomCourt` | oui | texte, 20 caractères max | Nom affiché dans les en-têtes de colonnes (ex. `"DS3"`, `"IE2"`). |
 | `nomLong` | non | texte, 80 caractères max | Titre complet de l'évaluation. |
 | `description` | non | texte, 500 caractères max | Notes libres (affichées en infobulle). |
 | `noteMax` | non | nombre > 0 | Note sur laquelle le total est ramené. **Défaut : 20.** Ce n'est pas la somme des points : un sujet sur 25 points peut être noté sur 20. |
+| `bareme` | non, **Type D seulement** | liste de nombres ≥ 0 | Points rapportés par chaque niveau de maîtrise, du plus bas au plus haut. Ex. `[0, 1, 2, 3]` pour 4 niveaux. Doit avoir **autant de valeurs que de niveaux** réglés dans l'application (4 par défaut) ; sinon il est ignoré. Absent : le barème des Réglages de l'enseignant. |
+| `bilanParExercice` | non, **Type D seulement** | vrai / faux | Affiche aussi, pour chaque exercice, le niveau atteint sur chaque compétence. Absent : réglage par défaut de l'enseignant. |
 | `coef` | non | nombre ≥ 0 | Coefficient dans la moyenne de la période. **Défaut : 1.** |
 | `competences` | non | liste | Description des compétences utilisées (voir plus bas). Sert seulement à **créer** celles que l'enseignant n'a pas encore. |
 | `exercices` | oui | liste, au moins 1 | Les exercices, dans l'ordre du sujet. |
@@ -7265,9 +7313,19 @@ le créneau, la période et la discipline.
 | Champ | Obligatoire | Type | Rôle |
 |---|---|---|---|
 | `titre` | oui | texte **très court**, 8 caractères conseillés (20 max) | Code de la question, affiché en tête de colonne (ex. `"1a"`, `"Q3"`, `"2.b"`). |
-| `points` | oui | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
-| `competences` | non | liste de codes | Codes des compétences évaluées par la question (ex. `["C1", "C3"]`). Liste vide ou absente : la question ne compte pour aucune compétence. |
+| `points` | **Type C : oui** · Type D : non (ignoré) | nombre > 0, au plus 100 | Barème de la question. Décimales acceptées (`0.5`, `1.5`). |
+| `competences` | **Type D : oui, au moins une** · Type C : non | liste | Compétences évaluées par la question. Chaque élément est un code (`"C1"`) ou, en Type D, un objet `{ "code": "C1", "poids": 2 }`. En Type C, une liste vide ou absente veut dire que la question ne compte pour aucune compétence. |
 | `description` | non | texte, 120 caractères max | Intitulé de la question (infobulle). |
+
+### Poids d'une compétence (Type D)
+
+Dans une question de Type D, chaque compétence rapporte les points de son niveau multipliés par
+son **poids** (1 par défaut). Un poids de 2 fait compter la compétence double dans cette
+question ; il doit être compris entre 0,5 et 20. Le poids est propre à la question : la même
+compétence peut peser 1 dans une question et 2 dans une autre.
+
+Exemple : barème `[0, 1, 2, 3]`, question 1b avec C1 (poids 2) et C3. Un élève au niveau 3 en
+C1 et au niveau 2 en C3 obtient 2 × 2 + 1 = 5 points sur 3 × 3 = 9.
 
 ### Compétence (liste `competences` de la racine)
 
@@ -7312,8 +7370,8 @@ L'enseignant a pu modifier ce référentiel : s'il te donne sa liste, utilise-la
   ` ```json … ``` `** ou de quelques phrases : l'application garde ce qui va de la première `{`
   à la dernière `}`.
 - Les champs inconnus sont ignorés.
-- Un titre trop long est tronqué ; une question sans points valides est refusée avec un
-  message qui dit laquelle.
+- Un titre trop long est tronqué. Une question de Type C sans points valides, ou de Type D sans
+  compétence, est refusée avec un message qui dit laquelle.
 </script>
 <script>
 // Thème : restauration AVANT init() pour que tous les calculs de couleur dérivés
@@ -7336,11 +7394,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.77.0';
+const APP_VERSION    = '2.78.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-05T21:17:16Z';
+const APP_BUILD_DATE = '2026-10-05T21:36:40Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -39627,7 +39685,7 @@ function _evalNewSave() {
       createdAt: now, updatedAt: now,
     };
     // Structure importée (📥) : exercices, questions, barème, compétences — Type C seulement.
-    if (type === 'C' && _evalNewImport) _evalImportApply(evObj, _evalNewImport);
+    if ((type === 'C' || type === 'D') && _evalNewImport?.type === type) _evalImportApply(evObj, _evalNewImport);
   }
   _evalNewImport = null;
 
@@ -39737,7 +39795,9 @@ function _evalImportParse(text) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) return { errors: ['Le fichier doit contenir un objet JSON.'], warnings, spec: null };
   if (d.format !== undefined && d.format !== 'plan-de-classe/evaluation') warnings.push(`Champ « format » inattendu (« ${d.format} ») : lecture tentée quand même.`);
   if (d.version !== undefined && d.version !== 1) warnings.push(`Version ${d.version} : seule la version 1 est connue, lecture tentée quand même.`);
-  if (d.type !== undefined && String(d.type).toUpperCase() !== 'C') errors.push(`Type « ${d.type} » : seul le type C s'importe pour l'instant.`);
+  const type = (d.type === undefined || d.type === null || d.type === '') ? 'C' : String(d.type).toUpperCase();
+  if (type !== 'C' && type !== 'D') errors.push(`Type « ${d.type} » : seuls les types C et D s'importent.`);
+  const isD = type === 'D';
   const str = (v, max, what) => {
     let t = (v == null) ? '' : String(v).trim();
     if (t.length > max) { warnings.push(`${what} tronqué à ${max} caractères.`); t = t.slice(0, max); }
@@ -39748,8 +39808,21 @@ function _evalImportParse(text) {
     nomCourt: str(d.nomCourt, 20, 'Nom court'),
     nomLong: str(d.nomLong, 80, 'Nom long'),
     description: str(d.description ?? d.descriptif, 500, 'Description'),
+    type: isD ? 'D' : 'C',
     noteMax: 20, coef: 1, exercices: [], compDefs: {},
   };
+  // Type D : barème niveau → points (taille = nombre de niveaux réglé chez l'enseignant)
+  // et bilan par exercice. Barème absent ou de mauvaise taille → défaut de l'app.
+  if (isD) {
+    const nb = S.evalPrefs?.nbLevels || 4;
+    if (d.bareme != null) {
+      const b = Array.isArray(d.bareme) ? d.bareme.map(num) : null;
+      if (!b || b.some(v => !(Number.isFinite(v) && v >= 0 && v <= 100))) errors.push(`« bareme » invalide (${JSON.stringify(d.bareme)}) — une liste de nombres ≥ 0 est attendue.`);
+      else if (b.length !== nb) warnings.push(`« bareme » a ${b.length} valeur(s) alors que tes évaluations utilisent ${nb} niveaux : barème par défaut utilisé (modifiable avant de créer).`);
+      else spec.bareme = b;
+    }
+    if (d.bilanParExercice != null) spec.bilanParExercice = !!d.bilanParExercice;
+  }
   if (!spec.nomCourt) errors.push('« nomCourt » manquant (ex. "DS3").');
   if (d.noteMax != null) {
     const n = num(d.noteMax);
@@ -39775,15 +39848,37 @@ function _evalImportParse(text) {
     else x.questions.forEach((q, j) => {
       const qLbl = `${exo.titre}, question ${j + 1}`;
       if (!q || typeof q !== 'object') { errors.push(`${qLbl} : n'est pas un objet.`); return; }
-      const pts = num(q.points ?? q.max);
-      if (!(Number.isFinite(pts) && pts > 0 && pts <= 100)) errors.push(`${qLbl} : « points » invalide (${JSON.stringify(q.points)}) — un nombre entre 0 et 100 est attendu.`);
-      const codes = [];
+      // Type C : des points. Type D : pas de points (les niveaux font la note), un poids par compétence.
+      const pts = isD ? NaN : num(q.points ?? q.max);
+      if (!isD && !(Number.isFinite(pts) && pts > 0 && pts <= 100)) errors.push(`${qLbl} : « points » invalide (${JSON.stringify(q.points)}) — un nombre entre 0 et 100 est attendu.`);
+      const codes = [], weights = {};
       const rawC = Array.isArray(q.competences) ? q.competences : (typeof q.competences === 'string' && q.competences.trim() ? q.competences.split(/[,;\s]+/) : []);
-      for (const c of rawC) { const k = String(c ?? '').trim(); if (k && !codes.some(z => z.toUpperCase() === k.toUpperCase())) codes.push(k); }
-      exo.questions.push({ titre: str(q.titre ?? q.label, 20, `Titre de ${qLbl}`) || `Q${j + 1}`, points: pts, description: str(q.description, 120, `Description de ${qLbl}`), codes });
+      for (const c of rawC) {
+        // Une compétence : un code ("C1") ou, en Type D, un objet { code, poids }.
+        const k = String((c && typeof c === 'object') ? (c.code ?? '') : (c ?? '')).trim();
+        if (!k || codes.some(z => z.toUpperCase() === k.toUpperCase())) continue;
+        codes.push(k);
+        if (isD && c && typeof c === 'object' && c.poids != null) {
+          const w = num(c.poids);
+          if (Number.isFinite(w) && w > 0) {
+            const wc = Math.min(TYPED_W_MAX, Math.max(TYPED_W_MIN, w));
+            if (wc !== w) warnings.push(`${qLbl} : poids de ${k} ramené à ${wc} (entre ${TYPED_W_MIN} et ${TYPED_W_MAX}).`);
+            if (wc !== 1) weights[k.toUpperCase()] = wc;
+          } else errors.push(`${qLbl} : poids de ${k} invalide (${JSON.stringify(c.poids)}).`);
+        }
+      }
+      if (isD && codes.length === 0) errors.push(`${qLbl} : en Type D, chaque question doit évaluer au moins une compétence.`);
+      exo.questions.push({ titre: str(q.titre ?? q.label, 20, `Titre de ${qLbl}`) || `Q${j + 1}`, points: pts, description: str(q.description, 120, `Description de ${qLbl}`), codes, weights });
     });
     spec.exercices.push(exo);
   });
+  // Total : points (C) ; en D, maximum atteignable = Σ poids × points du niveau le plus haut.
+  if (isD) {
+    const nb = S.evalPrefs?.nbLevels || 4;
+    const tbl = spec.bareme || ((Array.isArray(S.evalPrefs?.typeDPoints) && S.evalPrefs.typeDPoints.length === nb) ? S.evalPrefs.typeDPoints : _typeDDefaultPoints(nb));
+    const top = Math.max(...tbl);
+    for (const e of spec.exercices) for (const q of e.questions) q.points = q.codes.reduce((t, c) => t + (q.weights[c.toUpperCase()] || 1), 0) * top;
+  }
   const total = spec.exercices.reduce((s, e) => s + e.questions.reduce((t, q) => t + (Number.isFinite(q.points) ? q.points : 0), 0), 0);
   spec.totalPoints = Math.round(total * 100) / 100;
   return { errors, warnings, spec };
@@ -39825,8 +39920,13 @@ function _evalImportApply(evObj, spec) {
     if (x.description) exo.name = x.description;
     evObj.exercices.push(exo);
     x.questions.forEach((q, j) => {
-      const mn = { id: _newMiniNoteId() + i + '_' + j, label: q.titre, max: q.points, exerciceId: exoId,
+      const mn = { id: _newMiniNoteId() + i + '_' + j, label: q.titre, exerciceId: exoId,
         competenceIds: q.codes.map(c => ids[c.toUpperCase()]).filter(Boolean) };
+      if (spec.type === 'D') {
+        // Pas de barème en points par question : poids par compétence (défaut 1, non stocké).
+        mn.compWeights = {};
+        for (const c of q.codes) { const w = q.weights[c.toUpperCase()]; const cid = ids[c.toUpperCase()]; if (w && cid) mn.compWeights[cid] = w; }
+      } else mn.max = q.points;
       if (q.description) mn.name = q.description;
       evObj.miniNotes.push(mn);
     });
@@ -39876,14 +39976,18 @@ function _evalImportRenderPreview() {
     const { known, created } = _evalImportResolveComps(sp);
     const nbQ = sp.exercices.reduce((s, e) => s + e.questions.length, 0);
     const fmt = n => String(n).replace('.', ',');
-    h += `<div style="margin-bottom:4px"><strong>${_esc(sp.nomCourt || '?')}</strong>${sp.nomLong ? ' — ' + _esc(sp.nomLong) : ''} · ${sp.exercices.length} exercice(s), ${nbQ} question(s) · <strong>${fmt(sp.totalPoints)} pts</strong> ramenés sur ${fmt(sp.noteMax)} · coef ${fmt(sp.coef)}</div>`;
+    h += `<div style="margin-bottom:4px"><span class="eval-type-badge eval-type-${sp.type}">${sp.type}</span> <strong>${_esc(sp.nomCourt || '?')}</strong>${sp.nomLong ? ' — ' + _esc(sp.nomLong) : ''} · ${sp.exercices.length} exercice(s), ${nbQ} question(s) · <strong>${fmt(sp.totalPoints)} pts${sp.type === 'D' ? ' au maximum' : ''}</strong> ramenés sur ${fmt(sp.noteMax)} · coef ${fmt(sp.coef)}</div>`
+      + (sp.type === 'D' ? `<div style="margin-bottom:4px;color:var(--pencil)">Barème niveau → points : ${sp.bareme ? sp.bareme.map(fmt).join(' / ') : 'celui des Réglages'}${sp.bilanParExercice ? ' · bilan par exercice' : ''}</div>` : '');
     h += '<div style="max-height:220px;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;padding:4px 8px;background:var(--paper)">';
     for (const e of sp.exercices) {
       const sub = e.questions.reduce((s, q) => s + (Number.isFinite(q.points) ? q.points : 0), 0);
       h += `<div style="margin:3px 0"><strong>${_esc(e.titre)}</strong>${e.description ? ' — ' + _esc(e.description) : ''} <span style="color:var(--pencil)">(${fmt(Math.round(sub * 100) / 100)} pts)</span><div style="display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 0 12px">`;
       for (const q of e.questions) {
         const tip = q.description ? ` title="${_escAttr(q.description)}"` : '';
-        h += `<span${tip} style="font-family:var(--font-mono);font-size:.9em;padding:1px 6px;border:1px solid var(--rule-line);border-radius:10px;background:var(--paper-warm)">${_esc(q.titre)} · ${Number.isFinite(q.points) ? fmt(q.points) : '?'} pt${q.codes.length ? ' · ' + q.codes.map(_esc).join('+') : ''}</span>`;
+        const cs = q.codes.map(c => _esc(c) + (q.weights?.[c.toUpperCase()] ? '×' + fmt(q.weights[c.toUpperCase()]) : '')).join('+');
+        h += sp.type === 'D'
+          ? `<span${tip} style="font-family:var(--font-mono);font-size:.9em;padding:1px 6px;border:1px solid var(--rule-line);border-radius:10px;background:var(--paper-warm)">${_esc(q.titre)} · ${cs}</span>`
+          : `<span${tip} style="font-family:var(--font-mono);font-size:.9em;padding:1px 6px;border:1px solid var(--rule-line);border-radius:10px;background:var(--paper-warm)">${_esc(q.titre)} · ${Number.isFinite(q.points) ? fmt(q.points) : '?'} pt${q.codes.length ? ' · ' + cs : ''}</span>`;
       }
       h += '</div></div>';
     }
@@ -39901,7 +40005,7 @@ function _evalImportUse() {
   const sp = _evalImportPending;
   if (!sp) return;
   _evalNewImport = sp;
-  const radio = document.querySelector('input[name="meval-new-type"][value="C"]');
+  const radio = document.querySelector(`input[name="meval-new-type"][value="${sp.type}"]`);
   if (radio) radio.checked = true;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
   set('meval-new-nomcourt', sp.nomCourt);
@@ -39909,6 +40013,15 @@ function _evalImportUse() {
   set('meval-new-desc', sp.description);
   set('meval-new-notemax', sp.noteMax);
   set('meval-new-coef', sp.coef);
+  if (sp.type === 'D') {
+    // Barème et bilan par exercice : posés dans les champs de la modale, que ✓ Créer relit.
+    const w = document.getElementById('meval-new-typed-points');
+    if (w) w.innerHTML = '';
+    _evalNewRenderTypeDPoints();
+    if (sp.bareme) document.querySelectorAll('.meval-new-typed-pt').forEach(inp => { const i = +inp.dataset.lvl; if (sp.bareme[i] != null) inp.value = sp.bareme[i]; });
+    const bx = document.getElementById('meval-new-typed-bilanexo');
+    if (bx && sp.bilanParExercice != null) bx.checked = sp.bilanParExercice;
+  }
   _evalNewOnTypeChange();
   closeMod2('meval-import');
   toast('📥 Structure importée — choisis les classes et la date, puis ✓ Créer');
@@ -39922,8 +40035,8 @@ function _evalImportRenderSum() {
   const type = document.querySelector('input[name="meval-new-type"]:checked')?.value;
   const nbQ = sp.exercices.reduce((s, e) => s + e.questions.length, 0);
   el.style.color = 'var(--ink-deep)';
-  el.innerHTML = `✓ <strong>${_esc(sp.nomCourt)}</strong> : ${sp.exercices.length} exercice(s), ${nbQ} question(s), ${String(sp.totalPoints).replace('.', ',')} pts`
-    + (type !== 'C' ? ` <span style="color:var(--warn-fg)">— ne s'applique qu'en Type C</span>` : '')
+  el.innerHTML = `✓ Type ${sp.type} <strong>${_esc(sp.nomCourt)}</strong> : ${sp.exercices.length} exercice(s), ${nbQ} question(s)` + (sp.type === 'C' ? `, ${String(sp.totalPoints).replace('.', ',')} pts` : '')
+    + (type !== sp.type ? ` <span style="color:var(--warn-fg)">— ne s'applique qu'en Type ${sp.type}</span>` : '')
     + ` <button class="btn btn-g btn-sm" style="padding:1px 6px" onclick="_evalImportClear()" title="Oublier la structure importée">✕</button>`;
 }
 function _evalImportDownloadSpec() {
