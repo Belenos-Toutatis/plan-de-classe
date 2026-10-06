@@ -1921,6 +1921,32 @@ body:has(.mo.on)::before { display: none; }
   font: 500 13px var(--font-sans) !important;
   padding: 6px 10px !important;
 }
+#cls-lvl { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.cls-lvl-grp { position: relative; }
+.cls-lvl-btn {
+  font: 600 13px var(--font-sans); padding: 4px 10px; min-height: 28px;
+  border: 1px solid var(--rule-line); border-left: 4px solid; border-radius: var(--radius-md);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.cls-lvl-grp.on > .cls-lvl-btn { box-shadow: 0 0 0 2px var(--ink-blue); }
+.cls-lvl-cur { font-weight: 700; padding-left: 6px; border-left: 1px solid currentColor; }
+.cls-lvl-menu {
+  display: none; position: absolute; top: calc(100% + 3px); left: 0; z-index: 9995;
+  min-width: 100%; padding: 4px; gap: 3px; flex-direction: column;
+  background: var(--paper); border: 1px solid var(--rule-line); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+.cls-lvl-menu::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; height: 6px; }
+.cls-lvl-grp.open > .cls-lvl-menu, .cls-lvl-grp:focus-within > .cls-lvl-menu { display: flex; }
+.cls-lvl-item {
+  font: 600 13px var(--font-sans); text-align: left; white-space: nowrap; cursor: pointer;
+  padding: 6px 14px 6px 10px; border: none; border-left: 5px solid; border-radius: var(--radius-sm);
+}
+.cls-lvl-item:hover { filter: brightness(.93); }
+.cls-lvl-item.on { outline: 2px solid var(--ink-blue); outline-offset: -2px; }
+.cls-lvl-empty { color: var(--pencil); font-size: 12px; }
+@media (pointer: coarse) { .cls-lvl-btn { min-height: 36px; font-size: 14px; } .cls-lvl-item { padding: 10px 16px 10px 10px; font-size: 15px; } }
+@media print { #cls-lvl { display: none; } }
 #cls-sel:focus {
   outline: none;
   border-color: var(--ink-blue) !important;
@@ -2927,9 +2953,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="topbar">
 <div id="hdr">
   <h1>📚 Plan de Classe</h1>
-  <select id="cls-sel" onchange="switchClass(this.value)">
+  <!-- Sélecteur de classe : un bouton par niveau, les classes du niveau apparaissent au
+       survol (au toucher : au clic). Le <select> reste, caché, comme support de valeur. -->
+  <select id="cls-sel" onchange="switchClass(this.value)" style="display:none" aria-hidden="true" tabindex="-1">
     <option value="">— Choisir une classe —</option>
   </select>
+  <nav id="cls-lvl" aria-label="Choisir une classe"></nav>
   <span id="hdr-yr"></span>
   <span id="hdr-pp" title="Professeur·e principal·e de la classe"></span>
   <div id="hdr-right">
@@ -7407,11 +7436,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.79.0';
+const APP_VERSION    = '2.80.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T13:00:27Z';
+const APP_BUILD_DATE = '2026-10-06T17:53:05Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15507,6 +15536,7 @@ function switchClass(id) {
   }
   S.cur = id;
   document.getElementById('cls-sel').value = id;
+  _renderClassPicker();
   const cls = S.classes[id];
   _refreshHdrClassInfo(cls);
   // Réinitialise les filtres "volatils" qui n'ont pas de sens à travers les classes
@@ -15557,7 +15587,79 @@ function refreshSelector() {
     });
     sel.appendChild(grp);
   }
+  _renderClassPicker();
 }
+
+// ── Sélecteur de classe du bandeau : un bouton par niveau ──────────────────────
+// Survoler un bouton déplie aussitôt les classes de ce niveau, avec les mêmes fonds que
+// les cartes de l'onglet Classes (levelBgColor, même rang de section → même nuance) et la
+// même bordure de niveau (levelAccentColor). Au toucher (pas de survol), un clic déplie.
+// Le bouton du niveau courant affiche aussi le nom de la classe courante.
+var _clsPickHideTimer = null;
+function _renderClassPicker() {
+  const nav = document.getElementById('cls-lvl');
+  if (!nav || typeof S === 'undefined' || !S.classes) return;
+  const groups = [];          // [{ key, label, order, items:[{cls,bg}] }]
+  const byKey = {};
+  const secCount = {};
+  for (const cls of sortedClasses()) {
+    let key, label, order;
+    if (cls.virtual) { key = 'v'; label = '🔀'; order = 999; }
+    else { order = clsLevel(cls); key = 'l' + order; label = _levelLabel(order); }
+    if (!byKey[key]) { byKey[key] = { key, label, order, virtual: !!cls.virtual, items: [] }; groups.push(byKey[key]); }
+    let bg;
+    if (cls.virtual) bg = 'var(--paper-warm)';
+    else { const i = secCount[order] ?? 0; secCount[order] = i + 1; bg = levelBgColor(order, i); }
+    byKey[key].items.push({ cls, bg });
+  }
+  if (!groups.length) { nav.innerHTML = '<span class="cls-lvl-empty">Aucune classe</span>'; return; }
+  // Classes recomposées en dernier, après tous les niveaux
+  const vi = groups.findIndex(g => g.virtual);
+  if (vi >= 0) groups.push(groups.splice(vi, 1)[0]);
+  nav.innerHTML = groups.map(g => {
+    const cur = g.items.find(it => it.cls.id === S.cur);
+    const accent = g.virtual ? 'var(--disc-accent)' : levelAccentColor(g.order);
+    const btnBg = g.virtual ? 'var(--paper-warm)' : levelBgColor(g.order, 0);
+    const fg = g.virtual ? 'var(--ink-deep)' : _contrastTextColor(btnBg);
+    const title = g.virtual ? 'Classes recomposées' : 'Classes de ' + g.label;
+    const items = g.items.map(({ cls, bg }) => {
+      const ifg = cls.virtual ? 'var(--ink-deep)' : _contrastTextColor(bg);
+      return `<button type="button" role="menuitem" class="cls-lvl-item${cls.id === S.cur ? ' on' : ''}" style="background:${bg};color:${ifg};border-left-color:${accent}" onclick="_clsPickChoose('${_escJsAttr(cls.id)}')">${_esc(cls.nom)}</button>`;
+    }).join('');
+    return `<div class="cls-lvl-grp${cur ? ' on' : ''}" data-key="${g.key}" onmouseenter="_clsPickOpen(this)" onmouseleave="_clsPickLeave(this)">`
+      + `<button type="button" class="cls-lvl-btn" aria-haspopup="menu" title="${_escAttr(title)}" style="background:${btnBg};color:${fg};border-left-color:${accent}" onclick="_clsPickToggle(this.parentNode)">`
+      + `${_esc(g.label)}${cur ? `<span class="cls-lvl-cur">${_esc(cur.cls.nom)}</span>` : ''}</button>`
+      + `<div class="cls-lvl-menu" role="menu">${items}</div></div>`;
+  }).join('');
+}
+function _clsPickCloseAll(except) {
+  document.querySelectorAll('#cls-lvl .cls-lvl-grp.open').forEach(g => { if (g !== except) g.classList.remove('open'); });
+}
+function _clsPickOpen(grp) {
+  clearTimeout(_clsPickHideTimer);
+  _clsPickCloseAll(grp);
+  grp.classList.add('open');
+}
+function _clsPickLeave(grp) {
+  clearTimeout(_clsPickHideTimer);
+  // Petite grâce : laisse le temps de descendre du bouton vers la liste.
+  _clsPickHideTimer = setTimeout(() => grp.classList.remove('open'), 180);
+}
+function _clsPickToggle(grp) {
+  // Au toucher (aucun survol), le clic déplie / replie ; à la souris le survol l'a déjà ouvert.
+  if (matchMedia('(hover: hover)').matches) { _clsPickOpen(grp); return; }
+  const was = grp.classList.contains('open');
+  _clsPickCloseAll();
+  if (!was) grp.classList.add('open');
+}
+function _clsPickChoose(id) {
+  _clsPickCloseAll();
+  switchClass(id);
+  if (document.getElementById('tab-classes')?.classList.contains('on')) renderClasses();
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest || !e.target.closest('#cls-lvl')) _clsPickCloseAll();
+});
 
 // Teinte de base (H, S, L) par niveau — variation de L pour les sections
 const LEVEL_HSL = {
@@ -53703,6 +53805,7 @@ function toggleAppTheme() {
   try { localStorage.setItem('planClasse_theme', next); } catch (e) {}
   const btn = document.getElementById('btn-theme');
   if (btn) btn.textContent = next === 'dark' ? '☾' : '◐';
+  try { _renderClassPicker(); } catch (_) {}
   // Si la palette niveaux ou les seuils note sont en mode auto, on régénère
   // depuis le nouveau thème puis on re-render les vues d'éval ouvertes.
   try {
@@ -53734,6 +53837,7 @@ function toggleAppTheme() {
   document.documentElement.dataset.theme = saved;
   const btn = document.getElementById('btn-theme');
   if (btn) btn.textContent = saved === 'dark' ? '☾' : '◐';
+  try { if (typeof _renderClassPicker === 'function') _renderClassPicker(); } catch (_) {}
 })();
 </script>
 </body>
