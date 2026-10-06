@@ -54,6 +54,30 @@ test('_periodEndDate : T2 = dernier jour de février (gère bissextiles)', () =>
   assert.match(ev('_periodEndDate("T1")'), /-11-30$/);
 });
 
+test('_periodStartDate / _prevPeriodeCode : bornes contiguës avec _periodEndDate', () => {
+  ev('S.evalPrefs.periodMode = "semestre";');
+  assert.match(ev('_periodStartDate("S1")'), /-09-01$/);
+  assert.match(ev('_periodStartDate("S2")'), /-02-01$/);
+  assert.equal(ev('_prevPeriodeCode("S2")'), 'S1');
+  assert.equal(ev('_prevPeriodeCode("S1")'), null);
+  ev('S.evalPrefs.periodMode = "trimestre";');
+  assert.match(ev('_periodStartDate("T2")'), /-12-01$/);
+  assert.match(ev('_periodStartDate("T3")'), /-03-01$/);
+  assert.equal(ev('_prevPeriodeCode("T3")'), 'T2');
+  ev('S.evalPrefs.periodMode = "semestre";');
+});
+test('_remMax : défaut 600, valeur réglée, valeurs absurdes ignorées', () => {
+  ev('S.evalPrefs = S.evalPrefs || {}; delete S.evalPrefs.bulletinRemMax;');
+  assert.equal(ev('_remMax()'), 600);
+  ev('S.evalPrefs.bulletinRemMax = 400;');
+  assert.equal(ev('_remMax()'), 400);
+  for (const bad of ['10', '"x"', '99999', 'null']) {
+    ev(`S.evalPrefs.bulletinRemMax = ${bad};`);
+    assert.equal(ev('_remMax()'), 600, bad);
+  }
+  ev('delete S.evalPrefs.bulletinRemMax;');
+});
+
 test('_stuActiveOn / _stuDepartedOn : bornes arrivée / départ', () => {
   // Pas encore arrivé
   assert.equal(ev('_stuActiveOn({arrivalDate:"2099-01-01",departureDate:null},"2026-06-09")'), false);
