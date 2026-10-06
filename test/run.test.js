@@ -2729,3 +2729,39 @@ test('import éval D : les points du sujet deviennent des poids (partage, points
   assert.deepEqual(w[4], { C1: 0.5, C3: 0.5 });
   assert.ok(r.warnings.some(x => x.includes('ramené')));
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bilans — bandeau de synthèse + filtres de lignes (v2.85.0)
+// ─────────────────────────────────────────────────────────────────────────────
+test('_bsynthHistBins : 5 tranches de 4 points, 20 dans la dernière, non-nombres ignorés', () => {
+  assert.deepEqual(get('_bsynthHistBins([0, 3.9, 4, 10, 19.99, 20, null, NaN, "x"])'), [2, 1, 1, 0, 2]);
+  assert.deepEqual(get('_bsynthHistBins([])'), [0, 0, 0, 0, 0]);
+});
+test('_bsynthNotes : drapeaux en baisse / sous 10 / sans remarque / mention', () => {
+  setState({ classes: { C: { id: 'C', nom: 'C', eleves: ['a', 'b', 'c'], rooms: {} } }, eleves: {},
+             evalPrefs: { periodMode: 'semestre' } });
+  const r = get(`(() => {
+    const o = { m: _computeStudentMeanForPeriod, r: _getBulletinRemarque, c: _getConseilActive };
+    const prev = { a: 14, b: 12, c: 9 };   // S1
+    _computeStudentMeanForPeriod = (cid, sid, per) => per === 'S1' ? prev[sid] : null;
+    _getBulletinRemarque = (cid, sid) => sid === 'a' ? 'Bien.' : '';
+    _getConseilActive = (cid, sid) => new Set(sid === 'b' ? ['cm_enc'] : []);
+    try {
+      const synth = [{ perCode: 'S2', studentMoy: new Map([['a', 15], ['b', 9.5], ['c', 8]]) }];
+      const out = _bsynthNotes(S.classes.C, 'S2', ['a', 'b', 'c'], synth, undefined);
+      const f = {}; for (const [sid, set] of out.flags) f[sid] = [...set].sort();
+      return { f, chips: out.chips.map(c => [c.v, c.n ?? null]) };
+    } finally { _computeStudentMeanForPeriod = o.m; _getBulletinRemarque = o.r; _getConseilActive = o.c; }
+  })()`);
+  assert.deepEqual(r.f.a, []);                                  // 15 ↑ depuis 14, remarque écrite
+  assert.deepEqual(r.f.b, ['down', 'low', 'mention', 'norem']); // 12 → 9,5 : −2,5
+  assert.deepEqual(r.f.c, ['low', 'norem']);                    // 9 → 8 : −1, pas « en baisse »
+  assert.deepEqual(r.chips, [['all', null], ['norem', 2], ['down', 1], ['low', 2], ['mention', 1]]);
+});
+test('_bsynthGetFilter : « Tous » forcé en mode confidentiel', () => {
+  ev(`localStorage.setItem('planClasse_bilanFilter_bilan', 'low')`);
+  assert.equal(ev(`_bsynthGetFilter('bilan')`), 'low');
+  ev(`_conf.on = true`);
+  try { assert.equal(ev(`_bsynthGetFilter('bilan')`), 'all'); }
+  finally { ev(`_conf.on = false; localStorage.removeItem('planClasse_bilanFilter_bilan')`); }
+});
