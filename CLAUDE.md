@@ -58,6 +58,15 @@ Presque tous les défauts trouvés venaient de la même faute : **une valeur lit
 
 ⚠️ **Une couleur posée en JS et reconnue par sa VALEUR dans une règle de thème doit changer aux deux endroits** : la bascule Liste/Diagramme des paires est ciblée par `#cfg-pairs-view-list[style*="2176b8"]`.
 
+💡 Deuxième cas du même mécanisme, et son piège : le sarcelle `#16a085` posé **en ligne** sur
+quelques boutons (Auto-îlots, « 🖼 Plan » des appels passés) est ciblé par
+`button[style*="background:#16a085"]` — une règle sombre, doublée en 2.79.0 d'une règle claire
+(le blanc n'y tenait que 3,28:1). ⚠️ Elle porte `:not(.btn-p)` : sur un bouton qui a cette
+classe, le fond en ligne est de toute façon écrasé par `background: var(--ink-blue) !important`,
+et lui poser l'encre sombre donnait **de l'encre sur l'encre (1:1)** — mesuré sur « 🖼 Plan »
+pendant la correction. Un sélecteur calé sur une valeur doit donc vérifier que cette valeur
+gagne vraiment la cascade.
+
 - ⚠️ **Le blanc figé sur une couleur de niveau est un défaut récurrent** — trouvé le 2026-09-06 sur les quatre pastilles de l'onglet **Bilan des compétences** (`renderCompetencesTab`) : niveau 2 orange à **2,15:1**, niveau 3 vert à **3,30**. Le blanc ne tient que sur le bleu du niveau 4, et la palette étant **réglable**, aucune valeur figée ne peut être sûre. Deux lints y veillent désormais (`test/run.test.js`) : `color:#fff` interdit dans la même déclaration qu'un `background:${colors[…]}`, et **index de palette jamais figé à 4** (`Math.min(4, Math.round(…))` — `nbLevels` va de 2 à 6 : quatre sites dans cet onglet, plus un dans `_evalShowNoteDetail`). Après correction : 4,72 à 7,25 dans les deux thèmes.
   - 💡 **Un auditeur qui parcourt le DOM ne voit que ce qui est RENDU.** Ces pastilles ont échappé à la passe du 2026-07-30 ; l'onglet doit porter des données pour être audité, donc la méthode de vérification n'est valable que jouée sur un état où **chaque onglet a de quoi s'afficher** — un tableau vide passe pour un tableau propre.
 - **Cartes de classe (onglet Classes)** — `levelBgColor` garde un **aplat saturé** : une teinte par niveau + une variation de luminosité par classe au sein du niveau. ⚠️ **Ne pas diluer ce fond** : repérer le niveau d'un coup d'œil est sa fonction première (une tentative de fond très pâle a été rejetée par l'utilisateur — « toutes les classes sont très similaires quel que soit leur niveau »). Comme aucune couleur de texte **fixe** ne tient 4,5:1 sur toute la gamme (max 5,4:1 en clair, 3,8:1 en sombre ; 1,4–2,6:1 pour des accents comme ♂/♀), la lisibilité vient de la **dérivation du texte depuis le fond de chaque carte** : `renderClasses` pose `--cc-fg:${_contrastTextColor(bg)}` en inline, et `.cc` / `.cc-name` / `.cc-meta` lisent `var(--cc-fg, …)` (7,9–11,3:1 mesurés). Les compteurs ♂/♀ et 📄 gardent leur code couleur (bleu / rose / sarcelle, tokens `--civ-m` / `--civ-f` / `--agr-fg`) grâce à la classe **`.cc-chip`** : une pastille à **fond opaque `var(--paper)`**, qui isole la couleur du fond de niveau et la rend indépendante de la carte (5,1–6,3:1 en clair, 8,3–9,3:1 en sombre). Un bloc `@media print` repose les valeurs du thème clair sur ces pastilles — sinon un thème sombre actif à l'écran imprimerait un bleu ciel délavé sur papier blanc. `levelAccentColor` ajoute une bordure gauche saturée **identique pour toutes les classes d'un même niveau** — le niveau se lit sur la bordure, la classe sur la nuance du fond.
@@ -74,10 +83,33 @@ Presque tous les défauts trouvés venaient de la même faute : **une valeur lit
 Quatre conditions sans lesquelles la mesure ne vaut rien, toutes apprises à leurs dépens :
 1. ⚠️ **Des DONNÉES PARTOUT.** L'auditeur ne voit que ce qui est rendu ; un onglet vide passe pour un onglet propre. C'est ainsi que les pastilles du Bilan des compétences (2,15:1) ont traversé la passe du 2026-07-30. Monter l'état de démo, puis y ajouter ce qu'il ne contient pas : appels dans **toutes** les classes, AESH placées et liées, zones de groupe et de tag sur les places, contraintes de placement et paires, surlignages roses, tablette indisponible affectée + doublon + orphelin, et une salle assez grande pour faire déborder la numérotation QCMCam (12 × 16 suffit).
 2. ⚠️ **Les SOUS-ÉTATS comptent autant que les onglets.** Balayer 25 écrans, pas 11 : les 3 modes de couleur du plan, le filtre de groupe, les 5 modes de Config Salle, les 2 modes du Bilan des compétences, les 2 périodes du Bilan des notes, une classe riche ET une classe vide.
-3. ⚠️ **Les MODALES aussi** — 90 statiques (forcer la classe `on`), les ~16 à contenu dynamique par leur vrai ouvreur, et les 4 tableurs d'évaluation. La moitié des défauts trouvés le 2026-09-07 y étaient, dont le bouton principal `.btn-p` de toute l'application (blanc sur `#3498db`, 3,15:1).
+3. ⚠️ **Les MODALES aussi** — 95 statiques (forcer la classe `on`), les ~16 à contenu dynamique par leur vrai ouvreur, et les 4 tableurs d'évaluation. La moitié des défauts trouvés le 2026-09-07 y étaient, dont le bouton principal `.btn-p` de toute l'application (blanc sur `#3498db`, 3,15:1).
+5. ⚠️ **UN CHARGEMENT PAR THÈME, jamais une bascule dans la page.** Poser `data-theme` puis
+   mesurer — même dans un appel séparé, même après `void document.body.offsetHeight` — renvoie
+   pour certaines déclarations la valeur de l'ANCIEN thème : audit du 2026-10-06, la barre
+   d'onglets rapportée à **1,69:1** en clair (couleur sombre sur fond clair) puis **1,28:1** en
+   sombre (couleur claire sur fond sombre), soit ~24 faux positifs — alors qu'au rechargement,
+   et après un vrai clic sur `◐` suivi de 2 s, elle est à 4,6:1. Protocole : écrire
+   `localStorage.planClasse_theme`, `location.reload()`, réinjecter la neutralisation des
+   transitions, puis mesurer.
+6. ⚠️ **Un auditeur DOM lit `color` : il ne sait pas mesurer un `<text>` SVG**, dont la couleur
+   est `fill`, et dont le fond est un `<rect>` frère que la remontée des parents ne voit pas.
+   Le « 🖥 TABLEAU » du schéma des îlots a été rapporté à 1,40:1 alors qu'il est `fill="#fff"`
+   sur un `<rect fill="#1a252f">` (~15:1). Écarter les `<text>` SVG, ou les traiter à part.
+
 4. ⚠️ **Neutraliser les transitions** (`*{transition:none !important;animation:none !important}`) : une puce saisie à mi-parcours mesure 4,48 au lieu de 4,71 et produit de faux écarts intermittents.
 
-Score de référence après la passe du **2026-09-07** : **0 écart**, en clair comme en sombre, sur 25 écrans + 90 modales statiques + 16 modales dynamiques + 4 tableurs. La passe précédente (2026-07-30) annonçait 13 / 9 sur 11 onglets sans données ; à périmètre et données réels, le point de départ du 2026-09-07 était de **~23 familles de défauts**, dont 8 sous 2:1 en thème sombre.
+Passe du **2026-10-06** (audit complet, cf. `docs/audit-complet-2026-10-06.md`) : **12 écarts**
+trouvés et corrigés en 2.79.0, tous sur des surfaces ajoutées depuis — dont **1,05:1** (les
+descriptions du bouton orange de « Désaffecter les tablettes », qui avaient échappé à la règle
+`.btn-desc`), **1,34:1** (la puce `.chip.on` de « Projeter » et « Comparer classes » :
+`background:var(--ink-blue)` + `color:#fff`, or `--ink-blue` devient PÂLE en sombre — l'encre
+correcte est `var(--paper)`, comme le fait `.pass-code-chip`) et **2,85:1** (pastilles G1/G2 des
+menus « Distinguer par groupe », `colorMap` littéral + blanc figé → tokens `--g1/--g2/--g3` dont
+l'encre est dérivée par `_contrastTextColor`). Après correction : **0 écart** dans les deux
+thèmes sur 11 onglets, 25 sous-états et les modales ouvertes par leur vrai ouvreur.
+
+Score de référence après la passe du **2026-09-07** : **0 écart**, en clair comme en sombre, sur 25 écrans + 95 modales statiques + ~42 modales dynamiques + 4 tableurs. La passe précédente (2026-07-30) annonçait 13 / 9 sur 11 onglets sans données ; à périmètre et données réels, le point de départ du 2026-09-07 était de **~23 familles de défauts**, dont 8 sous 2:1 en thème sombre.
 
 ### Polices embarquées (base64 woff2, sous-set Latin)
 Encodées en `data:font/woff2;base64,...` via 3 blocs `@font-face` en tête du `<style>` (~180 Ko pour les 3 fontes, assumé pour préserver le mono-fichier hors-ligne) :
@@ -153,7 +185,7 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - `.gitignore` — exclut les sauvegardes locales (`plan-classe-*.json`, `*.bak`, `*.tmp`)
 - `outils/diagnostic-pdf.html` — outil annexe (non lié à l'app) : rapport anonymisé de la mise en page d'un PDF de thrombinoscope, cf. section *📷 Photos des élèves*.
 - `docs/format-import-evaluation.md` — format du fichier d'import d'une évaluation Type C ou D, à donner à une IA (copie exacte embarquée dans la page, cf. section *Import de la structure d'une évaluation*).
-- `docs/` — audits et notes de conception, **versionnés** : `audit-ergonomie-2026-07-29.md` (catalogue Top 12 / six axes / lots A–F sur la v2.20.0 — l'essentiel réalisé depuis, projection et accessibilité clavier écartées ; restent ouverts : saisie de rentrée, couleurs de groupe en Vue Élève — le `thead` sticky de l'onglet Élèves est fait en v2.63.5), `audit-type-d-2026-08-02.md`, `audit-ergonomie-2026-10-03.md` (audit n° 2, architecture de l'information : où trouver / où régler / comment comprendre, sur la v2.68.0 — 15 priorités, plan d'action en lots A–G, rien de codé à sa rédaction), `screenshots/`. Toute note d'audit va là, pas dans un worktree.
+- `docs/` — audits et notes de conception, **versionnés** : `audit-complet-2026-10-06.md` (audit multi-axes de la v2.78.1 : contraste écran et impression, a11y des modales, responsive, perf, code mort — ses conclusions sont corrigées en 2.79.0), `audit-ergonomie-2026-07-29.md` (catalogue Top 12 / six axes / lots A–F sur la v2.20.0 — l'essentiel réalisé depuis, projection et accessibilité clavier écartées ; restent ouverts : saisie de rentrée, couleurs de groupe en Vue Élève — le `thead` sticky de l'onglet Élèves est fait en v2.63.5), `audit-type-d-2026-08-02.md`, `audit-ergonomie-2026-10-03.md` (audit n° 2, architecture de l'information : où trouver / où régler / comment comprendre, sur la v2.68.0 — 15 priorités, plan d'action en lots A–G, rien de codé à sa rédaction), `screenshots/`. Toute note d'audit va là, pas dans un worktree.
 ⚠️ **Les fichiers de données ne sont PAS dans ce dossier** — ils vivent dans le dossier
 VOISIN `../Plan de classe json/` (88 fichiers au 2026-09-10). La distinction n'est pas
 cosmétique : c'est elle qui rend possible l'exclusion Nextcloud ci-dessous. Le code est
@@ -245,7 +277,7 @@ L'app compare `APP_BUILD_DATE` à la **date d'auteur** du dernier commit GitHub 
 
 ## Données de démo (1er lancement)
 `createDemo()` (fin du fichier, juste avant `init()`) génère des données fictives au tout premier lancement, conditionné par `localStorage.planClasse_demoInstalled !== '1'` :
-- **6 classes fictives** : 6e A (30, 2 salles), 6e B (28, 2 salles), 5e A (32, 2 salles), 5e B (29, 2 salles îlots), 4e A (30, 3 groupes G1/G2/G3), 3e A (25, sans groupes — démontre chips désactivés)
+- **8 classes fictives** (6 réelles + 2 recomposées : « DNL Groupe 1 » et « 6e A — DF », qui démontrent `cls.virtual` et `cls.membership`) : 6e A (30, 2 salles), 6e B (28, 2 salles), 5e A (32, 2 salles), 5e B (29, 2 salles îlots), 4e A (30, 3 groupes G1/G2/G3), 3e A (25, sans groupes — démontre chips désactivés)
 - **Évaluations** (`_seedDemoEvaluations`) — refondue le 2026-08-02, **matrice complète** : **41 évaluations**, soit les 4 types (A/B/C/D) dans **chacune** des 5 classes 6A/6B/5A/5B/4A et à **chacun** des 2 semestres, plus 2 évals sur la discipline bilingue de la 6A. **3A reste sans évaluation** (état vide des 3 onglets — choix explicite de l'utilisateur). Progression de physique-chimie plausible par niveau. Poids mesuré : **293 Ko**, moyennes par type 12,4–12,7/20 (homogènes : cf. avertissement ci-dessous).
   - ⚠️ **La source unique est la table `PLAN`** — une ligne par évaluation, consommée par 4 constructeurs (`_buildA/B/C/D`). Ajouter une éval à la démo = ajouter une ligne, jamais écrire un littéral de 40 lignes. La version d'avant faisait 688 lignes pour 15 évals ; celle-ci en fait 533 pour 41.
   - ⚠️ **La construction se fait en DEUX temps** : `_buildRows(S1)` → transfert de l'élève → `_buildRows(S2)`. L'ordre n'est pas cosmétique : tout construire d'un coup donnait à une élève partie en janvier des notes dans les évals de **S2** de son ancienne classe, et le bilan affichait quatre colonnes orphelines ⤴ correspondant à des devoirs qu'elle n'avait pas pu passer.
@@ -334,7 +366,7 @@ La nav `#nav` est structurée en **deux groupes** séparés par un filet vertica
 6. **QCMCam** — plan visuel vue prof + export CSV multi-salles avec identifiant `classe-salle` (en-tête auto-reconnu par QCMcam 2) + import des résultats
 
 ### Groupe 2 — "Évaluations" (3 onglets actifs)
-1. **📊 Devoirs** (`tab-notes`) — création/édition d'évaluations Type A (mini-notes /20), Type B (compétences par passations), Type C (sommative avec exercices). Saisie en tableur ou en fiche par élève. Multi-classes. Tableau d'évaluations avec stats.
+1. **📊 Devoirs** (`tab-notes`) — création/édition d'évaluations Type A (mini-notes /20), Type B (compétences par passations), Type C (sommative avec exercices). Saisie au tableur. ⚠️ La saisie « en fiche par élève » a été **retirée en 2.79.0** : sa modale `meval-saisie` avait disparu du HTML et son module (`_evalOpenSaisie` + 11 fonctions) n'était plus appelé par rien — 316 lignes injoignables, trouvées à l'audit du 2026-10-06. Multi-classes. Tableau d'évaluations avec stats.
 2. **🎯 Bilan des compétences** (`tab-comp`, ex « Bilan par compétences ») — vue transverse classe : niveau moyen par élève sur chaque compétence évaluée. Sticky header + remarque classe et éléments travaillés synchronisés avec l'onglet Bilan des notes.
 3. **📜 Bilan des notes** (`tab-bilan`, ex « Bilan des évaluations ») — agrégation période : moyenne /20 par élève, rang, remarque bulletin (par élève × période). Sticky thead/tfoot via `position:sticky` dans `.bilan-table-scroll` (max-height calc(100vh - 220px)), masquage individuel de colonnes (Moy/Rang/Rem) en multi-période via `_bilanHiddenCols` (Set mémoire seule), paste multi-lignes depuis tableur (`_onBilanRemarquePaste`). Bouton **🔀 Comparer classes** : ouvre la modale `mbilan-crosstab` (tableau croisé classes × civilité — moy · σ · médiane — sur la période entière ou un sous-ensemble d'évals).
 
@@ -1714,13 +1746,14 @@ Helper `_formatRelDate(isoDate)` : convertit une date ISO en `JJ/MM/AAAA (il y a
 - CSS : `.hdr-btn.has-update::after` affiche un disque rouge `#e74c3c` 9 px en haut à droite, animation `hdrPulse` 2.2 s. Tooltip enrichi (« 🆕 Mise à jour : votre version a plus d'une semaine (X jours)… »).
 - Si offline ou rate-limit : pas de pastille (échec silencieux, on retentera au prochain démarrage).
 
-## Config Salle — modes d'édition (4 onglets)
+## Config Salle — modes d'édition (6 chips)
 
-L'onglet **Config Salle** propose 4 modes d'édition (chips en haut), tous appliqués à la salle active :
+L'onglet **Config Salle** propose 6 modes d'édition (chips en haut), tous appliqués à la salle active :
 
 1. **Tables** — clic = bascule table / sans-table (modifie `salle.positions_vides`).
+1bis. **Îlots** — regroupe des tables en blocs (`salle.ilots`), avec détection automatique (`cfgIlotsAuto`). Sert à la règle « même îlot = voisins » des paires à séparer. ⚠️ Mode ajouté APRÈS la passe de contraste du 2026-09-07 : c'est lui qui portait 2 des 5 écarts du thème sombre corrigés en 2.79.0 (littéraux `#7d2017` / `#a83a26` posés en encre).
 2. **Groupes G1/G2/G3** — sélection multi-cases puis clic sur `🔵 G1` / `🟠 G2` / `🟣 G3` / `— Aucun` (modifie `room.groupes` de chaque classe utilisant la salle). Mutuellement exclusif avec **Tags** au niveau d'une place.
-3. **Tags** — sélection multi-cases puis clic sur un bouton de tag défini (modifie `room.posTagId`). Bouton `⚙ Gérer les tags` ouvre la modale `mtags`.
+3. **Tags** — (le 5e chip est **Contraintes**, le 6e **🧑‍🏫 AESH**, documenté dans sa propre section) — sélection multi-cases puis clic sur un bouton de tag défini (modifie `room.posTagId`). Bouton `⚙ Gérer les tags` ouvre la modale `mtags`.
    - **Les trois champs d'un tag sont modifiables sur place** dans `mtags` : abréviation (`renameTagAbbr`), nom complet (`renameTagFull`), couleur (`changeTagColor`). ⚠️ L'abréviation ne l'était pas jusqu'à la 2.48.0 — seule anomalie, les classes mobiles et les mentions de conseil laissaient déjà corriger la leur. Une faute de frappe imposait donc de recréer le tag, de réaffecter les élèves **et de repeindre les zones de places**, qui pointent vers l'id.
    - **Renommer l'abréviation est sans cascade** : élèves (`stu.tags`) et places (`room.posTagId`) référencent l'**id**, jamais l'abréviation. Celle-ci ne sert qu'à l'affichage et à la reconnaissance des codes à l'import. Mêmes contrôles qu'à la création (1 à 6 caractères alphanumériques, majuscules, pas de doublon) ; ⚠️ **toute saisie refusée re-rend la liste**, sinon le champ garde à l'écran une abréviation qui n'existe pas dans le modèle.
    - ⚠️ **`_tagsRefreshSurfaces()` centralise les surfaces à rafraîchir** après une mutation de tag : liste des élèves, plan (cellules ET puces de la barre d'outils), barre d'action et grille de Config Salle. Les quatre mutations (abréviation, nom, couleur, suppression, création) y passent — elles ne rafraîchissaient auparavant que les élèves et le plan, donc un changement de couleur laissait la barre de Config Salle périmée. **Toute nouvelle surface affichant un tag s'ajoute là.**
@@ -2054,7 +2087,7 @@ L'enseignant peut taper une expression arithmétique dans une cellule de note (`
 - **`_hasArithOperator(raw)`** — détecte la présence d'un opérateur AU-DELÀ d'un signe initial (sinon `-5` ou `+5` seraient pris pour des expressions).
 - **`_evalTableurMaybeApplyExpr(inputEl)`** — appelé en tête de `_evalTableurConfirmIfOutOfRange` (le handler onblur). Si l'input contient un opérateur ET que l'évaluation réussit → remplace `inputEl.value` par `_fmtNote(v)` puis rejoue `_evalTableurUpdate(inputEl)` pour persister la valeur, recolorer la cellule, et rafraîchir total + Σ exo + brut + compétences inline + footer stats. Si l'expression est mal formée (`1++2-`, `(1+2`…) → toast non bloquant `⚠ Expression invalide` sans rien écraser, le prof voit sa saisie et corrige.
 
-Limité au tableur (Type A / C). La fiche par élève (Type A) n'a pas d'onblur dédié donc reste inchangée — scope volontairement restreint.
+Limité au tableur (Type A / C) — qui est désormais la seule saisie (la fiche par élève a été retirée en 2.79.0).
 
 ### Auto-scroll quand la cellule focusée passe sous le thead/tfoot sticky
 
@@ -2868,6 +2901,14 @@ _uiConfirm({
 
 **Clavier** : `_uiConfirm` pose le focus sur le bouton principal (`#mconfirm2-ok`) 60 ms après ouverture → **Entrée confirme** (parité avec `confirm()` natif), Échap annule, et le focus trap de la modale devient effectif (il exige un focus initial à l'intérieur de la modale pour intercepter Tab).
 
+⚠️ **Une modale s'ouvre par `openMod(id)`, JAMAIS par `classList.add('on')`** — c'est `openMod`
+qui pose `role="dialog"`, `aria-modal="true"`, le piège de focus et l'autofocus. Deux ouvreurs
+contournaient la fonction jusqu'en 2.79.0 (`editClass` → `mce`, `listAndShowFiles` → `mfiles`) :
+mesuré sur `mce`, ni `role`, ni `aria-modal`, focus laissé sur `<body>`, donc **aucun piège de
+focus** (Échap fermait quand même, le handler global agit sur `.mo.on`). 💡 L'audit du
+2026-09-05 annonçait pourtant 90/90 : il ouvrait **tout** par `openMod`, ce qui masque
+exactement ce défaut-là. Pour le détecter, il faut appeler le **vrai ouvreur** de chaque modale.
+
 **Auto-focus générique des modales** : `openMod(id)` focalise le premier élément portant l'attribut **`data-autofocus`** dans la modale (60 ms après ouverture, sans voler un focus déjà posé par l'appelant). **Sans champ `data-autofocus`, le focus est posé sur la boîte `.mb` elle-même** (`tabindex="-1"`, `.mb:focus{outline:none}`) : l'audit du 2026-09-05 a montré que **85 modales sur 90** laissaient le focus DERRIÈRE la modale — Tab parcourait la page masquée, le focus trap ne s'enclenchait jamais et le lecteur d'écran n'annonçait pas le dialogue. Focaliser la boîte plutôt que le premier bouton évite un bouton « pré-appuyé » à l'ouverture. Vérifié : 90/90 modales reçoivent le focus et se ferment à Échap. Posé sur : `nc-id` (mc), `ns-nom` (ms), `es-nom` (me), `nsl-nom` (msalle), `msaveatt-label` (msaveatt). Ces mêmes modales valident à **Entrée** (handlers inline `onkeydown` sur leurs inputs texte/number/date → bouton principal). Pour toute nouvelle modale à formulaire : poser `data-autofocus` sur le premier champ utile + Entrée = action principale.
 
 **Échap hors modale** : le handler clavier global ignore les sorties de mode (appel, contraintes, sélection) quand le focus est dans un champ HORS modale — cas particulier : Échap dans `#unpl-search` (filtre 🔍 des non-placés) vide le champ et rafraîchit la liste. Échap dans un champ DANS une modale ferme la modale (comportement historique conservé).
@@ -2913,6 +2954,17 @@ Bloc en **fin de `<style>`** (doit battre le bloc COMPACTION à spécificité é
 - **Responsive** et **rétrocompatibilité** : cf. sections dédiées ; **fuzz** et **sync** : cf. tests.
 
 ## Responsive — téléphone et tablette (bloc CSS en fin de `<style>`, après le bloc tactile)
+
+⚠️ **Le bandeau de droite du header a son PROPRE point de rupture (900 px), pas celui du reste.**
+`#hdr-right` (🔗 ⚙ · Sync · ● Non exporté · 📂 Ouvrir · 💾 Données · 🔒 ⏲ 🎙 ⓘ ◐) mesurait 676 px
+quand le repli a été calé sur 760 ; le minuteur et le sonomètre l'ont porté à **774 px**, et il
+débordait donc de la page entre 761 et ~843 px — mesuré le 2026-10-06 : **844 px de `scrollWidth`
+pour un viewport de 768** (iPad / Surface en portrait) et de 812 (téléphone en paysage), soit un
+défilement horizontal sur TOUS les onglets. La passe du 2026-09-05 testait pourtant 768×1024 et
+relevait 0 : c'est une **régression** apportée par les boutons ajoutés depuis. Corrigé en 2.79.0
+par un `@media (max-width: 900px)` dédié (header + nav), les autres règles restant à 760.
+**Tout bouton ajouté au header impose de re-mesurer `#hdr-right.getBoundingClientRect().width`**
+et, si besoin, de remonter ce 900.
 
 Audit du 2026-09-05 sur 4 gabarits (375×812, 812×375, 768×1024, 1024×768), via un auditeur injecté qui mesure `scrollWidth − clientWidth` et liste les éléments dont le bord droit dépasse l'écran sans ancêtre défilant. **Invariant : aucun élément ne doit élargir la page.** Sur un téléphone, un seul débordement (le bandeau d'onglets, 403 px : `.tab-group` est un flex sans `wrap`) faisait grandir le viewport de mise en page à 778 px — et **tout** se dimensionnait alors sur cette largeur fantôme, les modales `position:fixed` comprises (`.mb` de 778 px sur un écran de 375). Corriger le débordement racine a réglé les modales sans les toucher.
 
