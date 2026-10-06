@@ -1801,9 +1801,6 @@ html[data-theme="dark"] .bilan-show-chip:hover { background: #3b5a8c !important;
 .rw-tip-tbl td:first-child { text-align: left; font-family: var(--font-sans); }
 .rw-tip-exo td { font-weight: 600; color: var(--ink-blue); }
 .rw-tip-d, .rw-tip-n { color: var(--pencil); }
-.bilan-rem-open { position: absolute; top: 2px; right: 3px; border: none; background: transparent; cursor: pointer; font-size: .85em; padding: 1px 3px; opacity: .55; line-height: 1; }
-.bilan-rem-open:hover, .bilan-rem-open:focus { opacity: 1; }
-@media (pointer: coarse) { .bilan-rem-open { opacity: .85; font-size: 1em; padding: 4px; } }
 /* Bilan — compteur de caractères de la remarque (limite réglable, _remMax) */
 .bilan-rem-count {
   position: absolute;
@@ -1869,6 +1866,26 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
 .bsynth-chip:disabled { opacity:.45; cursor:default; }
 .bsynth-count { color:var(--pencil); font-size:.92em; }
 tr.bf-hide { display:none; }
+/* Bilans — lot 2 (v2.86.0) : pastilles, tendance, remarque en icône, mentions grisées */
+.bsynth-right { margin-left:auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.bsynth-seg { display:inline-flex; align-items:center; border:1px solid var(--rule-line); border-radius:var(--radius-md); overflow:hidden; background:var(--paper); }
+.bsynth-seg-lbl { font-family:var(--font-mono); font-size:.8em; color:var(--pencil); padding:0 8px; }
+.bsynth-seg button { border:none; border-left:1px solid var(--rule-line); background:var(--paper); color:var(--ink-deep); padding:3px 10px; cursor:pointer; font-family:var(--font-sans); font-size:.95em; line-height:1.4; }
+.bsynth-seg button.on { background:var(--chip-on-bg); color:#fff; }
+.bdot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:.08em; }
+.bspark { margin-left:6px; vertical-align:-2px; opacity:.6; }
+.bdelta { margin-left:5px; font-size:.82em; font-weight:600; }
+.bmoy b { font-weight:700; }
+.bfoot-bar { height:3px; border-radius:2px; background:var(--rule-line-soft); margin:3px 4px 0; overflow:hidden; }
+.bfoot-bar > span { display:block; height:100%; }
+.bcoef-x { font-family:var(--font-mono); font-size:.72em; color:var(--pencil-soft); font-weight:normal; }
+.brem-btn { border:1px solid var(--rule-line); background:var(--paper); color:var(--pencil); border-radius:50%; width:26px; height:26px; padding:0; cursor:pointer; font-size:.92em; line-height:1; }
+.brem-btn.done { color:var(--ok-fg); border-color:var(--ok-fg); font-weight:700; }
+.brem-btn:hover { border-color:var(--ink-blue); }
+.cm-btn.cm-off { opacity:.45; }
+.cm-btn.cm-off:hover, .cm-btn.cm-off:focus-visible { opacity:1; }
+#bilan-tbl.bdots tbody td.bilan-evalcell { border-right-color:transparent; }
+body:not(.conf-on) #bilan-tbl tbody tr:hover > td, body:not(.conf-on) #comp-wrap table tbody tr:hover > td { box-shadow:inset 0 1px 0 var(--ink-blue-soft), inset 0 -1px 0 var(--ink-blue-soft); }
 @media print { .bsynth, .bsynth-chips { display:none !important; } }
 
 /* Type B saisie sur plan : pastilles de niveau (.evp-pill) */
@@ -3797,7 +3814,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <span id="disc-channel-bilan" style="display:none;gap:6px;align-items:center" data-disc-toolbar="1"></span>
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="bilan-period-filter" onchange="_syncBilanPeriode('bilan-period-filter');renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
-        <button class="btn btn-g btn-sm" id="bilan-crosstab-btn" onclick="_bilanOpenCrossTab()" title="Comparer les classes : moyenne, σ et médiane par classe × civilité, sur la période ou un sous-ensemble d'évaluations">🔀 Comparer classes</button>
+        <button class="btn btn-g btn-sm" id="bilan-crosstab-btn" onclick="_bilanOpenCrossTab()" title="Comparer les classes : moyenne, σ et médiane par classe × civilité, sur la période ou un sous-ensemble d'évaluations">🆚 Comparer classes</button>
         <button class="btn btn-g btn-sm" onclick="openRemarkWriter()" title="Rédiger les remarques de bulletin élève par élève, avec toutes les informations utiles (Précédent / Suivant)">✍ Rédiger les remarques</button>
         <button class="btn btn-g btn-sm" onclick="printBilanNotes()" title="Imprimer le tableau affiché (paysage), avec la remarque de classe et les éléments travaillés — Ctrl+P">🖨 Imprimer</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">⧉ Copier</button>
@@ -3808,7 +3825,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <p class="al al-i evhelp" id="evhelp-bilan" style="margin-bottom:8px;position:relative;padding-right:28px">
       <button onclick="_evhelpToggle('bilan')" title="Masquer ce mode d'emploi (réaffichable via le ? à gauche de Période)" style="position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1">✕</button>
-      Synthèse de la période pour le bulletin. <strong>Une colonne par évaluation</strong> (note /20 individuelle de chaque élève, fond coloré selon la valeur), triées <strong>par date croissante</strong> de gauche à droite (sans date à la fin). En multi-période (« Toutes »), les colonnes <strong>Moyenne /20</strong>, <strong>Rang</strong> et <strong>📝 Remarque</strong> sont dédupliquées par période (S1/S2 ou T1/T2/T3). La moyenne est <strong>pondérée par les coefficients</strong> de chaque éval. Les évals marquées <em>« ne compte pas dans la moyenne »</em> (diagnostiques) sont ignorées. Clic sur le code court d'une éval = ouvrir sa saisie tableur. Bouton <strong>🔀 Comparer classes</strong> : tableau croisé classes × civilité (moyenne, σ, médiane) sur la période ou un sous-ensemble d'évaluations. Le <strong>bandeau de synthèse</strong> résume la classe (moyenne, répartition, remarques rédigées, élèves à surveiller) ; les <strong>pastilles de filtre</strong> n'affichent que certains élèves — le pied de tableau reste calculé sur toute la classe.
+      Synthèse de la période pour le bulletin. <strong>Une colonne par évaluation</strong> (note /20 individuelle de chaque élève, fond coloré selon la valeur), triées <strong>par date croissante</strong> de gauche à droite (sans date à la fin). En multi-période (« Toutes »), les colonnes <strong>Moyenne /20</strong>, <strong>Rang</strong> et <strong>📝 Remarque</strong> sont dédupliquées par période (S1/S2 ou T1/T2/T3). La moyenne est <strong>pondérée par les coefficients</strong> de chaque éval. Les évals marquées <em>« ne compte pas dans la moyenne »</em> (diagnostiques) sont ignorées. Clic sur le code court d'une éval = ouvrir sa saisie tableur. Bouton <strong>🆚 Comparer classes</strong> : tableau croisé classes × civilité (moyenne, σ, médiane) sur la période ou un sous-ensemble d'évaluations. Le <strong>bandeau de synthèse</strong> résume la classe (moyenne, répartition, remarques rédigées, élèves à surveiller) ; les <strong>pastilles de filtre</strong> n'affichent que certains élèves — le pied de tableau reste calculé sur toute la classe.
     </p>
     <div id="bilan-wrap"></div>
   </div>
@@ -5944,7 +5961,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="meval-crosstab" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(96vw,900px);width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      <h2 id="meval-crosstab-title" style="margin:0">🔀 Comparaison des classes</h2>
+      <h2 id="meval-crosstab-title" style="margin:0">🆚 Comparaison des classes</h2>
       <div style="display:flex;gap:6px">
         <button class="btn btn-g btn-sm" onclick="_evalCrossTabCopy()" title="Copie le tableau au format TSV">⧉ Copier</button>
       </div>
@@ -5963,7 +5980,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <div id="mbilan-crosstab" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(96vw,1000px);width:100%;max-height:92vh;overflow:hidden;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      <h2 id="mbilan-crosstab-title" style="margin:0">🔀 Comparer les classes</h2>
+      <h2 id="mbilan-crosstab-title" style="margin:0">🆚 Comparer les classes</h2>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="mbilan-crosstab-period" onchange="_bilanCrossTabOnPeriodChange()" style="padding:4px 8px;font-size:.88em"></select>
@@ -6005,7 +6022,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           </select>
         </span>
         <button class="btn btn-g btn-sm" onclick="_evalBilanCopy()" title="Copie le tableau au format TSV">⧉ Copier</button>
-        <button class="btn btn-g btn-sm" id="meval-bilan-crosstab-btn" onclick="_evalOpenCrossTab()" title="Comparer les classes (multi-classes) : moyenne, écart-type et effectif par classe et civilité" style="display:none">🔀 Comparer classes</button>
+        <button class="btn btn-g btn-sm" id="meval-bilan-crosstab-btn" onclick="_evalOpenCrossTab()" title="Comparer les classes (multi-classes) : moyenne, écart-type et effectif par classe et civilité" style="display:none">🆚 Comparer classes</button>
       </div>
     </div>
     <div id="meval-bilan-wrap" style="flex:1;overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper)"></div>
@@ -6174,7 +6191,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="📤 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px;font-weight:600">📤 ENT</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-sobr-btn" onclick="_evalTableurSobrToggleMenu(event)" title="🎨 Sobriété : retirer les fonds colorés (notes et/ou compétences) — choix indépendants persistés." aria-label="Sobriété" style="padding:4px 6px">🎨</button>
-        <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🔀 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🔀</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🆚 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🆚</button>
       </div>
     </div>
     <input type="hidden" id="meval-tableur-evalid">
@@ -6235,7 +6252,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:4px;padding:10px 14px;margin-bottom:14px;font-size:.9em">
       <strong>💡 Pour explorer :</strong> balade-toi dans les onglets, Vie de classe comme Évaluations. Tout est actif sur les données fictives —
-      y compris un <strong>devoir commun à deux classes</strong> (bouton 🔀 Comparer classes), une <strong>élève transférée</strong> en janvier dont les notes
+      y compris un <strong>devoir commun à deux classes</strong> (bouton 🆚 Comparer classes), une <strong>élève transférée</strong> en janvier dont les notes
       de l'ancienne classe restent visibles (marquées ⤴), des <strong>notes ajustées</strong> pour triche ou retard, et des devoirs <strong>facultatifs</strong> ou <strong>diagnostiques</strong>.
     </div>
 
@@ -7585,11 +7602,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.85.0';
+const APP_VERSION    = '2.86.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T22:31:54Z';
+const APP_BUILD_DATE = '2026-10-06T22:37:37Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31721,6 +31738,12 @@ async function printTrombi(all) {
 // Les champs deviennent du texte, les boutons disparaissent (mentions de conseil : on
 // garde les abréviations actives, lues dans data-active), le collant est neutralisé.
 function _printSanitizeClone(root) {
+  // Remarque en mode icône : on imprime le texte, pas l'icône.
+  root.querySelectorAll('[data-rem-text]').forEach(td => {
+    const d = document.createElement('div');
+    d.textContent = td.getAttribute('data-rem-text') || ''; d.style.whiteSpace = 'pre-wrap'; d.style.fontSize = '8pt'; d.style.textAlign = 'left';
+    td.replaceChildren(d);
+  });
   root.querySelectorAll('.bilan-conseil-cell').forEach(td => { td.textContent = td.getAttribute('data-active') || ''; });
   root.querySelectorAll('textarea').forEach(t => {
     const d = document.createElement('div');
@@ -31738,7 +31761,7 @@ function _printSanitizeClone(root) {
     if (b.closest('thead,tbody,tfoot') && b.textContent.trim().length > 2) { const sp = document.createElement('span'); sp.textContent = b.textContent; b.replaceWith(sp); }
     else b.remove();
   });
-  root.querySelectorAll('.bilan-rem-count,.bilan-rem-open,.fiche-ico,.fiche-photo-add,.fiche-photo-acts').forEach(e => e.remove());
+  root.querySelectorAll('.bilan-rem-count,.fiche-ico,.fiche-photo-add,.fiche-photo-acts').forEach(e => e.remove());
   root.querySelectorAll('.fiche-click').forEach(e => e.classList.remove('fiche-click'));
   root.querySelectorAll('[onclick],[oncontextmenu],[title]').forEach(e => { e.removeAttribute('onclick'); e.removeAttribute('oncontextmenu'); e.removeAttribute('title'); });
   root.querySelectorAll('th,td').forEach(c => { c.style.position = 'static'; c.style.cursor = ''; });
@@ -35551,7 +35574,7 @@ function _seedDemoEvaluations() {
   // ═══════════════ Mises en scène ═══════════════
 
   // ── 1. Évaluation MULTI-CLASSES : le même contrôle en 6A et 6B, à deux dates et sur
-  // deux créneaux différents. C'est ce qui rend le bouton « 🔀 Comparer classes » utile.
+  // deux créneaux différents. C'est ce qui rend le bouton « 🆚 Comparer classes » utile.
   {
     const ev = {
       id: _id(), type: 'C',
@@ -39440,7 +39463,7 @@ function renderEvalNotes() {
         <button class="btn btn-g btn-sm" onclick="_evalOpenEditor('${_esc(ev.id)}')" title="Réglages de cette évaluation : nom, date, période, coefficient, options avancées">⚙</button>
         <button class="btn btn-g btn-sm" onclick="_evalDuplicate('${_esc(ev.id)}')" title="Dupliquer cette évaluation (même structure, notes vides)">⧉</button>
         ${_evalListEvaluatedCompetences(ev, 'code').length > 0 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenBilanCompsForEval('${_esc(ev.id)}')" title="Bilan compétences : niveau atteint par élève sur chaque compétence évaluée">📊</button>` : ''}
-        ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🔀</button>` : ''}
+        ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🆚</button>` : ''}
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV" style="font-weight:600">📤 ENT</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Projeter les notes : vue épurée à projeter en plein écran (grands caractères pour le fond de la salle) ou à imprimer">👀</button>
         <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">🗑</button>
@@ -42057,7 +42080,7 @@ function _evalOpenTableur(forcedId) {
   const qcmBtn  = document.getElementById('meval-tableur-qcmcam-btn');
   if (qcmBtn) qcmBtn.style.display = (ev.type === 'A' || ev.type === 'C') ? '' : 'none';
   if (addMnBtn) addMnBtn.textContent   = (ev.type === 'C' || ev.type === 'D') ? '+ Q' : '+ Mini-note';
-  // Bouton "🔀 Comparer classes" : visible si l'éval est partagée entre plusieurs classes
+  // Bouton "🆚 Comparer classes" : visible si l'éval est partagée entre plusieurs classes
   const xtBtn = document.getElementById('meval-tableur-crosstab-btn');
   if (xtBtn) xtBtn.style.display = (_evalClassIds(ev).length > 1) ? '' : 'none';
   // Peuple le select avec les options de tri (incluant patterns de la salle active)
@@ -44054,7 +44077,7 @@ function _evalOpenCrossTab() {
     toast('💡 Évaluation mono-classe — pas de comparaison à faire', 'info');
     return;
   }
-  document.getElementById('meval-crosstab-title').textContent = `🔀 ${ev.nomCourt} — comparaison classes × civilité`;
+  document.getElementById('meval-crosstab-title').textContent = `🆚 ${ev.nomCourt} — comparaison classes × civilité`;
   _evalRenderCrossTab();
   openMod('meval-crosstab');
 }
@@ -44245,7 +44268,7 @@ function _bilanRenderCrossTab() {
     : 'Toutes périodes';
   const evSel = _bilanXState.selectedEvalId ? S.evaluations?.[_bilanXState.selectedEvalId] : null;
   const scopeLbl = evSel ? `Devoir : ${evSel.nomCourt}` : 'Moyenne période';
-  if (titleEl) titleEl.textContent = `🔀 Comparer les classes — ${periodeLbl} · ${scopeLbl}`;
+  if (titleEl) titleEl.textContent = `🆚 Comparer les classes — ${periodeLbl} · ${scopeLbl}`;
 
   // Pastilles devoirs + Moyenne en fin de ligne
   const evalsWrap = document.getElementById('mbilan-crosstab-evals');
@@ -49070,6 +49093,47 @@ function _computeStudentDomainLevel(classId, sid, domainId, periode) {
   return Math.round(levels.reduce((s, l) => s + l, 0) / levels.length);
 }
 
+// ─── Bilans — préférences d'affichage (v2.86.0) ───
+// Couleurs des notes : 'dot' (pastille devant la note, fond neutre — défaut) ou 'fill'
+// (case entièrement colorée, l'affichage historique). Remarques : 'icon' (✓ / ✎ qui ouvre
+// la fenêtre ✍ — défaut) ou 'inline' (zone de texte dans la ligne, collage d'une colonne
+// depuis un tableur). Réglages par machine, communs aux deux bilans.
+function _bilanCellStyle() { try { return localStorage.getItem('planClasse_bilanCellStyle') === 'fill' ? 'fill' : 'dot'; } catch (e) { return 'dot'; } }
+function _bilanRemMode() { try { return localStorage.getItem('planClasse_bilanRemMode') === 'inline' ? 'inline' : 'icon'; } catch (e) { return 'icon'; } }
+function _bilanSetDisplayPref(key, val) {
+  try { localStorage.setItem(key, val); } catch (e) {}
+  const at = document.querySelector('.tab.on')?.id;
+  if (at === 'tab-comp') renderCompetencesTab(); else renderBilanTab();
+}
+function _bilanDisplayTogglesHTML(withColors) {
+  const seg = (key, cur, opts, lbl, tip) => `<span class="bsynth-seg" title="${_escAttr(tip)}"><span class="bsynth-seg-lbl">${lbl}</span>${opts.map(([v, t]) =>
+    `<button type="button" class="${v === cur ? 'on' : ''}" aria-pressed="${v === cur}" onclick="_bilanSetDisplayPref('${key}','${v}')">${t}</button>`).join('')}</span>`;
+  let h = '';
+  if (withColors) h += seg('planClasse_bilanCellStyle', _bilanCellStyle(), [['dot', 'Pastilles'], ['fill', 'Cases pleines']], 'Couleurs',
+    'Pastilles : la note sur fond neutre, précédée d\'une pastille de couleur. Cases pleines : toute la case prend la couleur de la note.');
+  h += seg('planClasse_bilanRemMode', _bilanRemMode(), [['icon', 'En icône'], ['inline', 'Dans le tableau']], 'Remarques',
+    'En icône : ✓ rédigée / ✎ à rédiger, clic = fenêtre de rédaction. Dans le tableau : saisie directe dans la ligne, et collage d\'une colonne entière depuis un tableur.');
+  return h;
+}
+// Cellule « Remarque » en mode icône (les deux bilans). Le texte voyage dans
+// data-rem-text : l'export (Copier / CSV) et l'impression le relisent.
+function _bilanRemIconCell(sid, perCode, rem, bg, sep) {
+  const has = !!(rem || '').trim();
+  const tip = has ? `Remarque${perCode ? ' ' + perCode : ''} :\n${rem}\n\nClic = modifier dans la fenêtre de rédaction`
+                  : `Pas encore de remarque${perCode ? ' pour ' + perCode : ''} — clic pour rédiger`;
+  return `<td class="bilan-rem-icon" data-rem-text="${_escAttr(rem || '')}" style="padding:2px 4px;border-bottom:1px solid var(--rule-line-soft);text-align:center;background:${bg};${sep}">
+    <button type="button" class="brem-btn${has ? ' done' : ''}" onclick="openRemarkWriter('${_escJsAttr(sid)}', '${_escJsAttr(perCode)}')" title="${_escAttr(tip)}" aria-label="${has ? 'Remarque rédigée — modifier' : 'Rédiger la remarque'}">${has ? '✓' : '✎'}</button></td>`;
+}
+// Petite courbe des notes /20 d'un élève, de devoir en devoir (ordre chronologique).
+function _bilanSparkSVG(vals) {
+  const v = vals.filter(x => typeof x === 'number' && Number.isFinite(x));
+  if (v.length < 2) return '';
+  const W = 40, H = 14;
+  const pts = v.map((x, i) => `${Math.round(i * W / (v.length - 1) * 10) / 10},${Math.round((H - 1 - Math.max(0, Math.min(20, x)) / 20 * (H - 2)) * 10) / 10}`).join(' ');
+  return `<svg class="bspark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+}
+function _bdot(bg) { return `<span class="bdot" style="background:${bg || 'var(--pencil-soft)'}" aria-hidden="true"></span>`; }
+
 // ═══ Bilans — bandeau de synthèse + filtres de lignes (v2.85.0) ═══
 // Un bandeau de cartes au-dessus des deux tableaux de bilan (classe d'abord, élèves
 // ensuite) et une rangée de filtres en pastilles. Les filtres MASQUENT des lignes
@@ -49150,8 +49214,9 @@ function _bsynthLink(tab, f, html, tip) {
   return `<div class="bsynth-line bsynth-link" role="button" tabindex="0" onclick="_bsynthSetFilter('${tab}','${f}')" onkeydown="if(event.key==='Enter')_bsynthSetFilter('${tab}','${f}')" title="${_escAttr(tip || 'Clic = n\'afficher que ces élèves')}">${html}</div>`;
 }
 // chips : [{ v, lbl, n, tip }] — n = nombre d'élèves concernés (undefined pour « Tous »).
-function _bsynthChipsHTML(tab, chips, cur, shown, total) {
-  if (_conf?.on) return `<div class="bsynth-chips"><span class="bsynth-count">🔒 Filtres indisponibles en mode confidentiel</span></div>`;
+function _bsynthChipsHTML(tab, chips, cur, shown, total, rightHTML) {
+  const right = rightHTML ? `<span class="bsynth-right">${rightHTML}</span>` : '';
+  if (_conf?.on) return `<div class="bsynth-chips"><span class="bsynth-count">🔒 Filtres indisponibles en mode confidentiel</span>${right}</div>`;
   let h = '<div class="bsynth-chips" role="toolbar" aria-label="Filtrer les élèves">';
   for (const c of chips) {
     const on = c.v === cur;
@@ -49159,7 +49224,7 @@ function _bsynthChipsHTML(tab, chips, cur, shown, total) {
     h += `<button type="button" class="bsynth-chip${on ? ' on' : ''}" aria-pressed="${on}"${dis ? ' disabled' : ''} onclick="_bsynthSetFilter('${tab}','${c.v}')" title="${_escAttr(c.tip || '')}">${_esc(c.lbl)}${c.n != null ? `<span class="n">${c.n}</span>` : ''}</button>`;
   }
   if (cur !== 'all') h += `<span class="bsynth-count">${shown} élève${shown > 1 ? 's' : ''} affiché${shown > 1 ? 's' : ''} sur ${total} — le pied de tableau reste calculé sur toute la classe</span>`;
-  return h + '</div>';
+  return h + right + '</div>';
 }
 // Libellé d'un écart de moyenne : « ↗ +0,6 » / « ↘ −1,2 » / « = ».
 function _bsynthDeltaHTML(d, unit) {
@@ -49270,7 +49335,7 @@ function _bsynthNotes(cls, periode, sids, synthData, did) {
     { v: 'low', lbl: 'Sous 10/20', n: nLow, tip: 'Moyenne ' + (multi ? 'annuelle' : 'de la période') + ' strictement inférieure à 10/20' },
     { v: 'mention', lbl: 'Avec mention', n: cnt('mention'), tip: 'Élèves ayant au moins une mention du conseil de classe' },
   ];
-  return { flags, html, chips, sidsByPer };
+  return { flags, html, chips, sidsByPer, prevPer: multi ? null : prevPer, prevMap: multi ? null : prevMap };
 }
 
 // ─── Bilan des compétences : données de synthèse et drapeaux par élève ───
@@ -49381,7 +49446,7 @@ function renderBilanTab() {
     }
   }
   const periode = sel?.value ?? '';
-  // Met à jour l'état du bouton "🔀 Comparer classes" : actif uniquement si
+  // Met à jour l'état du bouton "🆚 Comparer classes" : actif uniquement si
   // au moins 2 classes ont des évals comptées pour la période courante.
   const ctBtn = document.getElementById('bilan-crosstab-btn');
   if (ctBtn) {
@@ -49618,7 +49683,9 @@ function renderBilanTab() {
   let _bf = _bsynthGetFilter('bilan');
   if (!_bs.chips.some(c => c.v === _bf)) _bf = 'all';
   const _bfShow = sid => _bf === 'all' || _bs.flags.get(sid)?.has(_bf);
-  let html = _bs.html + _bsynthChipsHTML('bilan', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length);
+  const _dots = _bilanCellStyle() === 'dot';
+  const _remIcon = _bilanRemMode() === 'icon';
+  let html = _bs.html + _bsynthChipsHTML('bilan', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanDisplayTogglesHTML(true));
   if (synthData.length > 1) {
     const allKeys = synthData.flatMap(sd => [`bilan:moy:${sd.perCode}`, `bilan:rang:${sd.perCode}`, `bilan:rem:${sd.perCode}`]);
     html += _bilanHiddenBanner(allKeys, k => {
@@ -49630,7 +49697,7 @@ function renderBilanTab() {
   // Wrapper avec max-height : permet aux thead/tfoot sticky de fonctionner.
   // Le tableau seul scrolle verticalement, les titres et stats restent visibles.
   html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
-  html += '<table id="bilan-tbl" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
+  html += `<table id="bilan-tbl" class="${_dots ? 'bdots' : 'bfill'}" style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">`;
   html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
   // Bandeau de période : un <th> coloré par semestre/trimestre couvrant TOUTES ses
   // colonnes d'éval (couleurs distinctes par période). Visible en mode groupé seulement.
@@ -49705,10 +49772,10 @@ function renderBilanTab() {
     const orphanHeaderBg = isOrphan ? 'background:repeating-linear-gradient(135deg,rgba(217,119,6,.07) 0,rgba(217,119,6,.07) 6px,transparent 6px,transparent 12px);' : '';
     html += `<th class="bilan-evalcell" style="padding:5px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);font-size:.85em;min-width:74px;${_brk}${orphanHeaderBg}" title="${_esc(tip)}">
       <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-weight:700;cursor:pointer;flex-wrap:wrap" onclick="_evalRowOpen('${_esc(ev.id)}')">${orphanMark}${typePill}${discPill}<span>${_esc(ev.nomCourt)}</span>${facStar}</div>
-      <input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
+      <span class="bcoef-x" aria-hidden="true">×</span><input type="number" min="0" max="100" step="0.5" value="${ev.coef ?? 1}" data-evalid="${_esc(ev.id)}"
              oninput="_bilanUpdateEvalCoef(this)"
              class="no-spinner"
-             style="width:46px;padding:0 2px;margin-top:1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.78em;text-align:center;color:var(--pencil)"
+             style="width:38px;padding:0 2px;margin-top:1px;border:1px solid transparent;background:transparent;font-family:var(--font-mono);font-size:.78em;text-align:center;color:var(--pencil)"
              title="Coefficient (édition directe au clavier)">
       ${dateFr ? `<div style="font-size:.74em;color:var(--pencil-soft);font-weight:normal;font-family:var(--font-mono)">${_esc(dateFr)}</div>` : ''}
     </th>`;
@@ -49745,7 +49812,9 @@ function renderBilanTab() {
     const sep = sdIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     const suffix = isMulti ? ' (' + sd.perCode + ')' : (periode ? ' (' + periode + ')' : '');
     const remAttr = isMulti ? `onclick="_toggleBilanCol('${remKey(sd)}')" style="cursor:pointer;` : 'style="';
-    html += `<th ${remAttr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des compétences.">📝 Remarque${suffix}</th>`;
+    html += _remIcon
+      ? `<th ${remAttr}padding:6px 4px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-serif);min-width:44px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Remarque de bulletin${suffix} : ✓ rédigée, ✎ à rédiger — clic sur l'icône = fenêtre de rédaction.">📝${isMulti ? '<br><span style="font-size:.78em;font-family:var(--font-mono)">' + _esc(sd.perCode) + '</span>' : ''}</th>`
+      : `<th ${remAttr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${isMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des compétences.">📝 Remarque${suffix}</th>`;
   });
   // Colonne Conseil (mentions du conseil de classe) — 1 par période
   const _cmTip = _conseilMentionsSorted().map(m => `${m.abbr} = ${m.nom}`).join(', ');
@@ -49761,6 +49830,14 @@ function renderBilanTab() {
   // moyValues par période de synthèse : moyValuesByPer[perIdx] = [moy1, moy2, ...]
   const moyValuesByPer = synthData.map(() => []);
 
+  // Notes /20 par période et par élève, dans l'ordre chronologique (courbe de tendance).
+  const _studNotesByPer = {};
+  for (const sd of synthData) {
+    const perEvs = evs.filter(e => !sd.perCode || e.periode === sd.perCode).slice().sort(_byDateAsc);
+    const m = new Map();
+    for (const sid of sids) m.set(sid, perEvs.map(e => noteSur20(e, sid)));
+    _studNotesByPer[sd.perCode] = m;
+  }
   _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
   let _visIdx = 0;
   for (let i = 0; i < sids.length; i++) {
@@ -49829,7 +49906,8 @@ function renderBilanTab() {
         const _disp = _studentNoteDisplay(ev, sid);
         if (_disp.kind === 'A') {
           const _aBg = '#9ca3af';
-          html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}background:${_aBg};color:${_contrastTextColor(_aBg)};font-weight:700;cursor:pointer" title="${_esc(ev.nomCourt)} · A — Absent${_esc(_remTip)}\nClic = éditer la remarque élève">${_esc(_disp.text)}${_remMark(_aBg)}</td>`;
+          const _aStyle = _dots ? 'color:var(--pencil);font-weight:600;' : `background:${_aBg};color:${_contrastTextColor(_aBg)};font-weight:700;`;
+          html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}${_aStyle}cursor:pointer" title="${_esc(ev.nomCourt)} · A — Absent${_esc(_remTip)}\nClic = éditer la remarque élève">${_dots ? _bdot(_aBg) : ''}${_esc(_disp.text)}${_remMark(_dots ? '' : _aBg)}</td>`;
         } else if (_disp.kind === 'NN') {
           html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${facStyle}color:var(--pencil);font-style:italic;cursor:pointer" title="${_esc(ev.nomCourt)} · NN — Non noté${_esc(_remTip)}\nClic = éditer la remarque élève">${_esc(_disp.text)}${_remMark('')}</td>`;
         } else {
@@ -49838,7 +49916,7 @@ function renderBilanTab() {
       } else {
         evValues[k].push(n);
         const bg = _noteColor(n, 20);
-        const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+        const col = (bg && !_dots) ? _contrastTextColor(bg) : 'var(--ink-deep)';
         const _posLbl = _evalSeatLabelAtTime(ev, cls, sid);
         // Note "brute" = note sur l'échelle d'origine (avant rescale /20), arrondie
         // à la granulométrie de l'éval — pour qu'elle corresponde exactement à ce qui
@@ -49847,10 +49925,12 @@ function renderBilanTab() {
         const tipN = `${ev.nomCourt} · ${_fmtNote(n)}/20 (note : ${_fmtNote(_origRounded)} sur ${ev.noteMax ?? 20})${_posLbl ? ' · position n° ' + _posLbl + ' au moment du devoir' : ' · non placé(e)'}${facTip}${_remTip}`;
         // Style fond : si facultative non comptée, on superpose les hachures sur la couleur de barème
         // et on dim la cellule (opacity .55) pour signaler "ignorée" même sur fond foncé.
-        const cellStyle = (isFac && !facCounts)
+        const cellStyle = _dots
+          ? ((isFac && !facCounts) ? 'background-image:repeating-linear-gradient(135deg,rgba(80,80,80,.18) 0,rgba(80,80,80,.18) 5px,transparent 5px,transparent 10px);opacity:.55;' : '')
+          : (isFac && !facCounts)
           ? `background-color:${bg};background-image:repeating-linear-gradient(135deg,rgba(80,80,80,.42) 0,rgba(80,80,80,.42) 5px,transparent 5px,transparent 10px);opacity:.55;`
           : `background:${bg};`;
-        html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${cellStyle}color:${col};cursor:pointer" title="${_esc(tipN)}\nClic = éditer la remarque élève">${_fmtNote(n)}${_remMark(bg)}</td>`;
+        html += `<td class="bilan-evalcell" onclick="_bilanOpenStuRem('${_esc(sid)}','${_esc(ev.id)}')" style="padding:3px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-size:.85em;${_brk}${cellStyle}color:${col};cursor:pointer" title="${_esc(tipN)}\nClic = éditer la remarque élève">${_dots ? _bdot(bg) : ''}${_fmtNote(n)}${_remMark(_dots ? '' : bg)}</td>`;
       }
     }
     // Moyenne + Rang par période de synthèse (skip si col masquée)
@@ -49872,17 +49952,30 @@ function renderBilanTab() {
                       : _meanGran === 0.25 ? 'quart de point'
                       : _meanGran === 0.1 ? 'dixième'
                       : 'centième';
-          const _moyTip = `Moyenne brute : ${(moy ?? 0).toFixed(4).replace('.', ',')}\nArrondi affiché : ${_fmtNote(moyDisp)} (arrondi : ${_gLbl})`;
-          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:700;background:${moyBg};color:${moyColor};${sep}" title="${_escAttr(_moyTip)}">${_fmtNote(moyDisp)}</td>`;
+          // Tendance : courbe des notes de la période + écart avec la période précédente.
+          const _prevM = synthData.length > 1
+            ? (sdIdx > 0 ? synthData[sdIdx - 1].studentMoy.get(sid) : null)
+            : _bs.prevMap?.get(sid);
+          const _prevP = synthData.length > 1 ? (sdIdx > 0 ? synthData[sdIdx - 1].perCode : null) : _bs.prevPer;
+          const _d = (_prevM != null) ? moy - _prevM : null;
+          const _dr = _d == null ? null : Math.round(_d * 10) / 10;
+          const _dTxt = _dr == null ? '' : (_dr > 0 ? '↗' + _fmtNote(_dr) : _dr < 0 ? '↘' + _fmtNote(-_dr) : '=');
+          const _dCls = (!_dots || _dr == null || _dr === 0) ? '' : (_dr > 0 ? ' bsynth-up' : (_dr <= -2 ? ' bsynth-down' : ''));
+          const _spark = _bilanSparkSVG(_studNotesByPer[sd.perCode]?.get(sid) || []);
+          const _moyTip = `Moyenne brute : ${(moy ?? 0).toFixed(4).replace('.', ',')}\nArrondi affiché : ${_fmtNote(moyDisp)} (arrondi : ${_gLbl})`
+            + (_dr != null ? `\nÉcart avec ${_prevP} : ${_dr > 0 ? '+' : _dr < 0 ? '−' : ''}${_fmtNote(Math.abs(_dr))}` : '')
+            + (_spark ? '\nCourbe : notes /20 de la période, dans l\'ordre chronologique' : '');
+          const _mStyle = _dots ? 'color:var(--ink-blue);' : `background:${moyBg};color:${moyColor};`;
+          html += `<td class="bmoy" data-export="${_escAttr(_fmtNote(moyDisp))}" style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);white-space:nowrap;${_mStyle}${sep}" title="${_escAttr(_moyTip)}">${_dots ? _bdot(moyBg) : ''}<b>${_fmtNote(moyDisp)}</b>${_spark}${_dTxt ? `<span class="bdelta${_dCls}">${_dTxt}</span>` : ''}</td>`;
         } else {
           html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft);${sep}">—</td>`;
         }
       }
       if (!_isBilanColHidden(rangKey(sd))) {
         if (rank != null) {
-          const rBg = _rankGradientColor(rank, sd.total);
-          const rCol = rBg ? _contrastTextColor(rBg) : 'var(--ink-blue)';
-          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:600;background:${rBg};color:${rCol}" title="Rang ${rank}/${sd.total}${sd.perCode ? ' en ' + sd.perCode : ''}">${rank}/${sd.total}</td>`;
+          const rBg = _dots ? '' : _rankGradientColor(rank, sd.total);
+          const rCol = rBg ? _contrastTextColor(rBg) : 'var(--ink-deep)';
+          html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono);font-weight:${_dots ? 400 : 600};background:${rBg};color:${rCol}" title="Rang ${rank}/${sd.total}${sd.perCode ? ' en ' + sd.perCode : ''}">${rank}/${sd.total}</td>`;
         } else {
           html += `<td style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)" title="Non classé (pas de note${sd.perCode ? ' en ' + sd.perCode : ''})">—</td>`;
         }
@@ -49896,9 +49989,9 @@ function renderBilanTab() {
       const remLen = remarque.length;
       const counterClass = remLen > _remMax() ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = synthData.length > 1 ? ' (' + sd.perCode + ')' : '';
+      if (_remIcon) { html += _bilanRemIconCell(sid, sd.perCode, remarque, rowBg, sep); return; }
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${rowBg};position:relative">
         <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(sd.perCode)}" data-concerned="${(_bs.sidsByPer[sd.perCode] || []).includes(sid) ? 1 : 0}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec le Bilan des compétences)">${_esc(remarque)}</textarea>
-        <button type="button" class="bilan-rem-open" onclick="openRemarkWriter('${_escJsAttr(sid)}', '${_escJsAttr(sd.perCode)}')" title="Rédiger dans la fenêtre complète (notes, compétences, vie de classe…)" aria-label="Ouvrir la fenêtre de rédaction">✍</button>
         <span class="${counterClass}" title="Nombre de caractères (limite réglable : ⚙ Réglages → Conseil de classe)">${remLen}/${_remMax()}</span>
       </td>`;
     });
@@ -49940,6 +50033,10 @@ function renderBilanTab() {
     } else {
       const s = _statsForNumbers(vals);
       const bg = _noteColor(s.avg, 20);
+      if (_dots) {
+        html += `<td class="bilan-evalcell" data-export="${_escAttr(_fmtNote(s.avg))}" style="padding:4px 6px;text-align:center;background:var(--paper-warm);color:var(--ink-deep);font-family:var(--font-mono);font-weight:600;font-size:.85em;cursor:help;${_brk}" title="${_esc(_statsTip(vals, evs[k].nomCourt))}">${_fmtNote(s.avg)}<div class="bfoot-bar" aria-hidden="true"><span style="width:${Math.max(0, Math.min(100, s.avg * 5))}%;background:${bg || 'var(--ink-blue-soft)'}"></span></div></td>`;
+        continue;
+      }
       const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
       html += `<td class="bilan-evalcell" style="padding:4px 6px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:600;font-size:.85em;cursor:help;${_brk}" title="${_esc(_statsTip(vals, evs[k].nomCourt))}">${_fmtNote(s.avg)}</td>`;
     }
@@ -49957,8 +50054,8 @@ function renderBilanTab() {
         // avec les cellules de moyenne par élève).
         const _mg = (S.evalPrefs?.meanGranularity ?? 0.01);
         const avgDisp = (_mg > 0) ? Math.round(s.avg / _mg) * _mg : s.avg;
-        const bg = _noteColor(avgDisp, 20);
-        const col = bg ? _contrastTextColor(bg) : 'var(--ink-deep)';
+        const bg = _dots ? '' : _noteColor(avgDisp, 20);
+        const col = bg ? _contrastTextColor(bg) : 'var(--ink-blue)';
         const lbl = 'Moyenne classe' + (synthData.length > 1 ? ' ' + sd.perCode : '');
         html += `<td style="padding:6px 10px;text-align:center;background:${bg || 'var(--paper-warm)'};color:${col};font-family:var(--font-mono);font-weight:700;cursor:help;${sep}" title="${_esc(_statsTip(vals, lbl))}">${_fmtNote(avgDisp)}</td>`;
       }
@@ -50194,6 +50291,9 @@ function _bilanScrapeTableForExport() {
   const table = document.getElementById('bilan-tbl');
   if (!table) return null;
   const scrapeCell = (c) => {
+    // 0) Valeur d'export explicite : remarque en mode icône, moyenne avec sa courbe
+    if (c.hasAttribute?.('data-rem-text')) return (c.getAttribute('data-rem-text') || '').replace(/\s+/g, ' ').trim();
+    if (c.hasAttribute?.('data-export')) return c.getAttribute('data-export') || '';
     // 1) Textarea → value (cellules Remarque)
     const ta = c.querySelector('textarea');
     if (ta) return (ta.value || '').replace(/\s+/g, ' ').trim();
@@ -51320,7 +51420,7 @@ function _conseilBtnHTML(mention, isOn, classId, sid, periode) {
   const bg = isOn ? color : 'transparent';
   const fg = isOn ? _contrastTextColor(color) : 'var(--pencil)';
   const border = isOn ? color : 'var(--rule-line)';
-  return `<button type="button" onclick="_toggleConseilClasse('${_esc(classId)}','${_esc(sid)}','${_esc(periode || '')}','${_esc(mention.id)}')"
+  return `<button type="button" class="cm-btn${isOn ? '' : ' cm-off'}" onclick="_toggleConseilClasse('${_esc(classId)}','${_esc(sid)}','${_esc(periode || '')}','${_esc(mention.id)}')"
     title="${_escAttr(mention.nom + (isOn ? ' (actif — clic pour retirer)' : ' (clic pour ajouter)'))}"
     style="background:${bg};color:${fg};border:1px solid ${border};border-radius:10px;padding:1px 6px;font-family:var(--font-mono);font-size:.78em;font-weight:700;cursor:pointer;line-height:1.4;min-width:24px">${_esc(mention.abbr)}</button>`;
 }
@@ -51935,7 +52035,8 @@ function renderCompetencesTab() {
   let _bf = _bsynthGetFilter('comp');
   if (!_bs.chips.some(c => c.v === _bf)) _bf = 'all';
   const _bfShow = sid => _bf === 'all' || _bs.flags.get(sid)?.has(_bf);
-  let html = _bs.html + _bsynthChipsHTML('comp', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length);
+  const _remIcon = _bilanRemMode() === 'icon';
+  let html = _bs.html + _bsynthChipsHTML('comp', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanDisplayTogglesHTML(false));
   // Bandeau toggle "Évals d'autres classes" — affiché si on détecte au moins une
   // compétence orpheline OU si le toggle masque actuellement (pour pouvoir le réactiver).
   const _hasOrphanPotentialComp = (() => {
@@ -51991,7 +52092,9 @@ function renderCompetencesTab() {
     const sep = idx === 0 ? 'border-left:2px solid var(--ink-blue-soft);' : 'border-left:1px solid var(--rule-line);';
     const suffix = compMulti ? ' (' + perCode + ')' : (periode ? ' (' + periode + ')' : '');
     const attr = compMulti ? `onclick="_toggleBilanCol('${cRemKey(perCode)}')" style="cursor:pointer;` : 'style="';
-    html += `<th ${attr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des notes.">📝 Remarque${suffix}</th>`;
+    html += _remIcon
+      ? `<th ${attr}padding:6px 4px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-serif);min-width:44px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Remarque de bulletin${suffix} : ✓ rédigée, ✎ à rédiger — clic sur l'icône = fenêtre de rédaction.">📝${compMulti ? '<br><span style="font-size:.78em;font-family:var(--font-mono)">' + _esc(perCode) + '</span>' : ''}</th>`
+      : `<th ${attr}padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:left;font-family:var(--font-serif);min-width:200px;background:var(--paper-warm);${sep}" title="${compMulti ? 'Cliquer pour masquer · ' : ''}Brouillon de remarque pour le bulletin${suffix}. Partagée avec l'onglet Bilan des notes.">📝 Remarque${suffix}</th>`;
   });
   html += '</tr></thead><tbody>';
   _setCurAbbrMap(sids.map(s => S.eleves[s]).filter(Boolean));
@@ -52070,9 +52173,9 @@ function renderCompetencesTab() {
       const remLenC = remarqueC.length;
       const counterClsC = remLenC > _remMax() ? 'bilan-rem-count over' : 'bilan-rem-count';
       const suffix = compMulti ? ' (' + perCode + ')' : '';
+      if (_remIcon) { html += _bilanRemIconCell(sid, perCode, remarqueC, bg, sep); return; }
       html += `<td style="padding:2px 6px;border-bottom:1px solid var(--rule-line-soft);${sep}background:${bg};position:relative">
         <textarea rows="1" data-cls="${_esc(cls.id)}" data-sid="${_esc(sid)}" data-periode="${_esc(perCode)}" data-concerned="${(_bs.sidsByPer[perCode] || []).includes(sid) ? 1 : 0}" oninput="_onBilanRemarqueInput(this)" onkeydown="_onBilanRemarqueKey(event, this)" onpaste="_onBilanRemarquePaste(event, this)" placeholder="(facultatif)" class="bilan-rem-textarea" style="width:100%;min-width:200px;padding:3px 6px;padding-right:48px;border:1px solid transparent;background:transparent;font-family:var(--font-sans);font-size:.85em;line-height:1.35;resize:none;min-height:26px;overflow:hidden" title="Brouillon de remarque pour le bulletin${suffix} (partagée avec le Bilan des notes)">${_esc(remarqueC)}</textarea>
-        <button type="button" class="bilan-rem-open" onclick="openRemarkWriter('${_escJsAttr(sid)}', '${_escJsAttr(perCode)}')" title="Rédiger dans la fenêtre complète (notes, compétences, vie de classe…)" aria-label="Ouvrir la fenêtre de rédaction">✍</button>
         <span class="${counterClsC}" title="Nombre de caractères (limite réglable : ⚙ Réglages → Conseil de classe)">${remLenC}/${_remMax()}</span>
       </td>`;
     });
