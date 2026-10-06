@@ -1770,8 +1770,26 @@ html[data-theme="dark"] .bilan-show-chip:hover { background: #3b5a8c !important;
 .rw-per { font: 600 .78em var(--font-mono); color: var(--ink-blue); }
 .rw-rems { margin: 0; padding-left: 18px; font-size: .9em; }
 .rw-place > summary { cursor: pointer; margin-bottom: 0; }
+.rw-rooms th:not(.rw-kv-k) { text-align: left; font: 600 .82em var(--font-mono); color: var(--ink-blue); padding: 3px 12px 3px 0; border-bottom: 1px solid var(--rule-line); white-space: nowrap; }
+.rw-rooms td { padding: 3px 12px 3px 0; border-bottom: 1px solid var(--rule-line-soft); vertical-align: top; }
+.rw-pairs { margin-top: 6px; font-size: .9em; padding: 2px 4px; }
+#tg .cell.cstr-focus { animation: cstrFocus .65s ease-in-out 4; outline: 4px solid var(--margin-red); outline-offset: 1px; }
+@keyframes cstrFocus { 50% { outline-color: transparent; } }
 .rw-place[open] > summary { margin-bottom: 6px; }
 .rw-info.fiche-click:hover { filter: brightness(.97); }
+/* ✏️ Modifier l'élève (me) — même gabarit que la fiche */
+#me-mb { max-width: min(96vw, 1180px); width: 100%; max-height: 94vh; overflow-y: auto; }
+.me-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.me-row > .me-f { flex: 1 1 180px; }
+.me-f { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; min-width: 0; }
+.me-f > span { font: 600 .78em var(--font-mono); text-transform: uppercase; letter-spacing: .03em; color: var(--pencil); }
+.me-f > input, .me-f > select { width: 100%; box-sizing: border-box; }
+#es-tags input[type="checkbox"] { width: 16px !important; height: 16px !important; padding: 0 !important; flex: 0 0 auto; }
+.me-sub { font-size: .78em; color: var(--pencil); margin: 6px 0 4px; }
+.me-chks { display: flex; flex-wrap: wrap; gap: 6px; }
+.me-chk { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border: 1px solid var(--rule-line); border-radius: 14px; font-weight: 600; font-size: .9em; cursor: pointer; background: var(--paper); }
+.me-chk:has(input:checked) { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; }
+.me-chk input { width: 16px !important; height: 16px !important; margin: 0; padding: 0 !important; flex: 0 0 auto; }
 .rw-ments { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .rw-ment { font: 600 .85em var(--font-mono); padding: 3px 10px; border-radius: 12px; border: 2px solid; background: var(--paper); color: var(--ink-deep); cursor: pointer; }
 .rw-tip { display: none; position: fixed; z-index: 99999; max-width: 380px; padding: 8px 10px; background: var(--paper); color: var(--ink-deep); border: 1px solid var(--rule-line); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); font-size: .85em; pointer-events: none; }
@@ -3927,81 +3945,80 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Edit student -->
 <div id="me" class="mo" onclick="closeMod(this,event)">
-  <div class="mb">
-    <h2>Modifier l'Élève</h2>
+  <!-- Mise en page alignée sur la fiche élève (mrw) : même largeur, en-tête au nom de
+       l'élève, cartes en deux colonnes. Les id des champs sont ceux qu'utilisent
+       openEdit / saveEdit — ne pas les renommer. -->
+  <div class="mb" id="me-mb">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <h2 style="margin:0;font-size:1.15em">✏️ Modifier l'élève</h2>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('me')" aria-label="Fermer" style="margin-left:auto;padding:4px 8px">✕</button>
+    </div>
     <input type="hidden" id="es-id">
-    <div class="fg"><label>Nom(s)</label><input id="es-nom" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();saveEdit()}"></div>
-    <div class="fg"><label>Prénom(s)</label><input id="es-prn" onkeydown="if(event.key==='Enter'){event.preventDefault();saveEdit()}"></div>
-    <div class="fg"><label>Civilité <span style="font-size:.78em;color:var(--pencil)">(optionnel)</span></label>
-      <select id="es-civ"><option value="">— Non spécifié —</option><option value="M">♂ Garçon (M)</option><option value="F">♀ Fille (F)</option></select>
+    <div class="rw-head" style="margin-bottom:10px">
+      <div class="rw-name" id="me-name">—</div>
+      <div class="rw-meta" id="me-meta"></div>
     </div>
-    <div class="fg"><label>Groupe <span id="es-grp-hint" style="font-size:.78em;color:var(--pencil)"></span></label>
-      <select id="es-grp"><option value="">— Aucun groupe —</option><option value="1">🔵 Groupe 1</option><option value="2">🟠 Groupe 2</option><option value="3">🟣 Groupe 3</option></select>
-    </div>
-    <div class="fg"><label>Rôle dans la classe <span style="font-size:.78em;color:var(--pencil)">(délégué·es élu·es — nom souligné sur le plan)</span></label>
-      <select id="es-delegue"><option value="">— Aucun —</option><option value="T">🗳 Délégué·e (souligné)</option><option value="S">🗳 Suppléant·e (souligné en pointillé)</option></select>
-    </div>
-    <div class="fg"><label>🏷 Tags <span style="font-size:.78em;color:var(--pencil)">(cumulables — DF, DNL… ; clic pour cocher ou décocher)</span></label>
-      <div id="es-tags" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>
-    </div>
-    <div class="fg"><label>Classe <span style="font-size:.78em;color:var(--pencil)">(en cas de changement de classe en cours d'année — l'historique, les compteurs et les appels passés sont conservés)</span></label>
-      <select id="es-cls"></select>
-    </div>
-    <div style="font-size:.78em;color:var(--pencil);margin-bottom:6px">Scolarité (1 max — PPRE / PAP / PPS / ULIS exclusifs entre eux)</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-ppre-fg)">
-        <input type="checkbox" id="es-ppre" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> PPRE
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-pap-fg)">
-        <input type="checkbox" id="es-pap" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> PAP (Plan d'Accompagnement Personnalisé)
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-pps-fg)">
-        <input type="checkbox" id="es-gevasco" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> GEVAsco / PPS
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-ulis-fg)">
-        <input type="checkbox" id="es-ulis" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> ULIS (hors classe)
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-ulis-i-fg)">
-        <input type="checkbox" id="es-ulis-incl" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> ULIS inclusion
-      </label>
-    </div>
-    <div style="font-size:.78em;color:var(--pencil);margin-bottom:6px">UPE2A — allophone (1 max ; cumulable avec un statut scolarité)</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-upe2a-fg)">
-        <input type="checkbox" id="es-upe2a" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> UPE2A (hors classe)
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-upe2a-i-fg)">
-        <input type="checkbox" id="es-upe2a-incl" style="width:16px;height:16px;flex-shrink:0" onchange="esStatusChange(this)"> UPE2A inclusion
-      </label>
-    </div>
-    <div style="font-size:.78em;color:var(--pencil);margin-bottom:6px">PAI — Projet d'Accueil Individualisé (médical : allergies, asthme, diabète… cumulable avec tout)</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--st-pai-fg)">
-        <input type="checkbox" id="es-pai" style="width:16px;height:16px;flex-shrink:0"> PAI (médical)
-      </label>
-    </div>
-    <div style="font-size:.78em;color:var(--pencil);margin-bottom:6px">Agrandissement — l'élève a besoin de photocopies agrandies (cumulable avec tout)</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--agr-fg)">
-        <input type="checkbox" id="es-agrandissement" style="width:16px;height:16px;flex-shrink:0"> 📄 Agrandissement (photocopies agrandies)
-      </label>
-    </div>
-    <div style="font-size:.78em;color:var(--pencil);margin-bottom:6px">Tiers-temps — l'élève dispose d'un temps majoré (⅓ en plus) aux évaluations (cumulable avec tout)</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:var(--agr-fg)">
-        <input type="checkbox" id="es-tiers-temps" style="width:16px;height:16px;flex-shrink:0"> ⏱ Tiers-temps (temps majoré +⅓)
-      </label>
-    </div>
-    <div class="fg"><label>📋 Informations (affichées au survol de la place)</label>
-      <textarea id="es-notes" rows="3" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em;resize:vertical" placeholder="Santé, famille, points d'attention… (les aménagements se règlent avec leurs boutons)"></textarea>
-    </div>
-    <div style="font-size:.78em;color:var(--pencil);margin:10px 0 4px">Arrivée / départ en cours d'année (laisser vide si présent toute l'année)</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
-      <div class="fg" style="flex:1;min-width:160px"><label for="es-arrival">📅 Arrivée</label>
-        <input type="date" id="es-arrival" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em" title="Premier jour de présence (vide = présent depuis la rentrée)">
+    <div class="rw-grid">
+      <div class="rw-col">
+        <div class="rw-sec">
+          <div class="rw-h">👤 Identité</div>
+          <div class="me-row">
+            <label class="me-f"><span>Nom(s)</span><input id="es-nom" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();saveEdit()}"></label>
+            <label class="me-f"><span>Prénom(s)</span><input id="es-prn" onkeydown="if(event.key==='Enter'){event.preventDefault();saveEdit()}"></label>
+          </div>
+          <div class="me-row">
+            <label class="me-f"><span>Civilité</span>
+              <select id="es-civ"><option value="">— Non spécifié —</option><option value="M">♂ Garçon (M)</option><option value="F">♀ Fille (F)</option></select></label>
+            <label class="me-f"><span>Classe <span class="rw-muted" title="En cas de changement de classe en cours d'année : l'historique, les compteurs et les appels passés sont conservés.">ⓘ</span></span>
+              <select id="es-cls"></select></label>
+          </div>
+        </div>
+        <div class="rw-sec">
+          <div class="rw-h">🏫 Dans la classe</div>
+          <div class="me-row">
+            <label class="me-f"><span>Groupe <span id="es-grp-hint" class="rw-muted" style="font-weight:400;text-transform:none"></span></span>
+              <select id="es-grp"><option value="">— Aucun groupe —</option><option value="1">🔵 Groupe 1</option><option value="2">🟠 Groupe 2</option><option value="3">🟣 Groupe 3</option></select></label>
+            <label class="me-f"><span>Rôle <span class="rw-muted" title="Délégué·es élu·es — nom souligné sur le plan">ⓘ</span></span>
+              <select id="es-delegue"><option value="">— Aucun —</option><option value="T">🗳 Délégué·e (souligné)</option><option value="S">🗳 Suppléant·e (souligné en pointillé)</option></select></label>
+          </div>
+          <div class="me-f"><span>🏷 Tags <span class="rw-muted" style="font-weight:400;text-transform:none">(cumulables — clic pour cocher ou décocher)</span></span>
+            <div id="es-tags" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>
+          </div>
+          <div class="me-row">
+            <label class="me-f" for="es-arrival"><span>📅 Arrivée</span><input type="date" id="es-arrival" title="Premier jour de présence (vide = présent depuis la rentrée)"></label>
+            <label class="me-f" for="es-departure"><span>🚪 Départ</span><input type="date" id="es-departure" title="Premier jour d'absence (vide = toujours présent)"></label>
+          </div>
+          <div class="rw-hint" style="margin-top:0">Arrivée / départ en cours d'année : laisser vide si présent toute l'année.</div>
+        </div>
       </div>
-      <div class="fg" style="flex:1;min-width:160px"><label for="es-departure">🚪 Départ</label>
-        <input type="date" id="es-departure" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:.9em" title="Premier jour d'absence (vide = toujours présent)">
+      <div class="rw-col">
+        <div class="rw-sec">
+          <div class="rw-h">🎓 Aménagements</div>
+          <div class="me-sub">Scolarité — un seul parmi PPRE / PAP / PPS / ULIS</div>
+          <div class="me-chks">
+            <label class="me-chk" style="color:var(--st-ppre-fg)"><input type="checkbox" id="es-ppre" onchange="esStatusChange(this)"> PPRE</label>
+            <label class="me-chk" style="color:var(--st-pap-fg)"><input type="checkbox" id="es-pap" onchange="esStatusChange(this)"> PAP</label>
+            <label class="me-chk" style="color:var(--st-pps-fg)"><input type="checkbox" id="es-gevasco" onchange="esStatusChange(this)"> GEVAsco / PPS</label>
+            <label class="me-chk" style="color:var(--st-ulis-fg)"><input type="checkbox" id="es-ulis" onchange="esStatusChange(this)"> ULIS (hors classe)</label>
+            <label class="me-chk" style="color:var(--st-ulis-i-fg)"><input type="checkbox" id="es-ulis-incl" onchange="esStatusChange(this)"> ULIS inclusion</label>
+          </div>
+          <div class="me-sub">UPE2A — allophone (un seul, cumulable avec la scolarité)</div>
+          <div class="me-chks">
+            <label class="me-chk" style="color:var(--st-upe2a-fg)"><input type="checkbox" id="es-upe2a" onchange="esStatusChange(this)"> UPE2A (hors classe)</label>
+            <label class="me-chk" style="color:var(--st-upe2a-i-fg)"><input type="checkbox" id="es-upe2a-incl" onchange="esStatusChange(this)"> UPE2A inclusion</label>
+          </div>
+          <div class="me-sub">Cumulables avec tout</div>
+          <div class="me-chks">
+            <label class="me-chk" style="color:var(--st-pai-fg)" title="Projet d'Accueil Individualisé — médical : allergies, asthme, diabète…"><input type="checkbox" id="es-pai"> ⚕️ PAI (médical)</label>
+            <label class="me-chk" style="color:var(--agr-fg)" title="Photocopies agrandies"><input type="checkbox" id="es-agrandissement"> 📄 Agrandissement</label>
+            <label class="me-chk" style="color:var(--agr-fg)" title="Temps majoré (⅓ en plus) aux évaluations"><input type="checkbox" id="es-tiers-temps"> ⏱ Tiers-temps (+⅓)</label>
+          </div>
+        </div>
+        <div class="rw-sec">
+          <div class="rw-h">📋 Informations</div>
+          <textarea id="es-notes" rows="4" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Santé, famille, points d'attention… (les aménagements se règlent au-dessus)"></textarea>
+          <div class="rw-hint">Affichées au survol de la place et dans la fiche.</div>
+        </div>
       </div>
     </div>
     <div class="ma">
@@ -7528,11 +7545,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.83.0';
+const APP_VERSION    = '2.84.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T19:18:21Z';
+const APP_BUILD_DATE = '2026-10-06T19:44:47Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10991,6 +11008,50 @@ function _ficheGo(what, tab, periode) {
   });
 }
 // Raccourcis de la fiche vers les outils de réglage (audit 2026-10-03, § 2.1).
+// Variantes par salle : la salle choisie devient la salle affichée de la classe (comme le
+// sélecteur de salle du choix de place), puis on ouvre l'outil.
+function _ficheSeatIn(salleId) {
+  const cls = getCls();
+  if (cls && salleId && cls.activeRoom !== salleId) setActiveRoom(salleId);
+  _ficheSeat();
+}
+function _ficheIpadIn(salleId, key) {
+  const cls = getCls();
+  if (cls && salleId && cls.activeRoom !== salleId) setActiveRoom(salleId);
+  _ficheIpad(key);
+}
+// Contraintes : onglet Plan, mode Contraintes activé, la case de l'élève mise en évidence.
+// Avec un élève placé, on entre directement dans ses places autorisées si on vient de la
+// ligne « Places autorisées » d'une salle (salleId fourni).
+function _ficheCstrPlan(salleId) {
+  const sid = _ficheSid, s = S.eleves[sid], cls = s ? S.classes[s.classe_id] : null;
+  if (!cls) return;
+  // Mémorise d'où l'on vient pour y revenir au « Terminer » (cf. _planCstrFinish) : la fiche
+  // se ferme SANS jouer son retour définitif, comme une parenthèse.
+  const ctx = { tab: document.querySelector('.tab.on')?.id?.replace('tab-', '') || null, cur: S.cur, clsId: cls.id, room: cls.activeRoom, sheet: _rw ? Object.assign({}, _rw) : null };
+  delete _modalReturnTo['mrw'];
+  _rwHideTip();
+  closeMod2('mrw');
+  _rw = null;
+  if (S.cur !== cls.id) switchClass(cls.id);
+  if (salleId && cls.rooms?.[salleId] && cls.activeRoom !== salleId) setActiveRoom(salleId);
+  switchTab('plan');
+  if (!_planCstrMode) _planCstrEnter();
+  if (!_planCstrMode) { if (ctx.sheet) { _rw = ctx.sheet; _rwOpen(false); } return; }
+  _cstrReturnCtx = ctx;
+  const placed = Object.values(activeRoomData(cls)?.seating || {}).includes(sid);
+  if (salleId && placed) _planCstrEnterAllowed(sid);
+  else renderTeacherGrid();   // bandeau « Terminer · ↩ fiche »
+  setTimeout(() => {
+    const key = Object.keys(activeRoomData(cls)?.seating || {}).find(k => activeRoomData(cls).seating[k] === sid);
+    const el = key ? document.querySelector(`#tg .cell[data-key="${key}"]`) : null;
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('cstr-focus'); setTimeout(() => el.classList.remove('cstr-focus'), 2600); }
+  }, 60);
+  const nm = `${s.prenom} ${(s.nom || '').toUpperCase()}`;
+  toast(salleId && placed ? `⛓ Places autorisées de ${nm} : peins les cases, puis ✓ Valider.`
+    : placed ? `⛓ Clique sur ${nm} pour ses places autorisées ; glisse-le sur un autre élève pour créer ou retirer une paire.`
+    : `⛓ ${nm} n'est pas placé·e dans cette salle : place-le d'abord pour régler ses contraintes.`);
+}
 function _ficheSeat() {
   const sid = _ficheSid; if (!sid) return;
   _rwParenthesis('mseatpick', () => openSeatPicker(null, sid));
@@ -10999,10 +11060,12 @@ function _ficheIpad(key) {
   const sid = _ficheSid; if (!sid) return;
   _rwParenthesis('mipad-picker', () => openIpadPicker(key, 0));
 }
-function _ficheConfig(mode) {
+function _ficheConfig(mode, salleId) {
   const sid = _ficheSid, s = S.eleves[sid], cls = s ? S.classes[s.classe_id] : null;
+  if (mode === 'contraintes') { _ficheCstrPlan(salleId); return; }
   closeMod2('mrw');
   if (cls && S.cur !== cls.id) switchClass(cls.id);
+  if (cls && salleId && cls.rooms?.[salleId] && cls.activeRoom !== salleId) setActiveRoom(salleId);
   switchTab('config');
   if (cls?.activeRoom) cfgSelectSalle(cls.activeRoom);
   setCfgMode(mode);
@@ -17328,6 +17391,10 @@ function openEdit(id) {
   document.getElementById('es-notes').value         = s.notes || '';
   document.getElementById('es-arrival').value       = s.arrivalDate   || '';
   document.getElementById('es-departure').value     = s.departureDate || '';
+  // En-tête au nom de l'élève, comme la fiche.
+  { const nm = document.getElementById('me-name'), mt = document.getElementById('me-meta');
+    if (nm) nm.textContent = `${(s.nom || '').toUpperCase()} ${s.prenom || ''}`.trim();
+    if (mt) mt.textContent = S.classes[s.classe_id]?.nom || ''; }
   openMod('me');
 }
 
@@ -20033,7 +20100,7 @@ let _cstrPaintLast = null;             // dernière case peinte (anti double-tog
 let _cstrLinesRaf = null;
 
 function togglePlanConstraintMode() {
-  if (_planCstrMode) { _planCstrExit(); return; }
+  if (_planCstrMode) { _planCstrFinish(); return; }
   _planCstrEnter();
 }
 
@@ -20057,7 +20124,24 @@ function _planCstrEnter() {
   renderTeacherGrid();
 }
 
+// Retour vers la fiche élève quand le mode Contraintes a été ouvert depuis elle
+// (_ficheCstrPlan) : { tab, cur, clsId, room, sheet }. Un « Terminer » explicite (bouton,
+// Échap, bouton de la barre) ramène là où l'on était ; toute autre sortie (changement
+// d'onglet ou de classe) l'abandonne.
+var _cstrReturnCtx = null;
+function _planCstrFinish() {
+  const ctx = _cstrReturnCtx;
+  _cstrReturnCtx = null;
+  _planCstrExit();
+  if (!ctx) return;
+  if (ctx.cur && S.classes[ctx.cur] && S.cur !== ctx.cur) switchClass(ctx.cur);
+  const cls = S.classes[ctx.clsId];
+  if (cls && ctx.room && cls.rooms?.[ctx.room] && cls.activeRoom !== ctx.room) { cls.activeRoom = ctx.room; save(); }
+  if (ctx.tab) switchTab(ctx.tab);
+  if (ctx.sheet && S.eleves[ctx.sheet.sid]) { _rw = ctx.sheet; _rwOpen(false); }
+}
 function _planCstrExit() {
+  _cstrReturnCtx = null;
   // Annule un éventuel sous-mode en cours (rétablit l'état d'origine sans commit)
   if (_planCstrSub === 'allowed') _planCstrRestoreAllowedBackup();
   else if (_planCstrSub === 'pairs') _planCstrRestorePairsBackup();
@@ -20385,7 +20469,7 @@ function _planCstrUpdateBanner() {
     b.className = '';
     b.innerHTML = `<span style="font-size:1.2em">⛓</span>
       <span style="flex:1"><strong>Mode contraintes</strong> — <strong>clique</strong> un élève pour définir ses places autorisées · <strong>glisse</strong> un élève sur un autre pour les séparer. <span style="font-weight:600">Traits rouges = paires existantes.</span></span>
-      <button class="btn btn-p btn-sm" onclick="_planCstrExit()">✓ Terminer</button>`;
+      <button class="btn btn-p btn-sm" onclick="_planCstrFinish()"${_cstrReturnCtx ? ' title="Quitter le mode contraintes et revenir à la fiche de l\'élève"' : ''}>${_cstrReturnCtx ? '✓ Terminer · ↩ fiche' : '✓ Terminer'}</button>`;
   }
 }
 
@@ -36971,7 +37055,7 @@ document.addEventListener('keydown', e => {
     if (_planCstrMode) {
       if (_planCstrSub === 'allowed') { _planCstrCancelAllowed(); return; }
       if (_planCstrSub === 'pairs')   { _planCstrCancelPairs();   return; }
-      _planCstrExit();
+      _planCstrFinish();
       return;
     }
     // Mode appel actif (Plan Prof) : Esc → quitte le mode appel (équivalent du bouton ↩ Quitter)
@@ -50377,35 +50461,52 @@ function _rwKeydown(e) {
     _rwGo(e.key === 'ArrowRight' ? 1 : -1);
   }
 }
-// Bloc « 📍 Place & matériel » (salle active de la classe réelle), repris de l'ancienne fiche.
+// Bloc « 📍 Place & matériel » : une colonne par salle de la classe (salle affichée en
+// premier, marquée ●), et en dessous, alignées, la place, la tablette, l'AESH et les places
+// autorisées de l'élève dans CETTE salle. Les paires « à séparer » valent pour la classe.
 function _fichePlaceHTML(s, cls) {
   if (!cls) return '';
-  const dash = '<span style="color:var(--pencil)">—</span>';
-  const row = (k, v) => `<tr><th class="rw-kv-k">${k}</th><td>${v}</td></tr>`;
-  const rowc = (k, v, onclick, title) => `<tr class="fiche-click" onclick="${onclick}" title="${_escAttr(title)}"><th class="rw-kv-k">${k}</th><td>${v} <span class="fiche-click-hint">✎</span></td></tr>`;
-  const room = activeRoomData(cls);
-  const salle = S.salles?.[cls.activeRoom];
-  const pos = room && cls.seating ? getPos(s.id, cls) : null;
-  const posLbl = pos ? `n° ${_qcmDisplayLabel(cls, pos.r, pos.c, salle?.cols || 10)}` : '<span style="color:var(--warn-fg, #92400e)">non placé·e</span>';
+  const dash = '<span class="rw-muted">—</span>';
+  const isCur = cls === getCls();   // place et tablette se règlent sur la classe affichée
+  const rids = Object.keys(cls.rooms || {}).filter(r => S.salles?.[r])
+    .sort((a, b) => (a === cls.activeRoom ? -1 : b === cls.activeRoom ? 1 : (S.salles[a].nom || '').localeCompare(S.salles[b].nom || '', 'fr')));
+  if (!rids.length) return '<div class="rw-hint">Aucune salle rattachée à la classe.</div>';
   const pool = S.tabletPools?.[cls.activePool];
-  const ip = pos ? ipadGet(cls, pos.k, 0) : 0;
-  const ipLbl = pool ? (ip ? `${_escName(pool.nom)} — ${_escName(poolLabel(pool, ip))}` : dash) : dash;
-  const aIdx = aeshHelpingSid(cls, s.id);
-  const aLbl = aIdx >= 0 ? `🤝 ${aeshLabel(aIdx, aeshIndices(room).length)}` : dash;
-  const nbRooms = Object.keys(cls.rooms || {}).length;
-  const allowedN = (room?.allowedFor?.[s.id] || []).length;
+  const g = _grp(s, cls);
+  const cell = (inner, onclick, title) => onclick
+    ? `<td class="fiche-click" onclick="${onclick}" title="${_escAttr(title)}">${inner} <span class="fiche-click-hint">✎</span></td>`
+    : `<td>${inner}</td>`;
+  const cols = rids.map(rid => {
+    const room = cls.rooms[rid], salle = S.salles[rid];
+    const key = Object.keys(room.seating || {}).find(k => room.seating[k] === s.id) || null;
+    let posLbl = '<span style="color:var(--warn-fg, #92400e)">non placé·e</span>';
+    if (key) { const [r, c] = key.split(',').map(Number); const n = qcmNumForCell(cls, rid, r, c); posLbl = n != null ? `n° ${n}` : '<span title="Place sans numéro QCMcam">🚫</span>'; }
+    let ipLbl = dash;
+    if (pool && key) {
+      const bp = room.ipadsByPool?.[pool.id] || {};
+      const parts = [];
+      if (bp.ce?.[key]) parts.push(_escName(poolLabel(pool, bp.ce[key])));
+      if (g && bp['g' + g]?.[key]) parts.push(`G${g} : ${_escName(poolLabel(pool, bp['g' + g][key]))}`);
+      if (parts.length) ipLbl = parts.join('<br>');
+    }
+    const aesh = Object.entries(room.aeshLinks || {}).filter(([, l]) => Array.isArray(l) && l.includes(s.id))
+      .map(([idx]) => '🤝 ' + aeshLabel(parseInt(idx, 10), room.aeshCount || 1));
+    const allowedN = (room.allowedFor?.[s.id] || []).length;
+    return { rid, salle, sname: salle.nom || rid, key, posLbl, ipLbl, aesh: aesh.join(', ') || dash, allowed: allowedN ? `${allowedN} place(s)` : dash };
+  });
+  const head = cols.map(c => `<th title="${c.rid === cls.activeRoom ? 'Salle affichée' : 'Autre salle de la classe'}">${c.rid === cls.activeRoom && cols.length > 1 ? '● ' : ''}${_escName(c.salle.nom)}</th>`).join('');
+  const rowOf = (label, f) => `<tr><th class="rw-kv-k">${label}</th>${cols.map(f).join('')}</tr>`;
   const pairs = (cls.noNeighbors || []).filter(p => p.split('|').includes(s.id))
     .map(p => S.eleves[p.split('|').find(x => x !== s.id)]).filter(Boolean)
     .map(o => _escName(o.prenom + ' ' + o.nom));
-  const cstrLbl = [allowedN ? `${allowedN} place(s) autorisée(s)` : '', pairs.length ? `à séparer de : ${pairs.join(', ')}` : ''].filter(Boolean).join(' · ');
-  const isCur = cls === getCls();   // place et tablette se règlent sur la classe affichée
-  return `<table class="rw-kv">`
-    + row('Salle', salle ? `${_escName(salle.nom)}${nbRooms > 1 ? ` <span style="color:var(--pencil);font-size:.85em">(salle active, ${nbRooms} au total)</span>` : ''}` : dash)
-    + (isCur ? rowc('Place', posLbl, "_ficheSeat()", 'Choisir sa place sur le plan') : row('Place', posLbl))
-    + (_featureEnabled('tablettes') ? (isCur && pos ? rowc('Tablette', ipLbl, `_ficheIpad('${pos.k}')`, 'Changer sa tablette') : row('Tablette', ipLbl)) : '')
-    + rowc('AESH', aLbl, "_ficheConfig('aesh')", 'Régler les AESH de cette salle (Config Salle)')
-    + rowc('Contraintes', cstrLbl || dash, "_ficheConfig('contraintes')", 'Places autorisées et élèves à séparer (Config Salle)')
-    + `</table>`;
+  return `<div style="overflow-x:auto"><table class="rw-kv rw-rooms">
+      <tr><th class="rw-kv-k">Salle</th>${head}</tr>
+      ${rowOf('Place', c => cell(c.posLbl, isCur ? `_ficheSeatIn('${_escJsAttr(c.rid)}')` : '', `Choisir sa place dans ${c.sname}`))}
+      ${_featureEnabled('tablettes') ? rowOf(`Tablette${pool ? ` <span class="rw-muted" style="font-weight:400">(${_escName(pool.nom)})</span>` : ''}`, c => cell(c.ipLbl, isCur && c.key ? `_ficheIpadIn('${_escJsAttr(c.rid)}','${_escJsAttr(c.key)}')` : '', `Changer sa tablette dans ${c.sname}`)) : ''}
+      ${rowOf('AESH', c => cell(c.aesh, `_ficheConfig('aesh','${_escJsAttr(c.rid)}')`, `Régler les AESH de ${c.sname} (Config Salle)`))}
+      ${rowOf('Places autorisées', c => cell(c.allowed, `_ficheCstrPlan('${_escJsAttr(c.rid)}')`, `Régler ses places autorisées dans ${c.sname} (Plan, mode Contraintes)`))}
+    </table></div>
+    <div class="fiche-click rw-pairs" onclick="_ficheCstrPlan()" title="Paires d'élèves à séparer (Plan, mode Contraintes)">⛓ À séparer de : ${pairs.length ? pairs.join(', ') : '<span class="rw-muted">personne</span>'} <span class="fiche-click-hint">✎</span></div>`;
 }
 var _rwPlaceOpen = false; // bloc Place & matériel déplié (mémoire de session)
 
