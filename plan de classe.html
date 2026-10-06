@@ -1740,6 +1740,14 @@ html[data-theme="dark"] .bilan-show-chip:hover { background: #3b5a8c !important;
 .rw-chip { font-size: .85em; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--rule-line); color: var(--pencil); }
 .rw-chip strong { color: var(--ink-deep); }
 .rw-chip.has { cursor: help; }
+.rw-year { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: -2px 0 8px; font-size: .85em; }
+.rw-year-lbl { font: 600 .85em var(--font-mono); color: var(--pencil); text-transform: uppercase; }
+.rw-year-item { padding: 1px 8px; border: 1px solid var(--rule-line); border-radius: 10px; font-family: var(--font-mono); color: var(--ink-deep); }
+.rw-year-item.cur { border-color: var(--ink-blue); box-shadow: 0 0 0 1px var(--ink-blue); }
+.rw-year-per { color: var(--pencil); }
+.rw-mini-ment { display: inline-block; padding: 0 5px; border-radius: 8px; font: 600 .82em var(--font-mono); }
+.rw-flag { border-bottom: 1px dotted currentColor; cursor: help; }
+.rw-flag-aesh { color: var(--aesh-fg); }
 .rw-chip.has:hover, .rw-chip:focus { border-color: var(--ink-blue); outline: none; }
 .rw-chip.warn { background: var(--caution-bg); border-color: var(--caution-bd); color: var(--caution-fg); }
 .rw-chip.warn strong { color: var(--caution-fg); }
@@ -7515,11 +7523,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.81.0';
+const APP_VERSION    = '2.82.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T18:54:13Z';
+const APP_BUILD_DATE = '2026-10-06T19:02:48Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -50527,6 +50535,20 @@ function renderRemarkWriter(focusText) {
   if (_clsHasMultipleDisciplines(cls)) metaParts.push('🎓 ' + _esc(_disciplineLabel(did)));
   if (stu.departureDate) metaParts.push('🚪 parti le ' + _fmtDateFr(stu.departureDate));
   else if (stu.arrivalDate) metaParts.push('📅 arrivé le ' + _fmtDateFr(stu.arrivalDate));
+  // Transfert en cours d'année : la moyenne peut mêler les notes de deux classes.
+  const _prevCls = (Array.isArray(stu.previousClasses) ? stu.previousClasses : []).filter(p => p && p.classId);
+  if (_prevCls.length) {
+    const pc = _prevCls[_prevCls.length - 1];
+    metaParts.push(`<span class="rw-flag" title="${_escAttr(_prevCls.map(p => (S.classes?.[p.classId]?.nom || p.classId) + ' jusqu\'au ' + _fmtDateFr(p.leftOn)).join(' · '))}">⤴ transféré·e de ${_esc(S.classes?.[pc.classId]?.nom || pc.classId)}${pc.leftOn ? ' le ' + _esc(_fmtDateFr(pc.leftOn).slice(0, 5)) : ''}</span>`);
+  }
+  // AESH liée, dans n'importe quelle salle de la classe.
+  const _aesh = [];
+  for (const [rid, room] of Object.entries(cls.rooms || {})) {
+    for (const [idx, list] of Object.entries(room?.aeshLinks || {})) {
+      if (Array.isArray(list) && list.includes(sid)) _aesh.push(`${aeshLabel(parseInt(idx, 10), room.aeshCount || 1)}${Object.keys(cls.rooms).length > 1 ? ' — ' + (S.salles?.[rid]?.nom || rid) : ''}`);
+    }
+  }
+  if (_aesh.length) metaParts.push(`<span class="rw-flag rw-flag-aesh" title="${_escAttr(_aesh.join(' · '))}">🤝 accompagné·e par une AESH</span>`);
   const tags = (stu.tags || []).map(t => S.tags?.[t]).filter(Boolean)
     .map(t => { const c = _safeColor(t.color); return `<span class="spec-badge" style="background:${c};color:${_contrastTextColor(c)}" title="${_escAttr(t.name || '')}">${_esc(t.abbr)}</span>`; }).join(' ');
   const head = `<div class="rw-head">
@@ -50564,6 +50586,15 @@ function renderRemarkWriter(focusText) {
       <div style="color:var(--pencil)">classe ${clsMean != null ? _fmtNote(clsMean) : '—'}${rank != null ? ` · rang ${rank}/${means.size}` : ''}</div>
       ${evo}
     </div>`;
+  // Toutes les périodes de l'année : moyenne + mentions de conseil (trajectoire).
+  const yearLine = _periodeOptions().map(o => {
+    const m = _computeStudentMeanForPeriod(cls.id, sid, o.code, did);
+    const ms = [..._getConseilActive(cls.id, sid, o.code, did)].map(id => S.conseilMentions[id]).filter(Boolean)
+      .map(mm => { const c = _safeColor(mm.color); return `<span class="rw-mini-ment" style="background:${c};color:${_contrastTextColor(c)}" title="${_escAttr(mm.nom)}">${_esc(mm.abbr)}</span>`; }).join('');
+    const cur = o.code === periode;
+    return `<span class="rw-year-item${cur ? ' cur' : ''}" title="${_escAttr(o.label)}${cur ? ' (période affichée)' : ''}"><span class="rw-year-per">${o.code}</span> ${m != null ? _fmtNote(m) : '—'}${ms ? ' ' + ms : ''}</span>`;
+  }).join('');
+  const yearBlock = `<div class="rw-year"><span class="rw-year-lbl">Année</span>${yearLine}</div>`;
 
   // ── Évaluations de la période (propres + orphelines), par date
   const evs = Object.values(S.evaluations || {})
@@ -50620,6 +50651,8 @@ function renderRemarkWriter(focusText) {
   const from = _periodStartDate(periode), to = _periodEndDate(periode);
   const ev_ = _rwVieEvents(stu, from, to);
   _rw.vie = ev_;
+  { const per = _periodeOptions().map(o => o.code);
+    _rw.vieYear = _rwVieEvents(stu, _periodStartDate(per[0]), _periodEndDate(per[per.length - 1])); }
   const chip = (kind, icon, lbl, warnAt) => {
     const n = ev_[kind].length;
     return `<span class="rw-chip${n >= warnAt ? ' warn' : ''}${n ? ' has' : ''}" tabindex="0" onmouseenter="_rwShowVieTip(this,'${kind}')" onmouseleave="_rwHideTip()" onfocus="_rwShowVieTip(this,'${kind}')" onblur="_rwHideTip()" onclick="_rwShowVieTip(this,'${kind}')">${icon} ${lbl} : <strong>${n}</strong></span>`;
@@ -50643,7 +50676,7 @@ function renderRemarkWriter(focusText) {
 
   body.innerHTML = head + `<div class="rw-grid">
     <div class="rw-col">
-      <div class="rw-sec"><div class="rw-h">📊 Résultats — ${_esc(periode)}</div>${resHead}${evTable}</div>
+      <div class="rw-sec"><div class="rw-h">📊 Résultats — ${_esc(periode)}</div>${resHead}${yearBlock}${evTable}</div>
       <div class="rw-sec"><div class="rw-h">🎯 Compétences${prevPer ? ` — ${prevPer} → ${_esc(periode)}` : ''}</div>${compBlock}</div>
     </div>
     <div class="rw-col">
@@ -50737,11 +50770,21 @@ function _rwTipHTML(ev, sid) {
 // { oubli, nt, rem, abs, ret } — chacun [{ d: 'YYYY-MM-DD', ts?, txt }], plus récent d'abord.
 function _rwVieEvents(stu, from, to) {
   const out = { oubli: [], nt: [], rem: [], abs: [], ret: [] };
+  // Créneau d'un oubli / travail non fait : déduit de l'heure de saisie et de l'emploi
+  // du temps de la salle affichée de la classe (l'historique ne stocke que l'horodatage).
+  const _cls = S.classes?.[stu.classe_id];
+  const _salleId = _cls?.activeRoom;
+  const slotTxt = (ts) => {
+    const dt = new Date(ts);
+    const hhmm = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+    const sl = _salleId ? findCurrentSlot(getSalleSchedule(_salleId, dayKeyOf(dt)), hhmm) : null;
+    return sl ? `${sl.label || sl.id} · ${hhmm}` : `${hhmm} (hors créneau)`;
+  };
   for (const h of (stu.history || [])) {
     const d = h.ts ? _ymd(new Date(h.ts)) : '';
     if (!d || d < from || d > to) continue;
-    if (h.type === 'oubli') out.oubli.push({ d, ts: h.ts, txt: '' });
-    else if (h.type === 'nt') out.nt.push({ d, ts: h.ts, txt: '' });
+    if (h.type === 'oubli') out.oubli.push({ d, ts: h.ts, txt: slotTxt(h.ts) });
+    else if (h.type === 'nt') out.nt.push({ d, ts: h.ts, txt: slotTxt(h.ts) });
     else if (h.type === 'rappel_fait') out.rem.push({ d, ts: h.ts, txt: h.label || '(sans libellé)' });
   }
   if (_featureEnabled('appel')) {
@@ -50767,7 +50810,7 @@ function _rwShowVieTip(el, kind) {
   const fmt = (d) => { const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }); };
   const rows = list.map(e => `<tr><td class="rw-tip-d" style="white-space:nowrap">${_esc(fmt(e.d))}</td><td style="text-align:left">${_esc(e.txt || '')}</td></tr>`).join('');
   const html = `<div class="rw-tip-t">${_RW_VIE_LBL[kind] || ''} — ${list.length}</div>
-    <div class="rw-tip-s">du ${_fmtDateFr(from)} au ${_fmtDateFr(to)}</div>
+    <div class="rw-tip-s">du ${_fmtDateFr(from)} au ${_fmtDateFr(to)}${_rw.vieYear ? ` · <strong>${(_rw.vieYear[kind] || []).length}</strong> sur l'année` : ''}</div>
     ${list.length ? `<table class="rw-tip-tbl">${rows}</table>` : '<div class="rw-tip-s">Rien sur la période.</div>'}`;
   _rwPlaceTip(el, html);
 }
