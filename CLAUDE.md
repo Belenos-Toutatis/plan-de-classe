@@ -714,6 +714,8 @@ Tests : `test/run.test.js` (migration T|S|null et PP, helpers de rendu avec tri 
 
 ## AESH — Accompagnant·e·s d'Élèves en Situation de Handicap
 
+> 🚧 **Prochain chantier (demandé le 2026-10-06, pas commencé)** : revoir la configuration des AESH et **où la ranger** dans le logiciel. Aujourd'hui elle vit dans Config Salle → mode 🧑‍🏫 AESH (par couple classe × salle : nombre, placement, élèves liés) ; la fiche élève (`mrw`, bloc Place & matériel) n'y renvoie que par `_ficheConfig('aesh', salle)`. Proposer l'emplacement à l'utilisateur avant de coder.
+
 Une AESH est un slot **anonyme** (pas de nom) configuré par couple **(classe, salle)**. Le label affiché dépend du nombre total dans la salle :
 - N=1 → `AESH`
 - N≥2 → `AESH1`, `AESH2`…
