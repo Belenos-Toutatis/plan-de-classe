@@ -3828,7 +3828,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <label style="font-size:.85em;color:var(--pencil)">Période :</label>
         <select id="bilan-period-filter" onchange="_syncBilanPeriode('bilan-period-filter');renderBilanTab()" style="padding:4px 8px;font-size:.9em"></select>
         <button class="btn btn-g btn-sm" id="bilan-crosstab-btn" onclick="_bilanOpenCrossTab()" title="Comparer les classes : moyenne, σ et médiane par classe × civilité, sur la période ou un sous-ensemble d'évaluations">🆚 Comparer classes</button>
-        <button class="btn btn-g btn-sm" onclick="openRemarkWriter()" title="Rédiger les remarques de bulletin élève par élève, avec toutes les informations utiles (Précédent / Suivant)">✍ Rédiger les remarques</button>
         <button class="btn btn-g btn-sm" onclick="printBilanNotes()" title="Imprimer le tableau affiché (paysage), avec la remarque de classe et les éléments travaillés — Ctrl+P">🖨 Imprimer</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">⧉ Copier</button>
         <button class="btn btn-g btn-sm" onclick="_bilanDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
@@ -3849,7 +3848,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <h2>🎯 Bilan des compétences</h2>
       <span class="tab-ctx" id="tabctx-comp"></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
-        <button class="btn btn-g btn-sm" onclick="openRemarkWriter()" title="Rédiger les remarques de bulletin élève par élève, avec toutes les informations utiles (Précédent / Suivant)">✍ Rédiger les remarques</button>
         <button class="btn btn-g btn-sm" onclick="printBilanComp()" title="Imprimer le tableau affiché (paysage), avec la remarque de classe et les éléments travaillés — Ctrl+P">🖨 Imprimer</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompCopy()" title="Copier le tableau au format TSV (collable dans Excel/LibreOffice/ENT)">⧉ Copier</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompCsv()" title="Télécharger un fichier CSV">💾 CSV</button>
@@ -7615,11 +7613,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.87.1';
+const APP_VERSION    = '2.87.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T22:41:45Z';
+const APP_BUILD_DATE = '2026-10-06T22:53:44Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10960,6 +10958,14 @@ function _confNameClick(sid) {
 // Onglet Élèves : le NOM ouvre toujours la fiche complète (demande de l'utilisateur),
 // y compris en mode confidentiel — la fiche ne montre que cet élève, qui devient donc
 // l'élève affiché. Le reste de la cellule du nom garde le clic afficher / masquer.
+// Depuis un bilan : la fiche s'ouvre sur la PÉRIODE DU BILAN (« Toutes » → vue Année) et
+// parcourt les élèves du bilan — comme l'icône ✎ / ✓ des remarques. Ailleurs, openFiche
+// (période en cours, toute la classe). reveal : texte du nom, qui ouvre la fiche même en
+// mode confidentiel (l'élève devient l'élève affiché, comme _confOpenFiche).
+function _bilanOpenSheet(sid, periode, reveal) {
+  if (reveal && _conf.on && _conf.sid !== sid) _confReveal(sid);
+  openRemarkWriter(sid, periode || '');
+}
 function _confOpenFiche(sid) {
   if (_conf.on && _conf.sid !== sid) _confReveal(sid);
   openFiche(sid);
@@ -49879,7 +49885,7 @@ function renderBilanTab() {
     const _hid = !_bfShow(sid);
     const rowBg = (_hid ? 0 : _visIdx++) % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-sid="${_esc(sid)}"${_hid ? ' class="bf-hide"' : ''} style="background:${rowBg}">`;
-    html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1;cursor:pointer" title="Cliquer pour ouvrir la fiche complète de l'élève"><span class="stu-name-link" onclick="event.stopPropagation();_confOpenFiche('${_esc(sid)}')">${_fmtStuNameInnerHtml(stu)}</span></td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||_bilanOpenSheet('${_esc(sid)}','${_esc(periode)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${rowBg};font-family:var(--font-serif);white-space:nowrap;z-index:1;cursor:pointer" title="Cliquer pour ouvrir la fiche complète de l'élève"><span class="stu-name-link" onclick="event.stopPropagation();_bilanOpenSheet('${_esc(sid)}','${_esc(periode)}',true)">${_fmtStuNameInnerHtml(stu)}</span></td>`;
     // Détermine quelles facultatives sont effectivement comptées pour cet élève
     // (par période de synthèse ou global selon le filtre). On précalcule l'union
     // sur les périodes de synthèse pour rester rapide.
@@ -52164,7 +52170,7 @@ function renderCompetencesTab() {
     const _hid = !_bfShow(sid);
     const bg = (_hid ? 0 : _visIdx++) % 2 === 0 ? 'var(--paper)' : 'var(--paper-warm)';
     html += `<tr data-sid="${_esc(sid)}"${_hid ? ' class="bf-hide"' : ''} style="background:${bg}">`;
-    html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap;cursor:pointer" title="Cliquer pour ouvrir la fiche complète de l'élève"><span class="stu-name-link" onclick="event.stopPropagation();_confOpenFiche('${_esc(sid)}')">${_fmtStuNameInnerHtml(stu)}</span></td>`;
+    html += `<td onclick="_confNameClick('${_esc(sid)}')||_bilanOpenSheet('${_esc(sid)}','${_esc(periode)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap;cursor:pointer" title="Cliquer pour ouvrir la fiche complète de l'élève"><span class="stu-name-link" onclick="event.stopPropagation();_bilanOpenSheet('${_esc(sid)}','${_esc(periode)}',true)">${_fmtStuNameInnerHtml(stu)}</span></td>`;
     let sumMean = 0, nbMean = 0;
     const _rowLvls = [];
     for (const col of cols) {
