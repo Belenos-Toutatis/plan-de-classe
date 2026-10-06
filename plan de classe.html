@@ -1866,6 +1866,19 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
 .bsynth-chip:disabled { opacity:.45; cursor:default; }
 .bsynth-count { color:var(--pencil); font-size:.92em; }
 tr.bf-hide { display:none; }
+/* Bilan des compétences — lot 3 (v2.87.0) : carte de maîtrise */
+.lvsq { display:inline-flex; align-items:center; justify-content:center; width:26px; height:24px; border-radius:6px; font-family:var(--font-mono); font-weight:600; font-size:.88em; line-height:1; vertical-align:middle; }
+.lvsq-sm { width:18px; height:16px; border-radius:4px; font-size:.78em; margin-right:4px; }
+.lvsq-none { border:1px dashed var(--rule-line); background:transparent; }
+.blegend { display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 12px; font-size:.92em; color:var(--pencil); }
+.blegend > span { display:inline-flex; align-items:center; }
+.bdomband { background:var(--paper-warm); color:var(--ink-blue); font-family:var(--font-sans); font-size:.76em; font-weight:600; padding:4px 6px 3px; border-bottom:2px solid var(--ink-blue-soft); border-left:2px solid var(--paper); text-align:center; max-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bcomp-name { font-family:var(--font-sans); font-size:.72em; font-weight:normal; color:var(--pencil); max-width:90px; margin:1px auto 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.blvbar { display:flex; height:9px; border-radius:3px; overflow:hidden; background:var(--rule-line-soft); min-width:60px; }
+.blvbar > span { display:block; height:100%; }
+.bfoot-acq { font-family:var(--font-mono); font-size:.8em; font-weight:600; color:var(--ink-deep); margin-top:3px; }
+.bfoot-acq span, .bfoot-mu { font-weight:normal; color:var(--pencil); }
+.bfoot-mu { font-family:var(--font-mono); font-size:.74em; }
 /* Bilans — lot 2 (v2.86.0) : pastilles, tendance, remarque en icône, mentions grisées */
 .bsynth-right { margin-left:auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .bsynth-seg { display:inline-flex; align-items:center; border:1px solid var(--rule-line); border-radius:var(--radius-md); overflow:hidden; background:var(--paper); }
@@ -7602,11 +7615,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.86.0';
+const APP_VERSION    = '2.87.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T22:37:37Z';
+const APP_BUILD_DATE = '2026-10-06T22:40:28Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -49132,6 +49145,24 @@ function _bilanSparkSVG(vals) {
   const pts = v.map((x, i) => `${Math.round(i * W / (v.length - 1) * 10) / 10},${Math.round((H - 1 - Math.max(0, Math.min(20, x)) / 20 * (H - 2)) * 10) / 10}`).join(' ');
   return `<svg class="bspark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
 }
+// Légende des niveaux de maîtrise (Bilan des compétences, en tête de tableau).
+function _bilanLevelLegendHTML(colors) {
+  const nb = _nbLevels();
+  const names = nb === 4 ? ['Insuffisante', 'Fragile', 'Satisfaisante', 'Très bonne'] : null;
+  let h = '<span class="blegend" title="Niveaux de maîtrise — couleurs réglables dans ⚙ Réglages des évaluations">';
+  for (let i = 0; i < nb; i++) h += `<span><span class="lvsq lvsq-sm" style="background:${colors[i]};color:${_contrastTextColor(colors[i])}">${i + 1}</span>${names ? names[i] : ''}</span>`;
+  return h + '<span><span class="lvsq lvsq-sm lvsq-none"></span>non évaluée</span></span>';
+}
+// Barre de répartition des niveaux (profil d'un élève, répartition d'une colonne).
+function _bilanLevelBarHTML(levels, colors, cls) {
+  const nb = _nbLevels();
+  const counts = new Array(nb).fill(0);
+  for (const l of levels) if (typeof l === 'number') counts[Math.max(1, Math.min(nb, Math.round(l))) - 1]++;
+  const tot = counts.reduce((a, b) => a + b, 0);
+  if (!tot) return '';
+  const tip = counts.map((n, k) => `Niveau ${k + 1} : ${n} (${Math.round(n / tot * 100)} %)`).join('\n');
+  return `<div class="blvbar${cls ? ' ' + cls : ''}" title="${_escAttr(tip)}">${counts.map((n, k) => n ? `<span style="width:${n / tot * 100}%;background:${colors[k]}"></span>` : '').join('')}</div>`;
+}
 function _bdot(bg) { return `<span class="bdot" style="background:${bg || 'var(--pencil-soft)'}" aria-hidden="true"></span>`; }
 
 // ═══ Bilans — bandeau de synthèse + filtres de lignes (v2.85.0) ═══
@@ -51935,6 +51966,13 @@ function renderCompetencesTab() {
   const orphanCompIds = new Set([...compIds].filter(c => !ownCompIds.has(c)));
   const comps = Array.from(compIds).map(id => S.competences?.[id]).filter(Boolean);
   comps.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  // Regroupe par domaine du socle (ordre du référentiel, « hors socle » en dernier) pour
+  // que le bandeau de domaines au-dessus des codes couvre des colonnes contiguës.
+  {
+    const _domOrder = Object.keys(S.competenceDomains || {});
+    const _di = c => { const i = _domOrder.indexOf(c.domainId); return i < 0 ? 9999 : i; };
+    comps.sort((a, b) => _di(a) - _di(b) || (a.code || '').localeCompare(b.code || ''));
+  }
 
   if (comps.length === 0) {
     // Vérifie si on a masqué des compétences orphelines : dans ce cas, montre quand
@@ -52036,7 +52074,7 @@ function renderCompetencesTab() {
   if (!_bs.chips.some(c => c.v === _bf)) _bf = 'all';
   const _bfShow = sid => _bf === 'all' || _bs.flags.get(sid)?.has(_bf);
   const _remIcon = _bilanRemMode() === 'icon';
-  let html = _bs.html + _bsynthChipsHTML('comp', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanDisplayTogglesHTML(false));
+  let html = _bs.html + _bsynthChipsHTML('comp', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanLevelLegendHTML(colors) + _bilanDisplayTogglesHTML(false));
   // Bandeau toggle "Évals d'autres classes" — affiché si on détecte au moins une
   // compétence orpheline OU si le toggle masque actuellement (pour pouvoir le réactiver).
   const _hasOrphanPotentialComp = (() => {
@@ -52066,14 +52104,33 @@ function renderCompetencesTab() {
   }
   html += '<div class="bilan-table-scroll" style="overflow:auto;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);max-height:calc(100vh - 220px)">';
   html += '<table style="border-collapse:separate;border-spacing:0;width:100%;font-size:.9em">';
-  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)"><tr>';
+  html += '<thead style="position:sticky;top:0;z-index:2;background:var(--paper-warm)">';
+  // Bandeau des domaines du socle au-dessus des codes (mode « Codes compétences »).
+  if (displayMode !== 'domain' && cols.some(col => S.competences?.[col.compIds[0]]?.domainId && S.competenceDomains?.[S.competences[col.compIds[0]].domainId])) {
+    const _perAll = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
+    const _right = 1 + _perAll.filter(p => !_isBilanColHidden(`comp:moy:${p}`)).length + _perAll.filter(p => !_isBilanColHidden(`comp:rem:${p}`)).length;
+    html += '<tr><th style="position:sticky;left:0;z-index:3;background:var(--paper-warm)"></th>';
+    let i = 0;
+    while (i < cols.length) {
+      const did = S.competences?.[cols[i].compIds[0]]?.domainId || '';
+      let j = i;
+      while (j + 1 < cols.length && (S.competences?.[cols[j + 1].compIds[0]]?.domainId || '') === did) j++;
+      const dom = S.competenceDomains?.[did];
+      const lbl = dom ? `${dom.code}${dom.name ? ' · ' + dom.name : ''}` : 'Hors socle';
+      html += `<th colspan="${j - i + 1}" class="bdomband" title="${_escAttr(lbl)}"><span>${_esc(lbl)}</span></th>`;
+      i = j + 1;
+    }
+    html += `<th colspan="${_right}" style="background:var(--paper-warm)"></th></tr>`;
+  }
+  html += '<tr>';
   html += `<th style="padding:6px 10px;border-bottom:2px solid var(--rule-line);text-align:left;position:sticky;left:0;background:var(--paper-warm);z-index:3;font-family:var(--font-serif)"${_NAME_HEAD_ATTRS()}>Élève</th>`;
   for (const col of cols) {
     const orphMark = col.isOrphan ? '<span style="color:var(--warn-fg);font-weight:bold" title="Compétence venant d\'évals d\'autres classes (élève transféré)">⤴</span> ' : '';
     const orphBg = col.isOrphan ? 'background:repeating-linear-gradient(135deg,rgba(217,119,6,.07) 0,rgba(217,119,6,.07) 6px,transparent 6px,transparent 12px);' : '';
     const orphTip = col.isOrphan ? '\n\n⤴ Compétence venant d\'une éval d\'une autre classe\n(visible parce qu\'au moins un élève transféré y a une saisie)' : '';
-    html += `<th class="bilan-evalcell" style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:54px;cursor:help;${orphBg}" title="${_esc(col.tip + orphTip)}">${orphMark}${_esc(col.code)}</th>`;
+    html += `<th class="bilan-evalcell" style="padding:6px 6px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-mono);min-width:48px;cursor:help;${orphBg}" title="${_esc(col.tip + orphTip)}">${orphMark}${_esc(col.code)}${col.name ? `<div class="bcomp-name">${_esc(col.name)}</div>` : ''}</th>`;
   }
+  html += `<th style="padding:6px 8px;border-bottom:2px solid var(--rule-line);text-align:center;font-family:var(--font-serif);min-width:110px;border-left:2px solid var(--ink-blue-soft)" title="Répartition des niveaux de l'élève sur les colonnes affichées">Profil</th>`;
   // Moyenne(s) — 1 colonne quand une période, N quand "Toutes" (cliquable pour masquer en multi)
   const compSynthPeriodes = periode === '' ? _periodeOptions().map(o => o.code) : [periode];
   const compMulti = compSynthPeriodes.length > 1;
@@ -52109,18 +52166,19 @@ function renderCompetencesTab() {
     html += `<tr data-sid="${_esc(sid)}"${_hid ? ' class="bf-hide"' : ''} style="background:${bg}">`;
     html += `<td onclick="_confNameClick('${_esc(sid)}')||openFiche('${_esc(sid)}')" style="padding:4px 10px;border-bottom:1px solid var(--rule-line-soft);position:sticky;left:0;background:${bg};font-family:var(--font-serif);white-space:nowrap;cursor:pointer" title="Cliquer pour ouvrir la fiche complète de l'élève"><span class="stu-name-link" onclick="event.stopPropagation();_confOpenFiche('${_esc(sid)}')">${_fmtStuNameInnerHtml(stu)}</span></td>`;
     let sumMean = 0, nbMean = 0;
+    const _rowLvls = [];
     for (const col of cols) {
       // Pour chaque colonne (compétence unique OU domaine), on agrège les niveaux
       // sur les compétences qu'elle représente puis on en prend la moyenne.
       const aggs = col.compIds.map(cid => _agg(sid, cid, periode));
       const levels = aggs.map(a => a.levelMean).filter(v => v != null);
       if (levels.length === 0) {
-        html += '<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;color:var(--pencil-soft)">—</td>';
+        html += '<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="Non évaluée"><span class="lvsq lvsq-none" aria-label="non évaluée"></span></td>';
         continue;
       }
       // Domaine = moyenne des compétences qu'il regroupe, arrondie à l'entier comme elles.
       const lvl = Math.round(levels.reduce((s, v) => s + v, 0) / levels.length);
-      sumMean += lvl; nbMean++;
+      sumMean += lvl; nbMean++; _rowLvls.push(lvl);
       const lvlIdx = Math.max(1, Math.min(colors.length, Math.round(lvl))) - 1;
       // Détail dans le tooltip : si plusieurs compétences (mode domaine), on liste les sous-moyennes
       let tipDetail;
@@ -52140,9 +52198,10 @@ function renderCompetencesTab() {
         : `${dispLvl} / 4 — moyenne sur ${aggs[0].entries.length} évaluation${aggs[0].entries.length > 1 ? 's' : ''}`;
       const tip = `${headerLine}\n\n${tipDetail}`;
       html += `<td class="bilan-evalcell" style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center" title="${_esc(tip)}">
-        <span style="display:inline-block;padding:2px 7px;background:${colors[lvlIdx]};color:${_contrastTextColor(colors[lvlIdx])};border-radius:10px;font-family:var(--font-mono);font-weight:600;font-size:.85em">${dispLvl}</span>
+        <span class="lvsq" style="background:${colors[lvlIdx]};color:${_contrastTextColor(colors[lvlIdx])}">${dispLvl}</span>
       </td>`;
     }
+    html += `<td style="padding:4px 8px;border-bottom:1px solid var(--rule-line-soft);border-left:2px solid var(--ink-blue-soft)">${_bilanLevelBarHTML(_rowLvls, colors) || '<span style="color:var(--pencil-soft)">—</span>'}</td>`;
     // Moyenne(s) : skip si col masquée
     compSynthPeriodes.forEach((perCode, idx) => {
       if (_isBilanColHidden(cMoyKey(perCode))) return;
@@ -52232,18 +52291,30 @@ function renderCompetencesTab() {
   html += '<tfoot style="position:sticky;bottom:0;z-index:2;background:var(--paper-warm)">';
   // Ligne moyenne par compétence (avec tooltip détaillé)
   html += '<tr style="border-top:2px solid var(--rule-line)">';
-  html += `<td style="padding:6px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600">μ classe</td>`;
-  compMeans.forEach((m, i) => {
-    const tip = _compStatsTooltip(compLevels[i]);
-    if (m.mean == null) {
-      html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">—</td>`;
-    } else {
-      const mIdx = Math.max(1, Math.min(colors.length, Math.round(m.mean))) - 1;
-      html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tip)}">
-        <span style="display:inline-block;padding:2px 7px;background:${colors[mIdx]};color:${_contrastTextColor(colors[mIdx])};border-radius:10px;font-family:var(--font-mono);font-weight:700;font-size:.85em">${_fmtNote(m.mean)}</span>
-      </td>`;
+  html += `<td style="padding:6px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600" title="Répartition de la classe par niveau, part au niveau « acquis » ou plus, et moyenne (μ)">Classe</td>`;
+  // Une cellule par COLONNE affichée (compétence, ou domaine en mode « Domaines ») :
+  // répartition de la classe par niveau + part au niveau « acquis » ou plus ; μ en clair.
+  const _acq = Math.floor(_nbLevels() / 2) + 1;
+  const _allColLvls = [];
+  for (const col of cols) {
+    const lvls = [];
+    for (const sid of sids) {
+      const ls = col.compIds.map(cid => _agg(sid, cid, periode).levelMean).filter(v => v != null);
+      if (ls.length) lvls.push(Math.round(ls.reduce((a, b) => a + b, 0) / ls.length));
     }
-  });
+    _allColLvls.push(...lvls);
+    const tip = (cols.length && col.compIds.length > 1 ? col.code + '\n' : '') + _compStatsTooltip(lvls);
+    if (!lvls.length) {
+      html += `<td class="bilan-evalcell" style="padding:6px 6px;text-align:center;color:var(--pencil-soft);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">—</td>`;
+      continue;
+    }
+    const pct = Math.round(lvls.filter(v => v >= _acq).length / lvls.length * 100);
+    const mu = lvls.reduce((a, b) => a + b, 0) / lvls.length;
+    html += `<td class="bilan-evalcell" data-export="${_escAttr(_fmtNote(mu))}" style="padding:6px 5px;text-align:center;background:var(--paper-warm);cursor:help" title="${_esc(tip + '\n\n' + pct + ' % au niveau ' + _acq + ' ou plus')}">
+      ${_bilanLevelBarHTML(lvls, colors)}<div class="bfoot-acq">${pct} %<span> ≥ ${_acq}</span></div><div class="bfoot-mu">μ ${_fmtNote(Math.round(mu * 100) / 100)}</div>
+    </td>`;
+  }
+  html += `<td style="padding:6px 8px;background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)" title="Répartition de tous les niveaux de la classe">${_bilanLevelBarHTML(_allColLvls, colors)}</td>`;
   // Cellule moyenne globale par période de synthèse (skip si col masquée)
   compSynthPeriodes.forEach((perCode, idx) => {
     if (_isBilanColHidden(cMoyKey(perCode))) return;
@@ -52285,14 +52356,17 @@ function renderCompetencesTab() {
   // Ligne nb d'évaluations par compétence (tooltip listant les évals)
   html += '<tr>';
   html += `<td style="padding:4px 10px;position:sticky;left:0;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--pencil)">éval(s)</td>`;
-  for (const c of comps) {
-    const evalList = _listEvaluationsForComp(cls.id, c.id, periode);
+  for (const col of cols) {
+    const seen = new Map();
+    for (const cid of col.compIds) for (const e of _listEvaluationsForComp(cls.id, cid, periode)) seen.set(e.id || e.nomCourt, e);
+    const evalList = [...seen.values()];
     const nEvals = evalList.length;
     const tip = evalList.length === 0
-      ? `Aucune évaluation contenant ${c.code}`
-      : `${nEvals} évaluation${nEvals > 1 ? 's' : ''} contenant ${c.code} :\n\n` + evalList.map(e => `• ${e.nomCourt}${e.nomLong ? ' — ' + e.nomLong : ''}${e.date ? ' (' + _fmtDateFr(e.date) + ')' : ''}`).join('\n');
+      ? `Aucune évaluation contenant ${col.code}`
+      : `${nEvals} évaluation${nEvals > 1 ? 's' : ''} contenant ${col.code} :\n\n` + evalList.map(e => `• ${e.nomCourt}${e.nomLong ? ' — ' + e.nomLong : ''}${e.date ? ' (' + _fmtDateFr(e.date) + ')' : ''}`).join('\n');
     html += `<td class="bilan-evalcell" style="padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:.82em;color:var(--pencil);background:var(--paper-warm);cursor:help" title="${_esc(tip)}">${nEvals}</td>`;
   }
+  html += '<td style="background:var(--paper-warm);border-left:2px solid var(--ink-blue-soft)"></td>';
   // Cellules Moyenne + Remarque vides (footer "éval(s)") — skip si col masquée
   compSynthPeriodes.forEach((perCode, idx) => {
     if (_isBilanColHidden(cMoyKey(perCode))) return;
@@ -52309,12 +52383,7 @@ function renderCompetencesTab() {
 
   html += '</table></div>';
 
-  // Mini-légende
-  html += '<div style="margin-top:8px;font-size:.85em;color:var(--pencil);display:flex;gap:14px;flex-wrap:wrap"><strong>Légende :</strong>';
-  ['Insuffisant','Fragile','Satisfaisant','Très bonne maîtrise'].forEach((lbl,i) => {
-    html += `<span><span style="display:inline-block;width:14px;height:14px;background:${colors[i]};border-radius:7px;vertical-align:middle;margin-right:4px"></span>N${i+1} ${lbl}</span>`;
-  });
-  html += '</div>';
+  // (La légende des niveaux est en tête, dans la rangée des filtres — _bilanLevelLegendHTML.)
 
   // Bloc "Remarque classe + Éléments travaillés" en bas du tableau
   // (1 paire par période si "Toutes", sinon 1 paire)

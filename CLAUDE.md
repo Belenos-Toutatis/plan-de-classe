@@ -2463,7 +2463,14 @@ Premier lot de la modernisation des deux bilans (maquette validée le 2026-10-07
 - **Mentions du conseil grisées** quand non attribuées (`.cm-btn.cm-off`, opacité .45, pleine au survol / focus) — les quatre boutons restent, un seul clic pour attribuer (choix préféré à un dévoilement au survol, peu commode au doigt). S'applique partout où `_conseilBtnHTML` est utilisé.
 - En-tête de devoir : coefficient précédé de « × » ; ligne survolée soulignée par un filet (`box-shadow` inset, pas de changement de fond → aucun risque de contraste), désactivé en mode confidentiel.
 - Audit : 0 écart en clair et en sombre, dans les deux styles de couleurs et sur le Bilan des compétences.
-- Reste du chantier (lot 3) : carte de maîtrise du Bilan des compétences (carrés, bandeau de domaines, colonne Profil, répartition en pied). Volontairement écartés : avatar et pastilles d'aménagement dans la colonne Élève — la 1re cellule reste visible en mode confidentiel, un aménagement y fuiterait.
+**Lot 3 (v2.87.0) — carte de maîtrise du Bilan des compétences.**
+- Cellules en **carrés** `.lvsq` (couleurs `maitriseColors`, encre `_contrastTextColor`) ; non évaluée = carré en pointillés `.lvsq-none` (distinct d'un niveau 1).
+- **Bandeau des domaines** du socle au-dessus des codes (mode « Codes compétences », `.bdomband`, colspan par domaine) ; les compétences sont donc **triées par domaine** (ordre du référentiel, hors socle en dernier) puis par code — exports compris, ils lisent `comps`. Nom court de la compétence sous le code (`.bcomp-name`, tronqué, infobulle complète).
+- Colonne **Profil** (`_bilanLevelBarHTML`) : répartition des niveaux de l'élève sur les colonnes affichées ; en pied, celle de toute la classe.
+- **Pied « Classe »** : par colonne, barre de répartition + « % au niveau ⌊nb/2⌋+1 ou plus » + μ. ⚠️ Le pied boucle désormais sur **`cols`** et non sur `comps` : en mode « Domaines du socle », il avait autant de cellules que de COMPÉTENCES sous des colonnes de DOMAINES — décalé (défaut antérieur, corrigé au passage ; la ligne « éval(s) » aussi, union des évals des compétences du domaine).
+- **Légende** des niveaux en tête (`_bilanLevelLegendHTML`, dans la rangée des filtres), plus en bas.
+- Audit : 0 écart en clair et en sombre, modes Codes et Domaines.
+- Volontairement écartés : avatar et pastilles d'aménagement dans la colonne Élève — la 1re cellule reste visible en mode confidentiel, un aménagement y fuiterait.
 
 ### Conseil de classe — mentions configurables
 
