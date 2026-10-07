@@ -1656,6 +1656,7 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ov-n{text-align:right;font-family:var(--font-mono);white-space:nowrap}
 .ov-n.hot{color:var(--danger-fg);font-weight:600}
 .ov-bar{display:inline-block;height:6px;border-radius:3px;background:var(--margin-red);vertical-align:middle;margin-left:5px;opacity:.75}
+.ov-bar.vie{background:var(--warn-fg)}
 .ov-cls{background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600;white-space:nowrap}
 .ov-amen{white-space:nowrap}
 /* Classe recomposée (v2.114.0) */
@@ -3790,11 +3791,11 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" id="btn-trombiview" onclick="openTrombiView()" style="display:none" title="Afficher le trombinoscope d'une classe, et l'imprimer (cette classe ou toutes)">🖼 Trombinoscope</button>
         <button class="btn btn-g btn-sm" id="btn-memo" onclick="openMemoGame()" style="display:none" title="Jeu de mémorisation : retrouver le prénom (ou le nom) de chaque élève à partir de sa photo">🧠 Mémoriser</button>
       </span>
-      <span class="tb-grp"><span class="tb-grp-lbl">Positions</span>
-        <button class="btn btn-p btn-sm" onclick="startSeatingEntry()">📍 Saisir les positions</button>
+      <span class="tb-grp"><span class="tb-grp-lbl">Suivi</span>
+        <button class="btn btn-g btn-sm" onclick="openOverviewModal()" title="Vue d'ensemble : tous les élèves de toutes les classes — absences, retards, oublis, travail non fait, par période">📊 Vue d'ensemble</button>
       </span>
-      <!-- v2.94.0 : le reste de la barre est regroupé dans « ⋯ Plus » (demande de l'utilisateur :
-           seules Positions et Photos restent visibles). -->
+      <!-- v2.94.0 : le reste de la barre est regroupé dans « ⋯ Plus ». v2.117.0 : « 📍 Saisir les
+           positions » retiré (doublon), « 📊 Vue d'ensemble » sorti du menu. -->
       <span class="dd dd-right" style="margin-left:auto">
         <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Autres actions : tags, tableau des positions, suivi, impression, remises à zéro">⋯ Plus ▾</button>
         <div class="dd-menu">
@@ -3802,7 +3803,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <button onclick="closeAllDd();goToExportPositions()" title="Tableau complet de la classe (positions, groupes, compteurs, aménagements, informations) — triable, copiable, exportable en CSV">🗒 Tableau des positions</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();openSnapshotsModal('incidents')" title="Sauvegarder ou consulter l'état des incidents à une date">🔖 Instantanés</button>
-          <button onclick="closeAllDd();openOverviewModal()" title="Vue d'ensemble : tous les élèves de toutes les classes avec absences/retards cumulés">📊 Vue d'ensemble</button>
           <button onclick="closeAllDd();printElevesList()" title="Imprimer la liste : élève, groupe, oublis, travail non fait (portrait — Ctrl+P)">🖨 Imprimer la liste</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();resetAll()">↺ Réinitialiser les compteurs 📦/📝</button>
@@ -7304,46 +7304,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <!-- ── MODAL Stats par élève sur une période ── -->
-<!-- Saisie séquentielle des positions -->
-<div id="mse" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:min(95vw,1100px);width:100%">
-    <h2>📍 Saisir les positions</h2>
-
-    <!-- Mode séquentiel (un par un) -->
-    <div id="mse-seq">
-      <p id="mse-title" style="font-weight:bold;font-size:1.05em;margin-bottom:6px"></p>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
-        <input id="mse-input" type="text"
-               placeholder="N° de place QCM (ex: 1, 25, 160…) + Entrée — ou coller une colonne"
-               style="flex:1;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:1em"
-               onkeydown="mseKeydown(event)" onpaste="msePaste(event)">
-        <button class="btn btn-p btn-sm" onclick="mseConfirmInput()">↵ OK</button>
-      </div>
-      <p id="mse-err" style="color:#e74c3c;font-size:.82em;min-height:1.1em;margin:0 0 6px"></p>
-      <p style="font-size:.78em;color:var(--pencil);margin:0 0 8px">Ou clique directement sur une place ci-dessous.</p>
-      <div id="mse-grid" class="gc" style="margin-bottom:4px"></div>
-      <div class="board" style="margin-bottom:10px">🖥 TABLEAU</div>
-      <div class="ma">
-        <button class="btn btn-g" onclick="skipSeatingEntry()">Passer →</button>
-        <button class="btn btn-d" onclick="abortSeatingEntry()">Terminer</button>
-      </div>
-    </div>
-
-    <!-- Mode collage en masse -->
-    <div id="mse-bulk" style="display:none">
-      <p style="margin-bottom:8px;font-size:.9em">Vérifie les associations, puis clique <strong>Appliquer</strong> :</p>
-      <div style="max-height:60vh;overflow-y:auto;margin-bottom:12px">
-        <table id="mse-bulk-table" style="width:100%;border-collapse:collapse;font-size:.85em"></table>
-      </div>
-      <div class="ma">
-        <button class="btn btn-g" onclick="mseBulkCancel()">← Retour</button>
-        <button class="btn btn-p" onclick="mseBulkApply()">✅ Appliquer</button>
-      </div>
-    </div>
-
-  </div>
-</div>
-
 <!-- Edit class -->
 <div id="mce" class="mo" onclick="closeMod(this,event)">
   <div class="mb clf-mb">
@@ -7929,11 +7889,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.116.0';
+const APP_VERSION    = '2.117.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T21:16:24Z';
+const APP_BUILD_DATE = '2026-10-07T21:29:21Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -14738,9 +14698,9 @@ function _countTagViolations(cls) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SAISIE SÉQUENTIELLE DES POSITIONS (onglet Élèves)
+// Libellés de place (la saisie séquentielle « 📍 Saisir les positions » a été retirée en v2.117.0 :
+// la colonne Position de l'onglet Élèves, son clic droit et le Plan font le même travail)
 // ═══════════════════════════════════════════════════════════
-let seatingEntryState = null;
 
 // Convertit un label saisi (ex: "1", "3A", "B2") → clé "r,c"
 function seatLabelToKey(label, cls) {
@@ -14761,222 +14721,6 @@ function seatLabelToKey(label, cls) {
   if (r < 0 || r >= rows) return null;
   const c = cols - pos;
   return `${r},${c}`;
-}
-
-function startSeatingEntry() {
-  const cls = getCls();
-  if (!cls) return toast('⚠️ Sélectionne une classe.', 'warn');
-  const placed = new Set(Object.values(cls.seating));
-  const unplaced = cls.eleves
-    .filter(sid => S.eleves[sid] && !placed.has(sid))
-    .sort((a, b) => {
-      const sa = S.eleves[a], sb = S.eleves[b];
-      return (sa.nom + sa.prenom).localeCompare(sb.nom + sb.prenom);
-    });
-  if (!unplaced.length) return toast('✅ Tous les élèves sont déjà placés.');
-  seatingEntryState = { students: unplaced, index: 0, bulkPending: null };
-  renderSeatingEntryModal();
-  openMod('mse');
-  setTimeout(() => { const inp = document.getElementById('mse-input'); if (inp) inp.focus(); }, 120);
-}
-
-function renderSeatingEntryModal() {
-  if (!seatingEntryState) return;
-  const cls = getCls();
-  const { students, index } = seatingEntryState;
-  const sid = students[index];
-  const stu = S.eleves[sid];
-  if (!stu) { nextSeatingEntry(); return; }
-
-  // Assure le mode séquentiel visible
-  document.getElementById('mse-seq').style.display = '';
-  document.getElementById('mse-bulk').style.display = 'none';
-  document.getElementById('mse-err').textContent = '';
-  const inp = document.getElementById('mse-input');
-  if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
-
-  const salleNom = cls.configuration.salle || '?';
-  document.getElementById('mse-title').textContent =
-    `${stu.prenom} ${stu.nom}  (${index + 1} / ${students.length})  —  Salle : ${salleNom}`;
-
-  const rows = cls.configuration.rows || 4;
-  const cols = cls.configuration.cols || 10;
-  const g = document.getElementById('mse-grid');
-  g.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  g.style.maxWidth = `${94 * cols}px`;
-  g.innerHTML = '';
-
-  for (let r = rows - 1; r >= 0; r--) {
-    for (let c = cols - 1; c >= 0; c--) {
-      const key = `${r},${c}`;
-      const nt  = cls.configuration.positions_vides.includes(key);
-      const occ = cls.seating[key];
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-      if (nt) {
-        cell.classList.add('nt');
-      } else if (occ) {
-        cell.classList.add('oc');
-        const ostu = S.eleves[occ];
-        cell.innerHTML = `<span class="cpos">N°${seatLabel(r,c,cols)}</span>`
-          + (ostu ? `<div style="font-size:.68em;margin-top:2px">${_escName(ostu.prenom)}<br>${_escName(ostu.nom)}</div>` : '');
-      } else {
-        cell.classList.add('em');
-        cell.innerHTML = `<span class="cpos">N°${seatLabel(r,c,cols)}</span>`;
-        cell.style.cursor = 'pointer';
-        cell.addEventListener('click', () => placeStudentAtEntry(key));
-      }
-      g.appendChild(cell);
-    }
-  }
-}
-
-// Saisie clavier : Entrée valide
-function mseKeydown(e) {
-  if (e.key === 'Enter') { e.preventDefault(); mseConfirmInput(); }
-}
-
-function mseConfirmInput() {
-  const inp = document.getElementById('mse-input');
-  const err = document.getElementById('mse-err');
-  const label = inp.value.trim();
-  if (!label) return;
-  const cls = getCls();
-  const key = seatQCMToKey(label, cls);
-  if (!key) {
-    err.textContent = `"${label}" ne correspond à aucune place valide.`;
-    inp.select(); return;
-  }
-  if (cls.configuration.positions_vides.includes(key)) {
-    err.textContent = `La place N°${label.toUpperCase()} est désactivée (sans table).`;
-    inp.select(); return;
-  }
-  if (cls.seating[key]) {
-    const occ = S.eleves[cls.seating[key]];
-    err.textContent = `Place déjà occupée par ${occ ? occ.prenom + ' ' + occ.nom : '?'}.`;
-    inp.select(); return;
-  }
-  err.textContent = '';
-  inp.value = '';
-  placeStudentAtEntry(key);
-}
-
-// Collage depuis tableur : détecte plusieurs lignes → mode bulk
-function msePaste(e) {
-  const text = (e.clipboardData || window.clipboardData).getData('text');
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-  if (lines.length <= 1) return; // ligne unique → traitement normal par mseConfirmInput
-  e.preventDefault();
-  const cls = getCls();
-  const { students, index } = seatingEntryState;
-  const remaining = students.slice(index);
-  const total = Math.max(remaining.length, lines.length);
-  const rows = [];
-  for (let i = 0; i < total; i++) {
-    const sid  = remaining[i] || null;
-    const stu  = sid ? S.eleves[sid] : null;
-    const lbl  = lines[i] || '';
-    let key = null, warn = '';
-    if (sid && lbl) {
-      key = seatQCMToKey(lbl, cls);
-      if (!key) warn = 'Place inconnue';
-      else if (cls.configuration.positions_vides.includes(key)) warn = 'Place désactivée';
-      else if (cls.seating[key]) {
-        const occ = S.eleves[cls.seating[key]];
-        warn = `Occupée par ${occ ? occ.prenom + ' ' + occ.nom : '?'}`;
-      }
-    } else if (!sid && lbl) warn = 'Pas d\'élève correspondant';
-    else if (sid && !lbl)   warn = 'Pas de place fournie';
-    rows.push({ sid, stu, lbl, key, warn });
-  }
-  seatingEntryState.bulkPending = rows;
-  // Rendu du tableau de prévisualisation
-  const tbl = document.getElementById('mse-bulk-table');
-  const okCount   = rows.filter(r => r.key && !r.warn).length;
-  const warnCount = rows.filter(r => r.warn).length;
-  tbl.innerHTML = `
-    <thead><tr style="background:#f5f5f5">
-      <th style="padding:4px 8px;text-align:left;border-bottom:2px solid #ddd">Élève</th>
-      <th style="padding:4px 8px;text-align:left;border-bottom:2px solid #ddd">Place saisie</th>
-      <th style="padding:4px 8px;text-align:left;border-bottom:2px solid #ddd">État</th>
-    </tr></thead>
-    <tbody>` + rows.map(row => {
-    const bg      = row.warn ? '#fff0f0' : (row.key ? '#f0fff4' : '#fafafa');
-    const stuName = row.stu  ? `${_escName(row.stu.prenom)} ${_escName(row.stu.nom)}` : '<em style="color:var(--pencil-soft)">—</em>';
-    const lblDisp = row.lbl  ? _escAttr(row.lbl.toUpperCase()) : '<em style="color:var(--pencil-soft)">—</em>';
-    const state   = row.warn ? `⚠ ${_escAttr(row.warn)}` : (row.key ? '✅ OK' : '<em style="color:var(--pencil-soft)">—</em>');
-    return `<tr style="background:${bg}">
-      <td style="padding:3px 8px;border-bottom:1px solid #eee">${stuName}</td>
-      <td style="padding:3px 8px;border-bottom:1px solid #eee;font-family:monospace">${lblDisp}</td>
-      <td style="padding:3px 8px;border-bottom:1px solid #eee;font-size:.83em">${state}</td>
-    </tr>`;
-  }).join('') + `</tbody>
-    <tfoot><tr style="background:#f9f9f9;font-size:.82em;color:#666">
-      <td colspan="3" style="padding:4px 8px">
-        ${okCount} placement(s) valide(s)${warnCount ? ` — ${warnCount} ligne(s) ignorée(s)` : ''}
-      </td>
-    </tr></tfoot>`;
-  document.getElementById('mse-seq').style.display = 'none';
-  document.getElementById('mse-bulk').style.display = '';
-}
-
-function mseBulkCancel() {
-  seatingEntryState.bulkPending = null;
-  renderSeatingEntryModal();
-}
-
-function mseBulkApply() {
-  if (!seatingEntryState?.bulkPending) return;
-  const cls  = getCls();
-  const rows = seatingEntryState.bulkPending;
-  let placed = 0;
-  pushUndo();
-  const beforeSeat = _snapSeating(cls);
-  for (const row of rows) {
-    if (row.sid && row.key && !row.warn) {
-      cls.seating[row.key] = row.sid;
-      placed++;
-    }
-  }
-  _recordMovesFromDiff(cls, beforeSeat);
-  seatingEntryState = null;
-  save();
-  closeMod2('mse');
-  renderTeacherGrid();
-  renderStudents();
-  toast(`✅ ${placed} élève(s) placé(s).`);
-}
-
-function placeStudentAtEntry(key) {
-  const cls = getCls();
-  if (!seatingEntryState || !cls) return;
-  const sid = seatingEntryState.students[seatingEntryState.index];
-  pushUndo();
-  const beforeSeat = _snapSeating(cls);
-  cls.seating[key] = sid;
-  _recordMovesFromDiff(cls, beforeSeat);
-  save();
-  nextSeatingEntry();
-}
-
-function nextSeatingEntry() {
-  if (!seatingEntryState) return;
-  seatingEntryState.index++;
-  if (seatingEntryState.index >= seatingEntryState.students.length) {
-    abortSeatingEntry();
-    return;
-  }
-  renderSeatingEntryModal();
-}
-
-function skipSeatingEntry() { nextSeatingEntry(); }
-
-function abortSeatingEntry() {
-  seatingEntryState = null;
-  closeMod2('mse');
-  renderTeacherGrid();
-  renderStudents();
-  toast('✅ Saisie des positions terminée.');
 }
 
 // ─── Filtre de groupe (chips) ───
@@ -18264,7 +18008,7 @@ let _histNotesPeriode = '';  // période de l'historique : '' = toute l'année, 
 let _ovSort = { col: 'abs', dir: -1 }; // par défaut tri absences desc
 // Filtres (état de session) : classes choisies (vide = toutes), seuils (l'un OU l'autre),
 // période des compteurs ('month' | 'prev' | 'per' | 'year').
-var _ovF = { cls: new Set(), thr: new Set(), per: 'year' };
+var _ovF = { cls: new Set(), thr: new Set(), per: 'year', incl: true };
 var OV_THR = [
   { k: 'abs', lbl: '3 absences ou plus', test: r => r.abs >= 3, appel: true },
   { k: 'ret', lbl: '3 retards ou plus',  test: r => r.ret >= 3, appel: true },
@@ -18274,13 +18018,14 @@ var OV_THR = [
 var OV_PER = [['month', 'Ce mois'], ['prev', 'Mois précédent'], ['per', 'Cette période'], ['year', 'Année']];
 
 function openOverviewModal() {
-  _ovF = { cls: new Set(), thr: new Set(), per: 'year' };
+  _ovF = { cls: new Set(), thr: new Set(), per: 'year', incl: true };
   _ovSort = { col: 'abs', dir: -1 };
   const q = document.getElementById('ov-search'); if (q) q.value = '';
   renderOverview();
   openMod('moverview');
 }
-function resetOverviewFilters() { _ovF = { cls: new Set(), thr: new Set(), per: 'year' }; renderOverview(); }
+function resetOverviewFilters() { _ovF = { cls: new Set(), thr: new Set(), per: 'year', incl: true }; renderOverview(); }
+function _ovToggleIncl() { _ovF.incl = !_ovF.incl; renderOverview(); }
 function sortOverview(col) {
   if (_ovSort.col === col) _ovSort.dir = -_ovSort.dir;
   else { _ovSort.col = col; _ovSort.dir = (col === 'classe' || col === 'nom') ? 1 : -1; }
@@ -18321,6 +18066,9 @@ function _overviewRows(opts) {
     for (const sid of cls.eleves || []) {
       const stu = S.eleves[sid];
       if (!stu) continue;
+      // « Élèves en classe seulement » : sans les ULIS / UPE2A hors inclusion — pré-marqués absents
+      // à chaque appel, ils occuperaient le haut du classement des absences sans raison.
+      if (_ovF.incl && ((stu.ulis && !stu.ulis_incl) || (stu.upe2a && !stu.upe2a_incl))) continue;
       let abs, ret, oublis, nt;
       if (range) {
         ({ abs, ret } = getStudentAttendanceStatsInRange(cls.id, sid, range.from, range.to));
@@ -18392,12 +18140,14 @@ function renderOverview() {
         return `<span class="mvc-lvl-group">${pill(k === cs.length, `_ovToggleLevel(${n})`, _esc(_levelLabel(n)), 'Tout le niveau', ' mvc-lvl' + (k && k < cs.length ? ' part' : ''))}`
           + cs.map(c => pill(_ovF.cls.has(c.id), `_ovToggleCls('${_escJsAttr(c.id)}')`, _esc(c.nom), '')).join('') + '</span>';
       }).join('') + '</span></div>';
+    h += '<div class="mvc-fp-row"><span class="mvc-fp-lbl">Élèves :</span><span class="mvc-fp-chips">'
+      + pill(_ovF.incl, '_ovToggleIncl()', 'Sans les ULIS / UPE2A hors inclusion', "Les élèves ULIS ou UPE2A qui ne sont pas inclus dans la classe sont pré-marqués absents à chaque appel : ils sont masqués tant que cette pastille est active") + '</span></div>';
     h += '<div class="mvc-fp-row"><span class="mvc-fp-lbl">Période :</span><span class="mvc-fp-chips">'
       + OV_PER.map(([k, l]) => pill(_ovF.per === k, `_ovSetPer('${k}')`, l, _ovPerLabel(k))).join('') + '</span></div>';
     h += '<div class="mvc-fp-row"><span class="mvc-fp-lbl">Seuils :</span><span class="mvc-fp-chips">'
       + (conf ? '<span class="clf-hint">🔒 indisponibles en mode confidentiel</span>'
         : OV_THR.filter(t => appel || !t.appel).map(t => pill(_ovF.thr.has(t.k), `_ovToggleThr('${t.k}')`, t.lbl, 'Plusieurs seuils : l\'un OU l\'autre')).join('')
-          + ((_ovF.cls.size || _ovF.thr.size || _ovF.per !== 'year') ? pill(false, 'resetOverviewFilters()', '↻', 'Tout réinitialiser') : ''))
+          + ((_ovF.cls.size || _ovF.thr.size || _ovF.per !== 'year' || !_ovF.incl) ? pill(false, 'resetOverviewFilters()', '↻', 'Tout réinitialiser') : ''))
       + '</span></div>';
     chips.innerHTML = h;
   }
@@ -18407,8 +18157,9 @@ function renderOverview() {
     : `${rows.length} élève${rows.length > 1 ? 's' : ''} affiché${rows.length > 1 ? 's' : ''} · clic sur une ligne : fiche de l'élève`;
   if (!rows.length) { list.innerHTML = '<p style="padding:20px;color:var(--pencil);text-align:center;font-size:.9em">Aucun élève ne correspond aux filtres.</p>'; return; }
   const maxA = Math.max(1, ...rows.map(r => r.abs)), maxR = Math.max(1, ...rows.map(r => r.ret));
+  const maxO = Math.max(1, ...rows.map(r => r.oublis)), maxN = Math.max(1, ...rows.map(r => r.non_travail));
   const arrow = c => _ovSort.col === c ? (_ovSort.dir === 1 ? ' ▲' : ' ▼') : '';
-  const num = (v, hot, max, title) => `<td class="ov-n${hot ? ' hot' : ''}" title="${_escAttr(title)}">${v}${max ? `<span class="ov-bar" style="width:${Math.round(40 * v / max)}px"></span>` : ''}</td>`;
+  const num = (v, hot, max, title, vie) => `<td class="ov-n${hot ? ' hot' : ''}" title="${_escAttr(title)}">${v}${max ? `<span class="ov-bar${vie ? ' vie' : ''}" style="width:${Math.round(40 * v / max)}px"></span>` : ''}</td>`;
   const trs = rows.map(r => {
     const s = S.eleves[r.sid];
     const g = r.groupe ? `<span class="gbdg g${r.groupe}" style="font-size:.7em;padding:0 4px">G${r.groupe}</span>` : '';
@@ -18417,7 +18168,7 @@ function renderOverview() {
       <td class="ov-amen">${s ? _ficheSpecBadges(s) : ''}${g}</td>
       <td><span class="ov-cls">${_escName(r.className)}</span></td>
       ${appel ? num(r.abs, r.abs >= 3, maxA, `Absences : ${r.abs}`) + num(r.ret, r.ret >= 3, maxR, `Retards : ${r.ret}`) : ''}
-      ${num(r.oublis, r.oublis >= 4, 0, `Matériel oublié : ${r.oublis}`)}${num(r.non_travail, r.non_travail >= 4, 0, `Travail non fait : ${r.non_travail}`)}
+      ${num(r.oublis, r.oublis >= 4, maxO, `Matériel oublié : ${r.oublis}`, true)}${num(r.non_travail, r.non_travail >= 4, maxN, `Travail non fait : ${r.non_travail}`, true)}
       <td style="text-align:center"><button class="btn btn-g btn-sm" onclick="overviewOpenHist('${r.classId}','${r.sid}')" title="Historique de l'élève">🕓</button></td>
     </tr>`;
   }).join('');
