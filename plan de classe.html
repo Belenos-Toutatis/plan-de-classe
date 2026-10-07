@@ -399,7 +399,21 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .td-src{opacity:.4 !important}
 .td-over{outline:4px solid #2980b9 !important;outline-offset:-2px;box-shadow:inset 0 0 0 9999px rgba(41,128,185,.14)}
 /* ─── Listes absences/retards (sous les non-placés en Plan Prof) ─── */
-#att-side{margin-top:10px}
+#att-side{margin-top:10px;display:flex;gap:6px;align-items:stretch}
+#att-side:empty{display:none}
+#att-side .att-lists{flex:1;min-width:0}
+/* Barre verticale repliable (v2.99.2) : clic = afficher / masquer la liste des absents et retards */
+#att-side .att-rail{order:2;flex:0 0 26px;writing-mode:vertical-rl;display:flex;align-items:center;justify-content:flex-start;gap:10px;
+  padding:10px 0;border:1px solid var(--rule-line);border-radius:8px;background:var(--paper-warm);color:var(--ink-deep);
+  font:600 .8em var(--font-sans);cursor:pointer;white-space:nowrap;min-height:120px}
+#att-side .att-rail:hover,#att-side .att-rail:focus-visible{border-color:var(--ink-blue);outline:none}
+#att-side .att-rail .att-rail-arrow{writing-mode:horizontal-tb;font-size:1.1em}
+#att-side.collapsed .att-lists{display:none}
+.tp-side.att-only{width:auto}
+.tp-side.att-only:not(.att-collapsed){width:240px}
+/* Non placés affichés : la colonne est là de toute façon, pas de repli */
+.tp-side:not(.att-only) #att-side .att-rail{display:none}
+.tp-side:not(.att-only) #att-side.collapsed .att-lists{display:block}
 #att-side .att-block{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 12px;margin-bottom:10px}
 #att-side .att-block h3{margin:0 0 6px;font-size:.9em;color:var(--pencil)}
 #att-side .att-block.absents{border-color:#cbcbcb}
@@ -801,6 +815,9 @@ body.el-bulk-on.noise-widget-on:has(#tab-eleves.on) #toast, body.el-bulk-on.time
   .gc,.svgc{}
   .tp{flex-direction:column}
   .tp-side{width:100%}
+  .tp-side.att-only{width:100%}
+  #att-side .att-rail{writing-mode:horizontal-tb;min-height:0;flex-basis:auto;padding:6px 10px}
+  #att-side{flex-direction:column}
 }
 
 /* ─── TOOLBAR ─── */
@@ -7869,11 +7886,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.99.1';
+const APP_VERSION    = '2.99.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T16:47:32Z';
+const APP_BUILD_DATE = '2026-10-07T16:52:41Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -22266,7 +22283,11 @@ function renderAttendanceSide() {
 
   const grpLbl = s => _grp(s) ? `<span class="gbdg g${_grp(s)}" style="font-size:.7em">G${_grp(s)}</span>` : '';
 
-  let html = '';
+  const collapsed = _attSideCollapsed();
+  const arrow = collapsed ? '◀' : '▶';
+  let html = `<button type="button" class="att-rail" onclick="_attSideToggle()" aria-expanded="${!collapsed}"
+    title="${collapsed ? 'Afficher' : 'Masquer'} la liste des absents et retardataires">
+    <span class="att-rail-arrow">${arrow}</span><span>🚫 ${absents.length} absent${absents.length > 1 ? 's' : ''}</span><span>⏰ ${retards.length} retard${retards.length > 1 ? 's' : ''}</span></button><div class="att-lists">`;
 
   // Bloc Absents
   html += `<div class="att-block absents">
@@ -22290,9 +22311,17 @@ function renderAttendanceSide() {
       `<div class="att-row late">${grpLbl(s)}<span>${_escAttr(s.prenom)} <strong>${_escAttr(s.nom)}</strong></span><span class="att-time">${hhmm || ''}</span></div>`
     ).join('');
   }
-  html += `</div>`;
+  html += `</div></div>`;
 
   el.innerHTML = html;
+  el.classList.toggle('collapsed', collapsed);
+}
+function _attSideCollapsed() {
+  try { return localStorage.getItem('planClasse_attSideCollapsed') === '1'; } catch (e) { return false; }
+}
+function _attSideToggle() {
+  try { localStorage.setItem('planClasse_attSideCollapsed', _attSideCollapsed() ? '0' : '1'); } catch (e) {}
+  renderAttendanceSide();
 }
 
 // Panneau de droite du Plan (v2.99.0) : « Élèves non placés » se replie quand il n'y a personne
@@ -22307,6 +22336,9 @@ function _tpSideUpdate() {
   const attEmpty = !(att && att.innerHTML.trim());
   unpl.style.display = unplEmpty ? 'none' : '';
   side.style.display = (unplEmpty && attEmpty) ? 'none' : '';
+  // Seulement la liste d'appel : la colonne peut se réduire à la barre verticale
+  side.classList.toggle('att-only', unplEmpty && !attEmpty);
+  side.classList.toggle('att-collapsed', !!att?.classList.contains('collapsed'));
 }
 (function () {
   const _ru = renderUnplaced, _ra = renderAttendanceSide;
