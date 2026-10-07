@@ -1144,6 +1144,14 @@ Variable globale `_appelSavedSlot = { date: 'YYYY-MM-DD', slotId, classId, label
 
 Sites de mutation où `_saveAttTransient()` est appelé : `toggleAbsence`, `promptLateForStudent`, `clearAbsences`, `autoMarkUlisAbsent` (si n>0), `cancelEditAttendance`, `saveAttendanceConfirm` (les 2 branches : update et create), `_absencesAutoReset` (après auto-clean).
 
+### Appels passés — refonte v2.107.0 (maquette validée le 2026-10-07)
+
+- **Une fenêtre, deux vues** (`#matt-view`) : **Appels** | **Par élève** (l'ancienne fenêtre `mattStats` a été **supprimée** ; `openAttStats()` ouvre `openAttendanceModal('stu')`, `openAttStatsFromMatt()` bascule de vue). Classe en pastilles (classe courante | Toutes).
+- **État unique `_attF`** `{ view, cls, per, from, to, abs, ret, hz }` ; `_attSet(k, v)` puis **`_attRender()`** qui recopie l'état dans les **anciens champs, gardés cachés** (`matt-f-*`, `msts-*`) — `renderAttendanceList` et `renderAttStats` les lisent toujours. Période en un clic (`#matt-per`) : Cette semaine | **Ce mois (défaut, arbitrage)** | Cette période (`_currentPeriode` → `_periodStartDate` / `_periodEndDate`) | Tout | Dates… (`_attRange`). Pastilles « avec absents », « avec retards » (vue Appels), « masquer 0 / 0 » (vue Par élève).
+- **Bandeau** `#matt-synth` (`_attSynthRender`) : appels, absences (élèves concernés), retards, les plus absents (noms masqués en mode confidentiel).
+- **Liste groupée par jour** (`.att-day`), une ligne `.att-row` par appel : créneau, (classe en vue Toutes), groupe, pastilles 🚫 / ⏰ / 🧑‍🏫 ou « ✓ aucun absent », libellé seulement s'il a été renommé, puis 🖼 Plan, ✏️ Modifier, 📝, 🗑. **Clic sur la ligne = détail déplié sur place** (`_attOpen`, `_attToggle`) avec « ⧉ Copier la liste ». Le corps du détail est **`_attDetailBodyHTML(r, cid)`**, partagé avec la fenêtre `mattDet` (toujours ouverte par « 📝 Liste » depuis le plan d'un appel).
+- Audit : 0 écart en clair et en sombre (deux vues, dates, détail déplié) ; 363 px à 375, sans débordement.
+
 ### Modal "📅 Appels passés" (avec filtres)
 - Bouton dans toolbar Plan Prof
 - Filtres : classe (dropdown avec "Toutes les classes"), date du / au, cases "avec absents" / "avec retards", bouton ↺ reset

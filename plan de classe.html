@@ -1606,6 +1606,22 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .lst-empty{padding:14px;text-align:center;color:var(--pencil);font-size:.9em;font-style:italic}
 .lst-sub{font-size:.78em;color:var(--pencil);flex-basis:100%;padding-left:26px}
 .lst-flex{flex:1;min-width:0}
+/* Appels passés (v2.107.0) */
+.att-day{font-family:var(--font-mono);font-size:.72em;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-blue-soft);margin:10px 0 4px}
+.att-day:first-child{margin-top:0}
+.att-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--rule-line);border-radius:var(--radius-md);margin-bottom:4px;background:var(--paper);color:var(--ink-deep);cursor:pointer;flex-wrap:wrap}
+.att-row:hover,.att-row:focus-visible{border-color:var(--ink-blue-soft);outline:none}
+.att-row.open{border-color:var(--ink-blue-soft);border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:0}
+.att-caret{color:var(--pencil);width:10px}
+.att-slot{font-family:var(--font-mono);font-weight:700;border:1px solid var(--rule-line);border-radius:4px;padding:0 6px;font-size:.9em}
+.att-grp{font-size:.85em;color:var(--pencil)}
+.att-cls{font-size:.78em;background:var(--info-bg);color:var(--link-fg);border-radius:3px;padding:1px 6px}
+.att-pa{background:var(--alert-bg);color:var(--alert-fg);border-radius:4px;padding:0 7px;font-size:.88em;font-weight:600}
+.att-pr{background:var(--caution-bg);color:var(--caution-fg);border-radius:4px;padding:0 7px;font-size:.88em;font-weight:600}
+.att-ok{color:var(--ok-fg);font-size:.88em}
+.att-lbl{font-size:.82em;color:var(--pencil);font-style:italic;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.att-acts{margin-left:auto;display:inline-flex;gap:4px;align-items:center}
+.att-det{border:1px solid var(--ink-blue-soft);border-top:none;border-radius:0 0 var(--radius-md) var(--radius-md);padding:4px 12px 8px;margin-bottom:6px;background:var(--paper-warm);color:var(--ink-deep);font-size:.92em}
 /* Fenêtres longues à sommaire (v2.106.0, gabarit A) — construites par _sumInit */
 .sum-wrap{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:start}
 .sum-nav{display:flex;flex-direction:column;gap:2px;position:sticky;top:0}
@@ -7061,35 +7077,42 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ── MODAL Appels passés (liste) ── -->
 <div id="matt" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:780px;width:100%">
-    <h2>📅 Appels enregistrés</h2>
-    <div class="modal-filters-bar" style="border-radius:4px;padding:8px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88em">
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Classe :</span>
-        <select id="matt-f-class" onchange="renderAttendanceList()" style="padding:3px 6px;border:1px solid #ccc;border-radius:3px"></select>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Du :</span>
-        <input type="date" id="matt-f-from" onchange="renderAttendanceList()" style="padding:3px 5px;border:1px solid #ccc;border-radius:3px">
-      </label>
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Au :</span>
-        <input type="date" id="matt-f-to" onchange="renderAttendanceList()" style="padding:3px 5px;border:1px solid #ccc;border-radius:3px">
-      </label>
-      <label style="display:flex;align-items:center;gap:3px">
-        <input type="checkbox" id="matt-f-abs" onchange="renderAttendanceList()"> avec absents
-      </label>
-      <label style="display:flex;align-items:center;gap:3px">
-        <input type="checkbox" id="matt-f-ret" onchange="renderAttendanceList()"> avec retards
-      </label>
-      <button class="btn btn-g btn-sm" onclick="resetAttFilters()" title="Réinitialiser les filtres">↺</button>
-      <button class="btn btn-p btn-sm" onclick="openAttStatsFromMatt()" title="Ouvrir une vue tableau cumulé par élève sur une période donnée" style="margin-left:auto">📊 Stats par élève</button>
+  <div class="mb" style="max-width:980px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+    <!-- Refonte v2.107.0 (maquette validée le 2026-10-07) : deux vues (Appels | Par élève),
+         période en un clic, bandeau, appels groupés par jour avec détail dépliable. Les anciens
+         champs (matt-f-*, msts-*) restent, cachés : le code de rendu les lit toujours. -->
+    <div class="lst-head">
+      <h2>📅 Appels passés</h2>
+      <span class="ip-seg" id="matt-view" role="group" aria-label="Vue"><button type="button" data-v="list" onclick="_attSet('view','list')">Appels</button><button type="button" data-v="stu" onclick="_attSet('view','stu')">Par élève</button></span>
+      <span style="margin-left:auto;font-size:.85em;color:var(--pencil)">Classe</span>
+      <span class="ip-seg" id="matt-cls" role="group" aria-label="Classe"></span>
     </div>
-    <p id="matt-info" style="font-size:.85em;color:var(--pencil);margin-bottom:6px"></p>
-    <div id="matt-list" style="max-height:55vh;overflow-y:auto;border:1px solid #ddd;border-radius:4px"></div>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('matt')">Fermer</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+      <span class="ip-seg" id="matt-per" role="group" aria-label="Période">
+        <button type="button" data-v="week" onclick="_attSet('per','week')" title="Lundi → dimanche de la semaine en cours">Cette semaine</button><button type="button" data-v="month" onclick="_attSet('per','month')" title="Du 1er au dernier jour du mois">Ce mois</button><button type="button" data-v="sem" onclick="_attSet('per','sem')" title="La période en cours (semestre ou trimestre)">Cette période</button><button type="button" data-v="all" onclick="_attSet('per','all')">Tout</button><button type="button" data-v="custom" onclick="_attSet('per','custom')">Dates…</button>
+      </span>
+      <span id="matt-dates" style="display:none;gap:6px;align-items:center;font-size:.88em">du <input type="date" id="matt-f-from" onchange="_attDates()"> au <input type="date" id="matt-f-to" onchange="_attDates()"></span>
+      <span id="matt-chips-list" style="display:inline-flex;gap:6px">
+        <button type="button" class="bsynth-chip" id="matt-chip-abs" onclick="_attSet('abs')">avec absents</button>
+        <button type="button" class="bsynth-chip" id="matt-chip-ret" onclick="_attSet('ret')">avec retards</button>
+      </span>
+      <span id="matt-chips-stu" style="display:none;gap:6px"><button type="button" class="bsynth-chip" id="matt-chip-hz" onclick="_attSet('hz')" title="Masque les élèves sans absence ni retard sur la période">masquer 0 / 0</button></span>
+      <span style="display:none">
+        <select id="matt-f-class"></select><input type="checkbox" id="matt-f-abs"><input type="checkbox" id="matt-f-ret">
+        <select id="msts-class"></select><input type="date" id="msts-from"><input type="date" id="msts-to"><input type="checkbox" id="msts-hidezero">
+      </span>
     </div>
+    <div id="matt-synth"></div>
+    <div id="matt-pane-list" style="flex:1;min-height:0;display:flex;flex-direction:column">
+      <p id="matt-info" style="display:none"></p>
+      <div id="matt-list" style="flex:1;overflow-y:auto;min-height:120px"></div>
+    </div>
+    <div id="matt-pane-stu" style="flex:1;min-height:0;display:none;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span id="msts-info" style="color:var(--pencil);font-size:.85em"></span>
+        <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="exportAttStatsCSV()" title="Télécharger le tableau au format CSV (Excel, LibreOffice…)">💾 Export CSV</button></div>
+      <div id="msts-list" style="flex:1;overflow-y:auto;border:1px solid var(--rule-line);border-radius:4px;min-height:120px"></div>
+    </div>
+    <div class="ma"><button class="btn btn-g" onclick="closeMod2('matt')">Fermer</button></div>
   </div>
 </div>
 
@@ -7193,42 +7216,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <!-- ── MODAL Stats par élève sur une période ── -->
-<div id="mattStats" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:980px;width:100%">
-    <h2>📊 Statistiques absences / retards par élève</h2>
-    <div class="modal-filters-bar" style="border-radius:4px;padding:8px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88em">
-      <div style="display:flex;align-items:center;gap:5px">
-        <span style="font-weight:600">Période :</span>
-        <button class="btn btn-sm" id="msts-pw" onclick="setStatsPeriod('week')" title="Lundi → dimanche de la semaine en cours">Semaine</button>
-        <button class="btn btn-sm" id="msts-pm" onclick="setStatsPeriod('month')" title="1er → dernier jour du mois en cours">Mois</button>
-      </div>
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Du :</span>
-        <input type="date" id="msts-from" onchange="renderAttStats()" style="padding:3px 5px;border:1px solid #ccc;border-radius:3px">
-      </label>
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Au :</span>
-        <input type="date" id="msts-to" onchange="renderAttStats()" style="padding:3px 5px;border:1px solid #ccc;border-radius:3px">
-        <button class="btn btn-sm" onclick="setStatsTodayEnd()" title="Mettre la date du jour comme date de fin">📅 Aujourd'hui</button>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Classe :</span>
-        <select id="msts-class" onchange="renderAttStats()" style="padding:3px 6px;border:1px solid #ccc;border-radius:3px"></select>
-      </label>
-      <label style="display:flex;align-items:center;gap:3px" title="Masque les élèves sans absence ni retard sur la période">
-        <input type="checkbox" id="msts-hidezero" onchange="renderAttStats()"> 0/0 masqués
-      </label>
-      <button class="btn btn-g btn-sm" onclick="resetStatsFilters()" title="Réinitialiser : semaine en cours, classe courante">↺</button>
-      <span id="msts-info" style="margin-left:auto;color:var(--pencil)"></span>
-    </div>
-    <div id="msts-list" style="max-height:60vh;overflow-y:auto;border:1px solid #ddd;border-radius:4px"></div>
-    <div class="ma">
-      <button class="btn btn-p btn-sm" onclick="exportAttStatsCSV()" title="Télécharger le tableau actuel au format CSV (importable dans Excel, LibreOffice, Google Sheets…)">💾 Export CSV</button>
-      <button class="btn btn-g" onclick="closeMod2('mattStats')">Fermer</button>
-    </div>
-  </div>
-</div>
-
 <!-- Saisie séquentielle des positions -->
 <div id="mse" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:min(95vw,1100px);width:100%">
@@ -7825,11 +7812,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.106.2';
+const APP_VERSION    = '2.107.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T19:17:18Z';
+const APP_BUILD_DATE = '2026-10-07T19:25:23Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10553,8 +10540,7 @@ const _MODAL_RERENDER = {
   'mlinks':            () => renderUserLinks(),
   'maesh':             () => renderAeshModal(),
   'moverview':         () => renderOverview(),
-  'mattStats':         () => renderAttStats(),
-  'matt':              () => renderAttendanceList(),
+  'matt':              () => _attRender(),
   'msnap':             () => renderSnapshotsList(),
   'mconseil-mentions': () => renderConseilMentions(),
   'mdisciplines':      () => _renderDisciplinesList(),
@@ -11336,7 +11322,7 @@ function _confRefresh() {
   else if (name === 'comp' && typeof renderCompetencesTab === 'function') renderCompetencesTab();
   // Vue d'ensemble ouverte : son tri et ses filtres dépendent du mode.
   if (document.getElementById('moverview')?.classList?.contains('on') && typeof renderOverview === 'function') renderOverview();
-  if (document.getElementById('mattStats')?.classList?.contains('on') && typeof renderAttStats === 'function') renderAttStats();
+  if (document.getElementById('matt')?.classList?.contains('on') && typeof _attRender === 'function') _attRender();
   if (document.getElementById('mattPlan')?.classList?.contains('on') && typeof renderMattPlan === 'function') renderMattPlan();
   if (document.getElementById('mattDet')?.classList?.contains('on') && _mattCurrentRecordId && typeof viewAttendance === 'function') viewAttendance(_mattCurrentRecordId, _mattCurrentClassId);
 }
@@ -18235,32 +18221,9 @@ function getStudentAttendanceStatsInRange(classId, sid, fromYMD, toYMD) {
 }
 
 // Ouvre la modale stats. Si fromMatt=true, prévoit le retour vers matt à la fermeture.
-function openAttStatsFromMatt() {
-  // Ferme matt et programme son retour à la fermeture de mattStats
-  closeMod2('matt');
-  _modalReturnTo['mattStats'] = () => openMod('matt');
-  openAttStats();
-}
-
-function openAttStats() {
-  // Peuple le filtre classe
-  const sel = document.getElementById('msts-class');
-  let html = '<option value="">— Toutes les classes —</option>';
-  for (const [cid, c] of Object.entries(S.classes || {})) {
-    html += `<option value="${_escAttr(cid)}">${_escAttr(c.nom)}</option>`;
-  }
-  sel.innerHTML = html;
-  sel.value = getCls()?.id || '';
-  // Période par défaut : semaine en cours
-  const r = _statsWeekRange();
-  document.getElementById('msts-from').value = r.from;
-  document.getElementById('msts-to').value   = r.to;
-  document.getElementById('msts-hidezero').checked = false;
-  _statsSort = { col: 'abs', dir: -1 };
-  _highlightStatsPeriodBtn('week');
-  renderAttStats();
-  openMod('mattStats');
-}
+function openAttStatsFromMatt() { _attSet('view', 'stu'); }
+// La fenêtre de statistiques est devenue la vue « Par élève » des Appels passés (v2.107.0)
+function openAttStats() { openAttendanceModal('stu'); }
 
 function _highlightStatsPeriodBtn(period) {
   const map = { week: 'msts-pw', month: 'msts-pm' };
@@ -18318,11 +18281,6 @@ function renderAttStats() {
   const list      = document.getElementById('msts-list');
   const info      = document.getElementById('msts-info');
 
-  // Highlight automatique du bouton de période si la plage correspond à un raccourci
-  const wr = _statsWeekRange(), mr = _statsMonthRange();
-  if (fFrom === wr.from && fTo === wr.to)      _highlightStatsPeriodBtn('week');
-  else if (fFrom === mr.from && fTo === mr.to) _highlightStatsPeriodBtn('month');
-  else                                          _highlightStatsPeriodBtn(null);
 
   // Aggrège les élèves
   let rows = [];
@@ -18362,7 +18320,7 @@ function renderAttStats() {
     const totA = rows.reduce((s, r) => s + r.abs, 0);
     const totR = rows.reduce((s, r) => s + r.ret, 0);
     const fmtFr = (ymd) => ymd ? new Date(ymd + 'T12:00:00').toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '?';
-    info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🚫 ${totA} · ⏰ ${totR} · ${fmtFr(fFrom)} → ${fmtFr(fTo)}`;
+    info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🚫 ${totA} · ⏰ ${totR} · ${!fFrom && !fTo ? 'toute l\'année' : fmtFr(fFrom) + ' → ' + fmtFr(fTo)}`;
   }
 
   if (!rows.length) {
@@ -29062,110 +29020,135 @@ function _doSaveAttendance({ dateStr, slotId, groupe, label, endTime, overwriteI
 }
 
 // ─── Liste des appels passés (avec filtres) ───
-function openAttendanceModal() {
-  const cls = getCls();
-  // Peuple le sélecteur classe
-  const sel = document.getElementById('matt-f-class');
-  let html = '<option value="">— Toutes les classes —</option>';
-  for (const [cid, c] of Object.entries(S.classes || {})) {
-    html += `<option value="${_escAttr(cid)}">${_escAttr(c.nom)}</option>`;
-  }
-  sel.innerHTML = html;
-  // Par défaut : classe active si dispo
-  sel.value = cls?.id || '';
-  // Reset des autres filtres
-  document.getElementById('matt-f-from').value = '';
-  document.getElementById('matt-f-to').value = '';
-  document.getElementById('matt-f-abs').checked = false;
-  document.getElementById('matt-f-ret').checked = false;
-  renderAttendanceList();
+// ═══ Appels passés (v2.107.0) : état des filtres, partagé par les deux vues ═══
+var _attF = { view: 'list', cls: '', per: 'month', from: '', to: '', abs: false, ret: false, hz: false };
+var _attOpen = new Set();       // appels dépliés (détail sur place)
+function openAttendanceModal(view) {
+  _attF = { view: view === 'stu' ? 'stu' : 'list', cls: getCls()?.id || '', per: 'month', from: '', to: '', abs: false, ret: false, hz: false };
+  _attOpen = new Set();
+  if (typeof _statsSort !== 'undefined') _statsSort = { col: 'abs', dir: -1 };
+  _attRender();
   openMod('matt');
 }
-
-function resetAttFilters() {
-  document.getElementById('matt-f-class').value = getCls()?.id || '';
-  document.getElementById('matt-f-from').value = '';
-  document.getElementById('matt-f-to').value = '';
-  document.getElementById('matt-f-abs').checked = false;
-  document.getElementById('matt-f-ret').checked = false;
-  renderAttendanceList();
+function _attRange() {
+  const f = _attF;
+  if (f.per === 'week') return _statsWeekRange();
+  if (f.per === 'month') return _statsMonthRange();
+  if (f.per === 'sem') { const p = _currentPeriode(); return { from: _periodStartDate(p), to: _periodEndDate(p) }; }
+  if (f.per === 'custom') return { from: f.from, to: f.to };
+  return { from: '', to: '' };
 }
+function _attSet(k, v) {
+  if (k === 'abs' || k === 'ret' || k === 'hz') _attF[k] = !_attF[k];
+  else _attF[k] = v;
+  if (k === 'per' && v === 'custom' && !_attF.from && !_attF.to) { const r = _statsMonthRange(); _attF.from = r.from; _attF.to = r.to; }
+  _attRender();
+}
+function _attDates() {
+  _attF.from = document.getElementById('matt-f-from')?.value || '';
+  _attF.to = document.getElementById('matt-f-to')?.value || '';
+  _attRender();
+}
+function _attRender() {
+  const f = _attF, rg = _attRange();
+  const cur = getCls();
+  // Contrôles
+  const on = (sel, v) => document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  const clsSeg = document.getElementById('matt-cls');
+  if (clsSeg) clsSeg.innerHTML = (cur ? `<button type="button" data-v="${_escAttr(cur.id)}" onclick="_attSet('cls','${_escJsAttr(cur.id)}')">${_esc(cur.nom)}</button>` : '')
+    + `<button type="button" data-v="" onclick="_attSet('cls','')">Toutes</button>`;
+  on('#matt-view', f.view); on('#matt-cls', f.cls); on('#matt-per', f.per);
+  const dates = document.getElementById('matt-dates'); if (dates) dates.style.display = f.per === 'custom' ? 'inline-flex' : 'none';
+  const fr = document.getElementById('matt-f-from'), to = document.getElementById('matt-f-to');
+  if (fr && document.activeElement !== fr) fr.value = rg.from; if (to && document.activeElement !== to) to.value = rg.to;
+  [['matt-chip-abs', f.abs], ['matt-chip-ret', f.ret], ['matt-chip-hz', f.hz]].forEach(([id, v]) => document.getElementById(id)?.classList.toggle('on', v));
+  document.getElementById('matt-chips-list').style.display = f.view === 'list' ? 'inline-flex' : 'none';
+  document.getElementById('matt-chips-stu').style.display = f.view === 'stu' ? 'inline-flex' : 'none';
+  document.getElementById('matt-pane-list').style.display = f.view === 'list' ? 'flex' : 'none';
+  document.getElementById('matt-pane-stu').style.display = f.view === 'stu' ? 'flex' : 'none';
+  // Champs historiques, lus par renderAttendanceList / renderAttStats
+  const setSel = (id, v) => { const el = document.getElementById(id); if (!el) return; if (![...el.options].some(o => o.value === v)) el.innerHTML += `<option value="${_escAttr(v)}"></option>`; el.value = v; };
+  setSel('matt-f-class', f.cls); setSel('msts-class', f.cls);
+  document.getElementById('matt-f-abs').checked = f.abs; document.getElementById('matt-f-ret').checked = f.ret;
+  document.getElementById('msts-from').value = rg.from; document.getElementById('msts-to').value = rg.to;
+  document.getElementById('msts-hidezero').checked = f.hz;
+  _attSynthRender(rg);
+  if (f.view === 'list') renderAttendanceList(rg); else renderAttStats();
+}
+// Bandeau : appels, absences (élèves concernés), retards, élèves les plus absents
+function _attSynthRender(rg) {
+  const box = document.getElementById('matt-synth'); if (!box) return;
+  const f = _attF;
+  let nAp = 0, nA = 0, nR = 0; const perStu = {};
+  for (const [cid, ca] of Object.entries(S.attendance || {})) {
+    if (f.cls && cid !== f.cls) continue;
+    for (const r of Object.values(ca)) {
+      const d = r.date || '';
+      if (rg.from && d < rg.from) continue; if (rg.to && d > rg.to) continue;
+      nAp++; nA += (r.absents || []).length; nR += Object.keys(r.retards || {}).length;
+      for (const sid of (r.absents || [])) perStu[sid] = (perStu[sid] || 0) + 1;
+    }
+  }
+  const top = Object.entries(perStu).filter(([sid]) => !_confHides(sid)).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([sid, n]) => { const st = S.eleves[sid]; return st ? `${_esc(st.prenom)} ${_esc((st.nom || '').charAt(0))}. <strong>${n}</strong>` : ''; }).filter(Boolean);
+  const nStu = Object.keys(perStu).length;
+  box.innerHTML = `<div class="bsynth">
+    ${_bsynthCard('Appels', `<div class="bsynth-big">${nAp}</div><div class="bsynth-sub">${f.cls ? _esc(S.classes[f.cls]?.nom || '') : 'toutes les classes'}</div>`)}
+    ${_bsynthCard('Absences', `<div class="bsynth-big">${nA}</div><div class="bsynth-sub">${nStu} élève${nStu > 1 ? 's' : ''} concerné${nStu > 1 ? 's' : ''}</div>`)}
+    ${_bsynthCard('Retards', `<div class="bsynth-big">${nR}</div>`)}
+    ${_bsynthCard('Les plus absents', `<div class="bsynth-sub" style="margin-top:4px">${_conf?.on ? '🔒 masqué en mode confidentiel' : (top.length ? top.join(' · ') : 'personne')}</div>`)}
+  </div>`;
+}
+function _attToggle(id) { if (_attOpen.has(id)) _attOpen.delete(id); else _attOpen.add(id); renderAttendanceList(_attRange()); }
 
-function renderAttendanceList() {
+function renderAttendanceList(rg) {
   const list = document.getElementById('matt-list');
-  const info = document.getElementById('matt-info');
-  const fClass = document.getElementById('matt-f-class')?.value || '';
-  const fFrom  = document.getElementById('matt-f-from')?.value || '';
-  const fTo    = document.getElementById('matt-f-to')?.value || '';
-  const fAbs   = document.getElementById('matt-f-abs')?.checked || false;
-  const fRet   = document.getElementById('matt-f-ret')?.checked || false;
-
-  // Récupère les records selon le filtre classe
+  if (!list) return;
+  if (!rg) rg = _attRange();
+  const f = _attF;
   let pool = [];
-  if (fClass) {
-    for (const r of Object.values(S.attendance?.[fClass] || {})) {
-      pool.push({ r, classId: fClass });
+  for (const [cid, ca] of Object.entries(S.attendance || {})) {
+    if (f.cls && cid !== f.cls) continue;
+    for (const r of Object.values(ca)) pool.push({ r, classId: cid });
+  }
+  if (rg.from) pool = pool.filter(({ r }) => (r.date || '') >= rg.from);
+  if (rg.to)   pool = pool.filter(({ r }) => (r.date || '') <= rg.to);
+  if (f.abs)   pool = pool.filter(({ r }) => (r.absents?.length || 0) > 0);
+  if (f.ret)   pool = pool.filter(({ r }) => Object.keys(r.retards || {}).length > 0);
+  // Tri : date d'appel décroissante, puis créneau, puis heure de saisie
+  pool.sort((a, b) => (b.r.date || '').localeCompare(a.r.date || '') || (b.r.slotId || '').localeCompare(a.r.slotId || '') || ((b.r.ts || 0) - (a.r.ts || 0)));
+  if (!pool.length) { list.innerHTML = _emptyStateHTML('📅', 'Aucun appel sur cette période', 'Change de période (« Tout ») ou de classe, ou retire les filtres « avec absents / retards ».'); return; }
+  const year = String(new Date().getFullYear());
+  let html = '', lastDay = null;
+  for (const { r, classId } of pool) {
+    const day = r.date || '';
+    if (day !== lastDay) {
+      lastDay = day;
+      const d = new Date((day || todayKey()) + 'T12:00:00');
+      const lbl = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', ...(day.slice(0, 4) !== year ? { year: 'numeric' } : {}) });
+      html += `<div class="att-day">${_esc(lbl.charAt(0).toUpperCase() + lbl.slice(1))}</div>`;
     }
-  } else {
-    for (const [cid, ca] of Object.entries(S.attendance || {})) {
-      for (const r of Object.values(ca)) pool.push({ r, classId: cid });
-    }
-  }
-  // Filtres date
-  if (fFrom) pool = pool.filter(({ r }) => (r.date || '') >= fFrom);
-  if (fTo)   pool = pool.filter(({ r }) => (r.date || '') <= fTo);
-  // Filtres types
-  if (fAbs)  pool = pool.filter(({ r }) => (r.absents?.length || 0) > 0);
-  if (fRet)  pool = pool.filter(({ r }) => Object.keys(r.retards || {}).length > 0);
-
-  // Tri : du plus récent au plus ancien selon la DATE D'APPEL (pas la date de saisie).
-  // 1) date desc (la date du record, indépendante de quand on a saisi)
-  // 2) slotId desc en tie-breaker (S3 > S2 > S1 > M4 > M3 > M2 > M1 lexicographique)
-  // 3) ts desc en dernier recours (édition multiple d'un même slot le même jour)
-  pool.sort((a, b) => {
-    const da = a.r.date || '', db = b.r.date || '';
-    if (db !== da) return db.localeCompare(da);
-    const sa = a.r.slotId || '', sb = b.r.slotId || '';
-    if (sb !== sa) return sb.localeCompare(sa);
-    return (b.r.ts || 0) - (a.r.ts || 0);
-  });
-
-  if (info) {
-    const totA = pool.reduce((s, { r }) => s + (r.absents?.length || 0), 0);
-    const totR = pool.reduce((s, { r }) => s + Object.keys(r.retards || {}).length, 0);
-    info.textContent = `${pool.length} appel${pool.length>1?'s':''} · 🚫 ${totA} absence${totA>1?'s':''} · ⏰ ${totR} retard${totR>1?'s':''}`;
-  }
-
-  if (!pool.length) {
-    list.innerHTML = '<p style="padding:20px;color:var(--pencil);text-align:center;font-size:.9em">Aucun appel ne correspond aux filtres.</p>';
-    return;
-  }
-
-  list.innerHTML = pool.map(({ r, classId }) => {
-    const cls = S.classes[classId];
-    const className = cls?.nom || '(classe supprimée)';
-    const dateFr = new Date((r.date || todayKey()) + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' });
-    const nA = r.absents?.length || 0;
-    const nR = Object.keys(r.retards || {}).length;
-    const grpLabel = r.groupe === 1 ? '🔵 G1' : r.groupe === 2 ? '🟠 G2' : r.groupe === 3 ? '🟣 G3' : 'Tous';
-    const counts = [];
-    if (nA) counts.push(`${nA} absent${nA>1?'s':''}`);
-    if (nR) counts.push(`⏰ ${nR} retard${nR>1?'s':''}`);
-    if (!counts.length) counts.push('aucun absent');
-    const showClass = !fClass; // n'afficher la classe qu'en mode "toutes"
-    return `
-      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid #eee;flex-wrap:wrap">
-        <div style="flex:1;min-width:120px">
-          <div style="font-weight:600;font-size:.95em">${_escAttr(r.label)}${showClass ? ` <span style="font-size:.78em;color:var(--link-fg);background:var(--info-bg);padding:1px 6px;border-radius:3px;margin-left:4px">${_escAttr(className)}</span>` : ''}</div>
-          <div style="font-size:.78em;color:var(--pencil)">${dateFr}${r.slotId ? ' · '+r.slotId : ''} · ${grpLabel} · ${counts.join(' · ')}</div>
-        </div>
-        <button class="btn btn-p btn-sm" onclick="viewAttendance('${r.id}','${classId}')" title="Voir le détail (liste des absents et retards)">👁 Liste</button>
-        <button class="btn btn-p btn-sm" onclick="viewAttRecordOnPlan('${r.id}','${classId}')" title="Voir l'appel directement sur le plan de classe (lecture seule)" style="background:#16a085">🖼 Plan</button>
-        <button class="btn btn-w btn-sm" onclick="editAttendance('${r.id}','${classId}')" title="Modifier les absents/retards de cet appel">✏️ Modifier</button>
-        <button class="btn btn-g btn-sm" onclick="renameAttendance('${r.id}','${classId}')" title="Renommer">📝</button>
-        <button class="btn btn-d btn-sm" onclick="deleteAttendance('${r.id}','${classId}')" title="Supprimer">🗑</button>
+    const nA = r.absents?.length || 0, nR = Object.keys(r.retards || {}).length, nAesh = (r.aeshAbsents || []).length;
+    const grp = r.groupe ? `G${r.groupe}` : 'Tous';
+    const auto = !r.label || /^(Appel|M\d|S\d|[A-Z]\d)\b.*\d{4}/.test(r.label);
+    const open = _attOpen.has(r.id);
+    const clsChip = !f.cls ? `<span class="att-cls">${_esc(S.classes[classId]?.nom || '(classe supprimée)')}</span>` : '';
+    const pills = (nA ? `<span class="att-pa">🚫 ${nA}</span>` : '') + (nR ? `<span class="att-pr">⏰ ${nR}</span>` : '') + (nAesh ? `<span class="att-pr">🧑‍🏫 ${nAesh}</span>` : '') + (!nA && !nR && !nAesh ? '<span class="att-ok">✓ aucun absent</span>' : '');
+    html += `<div class="att-row${open ? ' open' : ''}" role="button" tabindex="0" aria-expanded="${open}" onclick="if(!event.target.closest('button'))_attToggle('${_escJsAttr(r.id)}')" onkeydown="if(event.key==='Enter'&&event.target===this)_attToggle('${_escJsAttr(r.id)}')" title="Clic = afficher / masquer la liste des absents et retardataires">
+        <span class="att-caret">${open ? '▾' : '▸'}</span>
+        <span class="att-slot">${_esc(r.slotId || '—')}</span>${clsChip}<span class="att-grp">${grp}</span>${pills}
+        ${auto ? '' : `<span class="att-lbl">${_esc(r.label)}</span>`}
+        <span class="att-acts">
+          <button class="btn btn-g btn-sm" onclick="viewAttRecordOnPlan('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Voir l'appel sur le plan (lecture seule)">🖼 Plan</button>
+          <button class="btn btn-g btn-sm" onclick="editAttendance('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Modifier les absents et retards de cet appel">✏️ Modifier</button>
+          <button class="lst-del" onclick="renameAttendance('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Renommer" aria-label="Renommer l'appel">📝</button>
+          <button class="lst-del" onclick="deleteAttendance('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Supprimer" aria-label="Supprimer l'appel">🗑</button>
+        </span>
       </div>`;
-  }).join('');
+    if (open) html += `<div class="att-det">${_attDetailBodyHTML(r, classId)}
+        ${nA || nR ? `<div style="text-align:right"><button class="btn btn-g btn-sm" onclick="_mattCurrentRecordId='${_escJsAttr(r.id)}';_mattCurrentClassId='${_escJsAttr(classId)}';copyAttList()" title="Copier la liste (par exemple pour la reporter dans l'ENT)">⧉ Copier la liste</button></div>` : ''}</div>`;
+  }
+  list.innerHTML = html;
 }
 
 // Trouve l'appel voisin (par date+ts croissants) dans la même classe.
@@ -29452,6 +29435,17 @@ function viewAttendance(id, classId) {
     btnNext.title = nextR ? `Suivant : « ${nextR.label} » →` : 'Aucun appel plus récent';
   }
 
+  const html = _attDetailBodyHTML(r, cid);
+  document.getElementById('mattDet-list').innerHTML = html;
+  openMod('mattDet');
+}
+
+// Corps du détail d'un appel (absents, retards, AESH) — partagé par la fenêtre de détail
+// (mattDet) et le détail déplié dans la liste des appels passés (v2.107.0).
+function _attDetailBodyHTML(r, cid) {
+  const nA = r.absents?.length || 0;
+  const nR = Object.keys(r.retards || {}).length;
+  const nAesh = (r.aeshAbsents || []).length;
   // Helper : récupère { nom, prenom, archived } d'un sid (live ou archivé dans le record)
   const _identityOf = sid => {
     const archived = !S.eleves[sid];
@@ -29517,10 +29511,8 @@ function viewAttendance(id, classId) {
     html += `<ul style="padding-left:22px;margin:4px 0">${aeshLabels.map(l => `<li style="padding:3px 0">${l}</li>`).join('')}</ul>`;
   }
   if (!nA && !nR && !nAesh) html = '<p style="color:var(--pencil);font-size:.9em;padding:10px">Aucun absent ni retard.</p>';
-  document.getElementById('mattDet-list').innerHTML = html;
-  openMod('mattDet');
+  return html;
 }
-
 function copyAttList() {
   if (_conf.on) { toast('🔒 Mode confidentiel — copie de la liste désactivée', 'warn'); return; }
   const cid = _mattCurrentClassId || getCls()?.id;
