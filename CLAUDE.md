@@ -2451,6 +2451,10 @@ Deux surfaces, à l'essai (l'utilisateur peut en supprimer une après usage) :
 
 ⚠️ La règle globale des `<select>` (~l. 1946) impose `padding:6px 10px !important` : posé en ligne avec `max-width:48px`, il restait ~26 px moins la flèche — « M1 » s'affichait « M ». Le remplissage se bat **en feuille de style** (classe dédiée, 2 px, largeur au contenu bornée 34–72 px). Même famille que les champs de poids du Type D : sur toute case étroite, c'est le remplissage imposé par la règle globale qu'il faut d'abord neutraliser.
 
+### Tableur B — descriptif de la passation au survol du code (v2.106.1)
+
+Le champ du code court d'une passation (en-tête du tableur Type B) porte un `data-tip` (bulle globale `#gtip`, ~0,5 s) : « code — descriptif » (`p.name`), ou « aucun descriptif (clic droit sur l'en-tête pour en ajouter un) ». Son ancien `title` (« Code court (édition directe) ») est remplacé par un `aria-label`, sinon l'infobulle native doublait la bulle. `#gtip` passe en `white-space:pre-line` (les `\n` d'un `data-tip` sont rendus).
+
 ### Tableur — filtre de groupe Tous / G1 / G2 / G3 (v2.56.0)
 
 Puces `#meval-tableur-gfilter` dans la barre du tableur (rendues par `_evalTableurRenderGroupChips` à chaque `_evalTableurRender`, cachées si la classe n'a aucun élève en groupe). Demandé pour les **passations par demi-groupe** : ne voir que les élèves présents. Le filtre agit dans `_evalTableurSortedSids` — donc sur les quatre tableurs, le collage, les stats du pied et le bilan compétences ouvert depuis le tableur (ils montrent ce qui est affiché) — et sur le plan de classe du Type B (élèves hors groupe estompés à leur place, `pointer-events:none`). Persisté dans `localStorage.planClasse_evalTableurGroup` comme le filtre du Plan Prof ; `_evalTableurGroup(cls)` retombe sur « Tous » si le groupe n'a personne dans la classe, et la puce d'un groupe vide est grisée (`_evalTableurSetGroup` l'ignore). ⚠️ Classe CSS **`.tgchip`**, pas `.gchip` : `setGroupFilter` éteint toutes les `.gchip` du document (même piège que `.amchip`). Test dans `run.test.js`.
