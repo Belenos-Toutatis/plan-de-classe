@@ -1898,6 +1898,7 @@ body.tableur-sobr-comps #meval-tableur-wrap td.meval-cell-comp { box-shadow:none
 .evl-empty { border-bottom-style:dashed; }
 .evl-mean { font-family:var(--font-mono); white-space:nowrap; color:var(--ink-blue); }
 .evl-acts { display:flex; gap:6px; align-items:center; }
+html .btn.btn-g.evl-filter-on { background:var(--chip-on-bg) !important; border-color:var(--chip-on-bg) !important; color:#fff !important; }
 .dd-right .dd-menu { left:auto; right:0; }
 @media (max-width: 760px) { .evl-row { grid-template-columns:minmax(0,1fr) 1fr; } .evl-hist, .evl-mean { display:none; } }
 /* Réglages des évaluations — sélecteur de jeu de couleurs (v2.88.0) */
@@ -6240,6 +6241,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="⧉ Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">⧉</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="📤 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px;font-weight:600">📤 ENT</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-cellstyle-btn" onclick="_tableurSetCellStyle(_tableurCellStyle() === 'bar' ? 'fill' : 'bar')" style="padding:4px 8px;white-space:nowrap" title="Couleur des cases : liseré à gauche ou case entièrement colorée (clic pour basculer)">▌ Liseré</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-sobr-btn" onclick="_evalTableurSobrToggleMenu(event)" title="🎨 Sobriété : retirer les fonds colorés (notes et/ou compétences) — choix indépendants persistés." aria-label="Sobriété" style="padding:4px 6px">🎨</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🆚 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🆚</button>
       </div>
@@ -7657,11 +7659,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.90.0';
+const APP_VERSION    = '2.91.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T03:47:04Z';
+const APP_BUILD_DATE = '2026-10-07T04:09:42Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -39730,16 +39732,17 @@ function renderEvalNotes() {
   }
 
   html += _evalListBandHTML(evs, _info, cls, periode);
-  {
-    // Rangée de filtres (même composant que les bilans, persistance propre).
-    let fh = '<div class="bsynth-chips" role="toolbar" aria-label="Filtrer les évaluations">';
-    for (const c of _evFilters) {
-      const on = c.v === _curF, dis = !on && c.v !== 'all' && c.n === 0;
-      fh += `<button type="button" class="bsynth-chip${on ? ' on' : ''}" aria-pressed="${on}"${dis ? ' disabled' : ''} onclick="_evalListSetFilter('${c.v}')" title="${_escAttr(c.tip || '')}">${_esc(c.lbl)}${c.n != null ? `<span class="n">${c.n}</span>` : ''}</button>`;
-    }
+  // Filtre : un menu dans la ligne du titre (la rangée de pastilles prenait trop de place
+  // — demande de l'utilisateur, v2.91.0).
+  if (_evalTbHost) {
+    const cur = _evFilters.find(c => c.v === _curF);
     const shown = evs.filter(_evShow).length;
-    if (_curF !== 'all') fh += `<span class="bsynth-count">${shown} évaluation${shown > 1 ? 's' : ''} sur ${evs.length}</span>`;
-    html += fh + '</div>';
+    let fm = `<span class="dd"><button class="btn btn-g btn-sm${_curF !== 'all' ? ' evl-filter-on' : ''}" onclick="toggleDd(this)" style="padding:3px 8px" title="Filtrer la liste des évaluations">⏷ Filtre${_curF !== 'all' ? ' : ' + _esc(cur.lbl) + ` (${shown}/${evs.length})` : ''} ▾</button><div class="dd-menu">`;
+    for (const c of _evFilters) {
+      const dis = c.v !== _curF && c.v !== 'all' && c.n === 0;
+      fm += `<button${dis ? ' disabled' : ''} onclick="closeAllDd();_evalListSetFilter('${c.v}')" title="${_escAttr(c.tip || '')}">${c.v === _curF ? '● ' : '<span style="visibility:hidden">● </span>'}${_esc(c.lbl)}${c.n != null ? ` <span style="color:var(--pencil);font-family:var(--font-mono)">${c.n}</span>` : ''}</button>`;
+    }
+    _evalTbHost.insertAdjacentHTML('afterbegin', fm + '</div></span>');
   }
   evs = evs.filter(_evShow);
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
@@ -42744,6 +42747,8 @@ function _tableurApplyCellStyle() {
   const bar = _tableurCellStyle() === 'bar';
   document.body?.classList?.toggle('tableur-lisere', bar);
   document.querySelectorAll('input[name="tableur-cellstyle"]').forEach(r => { r.checked = (r.value === (bar ? 'bar' : 'fill')); });
+  const b = document.getElementById('meval-tableur-cellstyle-btn');
+  if (b) b.textContent = bar ? '▌ Liseré' : '■ Cases pleines';
 }
 function _tlSync(td) {
   const raw = td.style.background || td.style.backgroundColor || '';
@@ -43448,12 +43453,13 @@ function _computeStudentNoteBrut(ev, sid) {
 function _compPillHTML(niv) {
   const colors = _maitriseColors();
   if (niv == null) {
-    return `<span class="comp-pill comp-pill-empty" style="display:inline-block;min-width:20px;padding:1px 7px;border-radius:11px;border:1px dashed var(--rule-line);color:var(--pencil);font-family:var(--font-mono);font-size:.82em;font-weight:400">${_formatNiveau(0)}</span>`;
+    return `<span class="comp-pill comp-pill-empty" style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:24px;padding:0 4px;box-sizing:border-box;border-radius:6px;border:1px dashed var(--rule-line);color:var(--pencil);font-family:var(--font-mono);font-size:.82em;font-weight:400;vertical-align:middle">${_formatNiveau(0)}</span>`;
   }
   const lvl = Math.round(niv);
   const bg = colors[Math.max(0, Math.min(colors.length - 1, lvl - 1))];
   const col = _contrastTextColor(bg);
-  return `<span class="comp-pill" style="display:inline-block;min-width:20px;padding:1px 8px;border-radius:11px;background:${bg};color:${col};font-family:var(--font-mono);font-size:.85em;font-weight:700">${_formatNiveau(lvl)}</span>`;
+  // Carré, comme la carte de maîtrise du Bilan des compétences (v2.91.0).
+  return `<span class="comp-pill" style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:24px;padding:0 4px;box-sizing:border-box;border-radius:6px;background:${bg};color:${col};font-family:var(--font-mono);font-size:.85em;font-weight:700;vertical-align:middle">${_formatNiveau(lvl)}</span>`;
 }
 
 // Bascule la position du bloc Compétences (avant/après le bloc Total/Note) — Type C.
