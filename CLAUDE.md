@@ -1245,6 +1245,11 @@ Vue cross-élèves filtrable par période, accessible depuis la modal **📅 App
 
 ## Import d'élèves (modale `mi`) — tableau ou texte libre, avec aperçu
 
+### Assistant en 4 étapes (v2.112.0, maquette validée le 2026-10-07)
+Étapes **1 Source** (fichier, glisser-déposer `_impDropFile` sur la zone de texte, ou collage ; format) · **2 Colonnes** (`#imp-mapping` + codes de groupes) · **3 Classes** (`#imp-step3` : sélection des classes `_impRenderClasses` + salle des nouvelles classes `#imp-room`, sorti de l'aperçu) · **4 Vérifier** (aperçu + options, bouton Importer). `_impSteps(res)` dit quelles étapes ont un objet : **texte libre → Colonnes et Classes sautées** (grisées dans `#imp-stepper`, « Suivant » les enjambe). `_impGo(delta, to)` / `_imp.step` (remis à 1 à l'ouverture) ; `_impRenderSteps(res)`, appelé par `_impRefresh`, pose le stepper (✓ étapes passées, clic = y aller), la visibilité des `.imp-step[data-step]`, les boutons Précédent / « <étape suivante> › » / Importer, et le **bandeau permanent `#imp-synth`** (À importer · Classes dont à créer · Ignorés = doublons · À vérifier, lien vers l'aperçu). Les fonctions d'analyse (`_impAnalyze`…) sont inchangées.
+- `_impNormDate` refuse une date impossible (31/02 → avertissement « non reconnue », au lieu d'être importée).
+- Couleurs « à créer / à importer » de l'aperçu en `var(--ok-fg)` (le littéral `#1a7442` tombait à 2,76:1 en sombre). Audit : 0 écart en clair et en sombre sur les 4 étapes ; 363 px à 375, bandeau en 2 colonnes.
+
 Une seule zone de texte, deux formats détectés automatiquement (`_impDetect`), un sélecteur `#imp-mode` pour forcer :
 
 - **Tableau** (CSV / TSV / copie d'un tableur) — séparateur = le premier de TAB / `;` / `,` qui donne ≥ 2 colonnes sur ≥ 80 % des lignes ; guillemets doubles respectés (`_impSplitLine`). **En-tête** reconnu si ≥ 1 titre matche un synonyme ET au moins un tiers des colonnes (sinon un « DUPONT » en 1re ligne passerait pour un titre). Sans en-tête, les colonnes sont **devinées d'après leurs valeurs** (`_impGuessFieldFromValues` : tout-majuscules → Nom, Capitalisé → Prénom, 1/G1/GP1 → Groupe, M/F → Civilité, id ou nom de classe → Classe, dates → Arrivée).

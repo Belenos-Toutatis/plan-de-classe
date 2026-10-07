@@ -1608,6 +1608,17 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .lst-empty{padding:14px;text-align:center;color:var(--pencil);font-size:.9em;font-style:italic}
 .lst-sub{font-size:.78em;color:var(--pencil);flex-basis:100%;padding-left:26px}
 .lst-flex{flex:1;min-width:0}
+/* Import d'élèves — assistant (v2.112.0) */
+.imp-stepper{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 10px}
+#imp-synth .bsynth{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+@media (max-width:520px){#imp-synth .bsynth{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.imp-st{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:999px;padding:3px 12px;font:500 .86em var(--font-sans);cursor:pointer}
+.imp-st.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
+.imp-st.done{color:var(--ok-fg);border-color:var(--ok-fg)}
+.imp-st:disabled{opacity:.45;cursor:default}
+.imp-sep{color:var(--pencil)}
+#imp-txt{min-height:180px}
+#imp-txt.imp-drop-on{outline:2px dashed var(--ink-blue);outline-offset:2px}
 /* Rappels d'un élève (v2.110.0) */
 .rem-av{width:44px;height:44px;border-radius:50%;background:var(--paper-warm);border:1px solid var(--rule-line);color:var(--ink-blue);display:flex;align-items:center;justify-content:center;font-weight:600;overflow:hidden;flex:0 0 44px}
 .rem-av img{width:100%;height:100%;object-fit:cover}
@@ -4420,7 +4431,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- Import students -->
 <div id="mi" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:900px;width:100%;max-height:92vh;overflow-y:auto">
-    <h2>Importer des Élèves</h2>
+    <!-- Assistant en 4 étapes (v2.112.0, maquette validée le 2026-10-07) : Source · Colonnes ·
+         Classes · Vérifier ; bandeau de synthèse permanent ; étapes sans objet sautées. -->
+    <h2>Importer des élèves</h2>
+    <div id="imp-stepper" class="imp-stepper"></div>
+    <div id="imp-synth"></div>
+    <div class="imp-step" data-step="1">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
       <button class="btn btn-g btn-sm" onclick="document.getElementById('imp-file-csv').click()" title="Fichier CSV / TSV / TXT — l'encodage Windows (Pronote) est reconnu automatiquement">📂 Ouvrir un fichier…</button>
       <input type="file" id="imp-file-csv" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" style="display:none" onchange="_impFileSelected(this)">
@@ -4435,10 +4451,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="fg">
       <label>Liste des élèves <span style="font-weight:400;font-size:.82em;color:var(--pencil)">— collée depuis Pronote ou un tableur, ou chargée d'un fichier. L'aperçu se met à jour pendant la frappe.</span></label>
-      <textarea id="imp-txt" data-autofocus oninput="_impSchedule()" placeholder="Nom;Prénom;Classe;Groupe;Sexe&#10;DUPONT;Martin;3A;GP1;M&#10;MARTIN;Sophie;3A;GP2;F&#10;&#10;— ou, en texte libre :&#10;DUPONT Martin 1&#10;BERNARD Lucas 2 3A"></textarea>
+      <textarea id="imp-txt" data-autofocus oninput="_impSchedule()" ondragover="event.preventDefault();this.classList.add('imp-drop-on')" ondragleave="this.classList.remove('imp-drop-on')" ondrop="_impDropFile(event)" placeholder="Dépose ici un fichier (CSV, export Pronote / SIECLE…) ou colle le tableau ou la liste.&#10;&#10;Nom;Prénom;Classe;Groupe;Sexe&#10;DUPONT;Martin;3A;GP1;M&#10;MARTIN;Sophie;3A;GP2;F&#10;&#10;— ou, en texte libre :&#10;DUPONT Martin 1&#10;BERNARD Lucas 2 3A"></textarea>
     </div>
-    <div id="imp-mapping" style="display:none"></div>
-    <div id="imp-preview" style="margin-top:6px"></div>
     <details style="margin-top:10px;font-size:.85em">
       <summary style="cursor:pointer;color:var(--pencil)">Ce qui est reconnu</summary>
       <div class="al al-i" style="margin-top:6px">
@@ -4453,14 +4467,24 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         Ex : <code>M. DURAND Lucas G1 [DF]</code> · <code>LEROY Antoine (M.) 4A</code>
       </div>
     </details>
-    <div class="ma" style="align-items:center;flex-wrap:wrap;gap:8px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);margin-right:auto;cursor:pointer">
+    </div>
+    <div class="imp-step" data-step="2"><div id="imp-mapping" style="display:none"></div></div>
+    <div class="imp-step" data-step="3" id="imp-step3"><div id="imp-room"></div></div>
+    <div class="imp-step" data-step="4">
+      <div id="imp-preview" style="margin-top:6px"></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);cursor:pointer">
         <input type="checkbox" id="imp-skip-dup" checked onchange="_impRefresh()"> Ignorer les élèves déjà présents
       </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);margin-right:auto;cursor:pointer" title="Une classe citée dans la colonne Classe mais absente de l'app est créée à l'import, avec une salle 4×10 par défaut">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85em;color:var(--pencil);cursor:pointer" title="Une classe citée dans la colonne Classe mais absente de l'app est créée à l'import, avec une salle 4×10 par défaut">
         <input type="checkbox" id="imp-create-cls" checked onchange="_impRefresh()"> Créer les classes inconnues
       </label>
+      </div>
+    </div>
+    <div class="ma" style="align-items:center;flex-wrap:wrap;gap:8px">
+      <button class="btn btn-g" id="imp-btn-prev" onclick="_impGo(-1)" style="margin-right:auto">‹ Précédent</button>
       <button class="btn btn-g" onclick="closeMod2('mi')">Annuler</button>
+      <button class="btn btn-p" id="imp-btn-next" onclick="_impGo(1)">Suivant ›</button>
       <button class="btn btn-s" id="imp-btn-go" onclick="importStudents()" disabled>Importer</button>
     </div>
   </div>
@@ -7845,11 +7869,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.111.0';
+const APP_VERSION    = '2.112.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T20:22:16Z';
+const APP_BUILD_DATE = '2026-10-07T20:35:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -16984,10 +17008,12 @@ function _impTruthy(v) { return /^(x|oui|o|yes|y|1|vrai|true|v|✓|✔)$/i.test(
 // Date : AAAA-MM-JJ ou JJ/MM/AAAA → AAAA-MM-JJ, sinon null.
 function _impNormDate(v) {
   const t = String(v || '').trim();
+  // Date réelle seulement : un 31/02 doit être signalé, pas importé.
+  const ok = (y, mo, d) => { const x = new Date(+y, +mo - 1, +d); return x.getFullYear() === +y && x.getMonth() === +mo - 1 && x.getDate() === +d; };
   let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if (m) return ok(m[1], m[2], m[3]) ? `${m[1]}-${m[2]}-${m[3]}` : null;
   m = t.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/);
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  if (m) return ok(m[3], m[2], m[1]) ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null;
   return null;
 }
 function _impNormTags(v) {
@@ -17227,9 +17253,61 @@ function openImportStudents() {
   // Tout effacer) il n'y a AUCUNE classe, et c'est justement le fichier — colonne
   // Classe — qui doit les créer. Sans classe courante, les lignes sans classe sont
   // simplement rejetées (« aucune classe cible »), l'aperçu le dit.
-  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.room = null; _imp.result = null; _imp.exclude = new Set();
+  _imp.sig = ''; _imp.mapping = null; _imp.header = null; _imp.codeMap = {}; _imp.room = null; _imp.result = null; _imp.exclude = new Set(); _imp.step = 1;
   openMod('mi');
   _impRefresh();
+}
+// ── Assistant (v2.112.0) ──
+function _impSteps(res) {
+  const has = !!(res && res.records && res.records.length);
+  return [
+    { n: 1, label: 'Source', on: true },
+    { n: 2, label: 'Colonnes', on: has && res.mode === 'table' && res.rows.length > 0 },
+    { n: 3, label: 'Classes', on: has && ((res.classGroups || []).some(g => g.status !== 'none') || Object.keys(res.newClasses || {}).length > 0) },
+    { n: 4, label: 'Vérifier', on: has },
+  ];
+}
+function _impGo(delta, to) {
+  const steps = _impSteps(_imp.result).filter(s => s.on).map(s => s.n);
+  let cur = _imp.step || 1;
+  if (to) cur = to;
+  else { const i = steps.indexOf(cur); cur = steps[Math.max(0, Math.min(steps.length - 1, (i < 0 ? 0 : i) + delta))] || 1; }
+  _imp.step = cur;
+  _impRenderSteps(_imp.result);
+  const mb = document.querySelector('#mi .mb'); if (mb) mb.scrollTop = 0;
+}
+function _impRenderSteps(res) {
+  const steps = _impSteps(res);
+  let cur = _imp.step || 1;
+  if (!steps.find(s => s.n === cur)?.on) cur = 1;
+  _imp.step = cur;
+  const el = document.getElementById('imp-stepper');
+  if (el) el.innerHTML = steps.map(s => `<button type="button" class="imp-st${s.n === cur ? ' on' : ''}${s.n < cur && s.on ? ' done' : ''}" ${s.on ? `onclick="_impGo(0, ${s.n})"` : 'disabled'} title="${s.on ? '' : 'sans objet pour ce fichier'}">${s.n < cur && s.on ? '✓' : s.n} ${s.label}</button>`).join('<span class="imp-sep">›</span>');
+  document.querySelectorAll('#mi .imp-step').forEach(d => d.style.display = (+d.dataset.step === cur) ? '' : 'none');
+  const on = steps.filter(s => s.on).map(s => s.n), last = on[on.length - 1];
+  const prev = document.getElementById('imp-btn-prev'), next = document.getElementById('imp-btn-next'), go = document.getElementById('imp-btn-go');
+  if (prev) prev.style.visibility = cur === 1 ? 'hidden' : '';
+  if (next) { next.style.display = cur === last ? 'none' : ''; const nx = on[on.indexOf(cur) + 1]; next.textContent = nx ? `${steps[nx - 1].label} ›` : 'Suivant ›'; next.disabled = !nx; }
+  if (go) go.style.display = cur === 4 ? '' : 'none';
+  // Bandeau de synthèse
+  const sy = document.getElementById('imp-synth'); if (!sy) return;
+  const recs = res?.records || [];
+  if (!recs.length) { sy.innerHTML = ''; return; }
+  const ok = recs.filter(r => r.ok);
+  const dup = recs.filter(r => !r.ok && !r.excluded && r.dup).length;
+  const warn = ok.filter(r => r.warnings.length).length + recs.filter(r => !r.ok && !r.excluded && !r.dup).length;
+  const clsIds = new Set(ok.map(r => r.targetClassId).filter(Boolean));
+  const nNew = Object.keys(res.newClasses || {}).length;
+  sy.innerHTML = `<div class="bsynth">
+    ${_bsynthCard('À importer', `<div class="bsynth-big">${ok.length}</div><div class="bsynth-sub">élève${ok.length > 1 ? 's' : ''}</div>`)}
+    ${_bsynthCard('Classes', `<div class="bsynth-big">${clsIds.size}</div><div class="bsynth-sub">${nNew ? `dont ${nNew} à créer` : 'existantes'}</div>`)}
+    ${_bsynthCard('Ignorés', `<div class="bsynth-big">${dup}</div><div class="bsynth-sub">doublons</div>`)}
+    ${_bsynthCard('À vérifier', `<div class="bsynth-big"${warn ? ' style="color:var(--warn-fg)"' : ''}>${warn}</div><div class="bsynth-sub">${warn ? `<a href="#" style="color:var(--link-fg)" onclick="event.preventDefault();_impGo(0,4)">voir dans l'aperçu</a>` : 'tout est en ordre'}</div>`)}
+  </div>`;
+}
+function _impDropFile(e) {
+  e.preventDefault(); e.currentTarget?.classList.remove('imp-drop-on');
+  const f = e.dataTransfer?.files?.[0]; if (f) _impFileSelected({ files: [f] });
 }
 function _impSchedule() {
   clearTimeout(_imp.timer);
@@ -17265,6 +17343,7 @@ function _impRefresh() {
   _impRenderCodes(res);
   _impRenderClasses(res, cls);
   _impRenderPreview(res, cls);
+  _impRenderSteps(res);
   if (modalBody) modalBody.scrollTop = scrollTop;
   const newCodesBox = document.getElementById('imp-codes-scroll');
   if (newCodesBox) newCodesBox.scrollTop = codesTop;
@@ -17360,7 +17439,7 @@ function _impRenderCodes(res) {
     </select>`;
   const rows = codes.map(({ code, count, interp, raw }) => {
     const abbrs = _impInterpAbbrs(interp);
-    const hint = abbrs.map(a => `${_escName(a)}${tagByAbbr(a) ? '' : ' <span style="color:#1a7442">✚</span>'}`).join(' · ');
+    const hint = abbrs.map(a => `${_escName(a)}${tagByAbbr(a) ? '' : ' <span style="color:var(--ok-fg)">✚</span>'}`).join(' · ');
     const abbrCell = interp.kind === 'tag'
       ? `<input data-code="${_escAttr(code)}" data-field="abbr" value="${_escAttr(abbrs.join(' '))}" maxlength="40" onchange="_impSetCode('${_escJsAttr(code)}','abbr',this.value)" style="width:110px;font-family:var(--font-mono);text-transform:uppercase;padding:2px 5px;font-size:.85em" title="Un ou plusieurs tags, séparés par un espace : « BIL LCE » en crée deux (6 caractères max chacun)">
          <span style="font-size:.78em;color:var(--pencil)">${hint || '<span style="color:var(--danger-fg)">aucun tag</span>'}</span>`
@@ -17389,10 +17468,10 @@ function _impRenderCodes(res) {
 function _impRenderClasses(res, cls) {
   let box = document.getElementById('imp-classes');
   if (!box) {
-    const anchor = document.getElementById('imp-codes') || document.getElementById('imp-mapping');
-    if (!anchor) return;
+    const step = document.getElementById('imp-step3');
+    if (!step) return;
     box = document.createElement('div'); box.id = 'imp-classes';
-    anchor.insertAdjacentElement('afterend', box);
+    step.prepend(box);
   }
   const groups = res.classGroups || [];
   if (!groups.some(g => g.status !== 'none')) { box.style.display = 'none'; box.innerHTML = ''; return; }
@@ -17400,7 +17479,7 @@ function _impRenderClasses(res, cls) {
   const curLab = cls ? _escName(cls.nom || cls.id) : null;
   const statusHTML = g => {
     if (g.status === 'existing') return '<span style="color:var(--pencil)">existante</span>';
-    if (g.status === 'new') return '<span style="color:#1a7442">✚ sera créée</span>';
+    if (g.status === 'new') return '<span style="color:var(--ok-fg)">✚ sera créée</span>';
     if (g.status === 'unknown') return curLab
       ? `<span style="color:var(--warn-fg, #a85312)">inconnue → ${curLab}</span>`
       : '<span style="color:var(--danger-fg)">inconnue — ignorée</span>';
@@ -17472,7 +17551,7 @@ function _impRenderPreview(res, cls) {
   const rowsHtml = shown.map(r => {
     const clsName = r.targetClassId ? _escName(r.targetClassId) : '—';
     const clsCell = r.classeRaw && !r.classeId ? `<span style="color:var(--warn-fg, #a85312)" title="classe inconnue">${_escName(r.classeRaw)} → ${clsName}</span>`
-                  : (r.classeNew ? `<span style="color:#1a7442" title="classe créée à l'import">${clsName} ✚</span>` : clsName);
+                  : (r.classeNew ? `<span style="color:var(--ok-fg)" title="classe créée à l'import">${clsName} ✚</span>` : clsName);
     const state = r.ok
       ? (r.warnings.length ? `<span style="color:var(--warn-fg, #a85312)" title="${_escAttr(r.warnings.join(' · '))}">⚠ ${_escName(r.warnings[0])}</span>` : '<span style="color:var(--pencil)">✓</span>')
       : `<span style="color:var(--danger-fg)" title="${_escAttr(r.warnings.join(' · '))}">✗ ${_escName(r.warnings[0] || 'ignorée')}</span>`;
@@ -17504,7 +17583,7 @@ function _impRenderPreview(res, cls) {
   const perClassHtml = Object.entries(perClass).map(([id, n]) => `${n} dans ${_escName(id)}`).join(', ');
   box.innerHTML = `${noCurHtml}
     <div style="font-size:.88em;margin:6px 0 4px">
-      <strong>${recs.length} ligne${recs.length > 1 ? 's' : ''}</strong> · <span style="color:#1a7442">✓ ${ok.length} à importer</span>${perClassHtml ? ` <span style="color:var(--pencil)">(${perClassHtml})</span>` : ''}
+      <strong>${recs.length} ligne${recs.length > 1 ? 's' : ''}</strong> · <span style="color:var(--ok-fg)">✓ ${ok.length} à importer</span>${perClassHtml ? ` <span style="color:var(--pencil)">(${perClassHtml})</span>` : ''}
       ${ko.length - nExcl ? ` · <span style="color:var(--danger-fg)">✗ ${ko.length - nExcl} ignorée${ko.length - nExcl > 1 ? 's' : ''}</span> <span style="color:var(--pencil);font-size:.9em">— ${reasonsHtml}</span>` : ''}
       ${nExcl ? ` · <span style="color:var(--pencil)">${nExcl} dans des classes non sélectionnées</span>` : ''}
     </div>
@@ -17517,7 +17596,10 @@ function _impRenderPreview(res, cls) {
       </table>${more}
     </div>
     ${dupSkipped ? `<div style="font-size:.8em;color:var(--pencil);margin-top:4px">${dupSkipped} élève${dupSkipped > 1 ? 's' : ''} déjà présent${dupSkipped > 1 ? 's' : ''} — décoche « Ignorer les élèves déjà présents » pour les réimporter quand même.</div>` : ''}
-    ${Object.keys(res.newClasses || {}).length ? `<div style="font-size:.84em;color:#1a7442;margin-top:4px">✚ Classes à créer : ${Object.entries(res.newClasses).map(([id, lab]) => `<strong>${_escName(id)}</strong>${lab !== id ? ` <span style="color:var(--pencil)">(« ${_escName(lab)} »)</span>` : ''}`).join(', ')}</div>${_impRoomChoiceHTML(cls)}` : ''}`;
+    ${Object.keys(res.newClasses || {}).length ? `<div style="font-size:.84em;color:var(--ok-fg);margin-top:4px">✚ Classes à créer : ${Object.entries(res.newClasses).map(([id, lab]) => `<strong>${_escName(id)}</strong>${lab !== id ? ` <span style="color:var(--pencil)">(« ${_escName(lab)} »)</span>` : ''}`).join(', ')}</div>` : ''}`;
+  const roomBox = document.getElementById('imp-room');
+  if (roomBox) roomBox.innerHTML = Object.keys(res.newClasses || {}).length
+    ? `<div style="font-size:.86em;margin-top:10px"><strong style="color:var(--ok-fg)">✚ Classes à créer :</strong> ${Object.keys(res.newClasses).map(id => `<strong>${_escName(id)}</strong>`).join(', ')}</div>${_impRoomChoiceHTML(cls)}` : '';
   if (btn) {
     btn.disabled = ok.length === 0;
     btn.textContent = ok.length ? `Importer ${ok.length} élève${ok.length > 1 ? 's' : ''}` : 'Importer';
