@@ -1089,6 +1089,13 @@ snap = {
 }
 ```
 
+### Fenêtre `msnap` — refonte v2.123.0 (maquette validée le 2026-10-08)
+- **Une seule fenêtre** pour les deux types, sélecteur **Positions · <salle> | Incidents** (`_snapSetType`, `_snapRender`) — `openSnapshotsModal(type)` choisit seulement l'onglet de départ (Plan → Positions, Élèves → Incidents).
+- **Création directe** : champ de nom prérempli + « ＋ Enregistrer la disposition actuelle / les compteurs actuels » (`snapshotCreateConfirm`) ; la fenêtre `msnapNew` et `snapshotCreate` ont été **supprimées**. Construction factorisée dans **`_snapMake(cls, type, nom, auto)`** (sans `pushUndo` ni `save`).
+- **Cartes** : positions = **mini-plan** (`_snapMiniPlan`, orientation Plan Prof, en orange les places dont l'occupant a changé depuis) + nombre d'élèves placés + pastille « N élèves ont changé de place depuis » (`_snapDiffPos`) ou « identique au plan actuel » ; incidents = totaux d'oublis / non faits à la date + écart avec aujourd'hui. Actions : 👁 Consulter, **↻ Revenir à ce plan** (= l'ancien Restaurer), ⋯ Renommer / Supprimer.
+- **Instantané automatique avant chaque « Mélanger tout »** (`_snapAutoBeforeShuffle`, appelé dans `_runRandomPlacement` après `pushUndo` quand `opts.reshuffle` et qu'il y a des élèves placés) : « 🔀 Avant mélange du JJ/MM à HH:MM », champ `auto: true`, **les 5 derniers** par classe et salle (`SNAP_AUTO_KEEP`) — permet de revenir au plan d'avant même après fermeture de l'app (Ctrl+Z ne survit pas à un F5).
+- Audit : 0 écart en clair et en sombre (deux types) ; 360 px à 375.
+
 ### Type `positions` — onglet Plan Prof
 - Capture le `seating` de la salle active + identité minimale des élèves placés (pour pouvoir consulter même si supprimés depuis)
 - Bouton **"🔖 Instantanés"** dans la toolbar Plan Prof

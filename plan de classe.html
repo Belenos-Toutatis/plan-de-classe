@@ -1675,6 +1675,23 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ev-types .eval-type-badge{flex:0 0 auto;font-size:.9em}
 .ev-types b{display:block;font-weight:600;font-size:.92em}
 .ev-tsub{display:block;font-size:.8em;color:var(--pencil);line-height:1.3}
+/* Instantanés (v2.123.0) */
+.snap-new{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.snap-new input{flex:1;min-width:200px}
+.snap-list{max-height:56vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.snap-card{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--rule-line);border-radius:6px;padding:8px 10px;background:var(--paper)}
+.snap-mp{display:grid;gap:1.5px;width:96px}
+.snap-mp i{aspect-ratio:1;background:var(--paper-deep);border-radius:1px}
+.snap-mp i.v{background:transparent}
+.snap-mp i.o{background:var(--link-fg)}
+.snap-mp i.c{background:#e29b3a}
+.snap-inc{font-size:.8em;color:var(--pencil);text-align:center;line-height:1.5}
+.snap-inc b{font-family:var(--font-serif);font-size:1.25em;color:var(--ink-blue)}
+.snap-name{font-weight:600;color:var(--ink-deep)}
+.snap-tag{font-size:.78em;padding:0 7px;border-radius:999px;background:var(--paper-warm);color:var(--pencil);border:1px solid var(--rule-line)}
+.snap-tag.warn{background:var(--caution-bg);color:var(--caution-fg);border-color:var(--caution-bd)}
+.snap-acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:620px){ .snap-card{grid-template-columns:72px minmax(0,1fr)} .snap-mp{width:72px} .snap-acts{grid-column:1 / -1} }
 /* Barre des onglets (v2.121.0) : une ligne, actif souligné, pastille, icônes seules en fenêtre étroite */
 #nav .nb{border:none !important;border-bottom:3px solid transparent !important;border-radius:0 !important;bottom:0 !important;box-shadow:none !important;padding:9px 12px 7px !important}
 #nav .nb.on{background:transparent !important;border-bottom-color:var(--ink-blue) !important;color:var(--ink-deep) !important;font-weight:600 !important}
@@ -7152,33 +7169,15 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ── MODAL Snapshots (positions ou incidents) ── -->
 <div id="msnap" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:680px;width:100%">
-    <h2 id="msnap-title">🔖 Instantanés</h2>
-    <p id="msnap-hint" style="font-size:.88em;color:var(--pencil);margin-bottom:10px"></p>
-    <div style="margin-bottom:12px">
-      <button class="btn btn-p" onclick="snapshotCreate()">🔖 Sauvegarder maintenant</button>
-    </div>
-    <div id="msnap-list" style="max-height:55vh;overflow-y:auto;border:1px solid #ddd;border-radius:4px"></div>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('msnap')">Fermer</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL Création d'instantané (saisie du nom) ── -->
-<div id="msnapNew" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:480px;width:100%">
-    <h2 id="msnapNew-title">🔖 Nouvel instantané</h2>
-    <div class="fg">
-      <label>Nom de l'instantané</label>
-      <input type="text" id="msnapNew-name"
-             style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:1em;box-sizing:border-box"
-             onkeydown="if(event.key==='Enter'){event.preventDefault();snapshotCreateConfirm()}">
-    </div>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('msnapNew')">Annuler</button>
-      <button class="btn btn-p" onclick="snapshotCreateConfirm()">🔖 Sauvegarder</button>
-    </div>
+  <!-- Instantanés — refonte v2.123.0 (maquette validée le 2026-10-08) : Positions | Incidents dans une
+       seule fenêtre, création directe, cartes avec mini-plan et écart avec aujourd'hui. -->
+  <div class="mb" style="width:min(780px,96vw);max-width:780px">
+    <div class="lst-head"><h2 id="msnap-title" style="flex:1;margin:0">🔖 Instantanés</h2><span id="msnap-seg" class="ip-seg"></span></div>
+    <div class="snap-new"><input type="text" id="msnap-name" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();snapshotCreateConfirm()}">
+      <button class="btn btn-p" id="msnap-go" onclick="snapshotCreateConfirm()">＋ Enregistrer</button></div>
+    <p id="msnap-hint" class="clf-note" style="margin:4px 0 10px"></p>
+    <div id="msnap-list" class="snap-list"></div>
+    <div class="ma"><button class="btn btn-g" onclick="closeMod2('msnap')">Fermer</button></div>
   </div>
 </div>
 
@@ -7949,11 +7948,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.122.0';
+const APP_VERSION    = '2.123.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T22:45:29Z';
+const APP_BUILD_DATE = '2026-10-07T22:51:17Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13719,6 +13718,8 @@ function _runRandomPlacement(opts, afterUndo) {
 
   pushUndo();
   if (typeof afterUndo === 'function') afterUndo();
+  // Instantané automatique : on peut revenir au plan d'avant le mélange même après la fermeture de l'app.
+  if (opts.reshuffle) _snapAutoBeforeShuffle(cls);
 
   let studentsToPlace;
   if (opts.reshuffle) {
@@ -29962,71 +29963,90 @@ function _snapVisibleList() {
 function openSnapshotsModal(type) {
   const cls = getCls();
   if (!cls) return toast('⚠️ Sélectionne une classe.', 'warn');
-  if (type === 'positions' && (!cls.activeRoom || !S.salles?.[cls.activeRoom])) {
-    return toast('⚠️ Aucune salle active — sélectionne d\'abord une salle dans cette classe.', 'warn');
-  }
-  _snapModalType = type;
-  document.getElementById('msnap-title').textContent =
-    type === 'positions' ? '🔖 Instantanés — Positions' : '🔖 Instantanés — Incidents';
-  document.getElementById('msnap-hint').textContent =
-    type === 'positions'
-      ? `Sauvegarde les positions des élèves dans la salle active (${activeSalle(cls)?.nom || ''}). Possibilité de consulter ou restaurer plus tard.`
-      : `Sauvegarde les compteurs 📦/📝 et l'historique de tous les élèves de la classe ${cls.nom}. Consultable plus tard (lecture seule).`;
-  renderSnapshotsList();
+  _snapModalType = type === 'positions' ? 'positions' : 'incidents';
+  _snapRender();
   openMod('msnap');
 }
-
+function _snapSetType(t) {
+  const cls = getCls();
+  if (t === 'positions' && (!cls?.activeRoom || !S.salles?.[cls.activeRoom])) return toast('⚠️ Aucune salle active pour cette classe.', 'warn');
+  _snapModalType = t; _snapRender();
+}
+function _snapRender() {
+  const cls = getCls(); if (!cls) return;
+  const pos = _snapModalType === 'positions';
+  const salle = activeSalle(cls)?.nom || '';
+  document.getElementById('msnap-title').textContent = '🔖 Instantanés — ' + cls.nom;
+  const b = (t, l) => `<button type="button" class="${_snapModalType === t ? 'on' : ''}" onclick="_snapSetType('${t}')">${l}</button>`;
+  document.getElementById('msnap-seg').innerHTML = b('positions', 'Positions' + (salle ? ' · ' + _esc(salle) : '')) + b('incidents', 'Incidents');
+  const inp = document.getElementById('msnap-name'); if (inp) inp.value = _snapDefaultName(_snapModalType);
+  document.getElementById('msnap-go').textContent = pos ? '＋ Enregistrer la disposition actuelle' : '＋ Enregistrer les compteurs actuels';
+  document.getElementById('msnap-hint').textContent = pos
+    ? `Un instantané garde les places des élèves dans ${salle || 'la salle affichée'} : tu peux le consulter ou revenir à ce plan. Un instantané est aussi pris automatiquement avant chaque « Mélanger tout » (les 5 derniers sont gardés).`
+    : `Un instantané garde les compteurs d'oublis et de travail non fait, et l'historique, de tous les élèves de ${cls.nom}. Consultable plus tard, en lecture seule.`;
+  renderSnapshotsList();
+}
+// Mini-plan d'un instantané de positions (orientation Plan Prof) : places occupées, et en orange
+// celles dont l'occupant a changé depuis.
+function _snapMiniPlan(k, cls) {
+  const sa = S.salles?.[k.salleId]; if (!sa) return '';
+  const cur = cls.rooms?.[k.salleId]?.seating || {}, then = k.data?.seating || {};
+  const vides = new Set(sa.positions_vides || []);
+  let h = `<div class="snap-mp" style="grid-template-columns:repeat(${sa.cols},1fr)">`;
+  for (let r = sa.rows - 1; r >= 0; r--) for (let c = sa.cols - 1; c >= 0; c--) {
+    const key = `${r},${c}`;
+    h += `<i class="${vides.has(key) ? 'v' : then[key] ? (then[key] !== cur[key] ? 'c' : 'o') : ''}"></i>`;
+  }
+  return h + '</div>';
+}
+function _snapDiffPos(k, cls) {
+  const cur = cls.rooms?.[k.salleId]?.seating || {}, then = k.data?.seating || {};
+  const where = m => { const o = {}; for (const [key, sid] of Object.entries(m)) o[sid] = key; return o; };
+  const a = where(then), b = where(cur);
+  return Object.keys(a).filter(sid => S.eleves[sid] && cls.eleves.includes(sid) && a[sid] !== b[sid]).length;
+}
 function renderSnapshotsList() {
   const list = document.getElementById('msnap-list');
+  const cls = getCls();
   const items = _snapVisibleList();
   if (!items.length) {
-    list.innerHTML = `<p style="padding:20px;color:var(--pencil);text-align:center;font-size:.9em">Aucun instantané ${_snapModalType === 'positions' ? 'de positions' : 'd\'incidents'} pour ce contexte.</p>`;
+    list.innerHTML = _emptyStateHTML('🔖', `Aucun instantané ${_snapModalType === 'positions' ? 'de positions pour cette salle' : "d'incidents pour cette classe"}`, 'Donne-lui un nom ci-dessus, puis « ＋ Enregistrer ».');
     return;
   }
+  const curO = (cls.eleves || []).reduce((t, id) => t + (S.eleves[id]?.oublis || 0), 0), curN = (cls.eleves || []).reduce((t, id) => t + (S.eleves[id]?.non_travail || 0), 0);
   list.innerHTML = items.map(k => {
     const isPos = k.type === 'positions';
-    const restoreBtn = isPos
-      ? `<button class="btn btn-w btn-sm" onclick="snapshotRestore('${k.id}')" title="Restaurer cette disposition">↻ Restaurer</button>`
-      : '';
-    return `
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #eee">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:.95em">${_escAttr(k.nom)}</div>
-          <div style="font-size:.78em;color:var(--pencil)">${_escAttr(_snapDateTimeFr(k.ts))}</div>
-        </div>
-        <button class="btn btn-p btn-sm" onclick="snapshotView('${k.id}')" title="Consulter en lecture seule">👁 Consulter</button>
-        ${restoreBtn}
-        <button class="btn btn-g btn-sm" onclick="snapshotRename('${k.id}')" title="Renommer">✏️</button>
-        <button class="btn btn-d btn-sm" onclick="snapshotDelete('${k.id}')" title="Supprimer">🗑</button>
-      </div>`;
+    let vis = '', meta = '', tag = '';
+    if (isPos) {
+      vis = _snapMiniPlan(k, cls);
+      const n = Object.keys(k.data?.seating || {}).length, d = _snapDiffPos(k, cls);
+      meta = `${n} élève${n > 1 ? 's' : ''} placé${n > 1 ? 's' : ''}`;
+      tag = d ? `<span class="snap-tag warn">${d} élève${d > 1 ? 's ont' : ' a'} changé de place depuis</span>` : '<span class="snap-tag">identique au plan actuel</span>';
+    } else {
+      const el = Object.values(k.data?.eleves || {});
+      const o = el.reduce((t, e) => t + (e.oublis || 0), 0), nt = el.reduce((t, e) => t + (e.non_travail || 0), 0);
+      vis = `<div class="snap-inc"><b>${o}</b> oublis<br><b>${nt}</b> non faits</div>`;
+      meta = `${el.length} élève${el.length > 1 ? 's' : ''}`;
+      const dO = curO - o, dN = curN - nt;
+      tag = (dO || dN) ? `<span class="snap-tag warn">depuis : ${dO >= 0 ? '+' : ''}${dO} oubli${Math.abs(dO) > 1 ? 's' : ''} · ${dN >= 0 ? '+' : ''}${dN} non fait${Math.abs(dN) > 1 ? 's' : ''}</span>` : '<span class="snap-tag">identique à aujourd\'hui</span>';
+    }
+    return `<div class="snap-card">
+      ${vis}
+      <div class="snap-txt"><div class="snap-name">${k.auto ? '🔀 ' : ''}${_esc(k.nom)}</div><div class="clf-note" style="margin:0">${_esc(_snapDateTimeFr(k.ts))} · ${meta}</div><div style="margin-top:3px">${tag}</div></div>
+      <div class="snap-acts">
+        <button class="btn btn-g btn-sm" onclick="snapshotView('${k.id}')" title="Consulter en lecture seule">👁 Consulter</button>
+        ${isPos ? `<button class="btn btn-w btn-sm" onclick="snapshotRestore('${k.id}')" title="Remettre les élèves aux places de cet instantané (annulable par Ctrl+Z)">↻ Revenir à ce plan</button>` : ''}
+        <span class="dd dd-right"><button class="btn btn-g btn-sm" onclick="toggleDd(this)" aria-label="Autres actions">⋯</button>
+          <div class="dd-menu"><button onclick="closeAllDd();snapshotRename('${k.id}')">✏️ Renommer</button><button onclick="closeAllDd();snapshotDelete('${k.id}')" style="color:var(--danger-fg)">🗑 Supprimer</button></div></span>
+      </div></div>`;
   }).join('');
 }
 
 // ─── Création ───
-function snapshotCreate() {
-  const cls = getCls();
-  if (!cls) return;
-  document.getElementById('msnapNew-title').textContent =
-    _snapModalType === 'positions' ? '🔖 Sauvegarder la disposition' : '🔖 Sauvegarder l\'état des incidents';
-  const inp = document.getElementById('msnapNew-name');
-  inp.value = _snapDefaultName(_snapModalType);
-  openMod('msnapNew');
-  setTimeout(() => { inp.focus(); inp.select(); }, 50);
-}
-
-function snapshotCreateConfirm() {
-  const cls = getCls();
-  if (!cls) return;
-  const nom = document.getElementById('msnapNew-name').value.trim();
-  if (!nom) { toast('⚠️ Donne un nom à l\'instantané.', 'warn'); document.getElementById('msnapNew-name')?.focus(); return; }
-
-  const ts   = Date.now();
-  const id   = _snapId();
-  const type = _snapModalType;
-
-  pushUndo();
+// Construit un instantané (sans pushUndo ni save : l'appelant s'en charge).
+function _snapMake(cls, type, nom, auto) {
+  const ts = Date.now(), id = _snapId();
   if (!S.snapshots) S.snapshots = {};
-
   if (type === 'positions') {
     const seating = JSON.parse(JSON.stringify(cls.seating || {}));
     const eleves = {};
@@ -30040,35 +30060,41 @@ function snapshotCreateConfirm() {
     const aeshCount   = (_room && _room.aeshCount) || 0;
     const aeshSeating = _room ? JSON.parse(JSON.stringify(_room.aeshSeating || {})) : {};
     const aeshLinks   = _room ? JSON.parse(JSON.stringify(_room.aeshLinks   || {})) : {};
-    S.snapshots[id] = {
-      id, type: 'positions', nom, ts,
-      classId: cls.id, salleId: cls.activeRoom,
-      data: { seating, eleves, aeshCount, aeshSeating, aeshLinks }
-    };
+    S.snapshots[id] = { id, type: 'positions', nom, ts, classId: cls.id, salleId: cls.activeRoom,
+      data: { seating, eleves, aeshCount, aeshSeating, aeshLinks } };
+    if (auto) S.snapshots[id].auto = true;
   } else {
     // type === 'incidents' : pour chaque élève de la classe, capture ses compteurs + history
     const eleves = {};
     for (const sid of cls.eleves || []) {
       const stu = S.eleves[sid];
       if (!stu) continue;
-      eleves[sid] = {
-        nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu),
-        oublis: stu.oublis || 0,
-        non_travail: stu.non_travail || 0,
-        history: JSON.parse(JSON.stringify(stu.history || []))
-      };
+      eleves[sid] = { nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu), oublis: stu.oublis || 0,
+        non_travail: stu.non_travail || 0, history: JSON.parse(JSON.stringify(stu.history || [])) };
     }
-    S.snapshots[id] = {
-      id, type: 'incidents', nom, ts,
-      classId: cls.id,
-      data: { eleves }
-    };
+    S.snapshots[id] = { id, type: 'incidents', nom, ts, classId: cls.id, data: { eleves } };
   }
-
+  return S.snapshots[id];
+}
+// Instantané automatique avant « Mélanger tout » : on ne garde que les 5 derniers par classe et salle.
+var SNAP_AUTO_KEEP = 5;
+function _snapAutoBeforeShuffle(cls) {
+  if (!cls || !cls.activeRoom || !Object.keys(cls.seating || {}).length) return;
+  const d = new Date();
+  _snapMake(cls, 'positions', `Avant mélange du ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, true);
+  const autos = Object.values(S.snapshots).filter(k => k.auto && k.classId === cls.id && k.salleId === cls.activeRoom).sort((a, b) => b.ts - a.ts);
+  for (const k of autos.slice(SNAP_AUTO_KEEP)) delete S.snapshots[k.id];
+}
+function snapshotCreateConfirm() {
+  const cls = getCls();
+  if (!cls) return;
+  const nom = document.getElementById('msnap-name').value.trim();
+  if (!nom) { toast('⚠️ Donne un nom à l\'instantané.', 'warn'); document.getElementById('msnap-name')?.focus(); return; }
+  pushUndo();
+  _snapMake(cls, _snapModalType, nom);
   save();
-  closeMod2('msnapNew');
-  renderSnapshotsList();
-  toast(`🔖 Instantané "${nom}" sauvegardé.`);
+  _snapRender();
+  toast(`🔖 Instantané "${nom}" enregistré.`);
 }
 
 // ─── Suppression / renommage ───
