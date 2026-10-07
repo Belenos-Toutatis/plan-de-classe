@@ -1615,6 +1615,9 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .rem-row .lst-count{color:inherit;opacity:1}
 .rem-presets{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .rem-chip{border:1px solid;border-radius:999px;padding:2px 10px;font:500 .84em var(--font-sans);cursor:pointer}
+.cmsg-chip{background:var(--paper);border-color:var(--rule-line);color:var(--ink-deep)}
+.cmsg-chip:hover{border-color:var(--ink-blue-soft)}
+.rem-row.cmsg-later{background:var(--paper-warm);color:var(--ink-deep);border-color:var(--rule-line);border-left-style:dashed}
 /* Nouvelle évaluation / Réglages d'une évaluation (v2.109.0) */
 .ev-h{font-family:var(--font-mono);font-size:.72em;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-blue-soft);margin:6px 0 6px}
 .ev-types{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
@@ -7447,24 +7450,46 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ═══════════════ MODALE 📣 MESSAGE À LA CLASSE ═══════════════ -->
 <div id="mclassmsg" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:560px">
-    <h2>📣 Message à la classe — <span id="mcmsg-name"></span></h2>
-    <div style="font-size:.85em;color:var(--pencil);margin-bottom:10px">
-      Ce que tu dois dire à toute la classe en début de séance (rendre les copies, rappel de sortie, matériel à apporter…).
-      Le message s'affiche en évidence au-dessus du plan de cette classe jusqu'à ce que tu le marques <strong>✓ Fait</strong>.
+  <div class="mb" style="max-width:620px;width:100%">
+    <!-- Refonte v2.111.0 (maquette validée le 2026-10-07) -->
+    <div class="lst-head">
+      <h2 style="margin:0">📣 Message à la classe</h2>
+      <span class="att-cls" id="mcmsg-name"></span><span class="lst-count" id="mcmsg-count"></span>
+      <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="_cmsgOpenPresets()" title="Modifier la liste des messages courants">⚙ Messages courants</button>
     </div>
-    <div id="mcmsg-list" style="margin-bottom:14px"></div>
-    <div style="border-top:1px solid var(--rule-line);padding-top:12px">
-      <div style="font-weight:600;margin-bottom:8px;font-size:.95em" id="mcmsg-form-title">+ Ajouter un message</div>
-      <div style="display:flex;gap:5px;align-items:flex-start">
-        <textarea id="mcmsg-text" data-autofocus rows="2" maxlength="300" placeholder="Ex. : Rendre les copies du DS · Sortie mardi : mot à faire signer…" style="flex:1;padding:7px;border:1px solid var(--rule-line);border-radius:4px;font-size:.95em;resize:vertical" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addClassMsgFromInput()}"></textarea>
-        <button class="btn btn-p" id="mcmsg-add-btn" onclick="addClassMsgFromInput()" style="padding:7px 14px">Ajouter</button>
-        <button class="btn btn-g" id="mcmsg-cancel-edit" onclick="_classMsgCancelEdit()" style="padding:7px 10px;display:none" title="Abandonner la modification">✕</button>
-      </div>
-      <div style="font-size:.78em;color:var(--pencil-soft);margin-top:4px">Entrée = valider · Maj+Entrée = retour à la ligne</div>
+    <p class="lst-intro" style="margin-top:6px">Ce que tu dois dire à toute la classe en début de séance. Le message s'affiche au-dessus du plan jusqu'à ce que tu le marques <strong>✓ Fait</strong>.</p>
+    <div class="ev-h">En attente</div>
+    <div id="mcmsg-list"></div>
+    <div class="ev-h" style="margin-top:12px">Ajouter</div>
+    <div style="display:flex;gap:6px;align-items:flex-start">
+      <textarea id="mcmsg-text" data-autofocus rows="2" maxlength="300" placeholder="Ce que tu dois dire à toute la classe…" class="lst-flex" style="resize:vertical" aria-label="Nouveau message" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addClassMsgFromInput()}"></textarea>
+      <button class="btn btn-p btn-sm" id="mcmsg-add-btn" onclick="addClassMsgFromInput()">Ajouter</button>
     </div>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('mclassmsg')">Fermer</button>
+    <div id="mcmsg-presets" class="rem-presets"></div>
+    <div class="lst-count" style="margin-top:4px">Entrée = valider · Maj+Entrée = retour à la ligne · clic sur un message courant = il remplit le champ · <strong>double-clic</strong> = ajouté tout de suite</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;font-size:.88em">
+      <span id="mcmsg-also-wrap" style="display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center"><span style="color:var(--pencil)">Aussi pour</span><span id="mcmsg-also" style="display:inline-flex;flex-wrap:wrap;gap:4px"></span></span>
+      <span style="display:inline-flex;gap:6px;align-items:center;margin-left:auto"><span style="color:var(--pencil)">à partir du</span><input type="date" id="mcmsg-from" title="Le message ne s'affichera au-dessus du plan qu'à partir de ce jour (vide = tout de suite)"></span>
+    </div>
+    <div id="mcmsg-others" class="lst-count" style="margin-top:10px"></div>
+    <div class="ma"><button class="btn btn-g" onclick="closeMod2('mclassmsg')">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ═══ Messages courants à la classe (v2.111.0, gabarit des fenêtres de liste) ═══ -->
+<div id="mcmsgpresets" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:600px;width:100%">
+    <div class="lst-head"><h2>📣 Messages courants</h2><span class="lst-count" id="mcmsgp-count"></span></div>
+    <p class="lst-intro">Proposés en un clic dans 📣 Message à la classe, dans cet ordre (glisse ⠿).</p>
+    <div class="lst-box">
+      <div id="mcmsgp-list" class="lst"></div>
+      <div class="lst-add"><span class="lst-plus">＋</span>
+        <input type="text" id="mcmsgp-add" maxlength="300" class="lst-flex" placeholder="Nouveau message courant…" aria-label="Nouveau message courant" onkeydown="if(event.key==='Enter'){event.preventDefault();_cmsgpAdd()}">
+        <button class="btn btn-s btn-sm" onclick="_cmsgpAdd()">Ajouter</button></div>
+    </div>
+    <div class="ma" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-w btn-sm" onclick="_cmsgpDefaults()" title="Remplace la liste par les messages proposés par défaut">↻ Messages par défaut</button>
+      <button class="btn btn-g" onclick="closeMod2('mcmsgpresets')">Fermer</button>
     </div>
   </div>
 </div>
@@ -7820,11 +7845,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.110.0';
+const APP_VERSION    = '2.111.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T20:04:53Z';
+const APP_BUILD_DATE = '2026-10-07T20:22:16Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -8561,6 +8586,10 @@ function postLoadHook() {
       if (typeof p === 'string') S.reminderPresets[i] = { label: p, color: null };
     }
   }
+  // Messages courants proposés dans 📣 Message à la classe (v2.111.0) — liste de textes ;
+  // absente → défauts ; liste vide explicite (tout supprimé) → respectée.
+  if (!Array.isArray(S.classMsgPresets)) S.classMsgPresets = DEFAULT_CLASSMSG_PRESETS.slice();
+  else S.classMsgPresets = S.classMsgPresets.filter(x => typeof x === 'string' && x.trim()).map(x => x.slice(0, 300));
   if (!S.seatingSnapshots) S.seatingSnapshots = {}; // Pool dédupliqué de seatings au moment des appels
   if (!S.tags) S.tags = {};      // Tags cumulables (DF, DNL, etc.) : { id, abbr, name, color }
   // Surlignage des dernières places modifiées (persistant cross-device via JSON)
@@ -11101,6 +11130,8 @@ function saveCtxNotes() {
 // (synchronisé entre machines via le fichier JSON / Nextcloud).
 // Chaque preset = { label: string, color: <id de REMINDER_COLOR_PALETTE | null> }
 // color = null → couleur par défaut (amber, le ton "carnet" historique).
+// Messages courants à la classe (v2.111.0) — défauts, réglables dans ⚙ Réglages
+const DEFAULT_CLASSMSG_PRESETS = ['Rendre les copies', 'Mot à faire signer', 'Matériel à apporter', 'Rappel de sortie', 'Ramasser le travail'];
 const REMINDER_COLOR_PALETTE = [
   { id: 'red',    bg: '#fdeaea', border: '#f5b7b1', fg: '#7b241c', label: 'Rouge'  },
   { id: 'orange', bg: '#fdebd0', border: '#f5b041', fg: '#7e5109', label: 'Orange' },
@@ -11682,6 +11713,11 @@ function removeReminder(rid) { markReminderDone(rid); }
 // Affiché en bandeau surligneur au-dessus du plan (Plan Prof uniquement — info
 // privée au prof, ni projetée en Vue Élève, ni imprimée). Un message part quand
 // il est marqué ✓ Fait (annulable par Ctrl+Z).
+// Messages VISIBLES aujourd'hui (v2.111.0) : ceux dont la date « à partir du » est passée
+function _clsMsgVisible(cls) {
+  const t = todayKey();
+  return _clsMessages(cls).filter(m => !m.from || m.from <= t);
+}
 function _clsMessages(cls) {
   if (!cls) return [];
   if (!Array.isArray(cls.classMessages)) cls.classMessages = [];
@@ -11695,7 +11731,7 @@ function _renderClassMsgBanner() {
   const banner = document.getElementById('class-msg-banner');
   const btn = document.getElementById('btn-class-msg');
   const cls = getCls();
-  const list = cls ? _clsMessages(cls).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
+  const list = cls ? _clsMsgVisible(cls).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
   if (btn) {
     btn.classList.toggle('has-msg', list.length > 0);
     btn.textContent = list.length ? `📣 Message (${list.length})` : '📣 Message';
@@ -11720,88 +11756,117 @@ function _renderClassMsgBanner() {
   banner.classList.add('on');
 }
 
-// Ouvre la modale ; avec un id → passe directement en modification de ce message.
+// Ouvre la modale ; avec un id → ce message passe directement en modification (sur place).
+var _cmsgAlso = new Set();
 function openClassMsg(editId) {
   const cls = getCls();
   if (!cls) return toast('⚠️ Sélectionne d\'abord une classe.', 'warn');
-  document.getElementById('mcmsg-name').textContent = cls.nom;
-  _cmsgEditId = null;
+  _cmsgEditId = null; _cmsgAlso = new Set();
   document.getElementById('mcmsg-text').value = '';
+  const fr = document.getElementById('mcmsg-from'); if (fr) fr.value = '';
   renderClassMsgModal();
   openMod('mclassmsg');
-  if (editId) _classMsgEdit(editId);
+  if (editId) setTimeout(() => _classMsgEdit(editId), 60);
 }
-
+function _fmtDM(ymd) { return ymd ? ymd.slice(8, 10) + '/' + ymd.slice(5, 7) : ''; }
 function renderClassMsgModal() {
   const cls = getCls();
   const listEl = document.getElementById('mcmsg-list');
   if (!cls || !listEl) return;
+  document.getElementById('mcmsg-name').textContent = cls.nom;
   const list = _clsMessages(cls).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
-  if (!list.length) {
-    listEl.innerHTML = _emptyStateHTML('📣', 'Aucun message en attente pour cette classe', 'Saisis-en un ci-dessous : il apparaîtra en jaune au-dessus du plan dès que tu afficheras cette classe.');
-  } else {
-    listEl.innerHTML =
-      `<div style="font-weight:600;margin-bottom:6px;font-size:.95em">Messages en attente (${list.length})</div>` +
-      list.map(m => {
-        const date = m.ts ? new Date(m.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
-        const editing = m.id === _cmsgEditId;
-        return `
-          <div style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:var(--notice-bg);border-left:3px solid ${editing ? 'var(--margin-red)' : 'var(--notice-bd)'};border-radius:3px;margin-bottom:4px">
-            <div style="flex:1;font-size:.92em;white-space:pre-line">${_escAttr(m.text)}${date ? ` <span style="color:var(--pencil-soft);font-size:.85em;white-space:nowrap">· ajouté le ${date}</span>` : ''}</div>
-            <button class="btn btn-s" onclick="markClassMsgDone('${m.id}')" style="padding:4px 10px;font-size:.85em" title="C'est dit — retire le message (Ctrl+Z pour le récupérer)">✓ Fait</button>
-            <button class="btn btn-g" onclick="_classMsgEdit('${m.id}')" style="padding:4px 8px;font-size:.85em" title="Modifier">✏️</button>
-          </div>`;
+  const today = todayKey();
+  const nVis = list.filter(m => !m.from || m.from <= today).length, nLater = list.length - nVis;
+  document.getElementById('mcmsg-count').textContent = list.length ? `${nVis} en attente${nLater ? ` · ${nLater} programmé${nLater > 1 ? 's' : ''}` : ''}` : '';
+  listEl.innerHTML = !list.length
+    ? '<div class="lst-empty" style="border:1px dashed var(--rule-line);border-radius:var(--radius-md)">Aucun message en attente pour cette classe.</div>'
+    : list.map(m => {
+        const later = m.from && m.from > today;
+        return `<div class="rem-row${later ? ' cmsg-later' : ''}" data-mid="${_escAttr(m.id)}">
+          <div class="lst-flex"><span class="rem-lbl" style="white-space:pre-line">${_escAttr(m.text)}</span>
+            <div class="lst-count">ajouté le ${_fmtDM(m.ts ? new Date(m.ts).toISOString().slice(0, 10) : '')}${later ? ` · s'affiche à partir du ${_fmtDM(m.from)}` : ''}</div></div>
+          <button class="btn btn-s btn-sm" onclick="markClassMsgDone('${m.id}')" title="C'est dit — retire le message (Ctrl+Z pour le récupérer)">✓ Fait</button>
+          <button class="lst-del" onclick="_classMsgEdit('${m.id}')" title="Modifier le texte" aria-label="Modifier le message">✏️</button>
+        </div>`;
       }).join('');
-  }
-  // Formulaire : ajout ou modification
-  const title = document.getElementById('mcmsg-form-title');
-  const addBtn = document.getElementById('mcmsg-add-btn');
-  const cancelBtn = document.getElementById('mcmsg-cancel-edit');
-  if (title) title.textContent = _cmsgEditId ? '✏️ Modifier le message' : '+ Ajouter un message';
-  if (addBtn) addBtn.textContent = _cmsgEditId ? '✓ Modifier' : 'Ajouter';
-  if (cancelBtn) cancelBtn.style.display = _cmsgEditId ? '' : 'none';
+  // Messages courants en puces
+  const pr = document.getElementById('mcmsg-presets');
+  if (pr) pr.innerHTML = (S.classMsgPresets || []).map((t, i) => `<button type="button" class="rem-chip cmsg-chip" onclick="_cmsgPreset(${i})" ondblclick="_cmsgPresetNow(${i})" title="Clic = remplir le champ · double-clic = ajouter tout de suite">${_escAttr(t)}</button>`).join('');
+  // Aussi pour (autres classes)
+  const also = document.getElementById('mcmsg-also');
+  const others = Object.values(S.classes || {}).filter(c => c.id !== cls.id).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+  document.getElementById('mcmsg-also-wrap').style.display = others.length ? 'inline-flex' : 'none';
+  if (also) also.innerHTML = others.map(c => `<button type="button" class="bsynth-chip${_cmsgAlso.has(c.id) ? ' on' : ''}" style="padding:1px 9px" onclick="_cmsgToggleAlso('${_escJsAttr(c.id)}')">${_esc(c.nom)}</button>`).join('');
+  // Aussi en attente (autres classes)
+  const ot = document.getElementById('mcmsg-others');
+  const pend = Object.values(S.classes || {}).filter(c => c.id !== cls.id).map(c => ({ c, n: _clsMsgVisible(c).length })).filter(x => x.n);
+  if (ot) ot.innerHTML = pend.length ? 'Aussi en attente : ' + pend.map(x => `<a href="#" style="color:var(--link-fg)" onclick="event.preventDefault();_cmsgGoClass('${_escJsAttr(x.c.id)}')">${_esc(x.c.nom)} (${x.n})</a>`).join(' · ') : '';
 }
-
+function _cmsgToggleAlso(id) { if (_cmsgAlso.has(id)) _cmsgAlso.delete(id); else _cmsgAlso.add(id); renderClassMsgModal(); }
+function _cmsgGoClass(id) { switchClass(id); _cmsgAlso = new Set(); renderClassMsgModal(); }
+function _cmsgPreset(i) {
+  const t = (S.classMsgPresets || [])[i]; const ta = document.getElementById('mcmsg-text'); if (!t || !ta) return;
+  ta.value = t; ta.focus(); setTimeout(() => { try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }, 0);
+}
+function _cmsgPresetNow(i) { const t = (S.classMsgPresets || [])[i]; if (!t) return; document.getElementById('mcmsg-text').value = t; addClassMsgFromInput(); }
+// Modifier sur place (comme les rappels)
 function _classMsgEdit(id) {
-  const cls = getCls();
-  const m = cls && _clsMessages(cls).find(x => x.id === id);
-  if (!m) return;
-  _cmsgEditId = id;
-  const ta = document.getElementById('mcmsg-text');
-  ta.value = m.text || '';
-  renderClassMsgModal();
-  ta.focus();
-  setTimeout(() => { try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }, 0);
+  const cls = getCls(); const m = cls && _clsMessages(cls).find(x => x.id === id); if (!m) return;
+  const lbl = document.querySelector(`#mcmsg-list .rem-row[data-mid="${CSS.escape(id)}"] .rem-lbl`); if (!lbl) return;
+  lbl.outerHTML = `<textarea class="rem-lbl" rows="2" maxlength="300" style="width:100%;resize:vertical" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur()}else if(event.key==='Escape'){event.stopPropagation();this.dataset.cancel='1';this.blur()}" onblur="_classMsgEditDone('${id}',this)">${_escAttr(m.text)}</textarea>`;
+  const ta = document.querySelector(`#mcmsg-list .rem-row[data-mid="${CSS.escape(id)}"] textarea.rem-lbl`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
-
-function _classMsgCancelEdit() {
-  _cmsgEditId = null;
-  document.getElementById('mcmsg-text').value = '';
+function _classMsgEditDone(id, ta) {
+  const cls = getCls(); const m = cls && _clsMessages(cls).find(x => x.id === id);
+  const v = (ta.value || '').trim();
+  if (m && !ta.dataset.cancel && v && v !== m.text) { pushUndo(); m.text = v; save(); _renderClassMsgBanner(); toast('✏️ Message modifié'); }
   renderClassMsgModal();
 }
-
+function _classMsgCancelEdit() { renderClassMsgModal(); }
 function addClassMsgFromInput() {
   const cls = getCls();
   if (!cls) return;
   const ta = document.getElementById('mcmsg-text');
   const text = (ta.value || '').trim();
   if (!text) { ta.focus(); return; }
+  const from = document.getElementById('mcmsg-from')?.value || '';
+  const later = from && from > todayKey();
   pushUndo();
-  const list = _clsMessages(cls);
-  const existing = _cmsgEditId ? list.find(x => x.id === _cmsgEditId) : null;
-  if (existing) {
-    existing.text = text;
-    toast('✏️ Message modifié');
-  } else {
-    list.push({ id: 'cmsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, ts: Date.now() });
-    toast(`📣 Message ajouté pour ${cls.nom}`);
+  const targets = [cls, ...[..._cmsgAlso].map(id => S.classes[id]).filter(Boolean)];
+  for (const c of targets) {
+    const msg = { id: 'cmsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, ts: Date.now() };
+    if (later) msg.from = from;
+    _clsMessages(c).push(msg);
   }
-  _cmsgEditId = null;
   ta.value = '';
   save();
   _renderClassMsgBanner();
   if (typeof renderClasses === 'function' && document.getElementById('tab-classes')?.classList.contains('on')) renderClasses();
+  toast(`📣 Message ajouté pour ${targets.map(c => c.nom).join(', ')}${later ? ` (affiché à partir du ${_fmtDM(from)})` : ''}`);
   closeMod2('mclassmsg'); // un message = une action terminée, retour au plan
+}
+// ── Messages courants (liste réglable) ──
+function _cmsgOpenPresets(fromSettings) {
+  if (!fromSettings) { closeMod2('mclassmsg'); _modalReturnTo['mcmsgpresets'] = () => openClassMsg(); }
+  _cmsgpRender(); openMod('mcmsgpresets');
+  setTimeout(() => document.getElementById('mcmsgp-add')?.focus(), 80);
+}
+function _cmsgpRender() {
+  const list = S.classMsgPresets || (S.classMsgPresets = []);
+  const el = document.getElementById('mcmsgp-list'); if (!el) return;
+  const cnt = document.getElementById('mcmsgp-count'); if (cnt) cnt.textContent = `${list.length} message${list.length > 1 ? 's' : ''}`;
+  el.innerHTML = !list.length ? '<div class="lst-empty">Aucun message courant — ajoute-en un sur la ligne ci-dessous.</div>'
+    : list.map((t, i) => `<div class="lst-row sort-row" data-sort-idx="${i}">${_sortHandleHTML('var(--pencil)')}
+        <input type="text" class="lst-flex" maxlength="300" value="${_escAttr(t)}" onchange="_cmsgpSet(${i}, this.value)" aria-label="Message courant ${i + 1}">
+        <button class="lst-del" onclick="_cmsgpDel(${i})" title="Supprimer" aria-label="Supprimer ce message courant">🗑</button></div>`).join('');
+  _makeSortable('mcmsgp-list', (from, to) => { const a = S.classMsgPresets; if (from === to || from < 0 || to < 0 || from >= a.length || to >= a.length) { _cmsgpRender(); return; } pushUndo(); const [x] = a.splice(from, 1); a.splice(to, 0, x); save(); _cmsgpRender(); });
+}
+function _cmsgpAdd() { const inp = document.getElementById('mcmsgp-add'); const v = (inp.value || '').trim(); if (!v) return inp.focus(); pushUndo(); S.classMsgPresets.push(v.slice(0, 300)); save(); inp.value = ''; _cmsgpRender(); inp.focus(); }
+function _cmsgpSet(i, v) { v = (v || '').trim(); if (!v) { _cmsgpRender(); return; } if (v === S.classMsgPresets[i]) return; pushUndo(); S.classMsgPresets[i] = v.slice(0, 300); save(); }
+function _cmsgpDel(i) { pushUndo(); S.classMsgPresets.splice(i, 1); save(); _cmsgpRender(); }
+function _cmsgpDefaults() {
+  _uiConfirm({ title: '↻ Messages par défaut', message: 'Remplacer la liste par les messages courants proposés par défaut ? (annulable avec Ctrl+Z)', okLabel: '↻ Remplacer',
+    onOk: () => { pushUndo(); S.classMsgPresets = DEFAULT_CLASSMSG_PRESETS.slice(); save(); _cmsgpRender(); } });
 }
 
 // « ✓ Fait » : le message a été passé, on le retire. Pas d'archive — c'est un
@@ -16339,7 +16404,7 @@ function renderClasses() {
     const nonAm = c.present - c.amenagement;
     const np = Object.keys(cls.seating || {}).length;
     const unpl = _clsUnplaced(cls);
-    const nMsg = Array.isArray(cls.classMessages) ? cls.classMessages.length : 0;
+    const _vMsg = _clsMsgVisible(cls); const nMsg = _vMsg.length;
     const civ = (c.m + c.f + c.civUnk) > 0
       ? ` · <span class="cc-chip cc-chip-m">♂ ${c.m}</span> <span class="cc-chip cc-chip-f">♀ ${c.f}</span>${c.civUnk ? ` <span title="${c.civUnk} élève(s) sans civilité">+${c.civUnk} ?</span>` : ''}`
       : '';
@@ -16372,7 +16437,7 @@ function renderClasses() {
     const chips = (c.agrandissement ? `<span class="cc-chip cc-chip-a" title="Élèves à photocopies agrandies">📄 ${c.agrandissement}</span>` : '')
       + (c.tiersTemps ? `<span class="cc-chip cc-chip-a" title="Élèves à tiers-temps">⏱ ${c.tiersTemps}</span>` : '')
       + (unpl ? `<span class="cc-chip" title="Élèves présents sans place dans la salle affichée">🪑 ${unpl} à placer</span>` : '')
-      + (nMsg ? `<span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(cls.classMessages.map(m => '• ' + m.text).join('\n'))}">📣 ${plural(nMsg, 'message')}</span>` : '');
+      + (nMsg ? `<span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(_vMsg.map(m => '• ' + m.text).join('\n'))}">📣 ${plural(nMsg, 'message')}</span>` : '');
     const origin = virtual ? (() => {
       const by = {};
       for (const sid of (cls.eleves || [])) { const st = S.eleves[sid]; if (st) by[st.classe_id] = (by[st.classe_id] || 0) + 1; }
@@ -16421,7 +16486,7 @@ function renderClasses() {
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
     totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totAgr += c.agrandissement; totDocStd += c.docStd;
     totM += c.m; totF += c.f; totCivUnk += c.civUnk; totTT += c.tiersTemps;
-    totMsg += Array.isArray(cls.classMessages) ? cls.classMessages.length : 0;
+    totMsg += _clsMsgVisible(cls).length;
     totUnpl += _clsUnplaced(cls);
   }
   const orders = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
@@ -32959,6 +33024,7 @@ function _settingsTiles() {
     { h: 'Vie de classe', tiles: [
       T('🏷', 'Tags', pl(n(S.tags), 'tag'), "_settingsOpenChild('mtags', openTagsModal)", 'tags df dnl etiquettes'),
       T('🔔', 'Motifs de rappel', pl((S.reminderPresets || []).length, 'motif'), "_settingsOpenChild('mrempresets', openReminderPresets)", 'rappels motifs verifier'),
+      T('📣', 'Messages courants', pl((S.classMsgPresets || []).length, 'message'), "_settingsOpenChild('mcmsgpresets', () => _cmsgOpenPresets(true))", 'message classe courants dire debut seance'),
       T('🏫', 'Salles et horaires', `${pl(n(S.salles), 'salle')} → Config Salle`, "closeMod2('msettings');switchTab('config')", 'salles horaires creneaux emploi temps config'),
       T('📱', 'Classes mobiles', `${pl(n(S.tabletPools), 'chariot')} → Tablettes`, "closeMod2('msettings');switchTab('ipads')", 'classes mobiles chariots tablettes lots', ff('tablettes')),
       T('📷', 'Photos des élèves', _photos.sids.size ? pl(_photos.sids.size, 'photo') : 'importer le trombinoscope', "closeMod2('msettings');openTrombiImport()", 'photos trombinoscope mbn'),
@@ -33990,7 +34056,7 @@ function _validateImport(d) {
                     // hash hexadécimal 8 caractères de _hashString (seatingSnapshots).
                     // ⚠️ Toute nouvelle section de S doit être ajoutée ici — et ses clés
                     // vérifiées compatibles ID_RE, sinon des imports légitimes seraient rejetés.
-                    'evalPrefs', 'userLinks', 'featureFlags', 'reminderPresets', 'seatingSnapshots'];
+                    'evalPrefs', 'userLinks', 'featureFlags', 'reminderPresets', 'classMsgPresets', 'seatingSnapshots'];
   for (const sec of sections) {
     const err = checkKeys(d[sec], sec);
     if (err) return err;
@@ -38697,7 +38763,7 @@ const S_SECTION_LABELS = {
   conseilIncompat: 'incompatibilités de mentions',
   disciplines: 'disciplines', tags: 'tags', tabletPools: 'classes mobiles',
   movedHighlights: 'places modifiées', violationsAccepted: 'contraintes acceptées',
-  userLinks: 'liens personnels', reminderPresets: 'motifs de rappel',
+  userLinks: 'liens personnels', reminderPresets: 'motifs de rappel', classMsgPresets: 'messages courants à la classe',
   featureFlags: 'fonctions activées', clock: 'horloge de synchronisation',
   memoProgress: 'progression du jeu de mémorisation',
 };

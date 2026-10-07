@@ -1194,6 +1194,13 @@ Le pendant **collectif** des rappels par élève : ce que le prof doit dire à *
 - **✓ Fait supprime sans archiver** (`markClassMsgDone`) : c'est un pense-bête de séance, pas un fait à consigner — à la différence des rappels par élève, qui vont dans l'historique. Ctrl+Z le ramène ; la modale se ferme d'elle-même sur le dernier.
 - **Carte de classe** (onglet Classes) : puce jaune `📣 N message(s) à passer` avec les textes en infobulle — pour voir d'un coup d'œil quelles classes ont quelque chose en attente.
 - Démo : deux messages sur la 6A, un sur la 5B (annoncés dans `mwelcome`).
+- **Refonte v2.111.0 (maquette validée le 2026-10-07)** :
+  - Fenêtre au gabarit des Rappels : en-tête (classe, « N en attente · N programmés », **⚙ Messages courants**), lignes `.rem-row` avec ✓ Fait et **✏️ modification sur place** (`_classMsgEdit` → `_classMsgEditDone` ; le formulaire du bas ne sert plus qu'à l'ajout — `_cmsgEditId` n'est plus utilisé). Le ✏️ du bandeau du plan ouvre la fenêtre et passe ce message en modification.
+  - **Messages courants** en puces sous le champ (`S.classMsgPresets`, liste de textes ; défauts `DEFAULT_CLASSMSG_PRESETS`, déclarés avant `init()`) : clic = remplit le champ, **double-clic = ajouté tout de suite**. Réglables dans la fenêtre `mcmsgpresets` (gabarit des fenêtres de liste, glisser ⠿, ↻ défauts), ouverte depuis la fenêtre ou la tuile **📣 Messages courants** des Réglages. ⚠️ Nouvelle section de `S` : initialisée dans `postLoadHook` (liste vide explicite respectée), dans la liste blanche de `_validateImport` et dans `S_SECTION_LABELS` ; c'est un réglage, **conservé en fin d'année**.
+  - **Aussi pour** : pastilles des autres classes (`_cmsgAlso`) — le même message est ajouté à chacune (une entrée d'annulation).
+  - **À partir du** (`#mcmsg-from`) : champ `m.from` (`YYYY-MM-DD`, posé seulement si dans le futur). **`_clsMsgVisible(cls)`** ne garde que les messages dont la date est passée : c'est lui que lisent le bandeau du plan, le bouton 📣 et les cartes de l'onglet Classes ; la fenêtre montre aussi les programmés (`.cmsg-later`, « s'affiche à partir du »).
+  - **Aussi en attente** : lien vers chaque autre classe qui a des messages visibles (`_cmsgGoClass` → `switchClass`).
+  - Audit : 0 écart en clair et en sombre (fenêtre avec message programmé, messages courants) ; 363 px à 375.
 
 ## Vue d'ensemble — tous les élèves toutes classes
 
