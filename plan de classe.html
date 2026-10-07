@@ -3596,12 +3596,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span class="pl-lbl" title="Salle">📍<span class="pl-txt"> Salle</span></span>
       <span id="tg-salle-buttons" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
       <button class="btn btn-g btn-sm" onclick="openAddSalleToClass()" title="Ajouter une salle à cette classe">＋</button>
-      <span class="tb-hint" style="font-size:.78em">Clic droit sur une salle → la retirer de cette classe. Chaque classe mobile a sa propre affectation de tablettes (passe d'une à l'autre via les boutons à droite).</span>
-      <span class="ff-tablettes" style="display:contents">
-        <span class="pl-sep"></span>
-        <span class="pl-lbl" title="Classe mobile (tablettes)">📱<span class="pl-txt"> Tablettes</span></span>
-        <span id="tg-pool-buttons" class="pool-buttons-container" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
-      </span>
+      <span class="tb-hint" style="font-size:.78em">Clic droit sur une salle → la retirer de cette classe. Les tablettes se gèrent dans l'onglet 📱 Tablettes.</span>
       <span id="tg-count" class="pl-count"></span>
     </div>
     <div class="tb pl-row2">
@@ -3639,13 +3634,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <button onclick="closeAllDd();openPrintAllClasses()">🖨 Plusieurs plans (Prof)…</button>
           <div class="dd-sep"></div>
           <button onclick="event.stopPropagation();togglePrintColors()" title="Bascule couleurs / noir & blanc pour toutes les impressions"><span class="pc-tog-lbl">🎨 Couleurs : ON</span></button>
-        </div>
-      </span>
-      <span class="dd dd-right ff-tablettes">
-        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Tablettes" aria-label="Autres actions : tablettes">⋯</button>
-        <div class="dd-menu">
-          <button onclick="closeAllDd();openAutoIpads()" title="Affecter automatiquement les tablettes aux élèves placés">📱 Affecter automatiquement les tablettes</button>
-          <button onclick="closeAllDd();openClearIpadsModal()" title="Désaffecter les tablettes selon une étendue choisie">🗑 Désaffecter les tablettes…</button>
         </div>
       </span>
       </span>
@@ -7943,11 +7931,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.100.3';
+const APP_VERSION    = '2.100.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T17:34:11Z';
+const APP_BUILD_DATE = '2026-10-07T17:39:45Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11458,14 +11446,13 @@ function _confRefresh() {
   if (document.getElementById('mattPlan')?.classList?.contains('on') && typeof renderMattPlan === 'function') renderMattPlan();
   if (document.getElementById('mattDet')?.classList?.contains('on') && _mattCurrentRecordId && typeof viewAttendance === 'function') viewAttendance(_mattCurrentRecordId, _mattCurrentClassId);
 }
-// Cellule du plan pour un élève masqué : place, nom, tablette — rien d'autre (ni couleur
+// Cellule du plan pour un élève masqué : place et nom — rien d'autre (ni couleur
 // de groupe/tag/genre, ni badge, ni compteur, ni état d'appel, ni alerte de contrainte).
 // Clic = révéler l'élève. Pas de glisser : on ne réorganise pas un plan devant un parent.
 function _confBuildHiddenCell(cell, cls, key, stu, row, col, ipad) {
   cell.classList.add('oc', 'conf-hidden');
   cell.draggable = false;
-  const pool = S.tabletPools?.[cls.activePool];
-  const tab = (pool && pool.count > 0) ? `<span class="cipad" style="color:var(--pencil)">${ipad ? 'Tab. ' + ipad : 'Tab. —'}</span>` : '';
+  const tab = '';   // tablette retirée des cases du Plan (v2.100.4 : l'onglet Tablettes s'en charge)
   cell.innerHTML = `
     <span class="cpos">N°${seatLabel(row, col, cls.configuration.cols || 10)}</span>
     <div class="cn">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
@@ -21633,23 +21620,6 @@ function buildCell(cls, row, col) {
         <span class="cctr${stu.oublis ? '' : ' zero'}" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié (clic = +1)">📦 ${stu.oublis}</span>
         <span class="cctr${stu.non_travail ? '' : ' zero'}" style="background:${oubliColor(stu.non_travail)};border-radius:3px" onclick="event.stopPropagation();incNT('${stu.id}')" title="Travail non fait (clic = +1)">📝 ${stu.non_travail}</span>
       </div>
-      ${(() => {
-        const _pool = S.tabletPools?.[cls.activePool];
-        const _hasPool = _pool && _pool.count > 0;
-        if (!_hasPool) return '';
-        const _isUnavail = ipad && _pool && (_pool.unavailable || []).includes(ipad);
-        const _style = _isUnavail ? 'background:var(--alert-bg);color:var(--alert-fg);font-weight:700;cursor:pointer'
-                     : ipad ? 'cursor:pointer'
-                     : 'cursor:pointer;color:var(--pencil);font-style:italic';
-        const _icon  = _isUnavail ? ' 🚫' : '';
-        const _label = ipad ? `Tab. ${ipad}${groupFilter ? ' '+ipadModeLabel(groupFilter) : ''}${_icon}` : 'Tab. —';
-        const _tip   = _isUnavail ? 'title="Tablette marquée indisponible (HS) — clic pour changer"'
-                     : ipad ? 'title="Clic pour changer la tablette"'
-                     : 'title="Clic pour affecter une tablette"';
-        return `<span class="cipad cipad-clickable" ${_tip}
-                      onclick="event.stopPropagation();openIpadPicker('${key}',${groupFilter})"
-                      style="${_style}">${_label}</span>`;
-      })()}
     `;
     const specTitle = [_delegueInfo(stu) ? '🗳 ' + _delegueInfo(stu).label : '', stu.ppre?'PPRE':'', stu.pap?'PAP':'', stu.gevasco?'GEVAsco/PPS':'', stu.ulis?'ULIS hors classe':'', stu.ulis_incl?'ULIS inclusion':'', stu.upe2a?'UPE2A hors classe':'', stu.upe2a_incl?'UPE2A inclusion':'', stu.pai?'PAI (médical)':'', stu.agrandissement?'Agrandissement (-A)':'', stu.tiers_temps?'Tiers-temps (+⅓)':''].filter(Boolean).join(' · ');
     const notesTitle = stu.notes ? `\n📋 ${stu.notes}` : '';
