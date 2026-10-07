@@ -7811,11 +7811,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.109.0';
+const APP_VERSION    = '2.109.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T19:46:12Z';
+const APP_BUILD_DATE = '2026-10-07T19:49:15Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -40691,6 +40691,7 @@ function openNewEvalModal() {
   // Reset état per-classe puis pré-coche la classe courante (avec date aujourd'hui)
   _evalNewState.dates = {};
   _evalNewState.slotIds = {};
+  _evalNewState.manual = new Set();
   _evalRenderNewClassPicker(cur ? [cur.id] : (allCls[0] ? [allCls[0].id] : []));
   // Sélecteur de discipline (flux) : régénéré depuis les classes cochées.
   // ⚠️ APRÈS _evalRenderNewClassPicker, jamais avant : appelé avant le pré-cochage,
@@ -40734,7 +40735,7 @@ function _evalRenderNewClassPicker(preCheckedIds) {
   // sans entrée préexistante dans _evalNewState.
   const today = new Date().toISOString().slice(0, 10);
   for (const c of sorted) {
-    if (pre.has(c.id) && _evalNewState.dates[c.id] == null) _evalNewState.dates[c.id] = today;
+    if (pre.has(c.id) && _evalNewState.dates[c.id] == null) { const d0 = _evalNewDefaultDate(); if (d0) _evalNewState.dates[c.id] = d0; }
   }
   // Chips compacts en haut (toggle sélection). Les inputs cachés restent dans
   // la liste pour que _evalNewGetCheckedClassIds() continue à fonctionner.
@@ -40768,7 +40769,7 @@ function _evalNewClassChipHTML(c, checked) {
 function _evalNewOnClassChipToggle(checkbox) {
   const cid = checkbox.getAttribute('data-cid');
   if (checkbox.checked && _evalNewState.dates[cid] == null) {
-    _evalNewState.dates[cid] = new Date().toISOString().slice(0, 10);
+    const d0 = _evalNewDefaultDate(); if (d0) _evalNewState.dates[cid] = d0;
   }
   if (!checkbox.checked) {
     delete _evalNewState.dates[cid];
@@ -40824,6 +40825,13 @@ function _evalNewClassRowHTML(c) {
     <select data-cid="${_esc(c.id)}" data-field="slot" onchange="_evalNewOnClassSlotChange(this)" style="padding:3px 6px;font-size:.85em">${slotOpts}</select>
   </div>`;
 }
+// Date par défaut d'une classe cochée (v2.109.1, demande de l'utilisateur) : mode AUTO pour les
+// types A et B (la date suivra la dernière mini-note / passation), aujourd'hui pour C et D (une
+// sommative a sa date dès la création, le mode auto n'y existe pas).
+function _evalNewDefaultDate() {
+  const t = document.querySelector('input[name="meval-new-type"]:checked')?.value || 'A';
+  return (t === 'C' || t === 'D') ? new Date().toISOString().slice(0, 10) : null;
+}
 // Bascule explicite en mode auto pour une classe : retire la date pré-remplie.
 function _evalNewSetClassAuto(cid) {
   delete _evalNewState.dates[cid];
@@ -40837,6 +40845,8 @@ function _evalNewOnClassDateChange(inputEl) {
   const v = inputEl.value || '';
   const wasAuto = (_evalNewState.dates[cid] == null);
   if (v) _evalNewState.dates[cid] = v; else delete _evalNewState.dates[cid];
+  _evalNewState.manual = _evalNewState.manual || new Set();
+  if (v) _evalNewState.manual.add(cid); else _evalNewState.manual.delete(cid);
   // Si on bascule vide → auto (ou auto → date), re-rend la ligne pour mettre à jour
   // le marqueur "(auto)" vs bouton "↻ Auto" et le picker créneau.
   if (wasAuto !== (v === '')) {
@@ -40894,6 +40904,11 @@ function _evalNewOnTypeChange() {
     for (const cid of _evalNewGetCheckedClassIds()) {
       if (_evalNewState.dates[cid] == null) _evalNewState.dates[cid] = today;
     }
+    if (typeof _evalNewRenderClassRows === 'function') _evalNewRenderClassRows();
+  } else {
+    // Retour en A ou B : les dates remplies d'office repassent en auto (pas celles saisies à la main)
+    const man = _evalNewState.manual || new Set();
+    for (const cid of Object.keys(_evalNewState.dates || {})) if (!man.has(cid)) { delete _evalNewState.dates[cid]; delete _evalNewState.slotIds[cid]; }
     if (typeof _evalNewRenderClassRows === 'function') _evalNewRenderClassRows();
   }
   _evOptsSum('meval-new');
@@ -43140,9 +43155,9 @@ function _evalDuplicate(evalId) {
   const srcClassIds = (_evalClassIds(ev) || []).filter(id => S.classes?.[id]);
   _evalNewState.dates = {};
   _evalNewState.slotIds = {};
-  const today = new Date().toISOString().slice(0, 10);
+  _evalNewState.manual = new Set();
   for (const cid of srcClassIds) {
-    _evalNewState.dates[cid] = today;  // date du jour à la duplication
+    { const d0 = _evalNewDefaultDate(); if (d0) _evalNewState.dates[cid] = d0; }  // C/D : date du jour ; A/B : auto
     // Créneau hérité s'il existe pour cette classe dans la source
     const sl = ev.slotIds?.[cid] || ev.slotId;
     if (sl) _evalNewState.slotIds[cid] = sl;
