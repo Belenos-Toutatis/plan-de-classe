@@ -1744,7 +1744,7 @@ test('Import : sans en-tête, une colonne de listes de codes est devinée « gro
 
 test('Import : classes inconnues créées à l\'import, id compacté, nom conservé', () => {
   _impSetup();
-  for (const [lab, id] of [['3B', '3B'], ['3ème C', '3C'], ['3EME C', '3C'], ['2nde 3', '23'], ['1ère S2', '1S2'], ['Terminale', 'TERMINALE']])
+  for (const [lab, id] of [['3B', '3B'], ['3ème C', '3C'], ['3EME C', '3C'], ['2nde 3', '23'], ['1ère S2', '1S2'], ['Terminale', 'TERMINALE'], ['Terminale B', 'TB'], ['Seconde 3', '23'], ['Première A', '1A']])
     assert.equal(ev(`_impClassIdFromLabel(${JSON.stringify(lab)})`), id, `id pour « ${lab} »`);
   const r = _impRun('Nom;Prénom;Classe\nROUX;Inès;3B\nLENOIR;Tom;3ème C\nDUPONT;Zoé;3A');
   assert.deepEqual(r.newClasses, { '3B': '3B', '3C': '3ème C' });

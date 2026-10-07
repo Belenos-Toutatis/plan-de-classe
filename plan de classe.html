@@ -1561,8 +1561,6 @@ html[data-theme="dark"] [style*="background:#fef3c7"] { background: #3a2f1a !imp
 /* Modale Réinitialiser : <code>EFFACER TOUT</code> */
 html[data-theme="dark"] #mreset code,
 html[data-theme="dark"] code[style*="background:#eee"] { background: var(--paper-deep) !important; color: var(--ink-deep) !important; }
-/* Édition classe : input read-only #ec-id-disp */
-html[data-theme="dark"] #ec-id-disp { background: var(--paper-deep) !important; color: var(--pencil-soft) !important; }
 /* Boutons PPS / PPRE / petits boutons gris "#eee" inline */
 html[data-theme="dark"] button[style*="background:#eee"] { background: var(--paper-deep) !important; color: var(--ink-deep) !important; }
 /* Diagramme paires : viewport SVG */
@@ -1641,6 +1639,33 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ev-types .eval-type-badge{flex:0 0 auto;font-size:.9em}
 .ev-types b{display:block;font-weight:600;font-size:.92em}
 .ev-tsub{display:block;font-size:.8em;color:var(--pencil);line-height:1.3}
+/* Nouvelle classe / Modifier la classe (v2.113.0) */
+.clf-mb{width:min(900px,96vw);max-width:900px}
+.clf-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap}
+.clf-title{flex:1;min-width:200px}
+.clf-title h2{margin:0 0 2px}
+.clf-sub{font-size:.84em;color:var(--pencil)}
+.clf-prev{min-width:220px;max-width:300px;border-radius:0 var(--radius-md,5px) var(--radius-md,5px) 0;border-left:6px solid transparent;padding:7px 11px;font-size:.84em;line-height:1.45;box-shadow:var(--shadow-card)}
+.clf-prev b{font-family:var(--font-serif);font-size:1.25em}
+.clf-col{display:flex;flex-direction:column;gap:12px}
+.clf-sec h3{margin-top:0}
+.clf-row{display:flex;gap:10px;flex-wrap:wrap}
+.clf-hint{font-size:.8em;color:var(--pencil);font-weight:400}
+.clf-auto{font:500 .72em var(--font-mono);padding:0 6px;border-radius:999px;background:var(--info-bg);color:var(--ink-blue);border:1px solid var(--info-bd,var(--rule-line))}
+.clf-auto.off{display:none}
+.clf-note{font-size:.8em;color:var(--pencil);margin-top:6px;line-height:1.4}
+.clf-lvl{display:flex;flex-direction:column;gap:6px}
+.clf-lvl .ip-seg{flex-wrap:wrap}
+.clf-pills{display:flex;flex-wrap:wrap;gap:6px}
+.clf-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:999px;padding:2px 11px;font:500 .84em var(--font-sans);cursor:pointer;line-height:1.6;margin:0 !important}
+.clf-pill input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.clf-pill .n{font:400 .85em var(--font-mono);opacity:1}
+.clf-pill:has(input:checked){background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
+.clf-pill:has(input:focus-visible){outline:2px solid var(--ink-blue);outline-offset:1px}
+.clf-pill.new{border-style:dashed}
+.clf-copy{margin-top:8px;font-size:.82em;color:var(--pencil);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.clf-copy select{font-size:1em;max-width:100%}
+.clf-ma{align-items:center;flex-wrap:wrap}
 .ev-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
 .ev-cols > .about-section{margin:0}
 .ev-opts{margin-top:10px;border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:6px 12px;background:var(--paper)}
@@ -4387,21 +4412,39 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Create class -->
 <div id="mc" class="mo" onclick="closeMod(this,event)">
-  <div class="mb">
-    <h2>Nouvelle Classe</h2>
-    <div class="fg"><label>Identifiant (ex : 3A)</label><input id="nc-id" placeholder="3A" maxlength="10" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
-    <div class="fg"><label>Nom complet</label><input id="nc-nom" placeholder="3ème A" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
-    <div class="fg"><label>Année scolaire</label><input id="nc-yr" type="number" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
-    <div class="fg"><label>Niveau <span style="font-size:.78em;color:var(--pencil)">(couleur de la carte, tri, récap photocopies)</span></label><select id="nc-niveau"></select></div>
-    <div class="fg"><label>Professeur·e principal·e <span style="font-size:.78em;color:var(--pencil)">(optionnel — affiché sur la carte de la classe et dans le bandeau)</span></label><input id="nc-pp" placeholder="Mme Dupont" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
-    <div class="fg" id="nc-copy-row">
-      <label>Salle initiale</label>
-      <select id="nc-copy"><option value="">— Nouvelle salle —</option></select>
-      <span style="font-size:.78em;color:var(--pencil);display:block;margin-top:3px">Tu pourras ajouter d'autres salles ensuite depuis Plan Prof.</span>
+  <!-- Nouvelle classe — même gabarit que Modifier la classe (v2.113.0, maquette validée le 2026-10-07) :
+       aperçu de la carte en direct, identifiant déduit du nom, niveau en boutons par cycle,
+       salles et disciplines en pastilles. -->
+  <div class="mb clf-mb">
+    <div class="clf-head">
+      <div class="clf-title"><h2>Nouvelle classe</h2><div class="clf-sub">La carte de la classe, telle qu'elle apparaîtra dans l'onglet Classes →</div></div>
+      <div class="clf-prev" id="nc-prev"></div>
+    </div>
+    <div class="ev-cols">
+      <div class="about-section clf-sec"><h3>Identité</h3>
+        <div class="fg"><label>Nom complet</label><input id="nc-nom" placeholder="5ème C" maxlength="40" data-autofocus oninput="_clfNomInput('nc')" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
+        <div class="clf-row">
+          <div class="fg" style="flex:1"><label>Identifiant <span class="clf-auto" id="nc-id-auto">auto</span></label><input id="nc-id" placeholder="5C" maxlength="10" oninput="_clfIdInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
+          <div class="fg" style="width:96px"><label>Année</label><input id="nc-yr" type="number" oninput="_clfPreview('nc')" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
+        </div>
+        <div class="fg"><label>Niveau <span class="clf-hint">(couleur de la carte, tri, récap photocopies)</span></label>
+          <select id="nc-niveau" style="display:none"></select><div id="nc-lvl" class="clf-lvl"></div></div>
+        <div class="fg"><label>Professeur·e principal·e <span class="clf-hint">(facultatif)</span></label><input id="nc-pp" placeholder="Mme Dupont" maxlength="60" oninput="_clfPreview('nc')" onkeydown="if(event.key==='Enter'){event.preventDefault();createClass()}"></div>
+      </div>
+      <div class="clf-col">
+        <div class="about-section clf-sec"><h3>🏫 Salles</h3>
+          <div id="nc-salles" class="clf-pills"></div>
+          <div class="clf-note">Plusieurs salles possibles ; la première cochée est la salle affichée. La disposition des tables se règle dans <em>Config Salle</em>.</div>
+          <div class="clf-copy"><label for="nc-copy-cls">Reprendre les salles d'une classe</label> <select id="nc-copy-cls" onchange="_ncCopyFromClass()"></select></div>
+        </div>
+        <div class="about-section clf-sec"><h3>🎓 Disciplines</h3>
+          <div id="nc-discs" class="clf-pills"></div>
+        </div>
+      </div>
     </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mc')">Annuler</button>
-      <button class="btn btn-p" onclick="createClass()">Créer</button>
+      <button class="btn btn-p" onclick="createClass()">✓ Créer la classe</button>
     </div>
   </div>
 </div>
@@ -7291,36 +7334,38 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Edit class -->
 <div id="mce" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:560px;width:100%">
-    <h2>Modifier la Classe</h2>
+  <div class="mb clf-mb">
     <input type="hidden" id="ec-id">
-    <div class="fg"><label>Identifiant</label><input id="ec-id-disp" disabled style="background:#f0f0f0;color:#888"></div>
-    <div class="fg"><label>Nom complet</label><input id="ec-nom"></div>
-    <div class="fg"><label>Année scolaire</label><input id="ec-yr" type="number"></div>
-    <div class="fg"><label>Niveau <span style="font-size:.78em;color:var(--pencil)">(couleur de la carte, tri, récap photocopies, propositions du jeu de mémorisation)</span></label><select id="ec-niveau"></select></div>
-    <div class="fg"><label>Professeur·e principal·e <span style="font-size:.78em;color:var(--pencil)">(optionnel — affiché sur la carte de la classe et dans le bandeau)</span></label><input id="ec-pp" placeholder="Mme Dupont" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault();saveClassEdit()}"></div>
-    <div class="about-section" style="margin-top:14px">
-      <h3>🎓 Disciplines enseignées</h3>
-      <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">
-        Coche les disciplines dans lesquelles tu enseignes à cette classe. Chaque évaluation, bilan et remarque bulletin
-        peut être rattaché à une discipline spécifique.
-      </p>
-      <div id="ec-disc-checks"></div>
+    <div class="clf-head">
+      <div class="clf-title"><h2>Modifier la classe</h2><div class="clf-sub" id="ec-sub"></div></div>
+      <div class="clf-prev" id="ec-prev"></div>
     </div>
-    <div class="about-section" style="margin-top:14px">
-      <h3>🏫 Salles</h3>
-      <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">
-        Salles où cette classe a cours. Chacune a son propre plan. La disposition des tables se règle dans <em>Config Salle</em>.
-      </p>
-      <div id="ec-salle-checks" style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.9em"></div>
+    <div class="ev-cols">
+      <div class="about-section clf-sec"><h3>Identité</h3>
+        <div class="fg"><label>Nom complet</label><input id="ec-nom" maxlength="40" oninput="_clfNomInput('ec')" onkeydown="if(event.key==='Enter'){event.preventDefault();saveClassEdit()}"></div>
+        <div class="clf-row">
+          <div class="fg" style="width:96px"><label>Année</label><input id="ec-yr" type="number" oninput="_clfPreview('ec')" onkeydown="if(event.key==='Enter'){event.preventDefault();saveClassEdit()}"></div>
+        </div>
+        <div class="fg"><label>Niveau <span class="clf-hint">(couleur de la carte, tri, récap photocopies, jeu de mémorisation)</span></label>
+          <select id="ec-niveau" style="display:none"></select><div id="ec-lvl" class="clf-lvl"></div></div>
+        <div class="fg"><label>Professeur·e principal·e <span class="clf-hint">(facultatif)</span></label><input id="ec-pp" placeholder="Mme Dupont" maxlength="60" oninput="_clfPreview('ec')" onkeydown="if(event.key==='Enter'){event.preventDefault();saveClassEdit()}"></div>
+      </div>
+      <div class="clf-col">
+        <div class="about-section clf-sec"><h3>🏫 Salles</h3>
+          <div id="ec-salle-checks" class="clf-pills"></div>
+          <div class="clf-note">Chaque salle a son propre plan. Décocher une salle efface le plan de la classe dans cette salle.</div>
+        </div>
+        <div class="about-section clf-sec"><h3>🎓 Disciplines</h3>
+          <div id="ec-disc-checks" class="clf-pills"></div>
+        </div>
+        <div class="about-section clf-sec"><h3>🧑‍🏫 AESH <span class="clf-hint">· enregistré tout de suite</span></h3>
+          <div id="ec-aesh-summary" style="font-size:.88em;margin-bottom:6px"></div>
+          <button class="btn btn-g btn-sm" onclick="openAeshModal(document.getElementById('ec-id').value)">✏️ Gérer les AESH…</button>
+        </div>
+      </div>
     </div>
-    <div class="about-section" style="margin-top:14px">
-      <h3>🧑‍🏫 AESH</h3>
-      <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">Un seul réglage pour toutes les salles de la classe. Enregistré tout de suite, indépendamment de ce formulaire.</p>
-      <div id="ec-aesh-summary" style="font-size:.9em;margin-bottom:8px"></div>
-      <button class="btn btn-g btn-sm" onclick="openAeshModal(document.getElementById('ec-id').value)">✏️ Gérer les AESH…</button>
-    </div>
-    <div class="ma">
+    <div class="ma clf-ma">
+      <span class="clf-note" style="flex:1;margin:0">Retirer une salle ou une discipline : une seule confirmation à l'enregistrement.</span>
       <button class="btn btn-g" onclick="closeMod2('mce')">Annuler</button>
       <button class="btn btn-p" onclick="saveClassEdit()">✓ Enregistrer</button>
     </div>
@@ -7869,11 +7914,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.112.0';
+const APP_VERSION    = '2.113.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T20:35:11Z';
+const APP_BUILD_DATE = '2026-10-07T20:45:25Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15738,32 +15783,7 @@ function renderTab(name) {
 
 function openMod(id) {
   // Peupler le select de salle initiale pour Nouvelle Classe
-  if (id === 'mc') {
-    { const ns = document.getElementById('nc-niveau'); if (ns) ns.innerHTML = _levelSelectHTML(null, ''); }
-    const sel = document.getElementById('nc-copy');
-    let html = '<option value="">— Nouvelle salle —</option>';
-    const salleEntries = Object.entries(S.salles || {});
-    if (salleEntries.length) {
-      html += '<optgroup label="Salles du catalogue">';
-      salleEntries.forEach(([sid, s]) => {
-        html += `<option value="salle:${_escAttr(sid)}">${_escAttr(s.nom)} (${s.rows}×${s.cols})</option>`;
-      });
-      html += '</optgroup>';
-    }
-    const classes = Object.values(S.classes);
-    if (classes.length) {
-      html += '<optgroup label="Reprendre les salles d\'une classe">';
-      classes.forEach(c => {
-        const n = Object.keys(c.rooms || {}).length;
-        html += `<option value="class:${_escAttr(c.id)}">${_escAttr(c.nom)} (${n} salle${n>1?'s':''})</option>`;
-      });
-      html += '</optgroup>';
-    }
-    sel.innerHTML = html;
-    // Année scolaire par défaut dérivée de la date (bascule au 1er août) — plus de 2025 en dur
-    const yr = document.getElementById('nc-yr');
-    if (yr) yr.value = _defaultSchoolYear();
-  }
+  if (id === 'mc') _ncPrepare();
   const el = document.getElementById(id);
   if (el) {
     // Si une autre modale est déjà ouverte, on bump le z-index pour stacker au-dessus.
@@ -15957,50 +15977,40 @@ function _impClassIdFromLabel(label) {
   const flat = String(label || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9_]/g, '');
   // Retire l'ordinal collé au niveau (« 3EMEC » → « 3C », « 2NDE3 » → « 23 », « 1ERES2 » → « 1S2 ») :
   // le libellé complet reste le NOM de la classe, seul l'identifiant est compacté.
-  return flat.replace(/^(\d{1,2})(?:EME|ERE|NDE|ND|ER|E)(?=[A-Z0-9])/, '$1').slice(0, 20);
+  // Niveaux écrits en toutes lettres en tête (« Terminale B » → « TB », « Seconde 3 » → « 23 »).
+  const lead = flat.replace(/^(?:TERMINALE|TLE)(?=[A-Z0-9])/, 'T').replace(/^SECONDE(?=[A-Z0-9])/, '2').replace(/^PREMIERE(?=[A-Z0-9])/, '1');
+  return lead.replace(/^(\d{1,2})(?:EME|ERE|NDE|ND|ER|E)(?=[A-Z0-9])/, '$1').slice(0, 20);
 }
 
 function createClass() {
   const id  = document.getElementById('nc-id').value.trim().toUpperCase();
   const nom = document.getElementById('nc-nom').value.trim();
   const yr  = parseInt(document.getElementById('nc-yr').value) || _defaultSchoolYear();
-  if (!id || !nom) { toast('⚠️ Remplis tous les champs.', 'warn'); document.getElementById(!id ? 'nc-id' : 'nc-nom')?.focus(); return; }
-  if (S.classes[id]) { toast('⚠️ Cette classe existe déjà.', 'warn'); document.getElementById('nc-id')?.focus(); return; }
+  if (!nom || !id) { toast('⚠️ Donne un nom à la classe.', 'warn'); document.getElementById(!nom ? 'nc-nom' : 'nc-id')?.focus(); return; }
+  if (!/^[A-Z0-9_]+$/.test(id)) { toast('⚠️ Identifiant : lettres et chiffres seulement.', 'warn'); document.getElementById('nc-id')?.focus(); return; }
+  if (S.classes[id]) { toast('⚠️ Cet identifiant est déjà pris par une autre classe.', 'warn'); document.getElementById('nc-id')?.focus(); return; }
+  const wantSalles = Array.from(document.querySelectorAll('#nc-salles input.nc-salle-cb:checked')).map(cb => cb.getAttribute('data-salle-id'));
+  const newSalle = wantSalles.includes('__new__');
+  const salleIds = wantSalles.filter(sid => S.salles?.[sid]);
+  if (!newSalle && !salleIds.length) return toast('⚠️ Coche au moins une salle (ou « Nouvelle salle »).', 'warn');
+  const discCbs = Array.from(document.querySelectorAll('#nc-discs input.nc-disc-cb'));
+  const discIds = discCbs.filter(cb => cb.checked).map(cb => cb.getAttribute('data-disc-id')).filter(d => S.disciplines?.[d]);
+  if (discCbs.length && !discIds.length) return toast('⚠️ Coche au moins une discipline.', 'warn');
   pushUndo();
 
-  const choix = document.getElementById('nc-copy').value;
-  let rooms = {};
-  let activeRoom = null;
-
-  if (choix.startsWith('class:')) {
-    // Reprendre toutes les salles d'une autre classe (catalogue partagé, groupes copiés)
-    const srcCls = S.classes[choix.slice(6)];
-    if (srcCls && srcCls.rooms) {
-      for (const [salleId, srcRoom] of Object.entries(srcCls.rooms)) {
-        rooms[salleId] = Object.assign(_newRoomTemplate(), {
-          groupes: JSON.parse(JSON.stringify(srcRoom.groupes || {}))
-        });
-      }
-      activeRoom = srcCls.activeRoom || Object.keys(rooms)[0];
-    }
-  } else if (choix.startsWith('salle:')) {
-    // Utiliser une salle existante du catalogue
-    const sid = choix.slice(6);
-    if (S.salles[sid]) {
-      rooms = { [sid]: _newRoomTemplate() };
-      activeRoom = sid;
-    }
+  // Salles cochées : celles d'une classe source choisie gardent ses zones de groupes.
+  const src = S.classes[document.getElementById('nc-copy-cls')?.value || ''];
+  const rooms = {};
+  for (const sid of salleIds) {
+    rooms[sid] = _newRoomTemplate();
+    if (src?.rooms?.[sid]) rooms[sid].groupes = JSON.parse(JSON.stringify(src.rooms[sid].groupes || {}));
   }
-
-  // Cas par défaut : créer une nouvelle salle pour cette classe
-  if (!activeRoom) {
-    const sid = createSalle(`Salle ${nom}`, 4, 10, []);
-    rooms = { [sid]: _newRoomTemplate() };
-    activeRoom = sid;
-  }
+  if (newSalle) { const sid = createSalle(`Salle ${nom}`, 4, 10, []); rooms[sid] = _newRoomTemplate(); salleIds.push(sid); }
+  const activeRoom = salleIds[0];
 
   const profPrincipal = document.getElementById('nc-pp')?.value.trim() || null;
   S.classes[id] = { id, nom, année: yr, profPrincipal, eleves: [], rooms, activeRoom };
+  if (discIds.length) S.classes[id].disciplineIds = discIds;
   { const nv = _readLevelSelect('nc-niveau'); if (nv != null) S.classes[id].niveau = nv; }
   setupClassAccessors(S.classes[id]);
 
@@ -16013,6 +16023,119 @@ function createClass() {
   switchClass(id);
   renderClasses();
   toast(`Classe ${nom} créée !`);
+}
+
+// ── Nouvelle classe / Modifier la classe : gabarit commun (v2.113.0) ──
+// prefix 'nc' (création) ou 'ec' (modification). Le niveau vit dans un <select> caché
+// (#<prefix>-niveau, lu par _readLevelSelect) ; les boutons par cycle le pilotent.
+var LEVEL_CYCLES = [
+  { key: 'ecole',   label: 'École',   codes: [10, 20, 30, 40, 50] },
+  { key: 'college', label: 'Collège', codes: [60, 70, 80, 90] },
+  { key: 'lycee',   label: 'Lycée',   codes: [100, 110, 120] },
+];
+var _clfCycle = {};   // cycle déplié par fenêtre (état d'affichage seulement)
+function _clfCycleOf(code) { return (LEVEL_CYCLES.find(c => c.codes.includes(code)) || {}).key || null; }
+function _clfLevelVal(prefix) { return _readLevelSelect(prefix + '-niveau'); }
+function _clfRenderLevel(prefix) {
+  const box = document.getElementById(prefix + '-lvl'), sel = document.getElementById(prefix + '-niveau');
+  if (!box || !sel) return;
+  const nom = document.getElementById(prefix + '-nom')?.value || '';
+  const auto = classLevelOrder(nom);
+  const v = _clfLevelVal(prefix);
+  sel.innerHTML = _levelSelectHTML(v, nom);
+  const eff = v != null ? v : auto;
+  if (!_clfCycle[prefix]) _clfCycle[prefix] = _clfCycleOf(eff) || 'college';
+  const cyc = v == null ? null : (v === 999 ? 'autre' : _clfCycleOf(v));
+  const b = (on, onclick, label, tip) => `<button type="button" class="${on ? 'on' : ''}" onclick="${onclick}"${tip ? ` title="${_escAttr(tip)}"` : ''}>${label}</button>`;
+  let h = '<div class="ip-seg">'
+    + b(v == null, `_clfSetLevel('${prefix}',null)`, `Auto (${_esc(_levelLabel(auto))})`, "Niveau déduit du nom de la classe")
+    + LEVEL_CYCLES.map(c => b(cyc === c.key, `_clfShowCycle('${prefix}','${c.key}')`, c.label + (_clfCycle[prefix] === c.key && v !== 999 ? ' ▾' : ''), 'Afficher les niveaux ' + (c.key === 'ecole' ? "de l'école" : c.key === 'lycee' ? 'du lycée' : 'du collège'))).join('')
+    + b(v === 999, `_clfSetLevel('${prefix}',999)`, 'Autre', "Hors niveau (ULIS, groupe…) : carte grise")
+    + '</div>';
+  const open = LEVEL_CYCLES.find(c => c.key === _clfCycle[prefix]);
+  if (open && v !== 999) h += '<div class="ip-seg">' + open.codes.map(code => b(v === code, `_clfSetLevel('${prefix}',${code})`, _esc(_levelLabel(code)))).join('') + '</div>';
+  box.innerHTML = h;
+}
+function _clfShowCycle(prefix, key) { _clfCycle[prefix] = key; _clfRenderLevel(prefix); }
+function _clfSetLevel(prefix, code) {
+  const sel = document.getElementById(prefix + '-niveau');
+  if (sel) { sel.innerHTML = _levelSelectHTML(code, document.getElementById(prefix + '-nom')?.value || ''); sel.value = code == null ? '' : String(code); }
+  if (code != null && code !== 999) _clfCycle[prefix] = _clfCycleOf(code);
+  if (code == null) _clfCycle[prefix] = _clfCycleOf(classLevelOrder(document.getElementById(prefix + '-nom')?.value || '')) || _clfCycle[prefix];
+  _clfRenderLevel(prefix); _clfPreview(prefix);
+}
+function _clfNomInput(prefix) {
+  if (prefix === 'nc') {
+    const idEl = document.getElementById('nc-id');
+    if (idEl && idEl.dataset.manual !== '1') idEl.value = _impClassIdFromLabel(document.getElementById('nc-nom').value).slice(0, 10);
+  }
+  if (_clfLevelVal(prefix) == null) _clfCycle[prefix] = _clfCycleOf(classLevelOrder(document.getElementById(prefix + '-nom')?.value || '')) || _clfCycle[prefix];
+  _clfRenderLevel(prefix); _clfPreview(prefix);
+}
+// Une frappe dans l'identifiant le fige ; le vider rend la main au calcul automatique.
+function _clfIdInput() {
+  const idEl = document.getElementById('nc-id');
+  idEl.dataset.manual = idEl.value.trim() ? '1' : '';
+  if (!idEl.value.trim()) idEl.value = _impClassIdFromLabel(document.getElementById('nc-nom').value).slice(0, 10);
+  document.getElementById('nc-id-auto')?.classList.toggle('off', idEl.dataset.manual === '1');
+  _clfPreview('nc');
+}
+// Aperçu de la carte, mêmes couleurs que renderClasses (fond de niveau, liseré, encre dérivée).
+function _clfPreview(prefix) {
+  const el = document.getElementById(prefix + '-prev');
+  if (!el) return;
+  const nom = document.getElementById(prefix + '-nom')?.value.trim() || '';
+  const v = _clfLevelVal(prefix);
+  const lvl = v != null ? v : classLevelOrder(nom);
+  const bg = levelBgColor(lvl, 0);
+  el.style.background = bg; el.style.borderLeftColor = levelAccentColor(lvl); el.style.color = _contrastTextColor(bg);
+  const cls = prefix === 'ec' ? S.classes[document.getElementById('ec-id')?.value] : null;
+  const n = cls ? (cls.eleves || []).length : 0;
+  const salles = Array.from(document.querySelectorAll(`#${prefix === 'nc' ? 'nc-salles' : 'ec-salle-checks'} input:checked`))
+    .map(cb => cb.getAttribute('data-salle-id') === '__new__' ? 'Nouvelle salle' : (S.salles?.[cb.getAttribute('data-salle-id')]?.nom || '')).filter(Boolean);
+  const pp = document.getElementById(prefix + '-pp')?.value.trim();
+  const yr = parseInt(document.getElementById(prefix + '-yr')?.value) || '';
+  el.innerHTML = `<b>${_esc(nom || 'Nom de la classe')}</b> <span>· ${_esc(_levelLabel(lvl))}</span><br>`
+    + `${n} élève${n > 1 ? 's' : ''}${yr ? ` · ${yr}–${yr + 1}` : ''}<br>`
+    + `📍 ${salles.length ? _esc(salles.join(', ')) : '<i>aucune salle</i>'}${pp ? `<br>👩‍🏫 ${_esc(pp)}` : ''}`;
+}
+function _clfPillHTML(cbClass, dataAttr, id, on, label, n, tip, extra) {
+  return `<label class="clf-pill${extra || ''}" title="${_escAttr(tip || '')}"><input type="checkbox" class="${cbClass}" ${dataAttr}="${_escAttr(id)}"${on ? ' checked' : ''} onchange="_clfPreview('${cbClass.slice(0, 2)}')">${label}${n ? ` <span class="n">${n}</span>` : ''}</label>`;
+}
+function _ncPrepare() {
+  const nom = document.getElementById('nc-nom'), idEl = document.getElementById('nc-id');
+  if (nom) nom.value = '';
+  if (idEl) { idEl.value = ''; idEl.dataset.manual = ''; }
+  document.getElementById('nc-id-auto')?.classList.remove('off');
+  const pp = document.getElementById('nc-pp'); if (pp) pp.value = '';
+  const yr = document.getElementById('nc-yr'); if (yr) yr.value = _defaultSchoolYear();
+  const sel = document.getElementById('nc-niveau'); if (sel) sel.innerHTML = _levelSelectHTML(null, '');
+  _clfCycle.nc = _clfCycleOf(clsLevel(getCls())) || 'college';
+  // Salles : celle affichée de la classe courante par défaut ; « Nouvelle salle » si le catalogue est vide.
+  const cur = getCls();
+  const entries = Object.entries(S.salles || {}).sort((a, b) => String(a[1].nom).localeCompare(String(b[1].nom), 'fr', { numeric: true }));
+  const defSid = (cur && S.salles?.[cur.activeRoom]) ? cur.activeRoom : (entries[0] || [])[0];
+  document.getElementById('nc-salles').innerHTML = entries.map(([sid, sa]) =>
+    _clfPillHTML('nc-salle-cb', 'data-salle-id', sid, sid === defSid, _esc(sa.nom), '', `${sa.rows} × ${sa.cols}`)).join('')
+    + _clfPillHTML('nc-salle-cb', 'data-salle-id', '__new__', !entries.length, '＋ Nouvelle salle', '', 'Crée une salle de 4 × 10 au nom de la classe', ' new');
+  const cs = document.getElementById('nc-copy-cls');
+  const classes = Object.values(S.classes).filter(c => !c.virtual).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+  cs.innerHTML = '<option value="">—</option>' + classes.map(c => `<option value="${_escAttr(c.id)}">${_esc(c.nom)}</option>`).join('');
+  cs.closest('.clf-copy').style.display = classes.length ? '' : 'none';
+  // Disciplines : la principale cochée par défaut.
+  const discs = Object.values(S.disciplines || {});
+  const prim = _disciplinePrimaryId();
+  document.getElementById('nc-discs').innerHTML = discs.length <= 1
+    ? `<span class="clf-note" style="margin:0">${discs.length ? `Une seule discipline : <strong>${_esc(discs[0].nom)}</strong>.` : 'Aucune discipline.'} <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">Créer une discipline…</a></span>`
+    : discs.map(d => _clfPillHTML('nc-disc-cb', 'data-disc-id', d.id, d.id === prim, _esc(d.nom), '', d.isPrimary ? 'Discipline principale' : '')).join('');
+  _clfRenderLevel('nc'); _clfPreview('nc');
+}
+// « Reprendre les salles d'une classe » : coche ses salles (leurs zones de groupes seront copiées).
+function _ncCopyFromClass() {
+  const src = S.classes[document.getElementById('nc-copy-cls').value];
+  if (!src) return;
+  document.querySelectorAll('#nc-salles input.nc-salle-cb').forEach(cb => { cb.checked = !!src.rooms?.[cb.getAttribute('data-salle-id')]; });
+  _clfPreview('nc');
 }
 
 // Purge les structures indexées par CLASSE (hors S.classes[id] et S.eleves, à la charge
@@ -16617,60 +16740,54 @@ function editClass(id) {
   const cls = S.classes[id];
   if (!cls) return;
   document.getElementById('ec-id').value = id;
-  document.getElementById('ec-id-disp').value = id;
   document.getElementById('ec-nom').value = cls.nom;
   document.getElementById('ec-yr').value  = cls.année;
   document.getElementById('ec-pp').value  = cls.profPrincipal || '';
-  document.getElementById('ec-niveau').innerHTML = _levelSelectHTML(LEVEL_CODES.includes(cls.niveau) ? cls.niveau : null, cls.nom);
+  const nv = LEVEL_CODES.includes(cls.niveau) ? cls.niveau : null;
+  document.getElementById('ec-niveau').innerHTML = _levelSelectHTML(nv, cls.nom);
+  _clfCycle.ec = _clfCycleOf(clsLevel(cls)) || 'college';
+  const n = (cls.eleves || []).length, ns = Object.keys(cls.rooms || {}).length;
+  document.getElementById('ec-sub').innerHTML = `${n} élève${n > 1 ? 's' : ''} · ${ns} salle${ns > 1 ? 's' : ''} · identifiant <code>${_esc(id)}</code> <span style="font-size:.9em">(non modifiable)</span>`;
   _ecRenderSalleChecks(cls);
   _ecRenderDisciplineChecks(cls);
   _ecRenderAeshSummary(cls);
+  _clfRenderLevel('ec'); _clfPreview('ec');
   openMod('mce');   // jamais classList.add : openMod pose role/aria-modal, le piège de focus et l'autofocus
 }
 
-// Cases « Salles » de Modifier la classe. Appliquées à « Sauvegarder », pas tout de suite :
+// Pastilles « Salles » de Modifier la classe. Appliquées à « Enregistrer », pas tout de suite :
 // la modale est un formulaire, « Annuler » ne doit rien laisser derrière lui.
 function _ecRenderSalleChecks(cls) {
   const wrap = document.getElementById('ec-salle-checks');
   if (!wrap) return;
   const entries = Object.entries(S.salles || {}).sort((a, b) => String(a[1].nom).localeCompare(String(b[1].nom), 'fr', { numeric: true }));
   if (!entries.length) { wrap.innerHTML = '<span style="color:var(--pencil);font-style:italic">Aucune salle au catalogue.</span>'; return; }
+  // Salle affichée en premier : l'aperçu la nomme d'abord.
+  entries.sort((a, b) => (b[0] === cls.activeRoom) - (a[0] === cls.activeRoom));
   wrap.innerHTML = entries.map(([sid, sa]) => {
     const on = !!cls.rooms?.[sid];
     const placed = on ? Object.keys(cls.rooms[sid].seating || {}).length : 0;
-    const act = cls.activeRoom === sid ? ' <span style="color:var(--pencil);font-size:.85em">(affichée)</span>' : '';
-    const tip = on ? (placed ? `${placed} élève(s) placé(s) dans cette salle — décocher efface ce plan` : 'Aucun élève placé') : 'Ajouter cette salle à la classe';
-    return `<label style="display:inline-flex;gap:5px;align-items:center;cursor:pointer" title="${_escAttr(tip)}"><input type="checkbox" class="ec-salle-cb" data-salle-id="${_escAttr(sid)}"${on ? ' checked' : ''}>${_esc(sa.nom)}${act}</label>`;
+    const tip = on ? (placed ? `${placed} élève(s) placé(s) dans cette salle — décocher efface ce plan` : 'Aucun élève placé') + (cls.activeRoom === sid ? ' · salle affichée' : '') : 'Ajouter cette salle à la classe';
+    return _clfPillHTML('ec-salle-cb', 'data-salle-id', sid, on, _esc(sa.nom) + (cls.activeRoom === sid ? ' ●' : ''), on && placed ? `${placed} placé${placed > 1 ? 's' : ''}` : '', tip);
   }).join('');
 }
 
-// Rend les checkboxes "Disciplines enseignées" pour la modale Modifier classe.
+// Pastilles « Disciplines » de Modifier la classe, avec le nombre d'évaluations de la classe.
 function _ecRenderDisciplineChecks(cls) {
   const wrap = document.getElementById('ec-disc-checks');
   if (!wrap) return;
   const allDiscs = Object.values(S.disciplines || {});
-  if (allDiscs.length === 0) {
-    wrap.innerHTML = '<p style="font-size:.86em;color:var(--pencil);font-style:italic;margin:0">Aucune discipline configurée.</p>';
+  const link = `<a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">Créer une discipline…</a>`;
+  if (allDiscs.length <= 1) {
+    wrap.innerHTML = `<span class="clf-note" style="margin:0">${allDiscs.length ? `Une seule discipline : <strong>${_esc(allDiscs[0].nom)}</strong>.` : 'Aucune discipline configurée.'} ${link}</span>`;
     return;
   }
   const checked = new Set(_clsDisciplineIds(cls));
-  if (allDiscs.length === 1) {
-    const d = allDiscs[0];
-    wrap.innerHTML = `<p style="font-size:.86em;color:var(--pencil);margin:0">
-      Une seule discipline configurée : <strong>${_esc(d.nom)}</strong>.
-      Pour avoir plusieurs flux (ex. SVT + Bilingue), <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">crée d'autres disciplines</a>.
-    </p>`;
-    return;
-  }
-  wrap.innerHTML = allDiscs.map(d => `
-    <label style="display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer;font-size:.92em">
-      <input type="checkbox" data-disc-id="${_escAttr(d.id)}"${checked.has(d.id) ? ' checked' : ''} class="ec-disc-cb">
-      <strong>${_esc(d.nom)}</strong>${d.isPrimary ? ' <span style="font-size:.78em;color:var(--pencil);font-style:italic">(principale)</span>' : ''}
-    </label>
-  `).join('') + `
-    <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin:8px 0 0">
-      <a href="javascript:openDisciplinesModal()" style="color:var(--disc-accent)">+ Créer une nouvelle discipline…</a>
-    </p>`;
+  const nbEv = {};
+  for (const e of Object.values(S.evaluations || {})) if (_evalIncludesClass(e, cls.id)) { const d = _evalDisciplineId(e); nbEv[d] = (nbEv[d] || 0) + 1; }
+  wrap.innerHTML = allDiscs.map(d => _clfPillHTML('ec-disc-cb', 'data-disc-id', d.id, checked.has(d.id), _esc(d.nom), nbEv[d.id] ? `${nbEv[d.id]} éval${nbEv[d.id] > 1 ? 's' : ''}` : '',
+    (d.isPrimary ? 'Discipline principale. ' : '') + (nbEv[d.id] ? `${nbEv[d.id]} évaluation(s) de cette classe` : 'Aucune évaluation'))).join('')
+    + `<span class="clf-note" style="margin:0;align-self:center">${link}</span>`;
 }
 
 // Shims (anciens callbacks oninput=… encore présents en HTML)
