@@ -567,6 +567,22 @@ html[data-theme="dark"] .memo-choice.good{background:#16301f;border-color:#3f8f5
 .cl-recap summary::before{content:"▸";color:var(--pencil)}
 .cl-recap[open] summary::before{content:"▾"}
 .cl-recap-tot{margin-left:auto;font-size:.85em;color:var(--pencil);font-family:var(--font-mono)}
+/* Barre du Plan (v2.97.0) */
+#tab-plan .pl-row1{background:var(--paper-warm);border-bottom:1px solid var(--rule-line);align-items:center}
+#tab-plan .pl-lbl{font-size:.82em;color:var(--pencil);align-self:center;white-space:nowrap}
+#tab-plan .pl-sep{width:1px;height:22px;background:var(--rule-line);margin:0 4px;align-self:center}
+#tab-plan .pl-count{margin-left:auto;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+#tab-plan .tgc-pill{font-size:.78em;padding:2px 8px;border-radius:10px;background:var(--paper);border:1px solid var(--rule-line);color:var(--ink-deep);white-space:nowrap;font-family:var(--font-sans)}
+#tab-plan .pl-right{margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+#tab-plan .pl-row3{border-top:1px dashed var(--rule-line);align-items:center}
+#tab-plan .pl-seg{display:inline-flex;border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);overflow:hidden}
+#tab-plan .pl-seg button{border:none;background:var(--paper);color:var(--ink-deep);padding:3px 9px;font:500 .8em var(--font-sans);cursor:pointer;line-height:1.5}
+#tab-plan .pl-seg button + button{border-left:1px solid var(--rule-line)}
+#tab-plan .pl-seg button:hover{background:var(--paper-warm)}
+#tab-plan .pl-seg button.on{background:var(--chip-on-bg);color:#fff}
+/* Appel en cours : le code pose un fond en ligne (#3b82f6, sérialisé « rgb(59, 130, 246) » dans l'attribut), battu par le !important de .btn-p — on le rend visible par un anneau. */
+html #btn-appel-mode.btn[style*="59, 130, 246"]{box-shadow:0 0 0 3px var(--highlighter) !important}
+@media (pointer: coarse){#tab-plan .pl-seg button{padding:7px 12px;font-size:.92em}}
 @media (max-width:760px){.cl-synth{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* À l'impression on part sur du papier blanc : si l'app est en thème sombre, les tokens
    valent leurs variantes CLAIRES (bleu ciel, rose pâle) et seraient délavés. On repose
@@ -2980,7 +2996,7 @@ body.conf-on #class-msg-banner { display: none !important; }
 .cell.conf-hidden .conf-lock { position: absolute; right: 3px; bottom: 2px; font-size: .75em; opacity: .7; }
 /* Onglet Élèves : le nom ouvre la fiche complète (mousedown stoppé pour ne pas lancer la sélection). */
 .stu-name-link { cursor: pointer; border-radius: var(--radius-sm); }
-.stu-name-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.stu-name-link:not(.dlg-t):not(.dlg-s):hover { text-decoration: underline; text-underline-offset: 2px; }
 .fiche-click:hover { background: var(--paper-deep); }
 .fiche-click-hint { color: var(--pencil); font-size: .8em; font-weight: 400; margin-left: 6px; }
 @media (pointer: coarse) { .fiche-ico { min-width: 32px; min-height: 30px; font-size: 1em; } }
@@ -3476,22 +3492,46 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
   <!-- ── TAB: Plan Prof ── -->
   <div id="tab-plan" class="tab">
-    <div class="tb" id="tg-salle-row" style="background:#fafafa;border-bottom:1px solid #eee">
-      <span style="font-size:.85em;color:var(--pencil);align-self:center">📍 Salle :</span>
+    <!-- Barre du Plan (v2.97.0, maquette validée le 2026-10-07) : 1) contexte et compteur,
+         2) actions par moment du cours, 3) affichage. Identifiants et fonctions inchangés. -->
+    <div class="tb pl-row1" id="tg-salle-row">
+      <span class="pl-lbl">📍 Salle</span>
       <span id="tg-salle-buttons" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
-      <button class="btn btn-s btn-sm" onclick="openAddSalleToClass()" title="Ajouter une salle à cette classe">➕ Ajouter une salle</button>
+      <button class="btn btn-g btn-sm" onclick="openAddSalleToClass()" title="Ajouter une salle à cette classe">＋</button>
       <span class="tb-hint" style="font-size:.78em">Clic droit sur une salle → la retirer de cette classe. Chaque classe mobile a sa propre affectation de tablettes (passe d'une à l'autre via les boutons à droite).</span>
       <span class="ff-tablettes" style="display:contents">
-        <span style="width:1px;height:22px;background:var(--rule-line);margin:0 4px"></span>
-        <span style="font-size:.85em;color:var(--pencil);align-self:center">📱 Classe mobile :</span>
+        <span class="pl-sep"></span>
+        <span class="pl-lbl">📱 Tablettes</span>
         <span id="tg-pool-buttons" class="pool-buttons-container" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
       </span>
+      <span id="tg-count" class="pl-count"></span>
     </div>
-    <div class="tb">
-      <span class="tb-grp"><span class="tb-grp-lbl">Plan</span>
-      <button class="btn btn-p btn-sm" onclick="switchTab('svue')" title="Aller à la Vue Élève">🔄 Vue Élève</button>
+    <div class="tb pl-row2">
+      <span class="tb-grp"><span class="tb-grp-lbl">Séance</span>
+      <button class="btn btn-p btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Faire l'appel : clic = absent / présent, clic droit = retard (raccourci touche A)">🙋 Faire l'appel</button>
+      <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Appels passés : consulter, modifier ou supprimer les appels enregistrés" aria-label="Appels passés">📅</button>
+      <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
+      <button class="btn btn-g btn-sm" id="btn-class-msg" onclick="openClassMsg()" title="Message à passer à toute la classe en début de séance — affiché en évidence au-dessus du plan tant qu'il n'est pas marqué fait">📣 Message</button>
+      </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Placement</span>
       <span class="dd">
-        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Imprimer (Ctrl+P)">🖨 Imprimer ▼</button>
+        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Placer, mélanger ou retirer les élèves">🔀 Placer ▾</button>
+        <div class="dd-menu">
+          <button onclick="closeAllDd();randomPlacement(false)">🔀 Placer les non placés</button>
+          <button onclick="closeAllDd();randomPlacement(true)">🔀 Mélanger tout</button>
+          <div class="dd-sep"></div>
+          <button onclick="closeAllDd();clearAllSeating()" style="color:var(--st-upe2a-i-fg)">🗑 Retirer toutes les positions</button>
+        </div>
+      </span>
+      <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : clique un élève pour ses places autorisées · glisse un élève sur un autre pour les séparer">⛓ Contraintes</button>
+      <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Instantanés : sauvegarder ou consulter des dispositions de classe" aria-label="Instantanés">📸</button>
+      <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
+      <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Refaire (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
+      </span>
+      <span class="pl-right">
+      <button class="btn btn-p btn-sm" onclick="switchTab('svue')" title="Aller à la Vue Élève (à projeter : plan des élèves, interroger au hasard)">🔄 Vue Élève</button>
+      <span class="dd dd-right">
+        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Imprimer (Ctrl+P)">🖨 ▾</button>
         <div class="dd-menu">
           <button onclick="closeAllDd();doPrint('t')">🖨 Plan Prof <span style="color:var(--pencil-soft);font-size:.85em">(Ctrl+P)</span></button>
           <button onclick="closeAllDd();doPrint('s')">🖨 Plan Élève</button>
@@ -3503,40 +3543,16 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <button onclick="event.stopPropagation();togglePrintColors()" title="Bascule couleurs / noir & blanc pour toutes les impressions"><span class="pc-tog-lbl">🎨 Couleurs : ON</span></button>
         </div>
       </span>
-      <span class="dd">
-        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Actions de placement">⚙ Actions ▼</button>
+      <span class="dd dd-right ff-tablettes">
+        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Tablettes" aria-label="Autres actions : tablettes">⋯</button>
         <div class="dd-menu">
-          <button onclick="closeAllDd();randomPlacement(false)">🔀 Placer les non placés</button>
-          <button onclick="closeAllDd();randomPlacement(true)">🔀 Mélanger tout</button>
-          <button class="ff-tablettes" onclick="closeAllDd();openAutoIpads()" title="Affecter automatiquement les tablettes aux élèves placés">📱 Affecter automatiquement les tablettes</button>
-          <button class="ff-tablettes" onclick="closeAllDd();openClearIpadsModal()" title="Désaffecter les tablettes selon une étendue choisie">🗑 Désaffecter les tablettes…</button>
-          <div class="dd-sep ff-tablettes"></div>
-          <button onclick="closeAllDd();clearAllSeating()" style="color:var(--st-upe2a-i-fg)">🗑 Retirer toutes les positions</button>
+          <button onclick="closeAllDd();openAutoIpads()" title="Affecter automatiquement les tablettes aux élèves placés">📱 Affecter automatiquement les tablettes</button>
+          <button onclick="closeAllDd();openClearIpadsModal()" title="Désaffecter les tablettes selon une étendue choisie">🗑 Désaffecter les tablettes…</button>
         </div>
       </span>
       </span>
-      <span class="tb-grp"><span class="tb-grp-lbl">Séance</span>
-      <button class="btn btn-g btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Mode appel : clic = absent/présent (raccourci touche A)">🙋 Mode appel</button>
-      <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Consulter les appels enregistrés">📅 Appels passés</button>
-      <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
-      <button class="btn btn-g btn-sm" id="btn-class-msg" onclick="openClassMsg()" title="Message à passer à toute la classe en début de séance — affiché en évidence au-dessus du plan tant qu'il n'est pas marqué fait">📣 Message</button>
-      </span>
-      <span class="tb-grp"><span class="tb-grp-lbl">Placement</span>
-      <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Sauvegarder ou consulter des dispositions de classe">📸 Instantanés</button>
-      <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : clique un élève pour ses places autorisées · glisse un élève sur un autre pour les séparer">⛓ Contraintes</button>
-      <button class="btn btn-g btn-sm btn-toggle-moved" onclick="toggleMovedHighlight()" oncontextmenu="return moveHighlightContextMenu(event)" style="font-size:1em;padding:2px 6px" title="Masquer / réafficher le surlignage rose des places modifiées — clic droit pour effacer">💡</button>
-      <span class="moved-help-text" style="display:none;font-size:.78em;color:var(--pencil);font-style:italic;margin-left:-2px"></span>
-      </span>
-      <span class="tb-grp">
-      <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
-      <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Refaire (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
-      </span>
-      <span class="tb-grp"><span class="tb-grp-lbl">Zoom</span>
-      <button class="btn btn-g btn-sm" onclick="tgZoomOut()" title="Zoom − (touche −)">🔍−</button>
-      <button class="btn btn-g btn-sm" onclick="tgZoomReset()" id="tg-zoom-lbl" title="Zoom 100% (touche =)">100%</button>
-      <button class="btn btn-g btn-sm" onclick="tgZoomIn()" title="Zoom + (touche +)">🔍+</button>
-      </span>
-      <span style="width:100%;height:0"></span>
+    </div>
+    <div class="tb pl-row3">
       <span class="tb-grp"><span class="tb-grp-lbl">Afficher</span>
       <span class="gchip gc-all on" onclick="setGroupFilter(0,this)" title="Tous (touche 0)">Tous</span>
       <span class="gchip gc-1"      onclick="setGroupFilter(1,this)" title="Groupe 1 (touche 1)">🔵 G1</span>
@@ -3551,15 +3567,27 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <span class="amchip am-photo" id="pl-chip-photo" onclick="togglePlanPhotos()" style="display:none"
               title="Afficher la photo de chaque élève en bas à droite de sa case">📷 Photos</span>
       </span>
-      <select id="tg-color-mode" onchange="setPlanColorMode(this.value)" title="Choisir comment les cases sont colorées" style="font-size:.82em;padding:2px 4px;border:1px solid #ccc;border-radius:3px">
-        <option value="groupe">🎨 Couleur : Groupe</option>
-        <option value="tag">🎨 Couleur : Tag (place)</option>
-        <option value="genre">🎨 Couleur : Genre</option>
-        <option value="none">🎨 Couleur : Aucune</option>
-      </select>
+      <button class="btn btn-g btn-sm btn-toggle-moved" onclick="toggleMovedHighlight()" oncontextmenu="return moveHighlightContextMenu(event)" style="font-size:1em;padding:2px 6px" title="Masquer / réafficher le surlignage rose des places modifiées — clic droit pour effacer">💡</button>
+      <span class="moved-help-text" style="display:none;font-size:.78em;color:var(--pencil);font-style:italic;margin-left:-2px"></span>
       </span>
       <span class="tb-hint" style="margin-left:8px">Clic droit sur un élève (cellule du plan) → menu contextuel (aménagements, rôle, fiche complète, informations, rappels, retirer de sa place…). Glisser un élève depuis sa cellule jusqu'au panneau de droite (« Non placés ») → le retire de sa place et le remet en attente d'affectation.</span>
-      <span id="tg-count" style="margin-left:auto;font-size:.85em;color:var(--pencil);white-space:nowrap"></span>
+      <span class="pl-right">
+      <span class="pl-lbl">🎨 Couleur</span>
+      <span class="pl-seg" id="tg-color-seg" role="group" aria-label="Couleur des cases">
+        <button type="button" data-v="groupe" onclick="setPlanColorMode('groupe')" title="Couleur du groupe G1 / G2 / G3">Groupe</button>
+        <button type="button" data-v="tag" onclick="setPlanColorMode('tag')" title="Couleur du tag (de l'élève, sinon de la place)">Tag</button>
+        <button type="button" data-v="genre" onclick="setPlanColorMode('genre')" title="Bleu / rose selon la civilité">Genre</button>
+        <button type="button" data-v="none" onclick="setPlanColorMode('none')" title="Aucune couleur">—</button>
+      </span>
+      <select id="tg-color-mode" onchange="setPlanColorMode(this.value)" style="display:none" aria-hidden="true" tabindex="-1">
+        <option value="groupe">Groupe</option><option value="tag">Tag</option><option value="genre">Genre</option><option value="none">Aucune</option>
+      </select>
+      <span class="pl-seg" role="group" aria-label="Zoom">
+        <button type="button" onclick="tgZoomOut()" title="Zoom − (touche −)">−</button>
+        <button type="button" onclick="tgZoomReset()" id="tg-zoom-lbl" title="Zoom 100% (touche =)">100%</button>
+        <button type="button" onclick="tgZoomIn()" title="Zoom + (touche +)">＋</button>
+      </span>
+      </span>
     </div>
     <div id="class-msg-banner" role="status" aria-live="polite"></div>
     <div class="tp">
@@ -7783,11 +7811,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.96.2';
+const APP_VERSION    = '2.97.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T12:13:38Z';
+const APP_BUILD_DATE = '2026-10-07T12:22:08Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19671,7 +19699,7 @@ function renderStudents() {
     return `
       <tr data-sid="${s.id}" class="${(sel + (_efShow(s) ? ((_zi++ % 2) ? ' el-alt' : '') : ' bf-hide')).trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)">
-        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}${_remBadgeInline(s)}</td>
+        <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link${_delegueNameCls(s)}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}${_remBadgeInline(s)}</td>
         <td class="conf-keep">${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
         <td>${_cnt('oublis', s.oublis, 'setOubli', 'Matériel oublié')}</td>
@@ -20354,6 +20382,7 @@ function renderTeacherGrid() {
   // ou quand le mode est changé par programme via setPlanColorMode)
   const colorSel = document.getElementById('tg-color-mode');
   if (colorSel && colorSel.value !== _planColorMode) colorSel.value = _planColorMode;
+  document.querySelectorAll('#tg-color-seg button').forEach(b => b.classList.toggle('on', b.dataset.v === _planColorMode));
   // 📣 Message à la classe : bandeau au-dessus du plan + état du bouton toolbar
   _renderClassMsgBanner();
 
@@ -20501,7 +20530,7 @@ function renderTeacherGrid() {
     }
     // Indication du pool actif retirée du tg-count — désormais visible directement
     // dans la toolbar à côté du sélecteur de salle (cf. .pool-buttons-container).
-    countEl.textContent = parts.join(' · ');
+    countEl.innerHTML = parts.map(p => `<span class="tgc-pill">${_esc(p)}</span>`).join('');
   }
 
   renderUnplaced();
@@ -21011,7 +21040,7 @@ function renderTeacherGridFromSnapshot() {
   if (countEl) {
     const parts = [`${placedSids.length} placé${placedSids.length !== 1 ? 's' : ''}`];
     if (archivedN > 0) parts.push(`${archivedN} supprimé${archivedN !== 1 ? 's' : ''} depuis`);
-    countEl.textContent = parts.join(' · ');
+    countEl.innerHTML = parts.map(p => `<span class="tgc-pill">${_esc(p)}</span>`).join('');
   }
 
   // Panneau "non placés" : on masque le contenu en consultation, sans casser la structure
@@ -22534,9 +22563,7 @@ function renderStudentView() {
           const _showLate = _lateAt && !_isAbs && (_appelMode || _isPostAppelForCls(cls));
           if (_showAbs)  cell.classList.add('absent');
           if (_showLate) cell.classList.add('late');
-          // Délégué·e : nom souligné (trait plein), suppléant·e : pointillé — v2.96.2, à la demande de l'utilisateur.
-          const _dlgC = _delegueNameCls(S.eleves[sid]).trim();
-          cell.innerHTML = `<div class="svname">${_dlgC ? `<span class="${_dlgC}">` : ''}${_escName(getDisplayName(cls, sid))}${_dlgC ? '</span>' : ''}</div>`
+          cell.innerHTML = `<div class="svname">${_escName(getDisplayName(cls, sid))}</div>`
             + (_showAbs ? '<div style="font-size:1.4em;line-height:1;margin-top:4px">🚫</div>' : '')
             + (_showLate ? `<div style="font-size:.7em;background:#facc15;color:#78350f;padding:1px 6px;border-radius:3px;font-weight:600;margin-top:4px">⏰ ${_escAttr(_lateAt)}</div>` : '');
         }
