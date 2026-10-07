@@ -2448,6 +2448,17 @@ Plus de modale Réglages intermédiaire. La modale `meval-new` (création + dupl
 - **Colonne 🎓 Conseil** (par période) à droite de Remarque : boutons-pastilles dont les **mentions sont entièrement paramétrables** (cf. section *Conseil de classe — mentions configurables*). Défauts : `F` Félicitations (bleu) · `E` Encouragements (vert) · `AT` Avertissement travail (orange) · `AC` Avertissement comportement (rouge), avec incompatibilités par défaut `F⊗E`, `E⊗AT`, `E⊗AC`. Storage `S.conseilClasse[classId][disciplineId][sid][periode] = { [mentionId]: true }`. La cellule porte `class="bilan-conseil-cell"` + `data-active="abbr1+abbr2"` (lu par le scrape Copier/CSV). Footer du tableau : totaux par mention sous forme de pastilles. `_toggleConseilClasse` applique les incompatibilités par paires et préserve la position de scroll de `.bilan-table-scroll` lors du re-render.
 - **Préservation du scroll au save de remarque élève** : `_bilanStuRemSave` (modale `mbilan-stuRem`, ouverte via clic sur une note dans le tableau) capture `scrollTop`/`scrollLeft` de `.bilan-table-scroll` avant le re-render et les restaure après — sinon le tableau saute en haut à chaque validation, pénible sur une grande classe quand on annote en bas. Même pattern que `_toggleConseilClasse`.
 
+### Onglet Devoirs — bandeau, filtres, rangées (v2.89.0)
+
+Même démarche que les bilans (maquette validée le 2026-10-07 ; le tableur suit dans un lot suivant, avec le liseré de couleur par défaut).
+- **Infos par devoir calculées une fois** : `_evalListInfo(ev, cls)` (effectif présent, élèves saisis, résumé de structure, notes finales arrondies, stats) — partagées par le bandeau, les filtres et les rangées.
+- **Bandeau** `_evalListBandHTML` (calculé sur TOUS les devoirs de la période, filtre ignoré) : nombre par type · saisies incomplètes (ligne cliquable = filtre) · moyenne des moyennes de classe (ramenées sur 20) · calendrier (dernier / prochain devoir daté).
+- **Filtres** (`.bsynth-chip`, `planClasse_evalListFilter`, `_evalListSetFilter`) : Tous · Type A/B/C/D (seulement les types présents) · Saisie incomplète · Multi-classes. Ici le filtre **retire** les rangées (pas de pied de tableau à préserver). `_bsynthSetFilter('notes', f)` y renvoie.
+- **Rangée** `_evalListRowHTML` (`.evl-row`, grille) : titre + ligne de détails · barre d'avancement de la saisie (orange si incomplète) · mini-histogramme des notes ramenées sur 20 (`_bsynthHistBins`, couleurs `_noteColor`) · moyenne avec pastille · **✏️ Saisir** + menu **⋯** (`.dd.dd-right`, menus déroulants existants) : Réglages, Dupliquer, Bilan des compétences, Comparer les classes (si multi-classes), Export ENT, Projeter, Supprimer. Les sept boutons d'icônes de chaque rangée ont disparu (arbitrage de l'utilisateur). Téléphone : histogramme et moyenne masqués.
+- Audit de contraste : 0 écart en clair et en sombre, menu ouvert compris.
+
+**Bandeau : bouton 🔗 de configuration des liens** masqué dès qu'au moins un lien existe (`renderUserLinks`) — il ne sert qu'à créer le premier ; ensuite ⚙ Réglages → 🔗 Liens (demande de l'utilisateur, v2.89.0).
+
 ### Bilans — bandeau de synthèse et filtres de lignes (v2.85.0)
 
 Premier lot de la modernisation des deux bilans (maquette validée le 2026-10-07 : bandeau, puis cellules allégées, puis carte de maîtrise). Au-dessus de chaque tableau, des cartes `.bsynth-card` puis une rangée de pastilles `.bsynth-chip`. Code : bloc `_bsynth*` juste avant `renderBilanTab`.

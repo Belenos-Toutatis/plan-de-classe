@@ -1868,6 +1868,21 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
 .bsynth-chip:disabled { opacity:.45; cursor:default; }
 .bsynth-count { color:var(--pencil); font-size:.92em; }
 tr.bf-hide { display:none; }
+/* Onglet Devoirs — rangées (v2.89.0) */
+.evl-row { display:grid; grid-template-columns:minmax(0,1fr) 120px 110px 92px auto; gap:14px; align-items:center; padding:9px 14px; background:var(--paper); border:1px solid var(--rule-line); border-left:3px solid var(--ink-blue); border-radius:var(--radius-md); cursor:pointer; }
+.evl-row:hover { border-color:var(--ink-blue-soft); border-left-color:var(--ink-blue); }
+.evl-title { min-width:0; }
+.evl-title strong { font-family:var(--font-serif); font-size:1.05em; margin-left:4px; }
+.evl-long { color:var(--pencil); }
+.evl-title .bsynth-sub { margin-top:2px; }
+.evl-inc { color:var(--warn-fg); }
+.evl-hist { display:flex; align-items:flex-end; gap:3px; height:30px; border-bottom:1px solid var(--rule-line); }
+.evl-hist > span { flex:1; border-radius:2px 2px 0 0; }
+.evl-empty { border-bottom-style:dashed; }
+.evl-mean { font-family:var(--font-mono); white-space:nowrap; color:var(--ink-blue); }
+.evl-acts { display:flex; gap:6px; align-items:center; }
+.dd-right .dd-menu { left:auto; right:0; }
+@media (max-width: 760px) { .evl-row { grid-template-columns:minmax(0,1fr) 1fr; } .evl-hist, .evl-mean { display:none; } }
 /* Réglages des évaluations — sélecteur de jeu de couleurs (v2.88.0) */
 .cset-picker { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
 .cset-opt { display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px; border:1px solid var(--rule-line); background:var(--paper); color:var(--ink-deep); border-radius:var(--radius-md); padding:5px 9px 6px; cursor:pointer; font-family:var(--font-sans); font-size:.85em; line-height:1.2; }
@@ -7616,11 +7631,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.88.0';
+const APP_VERSION    = '2.89.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T03:31:48Z';
+const APP_BUILD_DATE = '2026-10-07T03:42:03Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11717,6 +11732,10 @@ function renderUserLinks() {
   const zone = document.getElementById('hdr-user-links');
   if (!zone) return;
   const links = Array.isArray(S?.userLinks) ? S.userLinks : [];
+  // Le bouton 🔗 de configuration ne sert qu'à créer le PREMIER lien : ensuite les liens
+  // se règlent depuis ⚙ Réglages → 🔗 Liens (v2.89.0, demande de l'utilisateur).
+  const cfgBtn = document.getElementById('btn-user-links');
+  if (cfgBtn) cfgBtn.style.display = links.length ? 'none' : '';
   if (!links.length) {
     zone.innerHTML = '';
     return;
@@ -39390,6 +39409,130 @@ function _evalListCyclePeriodGroup() {
   renderEvalNotes();
 }
 
+// ═══ Onglet Devoirs — bandeau, filtres et rangées (v2.89.0) ═══
+// Infos d'un devoir pour la classe active : effectif présent, élèves saisis, résumé de
+// structure, notes finales /noteMax (arrondies à la granulométrie de l'éval).
+function _evalListInfo(ev, cls) {
+  const _activeSids = (cls.eleves || []).filter(sid => _stuActiveOnAnyEvalRef(S.eleves?.[sid], ev, cls.id));
+  const classSidSet = new Set(_activeSids);
+  let summaryInfo, nbStudents;
+  if (ev.type === 'B') {
+    const nbPass = (ev.passations || []).length;
+    const compIds = new Set();
+    for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+    const seen = new Set();
+    for (const p of (ev.passations || [])) {
+      for (const sid in (p.niveaux || {})) {
+        if (!classSidSet.has(sid)) continue;
+        if (Object.values(p.niveaux[sid] || {}).some(n => n != null)) seen.add(sid);
+      }
+    }
+    nbStudents = seen.size;
+    summaryInfo = `${nbPass} passation${nbPass > 1 ? 's' : ''} · ${compIds.size} compétence${compIds.size > 1 ? 's' : ''}`;
+  } else if (ev.type === 'D') {
+    nbStudents = Object.keys(ev.notes || {}).filter(sid => classSidSet.has(sid) && _studentHasAnyDataInEval(ev, sid)).length;
+    const nbQ = (ev.miniNotes || []).length;
+    const nbCompD = new Set((ev.miniNotes || []).flatMap(mn => mn.competenceIds || [])).size;
+    summaryInfo = `${nbQ} question${nbQ > 1 ? 's' : ''} · ${nbCompD} compétence${nbCompD > 1 ? 's' : ''} par niveaux`;
+  } else {
+    nbStudents = Object.keys(ev.notes || {}).filter(sid => {
+      if (!classSidSet.has(sid)) return false;
+      const vals = ev.notes[sid]?.values || {};
+      return Object.values(vals).some(v => v != null && v !== '');
+    }).length;
+    const nbMini = (ev.miniNotes || []).length;
+    const totalMax = (ev.miniNotes || []).reduce((s, m) => s + (m.max || 0), 0);
+    const exoInfo = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0
+      ? ` en ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''}` : '';
+    summaryInfo = `${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${_fmtNote(totalMax)} pts)`;
+  }
+  const notes = _activeSids
+    .map(sid => { const raw = _computeStudentEvalNote(ev, sid); return raw == null ? null : _roundNoteToGranularity(raw, ev); })
+    .filter(v => typeof v === 'number' && Number.isFinite(v));
+  const max = ev.noteMax || 20;
+  const notes20 = notes.map(v => v / max * 20);
+  const st = notes.length ? _statsForNumbers(notes) : null;
+  return { totalStudents: _activeSids.length, nbStudents, summaryInfo, notes, notes20, st, max };
+}
+function _evalListSetFilter(f) {
+  try { localStorage.setItem('planClasse_evalListFilter', f); } catch (e) {}
+  renderEvalNotes();
+}
+// Bandeau de synthèse de la liste (calculé sur TOUS les devoirs de la période, filtre ignoré).
+function _evalListBandHTML(evs, info, cls, periode) {
+  const byType = ['A', 'B', 'C', 'D'].map(t => [t, evs.filter(e => (e.type || 'A') === t).length]).filter(x => x[1]);
+  const inc = evs.filter(e => { const i = info.get(e.id); return i.nbStudents < i.totalStudents; });
+  const means = evs.map(e => info.get(e.id).st ? info.get(e.id).st.avg / info.get(e.id).max * 20 : null).filter(v => v != null);
+  const today = todayKey();
+  const dated = evs.map(e => ({ e, d: _evalDateFor(e, cls.id) || '' })).filter(x => x.d);
+  const past = dated.filter(x => x.d <= today).sort((x, y) => y.d.localeCompare(x.d))[0];
+  const next = dated.filter(x => x.d > today).sort((x, y) => x.d.localeCompare(y.d))[0];
+  const days = d => Math.round((new Date(today) - new Date(d)) / 864e5);
+  const c1 = `<div class="bsynth-big">${evs.length}</div><div class="bsynth-sub">${byType.map(([t, n]) => `${n} ${t}`).join(' · ')}</div>`;
+  const c2 = inc.length
+    ? _bsynthLink('notes', 'inc', `<span class="bsynth-num bsynth-down">${inc.length}</span> saisie${inc.length > 1 ? 's' : ''} incomplète${inc.length > 1 ? 's' : ''}`, 'Clic = n\'afficher que ces évaluations')
+      + `<div class="bsynth-sub">${inc.slice(0, 3).map(e => { const i = info.get(e.id); return `${_esc(e.nomCourt || '?')} ${i.nbStudents}/${i.totalStudents}`; }).join(' · ')}${inc.length > 3 ? ' …' : ''}</div>`
+    : `<div class="bsynth-big">✓</div><div class="bsynth-sub">toutes les saisies sont complètes</div>`;
+  let c3 = `<div class="bsynth-big">—</div><div class="bsynth-sub">aucune note</div>`;
+  if (means.length) {
+    const avg = means.reduce((a, b) => a + b, 0) / means.length;
+    c3 = `<div class="bsynth-big">${_fmtNote(Math.round(avg * 10) / 10)}<span class="bsynth-of"> /20</span></div>
+      <div class="bsynth-sub">moyenne des moyennes de classe${means.length > 1 ? ` · de ${_fmtNote(Math.round(Math.min(...means) * 10) / 10)} à ${_fmtNote(Math.round(Math.max(...means) * 10) / 10)}` : ''}</div>`;
+  }
+  const line = (lbl, x, rel) => x ? `<div class="bsynth-line"><span class="bsynth-sub" style="min-width:58px">${lbl}</span><b>${_esc(x.e.nomCourt || '?')}</b><span class="bsynth-sub">${_fmtDateFr(x.d)}${rel ? ' · ' + rel : ''}</span></div>` : '';
+  const c4 = (line('Dernier', past, past ? (days(past.d) === 0 ? "aujourd'hui" : `il y a ${days(past.d)} j`) : '') + line('Prochain', next, next ? `dans ${-days(next.d)} j` : ''))
+    || `<div class="bsynth-big">—</div><div class="bsynth-sub">aucune date</div>`;
+  return `<div class="bsynth">${_bsynthCard(`Évaluations · ${periode ? _esc(periode) : 'année'}`, c1)}${_bsynthCard('Saisie', c2)}${_bsynthCard('Moyenne des devoirs', c3, 'Moyenne, sur les devoirs de la période, de la moyenne de classe de chacun (ramenée sur 20)')}${_bsynthCard('Calendrier', c4)}</div>`;
+}
+// Une rangée de la liste : titre, avancement de la saisie, répartition des notes, moyenne, actions.
+function _evalListRowHTML(ev, cls, i) {
+  const id = _esc(ev.id);
+  const typeBadge = `<span class="eval-type-badge eval-type-${_esc(ev.type || 'A')}">${_esc(ev.type || 'A')}</span>`;
+  const d = _evalDateFor(ev, cls.id), slot = _evalSlotIdFor(ev, cls.id);
+  const pct = i.totalStudents ? Math.round(i.nbStudents / i.totalStudents * 100) : 0;
+  const incomplete = i.nbStudents < i.totalStudents;
+  const bins = _bsynthHistBins(i.notes20), bmax = Math.max(1, ...bins);
+  const hist = i.notes.length
+    ? `<div class="evl-hist" title="${_escAttr('Répartition des notes (ramenées sur 20) : ' + bins.map((n, k) => `${k * 4}–${k * 4 + 4} : ${n}`).join(' · '))}">${bins.map((n, k) => `<span style="height:${n ? Math.max(12, Math.round(n / bmax * 100)) : 0}%;background:${_noteColor(k * 4 + 2, 20) || 'var(--ink-blue-soft)'}"></span>`).join('')}</div>`
+    : '<div class="evl-hist evl-empty"></div>';
+  const half = i.max / 2;
+  const mean = i.st
+    ? `<div class="evl-mean" title="${_escAttr(`Moyenne ${_fmtNote(i.st.avg)} / ${_fmtNote(i.max)} · médiane ${_fmtNote(i.st.median)} · ${i.notes.filter(v => v >= half).length}/${i.notes.length} à ${_fmtNote(half)} ou plus`)}">${_bdot(_noteColor(i.st.avg, i.max))}<b>${_fmtNote(Math.round(i.st.avg * 100) / 100)}</b><span class="bsynth-sub"> /${_fmtNote(i.max)}</span></div>`
+    : '<div class="evl-mean bsynth-sub">—</div>';
+  const multi = _evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1;
+  const hasComp = _evalListEvaluatedCompetences(ev, 'code').length > 0;
+  const rowTip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${ev.description ? '\n\n' + ev.description : ''}\n\nClic = ouvrir la saisie (tableur)`;
+  return `<div class="bsg-row evl-row" onclick="_evalRowOpen('${id}')" title="${_escAttr(rowTip)}">
+    <div class="evl-title">
+      <div>${typeBadge}${_evalChannelPillHTML(ev, cls)}<strong>${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span class="evl-long">— ${_esc(ev.nomLong)}</span>` : ''}</div>
+      <div class="bsynth-sub">📅 ${d ? _fmtDateFr(d) : '—'}${slot ? ' · ' + _esc(slot) : ''} · ${_esc(ev.periode || '?')} · coef ${_fmtNote(ev.coef ?? 1)} · /${_fmtNote(ev.noteMax ?? 20)} · ${i.summaryInfo}${multi ? ' · 🆚 multi-classes' : ''}
+        ${_evalClassIds(ev).map(cid => _evalSkipPillHTML(ev, cid, false)).join('')}</div>
+    </div>
+    <div class="evl-prog" title="${_escAttr(`${i.nbStudents} élève(s) saisi(s) sur ${i.totalStudents} présent(s)`)}">
+      <div class="bsynth-sub"><b class="${incomplete ? 'evl-inc' : ''}">${i.nbStudents}/${i.totalStudents}</b> saisi${i.nbStudents > 1 ? 's' : ''}</div>
+      <div class="bsynth-bar"><span style="width:${pct}%;background:${incomplete ? 'var(--warn-fg)' : 'var(--ok-fg)'}"></span></div>
+    </div>
+    ${hist}
+    ${mean}
+    <div class="evl-acts" onclick="event.stopPropagation()">
+      <button class="btn btn-p btn-sm" onclick="_evalRowOpen('${id}')" title="Ouvrir la saisie (tableur)">✏️ Saisir</button>
+      <span class="dd dd-right">
+        <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Autres actions" aria-label="Autres actions sur cette évaluation">⋯</button>
+        <div class="dd-menu">
+          <button onclick="closeAllDd();_evalOpenEditor('${id}')">⚙ Réglages de l'évaluation</button>
+          <button onclick="closeAllDd();_evalDuplicate('${id}')">⧉ Dupliquer</button>
+          ${hasComp ? `<button onclick="closeAllDd();_evalOpenBilanCompsForEval('${id}')">📊 Bilan des compétences</button>` : ''}
+          ${multi ? `<button onclick="closeAllDd();_evalOpenCrossTabForEval('${id}')">🆚 Comparer les classes</button>` : ''}
+          <button onclick="closeAllDd();_evalOpenExportFor('${id}')">📤 Export ENT</button>
+          <button onclick="closeAllDd();_evalOpenRendu('${id}')">👀 Projeter les notes</button>
+          <div class="dd-sep"></div>
+          <button onclick="closeAllDd();_evalDeleteFromList('${id}')" style="color:var(--danger-fg)">🗑 Supprimer</button>
+        </div>
+      </span>
+    </div>
+  </div>`;
+}
+
 function renderEvalNotes() {
   _evhelpApply('notes');
   const cls = getCls();
@@ -39503,6 +39646,23 @@ function renderEvalNotes() {
     });
   }
 
+  // ─── Bandeau de synthèse + filtres (v2.89.0) ───
+  // Infos par devoir calculées UNE fois (bandeau, filtres, rangées).
+  const _info = new Map();
+  for (const ev of evs) _info.set(ev.id, _evalListInfo(ev, cls));
+  const _evf = (() => { try { return localStorage.getItem('planClasse_evalListFilter') || 'all'; } catch (e) { return 'all'; } })();
+  const _types = ['A', 'B', 'C', 'D'].filter(t => evs.some(e => (e.type || 'A') === t));
+  const _isMulti = ev => _evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1;
+  const _isInc = ev => { const i = _info.get(ev.id); return i.nbStudents < i.totalStudents; };
+  const _evFilters = [{ v: 'all', lbl: 'Tous' }]
+    .concat(_types.map(t => ({ v: 'type-' + t, lbl: 'Type ' + t, n: evs.filter(e => (e.type || 'A') === t).length, tip: 'Seulement les évaluations de type ' + t })))
+    .concat([{ v: 'inc', lbl: 'Saisie incomplète', n: evs.filter(_isInc).length, tip: 'Au moins un élève présent sans aucune saisie' },
+             { v: 'multi', lbl: 'Multi-classes', n: evs.filter(_isMulti).length, tip: 'Évaluations partagées avec d\'autres classes' }]);
+  const _curF = _evFilters.some(c => c.v === _evf) ? _evf : 'all';
+  const _evShow = ev => _curF === 'all' ? true
+    : _curF === 'inc' ? _isInc(ev) : _curF === 'multi' ? _isMulti(ev)
+    : (ev.type || 'A') === _curF.slice(5);
+
   // Toolbar de tri (au-dessus de la liste)
   const opts = [
     { v: 'date',      lbl: '📅 Date' },
@@ -39543,7 +39703,20 @@ function renderEvalNotes() {
     _evalTbHost.innerHTML = tbHtml;
   }
 
-  html += '<div style="display:flex;flex-direction:column;gap:8px">';
+  html += _evalListBandHTML(evs, _info, cls, periode);
+  {
+    // Rangée de filtres (même composant que les bilans, persistance propre).
+    let fh = '<div class="bsynth-chips" role="toolbar" aria-label="Filtrer les évaluations">';
+    for (const c of _evFilters) {
+      const on = c.v === _curF, dis = !on && c.v !== 'all' && c.n === 0;
+      fh += `<button type="button" class="bsynth-chip${on ? ' on' : ''}" aria-pressed="${on}"${dis ? ' disabled' : ''} onclick="_evalListSetFilter('${c.v}')" title="${_escAttr(c.tip || '')}">${_esc(c.lbl)}${c.n != null ? `<span class="n">${c.n}</span>` : ''}</button>`;
+    }
+    const shown = evs.filter(_evShow).length;
+    if (_curF !== 'all') fh += `<span class="bsynth-count">${shown} évaluation${shown > 1 ? 's' : ''} sur ${evs.length}</span>`;
+    html += fh + '</div>';
+  }
+  evs = evs.filter(_evShow);
+  html += '<div style="display:flex;flex-direction:column;gap:6px">';
   let lastType = null;
   let lastPeriode = null;
   const typeLabels = { A: 'TYPE A — Mini-notes', B: 'TYPE B — Compétences', C: 'TYPE C — Sommative' };
@@ -39561,95 +39734,7 @@ function renderEvalNotes() {
       html += `<div style="font-family:var(--font-mono);font-size:.78em;letter-spacing:0.08em;color:var(--pencil);margin:${lastType ? '8px' : '0'} 0 -2px;padding:2px 6px;border-bottom:1px dashed var(--rule-line)">${_esc(typeLabels[ev.type] || ev.type || '?')}</div>`;
       lastType = ev.type;
     }
-    // Effectif présent à AU MOINS UNE date de mini-note (A/C) ou passation (B) —
-    // cohérent avec le tableur de saisie. Pour les évals où des élèves arrivent /
-    // partent en cours, ils sont comptés s'ils ont pu faire au moins un constituant.
-    const _activeSids = (cls.eleves || []).filter(sid => _stuActiveOnAnyEvalRef(S.eleves?.[sid], ev, cls.id));
-    const totalStudents = _activeSids.length;
-    let typeBadge, summaryInfo, nbStudents;
-    // L'éval peut couvrir plusieurs classes, mais on affiche les stats de la classe active.
-    const classSidSet = new Set(_activeSids);
-    if (ev.type === 'B') {
-      typeBadge = '<span class="eval-type-badge eval-type-B">TYPE B</span>';
-      const nbPass = (ev.passations || []).length;
-      const compIds = new Set();
-      for (const p of (ev.passations || [])) for (const cid of (p.competenceIds || [])) compIds.add(cid);
-      // Compte les élèves DE LA CLASSE ACTIVE ayant au moins une saisie
-      const seen = new Set();
-      for (const p of (ev.passations || [])) {
-        for (const sid in (p.niveaux || {})) {
-          if (!classSidSet.has(sid)) continue;
-          if (Object.values(p.niveaux[sid] || {}).some(n => n != null)) seen.add(sid);
-        }
-      }
-      nbStudents = seen.size;
-      summaryInfo = `${nbPass} passation${nbPass > 1 ? 's' : ''} · ${compIds.size} compétence${compIds.size > 1 ? 's' : ''} évaluée${compIds.size > 1 ? 's' : ''}`;
-    } else if (ev.type === 'D') {
-      typeBadge = '<span class="eval-type-badge eval-type-D">TYPE D</span>';
-      // Saisies dans .levels (par question × compétence), pas dans .values
-      nbStudents = Object.keys(ev.notes || {}).filter(sid =>
-        classSidSet.has(sid) && _studentHasAnyDataInEval(ev, sid)).length;
-      const nbQ = (ev.miniNotes || []).length;
-      const nbCompD = new Set((ev.miniNotes || []).flatMap(mn => mn.competenceIds || [])).size;
-      summaryInfo = `${nbQ} question${nbQ > 1 ? 's' : ''} · ${nbCompD} compétence${nbCompD > 1 ? 's' : ''} évaluée${nbCompD > 1 ? 's' : ''} par niveaux`;
-    } else {
-      typeBadge = ev.type === 'C'
-        ? '<span class="eval-type-badge eval-type-C">TYPE C</span>'
-        : '<span class="eval-type-badge eval-type-A">TYPE A</span>';
-      // Limite à la classe active (les évals multi-classes peuvent partager ev.notes)
-      nbStudents = Object.keys(ev.notes || {}).filter(sid => {
-        if (!classSidSet.has(sid)) return false;
-        const vals = ev.notes[sid]?.values || {};
-        return Object.values(vals).some(v => v != null && v !== '');
-      }).length;
-      const nbMini   = (ev.miniNotes || []).length;
-      const totalMax = (ev.miniNotes || []).reduce((s, m) => s + (m.max || 0), 0);
-      const exoInfo  = ev.type === 'C' && Array.isArray(ev.exercices) && ev.exercices.length > 0
-        ? ` dans ${ev.exercices.length} exercice${ev.exercices.length > 1 ? 's' : ''}`
-        : '';
-      summaryInfo = `${nbMini} ${ev.type === 'C' ? 'question' : 'mini-note'}${nbMini > 1 ? 's' : ''}${exoInfo} (${totalMax} pts)`;
-    }
-    // Stats essentielles : moyenne / min / max / σ des notes finales (classe active uniquement)
-    // — arrondies à la granulométrie pour cohérence avec l'affichage utilisateur.
-    // Limité aux élèves présents à la date du devoir (cf. _activeSids).
-    const allNotes = _activeSids
-      .map(sid => {
-        const raw = _computeStudentEvalNote(ev, sid);
-        return raw == null ? null : _roundNoteToGranularity(raw, ev);
-      })
-      .filter(v => typeof v === 'number' && Number.isFinite(v));
-    let statsHTML = '';
-    if (allNotes.length > 0) {
-      const stats = _statsForNumbers(allNotes);
-      const halfMax = (ev.noteMax || 20) / 2;
-      const above = allNotes.filter(v => v >= halfMax).length;
-      statsHTML = `<span class="eval-stats-pill">
-        <span title="Moyenne"><strong>μ ${_fmtNote(stats.avg)}</strong></span>
-        <span title="Nombre d'élèves avec note ≥ ${_fmtNote(halfMax)}" class="eval-stats-mid">≥${_fmtNote(halfMax)} : <strong>${above}/${allNotes.length}</strong></span>
-      </span>`;
-    }
-    const rowTip = `${ev.nomCourt}${ev.nomLong ? ' — ' + ev.nomLong : ''}${ev.description ? '\n\n' + ev.description : ''}\n\nOuvrir la saisie (mode tableur) — boutons à droite pour réglages / export / suppression`;
-    html += `<div class="bsg-row" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--paper-warm);border-left:3px solid var(--ink-blue);border-radius:3px;cursor:pointer" onclick="_evalRowOpen('${_esc(ev.id)}')" title="${_escAttr(rowTip)}">
-      <div style="flex:1">
-        <div>${typeBadge}${_evalChannelPillHTML(ev, cls)}<strong style="font-family:var(--font-serif);font-size:1.05em">${_esc(ev.nomCourt || '(sans nom court)')}</strong>${ev.nomLong ? ` <span style="color:var(--pencil)">— ${_esc(ev.nomLong)}</span>` : ''}</div>
-        <div style="font-size:.85em;color:var(--pencil);margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
-          <span>📅 ${(() => { const d = _evalDateFor(ev, cls.id); return d ? _fmtDateFr(d) : '—'; })()}${_evalSlotIdFor(ev, cls.id) ? ' · ' + _esc(_evalSlotIdFor(ev, cls.id)) : ''} · ${_esc(ev.periode || '?')} · coef ${ev.coef ?? 1} · /${ev.noteMax ?? 20}
-          · ${summaryInfo}
-          · <strong>${nbStudents}/${totalStudents}</strong> saisi${nbStudents > 1 ? 's' : ''}</span>
-          ${_evalClassIds(ev).map(cid => _evalSkipPillHTML(ev, cid, false)).join('')}
-          ${statsHTML}
-        </div>
-      </div>
-      <div style="display:flex;gap:4px;flex-wrap:nowrap" onclick="event.stopPropagation()">
-        <button class="btn btn-g btn-sm" onclick="_evalOpenEditor('${_esc(ev.id)}')" title="Réglages de cette évaluation : nom, date, période, coefficient, options avancées">⚙</button>
-        <button class="btn btn-g btn-sm" onclick="_evalDuplicate('${_esc(ev.id)}')" title="Dupliquer cette évaluation (même structure, notes vides)">⧉</button>
-        ${_evalListEvaluatedCompetences(ev, 'code').length > 0 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenBilanCompsForEval('${_esc(ev.id)}')" title="Bilan compétences : niveau atteint par élève sur chaque compétence évaluée">📊</button>` : ''}
-        ${_evalClassIds(ev).filter(cid => S.classes?.[cid]).length > 1 ? `<button class="btn btn-g btn-sm" onclick="_evalOpenCrossTabForEval('${_esc(ev.id)}')" title="Comparer classes : tableau croisé moyenne · σ · médiane par civilité">🆚</button>` : ''}
-        <button class="btn btn-g btn-sm" onclick="_evalOpenExportFor('${_esc(ev.id)}')" title="Export ENT : tableau triable + copie TSV / CSV" style="font-weight:600">📤 ENT</button>
-        <button class="btn btn-g btn-sm" onclick="_evalOpenRendu('${_esc(ev.id)}')" title="Projeter les notes : vue épurée à projeter en plein écran (grands caractères pour le fond de la salle) ou à imprimer">👀</button>
-        <button class="btn btn-d btn-sm" onclick="_evalDeleteFromList('${_esc(ev.id)}')" title="Supprimer cette évaluation">🗑</button>
-      </div>
-    </div>`;
+    html += _evalListRowHTML(ev, cls, _info.get(ev.id));
   }
   html += '</div>';
   wrap.innerHTML = html;
@@ -49347,6 +49432,7 @@ function _bsynthGetFilter(tab) {
   try { return localStorage.getItem('planClasse_bilanFilter_' + tab) || 'all'; } catch (e) { return 'all'; }
 }
 function _bsynthSetFilter(tab, f) {
+  if (tab === 'notes') return _evalListSetFilter(f);
   if (_conf?.on) return;
   try { localStorage.setItem('planClasse_bilanFilter_' + tab, f); } catch (e) {}
   if (tab === 'bilan') renderBilanTab(); else renderCompetencesTab();
