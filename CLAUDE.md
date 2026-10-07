@@ -705,7 +705,8 @@ Les deux voyagent dans le JSON / sync / undo / backups sans rien d'autre. Ni pur
 ### Convention visuelle : le NOM est souligné
 Classes CSS **génériques** `.dlg-t` (trait plein 2 px) / `.dlg-s` (pointillé 2 px), `text-underline-offset:3px`, `text-decoration-skip-ink:none`. Le trait prend `currentColor` → il suit le thème et la couleur de texte de la cellule (absent, mode genre…) **sans variante sombre dédiée**, et passe tel quel en N&B. Posées sur :
 - **Plan Prof** : le `.cn` des deux branches de `buildCell` (appel et normale) — prénom ET nom soulignés (le `<br>` est dans le même bloc). L'infobulle de la cellule commence par « 🗳 Délégué·e » / « 🗳 Suppléant·e ».
-- **Plan imprimé** : le `.pn` de `doPrint('t')` et de `buildTeacherPageHTML` (Plusieurs plans). ⚠️ **Pas la Vue Élève ni son impression** (`doPrint('s')`) — arbitrage utilisateur : c'est un repère prof.
+- **Plan imprimé** : le `.pn` de `doPrint('t')` et de `buildTeacherPageHTML` (Plusieurs plans). Pas l'impression de la Vue Élève (`doPrint('s')`).
+- **Vue Élève à l'écran** (v2.96.2, demande de l'utilisateur qui revient sur l'arbitrage initial) : le nom affiché dans `.svname` est enveloppé d'un `<span class="dlg-t|dlg-s">` (`_delegueNameCls`).
 - **Onglet Élèves** : pastille `.dlg-badge` après le prénom (tokens `--paper-warm` / `--ink-blue` / `--rule-line`, donc thème sombre OK) — **pas de bouton** dans la ligne, déjà chargée.
 - **Carte de classe** (v2.96.1) : ligne compacte `.cl-dlg` « 🗳 Ethan G., Robin H. · suppl. Enzo D., … » (prénom + initiale du nom, soulignés `.dlg-t` / `.dlg-s`), noms complets dans l'**infobulle**. La v2.96.0 les avait mis en infobulle seulement : l'utilisateur ne les voyait plus. `_classDeleguesLine` n'est plus appelée par `renderClasses`.
 - **Fiche élève** (`renderRemarkWriter`) : « 🗳 Délégué·e » dans l'en-tête, cliquable vers Modifier l'élève.
