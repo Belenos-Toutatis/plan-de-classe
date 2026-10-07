@@ -590,9 +590,11 @@ html #btn-appel-mode.btn[style*="59, 130, 246"]{box-shadow:0 0 0 3px var(--highl
   #tg .cell .cell-unplace{opacity:0}
   #tg .cell:hover .cell-unplace, #tg .cell .cell-unplace:focus{opacity:1}
 }
-#tg .cell.nt, #svg .svcell.nt{background:repeating-linear-gradient(135deg,transparent 0 9px,var(--rule-line-soft) 9px 10px) !important;border:1.5px dashed var(--rule-line) !important}
+#tg .cell.nt, #svg .svcell.nt{background:repeating-linear-gradient(135deg,transparent 0 8px,var(--rule-line) 8px 10px) !important;border:1.5px dashed var(--pencil-soft) !important}
 #tg .cell.nt::after, #svg .svcell.nt::after{content:none !important}
+/* « Grand » : le PRÉNOM grossit, le nom de famille garde sa taille (maquette validée) */
 body.plan-name-big #tg .cell .cn{font-size:1.55em;line-height:1.12}
+body.plan-name-big #tg .cell .cn .cn-nom{font-size:.72em}
 #msettings .pl-seg{display:inline-flex;border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);overflow:hidden}
 #msettings .pl-seg button{border:none;background:var(--paper);color:var(--ink-deep);padding:3px 10px;font:500 .85em var(--font-sans);cursor:pointer}
 #msettings .pl-seg button + button{border-left:1px solid var(--rule-line)}
@@ -7867,11 +7869,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.99.0';
+const APP_VERSION    = '2.99.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T16:36:25Z';
+const APP_BUILD_DATE = '2026-10-07T16:47:32Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21474,7 +21476,7 @@ function buildCell(cls, row, col) {
         <span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>
         ${_grp(stu, cls) ? `<span class="gbadge g${_grp(stu, cls)}">G${_grp(stu, cls)}</span>` : ''}
         ${lateTime && !isAbsent ? `<span class="late-time">⏰ ${lateTime}</span>` : ''}
-        <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+        <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br><span class="cn-nom">${_escAttr(stu.nom)}</span></div>
         ${_cellPhotoHTML(stu.id)}
         ${isAbsent ? '<div style="font-size:1.4em;margin-top:2px">🚫</div>' : ''}`;
       if (_planTrombi()) cell.innerHTML = _trombiCellHTML(stu, isAbsent, lateTime);
@@ -21551,7 +21553,7 @@ function buildCell(cls, row, col) {
       ${stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : ''}
       ${specBadges}
       <button class="cell-unplace" onclick="event.stopPropagation();removeSeat(getCls(),'${key}')" title="Retirer de sa place">✕</button>
-      <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+      <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br><span class="cn-nom">${_escAttr(stu.nom)}</span></div>
         ${_cellPhotoHTML(stu.id)}
       <div class="cell-ctrs">
         <span class="cctr${stu.oublis ? '' : ' zero'}" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié (clic = +1)">📦 ${stu.oublis}</span>
@@ -31474,7 +31476,7 @@ function _cellPhotoHTML(sid, big) {
 // Contenu d'une case en mode trombinoscope : photo, prénom, nom — et l'état d'appel s'il y en a un.
 function _trombiCellHTML(stu, isAbsent, lateTime) {
   const ph = _cellPhotoHTML(stu.id, true) || '<div class="ctrombi-none" title="Pas de photo pour cet élève">📷</div>';
-  return `${ph}<div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>`
+  return `${ph}<div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br><span class="cn-nom">${_escAttr(stu.nom)}</span></div>`
     + (isAbsent ? '<div class="ctrombi-state">🚫</div>' : lateTime ? `<div class="ctrombi-state">⏰ ${_escAttr(lateTime)}</div>` : '');
 }
 const _planTrombi = () => _planPhotosMode === 2 && _photos.sids.size > 0;
