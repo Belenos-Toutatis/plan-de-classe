@@ -553,6 +553,8 @@ html[data-theme="dark"] .memo-choice.good{background:#16301f;border-color:#3f8f5
 .cl-card .cc-name{font:600 1.3em var(--font-serif);padding-right:62px;line-height:1.2}
 .cl-l{font-size:.82em;margin-top:2px;color:var(--cc-fg,var(--ink-deep))}
 .cl-s{font-size:.76em}
+.cl-dlg{font-size:.8em;line-height:1.6}
+.cl-dlg .dlg-t,.cl-dlg .dlg-s{text-underline-offset:2px}
 .cl-acts{position:absolute;top:7px;right:7px;display:flex;gap:3px}
 .cl-btn{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:5px;padding:1px 7px;cursor:pointer;font-size:.88em;line-height:1.5}
 .cl-btn:hover{border-color:var(--ink-blue)}
@@ -7781,11 +7783,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.96.0';
+const APP_VERSION    = '2.96.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T12:06:51Z';
+const APP_BUILD_DATE = '2026-10-07T12:08:58Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -16210,6 +16212,19 @@ function renderClasses() {
       for (const sid of (cls.eleves || [])) { const st = S.eleves[sid]; if (!st || !_stuActiveOn(st)) continue; if (st.delegue === 'T') T.push(st.prenom + ' ' + st.nom); else if (st.delegue === 'S') Su.push(st.prenom + ' ' + st.nom); }
       return (T.length ? '\nDélégué·es : ' + T.join(', ') : '') + (Su.length ? '\nSuppléant·es : ' + Su.join(', ') : '');
     })();
+    // Délégué·es sur la carte, en forme courte (Prénom N.), soulignés selon le rôle comme partout
+    // (trait plein = titulaire, pointillé = suppléant·e) ; noms complets dans l'infobulle.
+    const dlgLine = (() => {
+      const T = [], Su = [];
+      for (const sid of (cls.eleves || [])) {
+        const st = S.eleves[sid];
+        if (!st || !_stuActiveOn(st) || (st.delegue !== 'T' && st.delegue !== 'S')) continue;
+        const n = `<span class="${st.delegue === 'T' ? 'dlg-t' : 'dlg-s'}">${_escName(st.prenom)} ${_escName((st.nom || '').charAt(0))}.</span>`;
+        (st.delegue === 'T' ? T : Su).push(n);
+      }
+      if (!T.length && !Su.length) return '';
+      return `<div class="cl-l cl-dlg">🗳 ${T.join(', ')}${Su.length ? `<span class="cl-dlg-s">${T.length ? ' · ' : ''}suppl. ${Su.join(', ')}</span>` : ''}</div>`;
+    })();
     const discIds = _clsDisciplineIds(cls);
     const disc = discIds.length >= 2 || (discIds.length === 1 && !S.disciplines[discIds[0]]?.isPrimary) ? '\nDisciplines : ' + discIds.map(_disciplineLabel).join(', ') : '';
     const tip = `${cls.nom} — ${cls.année}–${cls.année + 1}\n${plural(c.total, 'inscrit')}, ${plural(np, 'placé')}, ${c.present} normalement présent${c.present > 1 ? 's' : ''}${c.outClass ? ` (${c.outClass} hors classe : ULIS / UPE2A)` : ''}\n${plural(nonAm, 'non aménagé')}, ${plural(c.amenagement, 'aménagé')}${cls.profPrincipal ? '\nPP : ' + cls.profPrincipal : ''}${dlg}${disc}\n\nClic : ouvrir les élèves de la classe`;
@@ -16244,7 +16259,7 @@ function renderClasses() {
       </div>
       <div class="cc-name">${virtual ? '🧬 ' : ''}${_escAttr(cls.nom)}${tag}</div>
       <div class="cl-l">${plural(c.total, 'élève')}${civ}${pp}</div>
-      ${salleLine ? `<div class="cl-l">${salleLine}</div>` : ''}${origin}
+      ${salleLine ? `<div class="cl-l">${salleLine}</div>` : ''}${origin}${dlgLine}
       <div class="cl-bar" title="${pctAm} % des présents ont un aménagement"><span style="width:${100 - pctAm}%"></span></div>
       <div class="cl-l cl-s">${c.present} présent${c.present > 1 ? 's' : ''} · ${nonAm} non aménagé${nonAm > 1 ? 's' : ''} · ${c.amenagement} aménagé${c.amenagement > 1 ? 's' : ''}</div>
       ${chips ? `<div class="cl-chips">${chips}</div>` : ''}
