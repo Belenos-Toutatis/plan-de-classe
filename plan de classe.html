@@ -1639,6 +1639,25 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ev-types .eval-type-badge{flex:0 0 auto;font-size:.9em}
 .ev-types b{display:block;font-weight:600;font-size:.92em}
 .ev-tsub{display:block;font-size:.8em;color:var(--pencil);line-height:1.3}
+/* Ajouter un élève, menu + Ajouter (v2.116.0) */
+.ms-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.ms-row{display:flex;gap:16px;flex-wrap:wrap}
+.add-menu{min-width:280px}
+.add-menu button{white-space:normal !important}
+.add-menu button b{display:block;font-weight:600}
+.add-menu button span{display:block;font-size:.88em;color:var(--pencil)}
+@media (max-width:520px){.ms-grid{grid-template-columns:minmax(0,1fr)}}
+/* Vue d'ensemble (v2.116.0) */
+.ov-chips{margin-bottom:8px}
+.ov-list{max-height:56vh;overflow-y:auto;border:1px solid var(--rule-line);border-radius:4px}
+.ov-tbl thead th{position:sticky;top:0;z-index:1}
+.ov-row{cursor:pointer}
+.ov-row:hover td{background:var(--paper-warm)}
+.ov-n{text-align:right;font-family:var(--font-mono);white-space:nowrap}
+.ov-n.hot{color:var(--danger-fg);font-weight:600}
+.ov-bar{display:inline-block;height:6px;border-radius:3px;background:var(--margin-red);vertical-align:middle;margin-left:5px;opacity:.75}
+.ov-cls{background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600;white-space:nowrap}
+.ov-amen{white-space:nowrap}
 /* Classe recomposée (v2.114.0) */
 .mvc-mb{width:min(1000px,97vw);max-width:1000px}
 .clf-prev.cc-virtual{color:var(--ink-deep);border-left-color:var(--disc-accent)}
@@ -3758,8 +3777,13 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span class="tab-ctx" id="tabctx-eleves"></span>
       <span id="el-amen-toggle"></span>
       <span class="tb-grp"><span class="tb-grp-lbl">Élèves</span>
-        <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
-        <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
+        <span class="dd"><button class="btn btn-p" onclick="toggleDd(this)" title="Ajouter un élève, plusieurs élèves (import) ou une classe">+ Ajouter ▾</button>
+          <div class="dd-menu add-menu">
+            <button onclick="closeAllDd();openMod('ms')"><b>👤 Un élève</b><span>Saisir nom, prénom, groupe, aménagements</span></button>
+            <button onclick="closeAllDd();openImportStudents()"><b>👥 Plusieurs élèves</b><span>Coller une liste ou ouvrir un fichier (Pronote, tableur)</span></button>
+            <div class="dd-sep"></div>
+            <button onclick="closeAllDd();openMod('mc')"><b>🏫 Une classe</b><span>Nouvelle classe</span></button>
+          </div></span>
       </span>
       <span class="tb-grp"><span class="tb-grp-lbl">Photos</span>
         <button class="btn btn-g btn-sm" onclick="openTrombiImport()" title="Importer les photos des élèves depuis le trombinoscope PDF exporté de MBN — elles s'affichent dans la fiche et au survol des noms">📷 Photos</button>
@@ -4491,22 +4515,33 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Add student -->
 <div id="ms" class="mo" onclick="closeMod(this,event)">
-  <div class="mb">
-    <h2>Ajouter un Élève</h2>
-    <div class="fg"><label>Nom(s)</label><input id="ns-nom" placeholder="DUPONT ou DUPONT MARTIN" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();addStudent()}"></div>
-    <div class="fg"><label>Prénom(s)</label><input id="ns-prn" placeholder="Martin ou Sophie Marie" onkeydown="if(event.key==='Enter'){event.preventDefault();addStudent()}"></div>
-    <div class="fg"><label>Civilité <span style="font-size:.78em;color:var(--pencil)">(optionnel)</span></label>
-      <select id="ns-civ"><option value="">— Non spécifié —</option><option value="M">♂ Garçon (M)</option><option value="F">♀ Fille (F)</option></select>
+  <!-- Ajouter un élève — refonte v2.116.0 : civilité et groupe en boutons, aménagements dès la
+       saisie, « Ajouter et en saisir un autre ». -->
+  <div class="mb" style="width:min(560px,96vw);max-width:560px">
+    <h2 id="ms-title">Ajouter un élève</h2>
+    <div class="ms-grid">
+      <div class="fg"><label>Nom(s)</label><input id="ns-nom" placeholder="DUPONT ou DUPONT MARTIN" data-autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();addStudent()}"></div>
+      <div class="fg"><label>Prénom(s)</label><input id="ns-prn" placeholder="Martin ou Sophie Marie" onkeydown="if(event.key==='Enter'){event.preventDefault();addStudent()}"></div>
     </div>
-    <div class="fg"><label>Groupe</label>
-      <select id="ns-grp"><option value="">— Aucun groupe —</option><option value="1">🔵 Groupe 1</option><option value="2">🟠 Groupe 2</option><option value="3">🟣 Groupe 3</option></select>
+    <div class="ms-row">
+      <div class="fg"><label>Civilité</label><div class="seg-radio">
+        <label title="Non spécifiée"><input type="radio" name="ns-civ" value="" checked>—</label>
+        <label title="Garçon"><input type="radio" name="ns-civ" value="M">♂ Garçon</label>
+        <label title="Fille"><input type="radio" name="ns-civ" value="F">♀ Fille</label></div></div>
+      <div class="fg"><label>Groupe</label><div class="seg-radio">
+        <label><input type="radio" name="ns-grp" value="" checked>Aucun</label>
+        <label><input type="radio" name="ns-grp" value="1">G1</label>
+        <label><input type="radio" name="ns-grp" value="2">G2</label>
+        <label><input type="radio" name="ns-grp" value="3">G3</label></div></div>
     </div>
-    <div class="fg"><label for="ns-arrival">📅 Arrivée <span style="font-size:.78em;color:var(--pencil)">(facultatif — vide = présent depuis la rentrée)</span></label>
-      <input type="date" id="ns-arrival" title="Premier jour de présence de l'élève. Vide = présent depuis la rentrée." onkeydown="if(event.key==='Enter'){event.preventDefault();addStudent()}">
-    </div>
-    <div class="ma">
+    <div class="fg"><label>Aménagements <span class="clf-hint">(facultatif — un seul par famille : PPRE / PAP / PPS / ULIS, et UPE2A)</span></label>
+      <div class="clf-pills" id="ns-amen"></div></div>
+    <div class="fg"><label for="ns-arrival">📅 Arrivée <span class="clf-hint">(facultatif — vide = présent depuis la rentrée)</span></label>
+      <input type="date" id="ns-arrival" style="width:170px" onkeydown="if(event.key==='Enter'){event.preventDefault();addStudent()}"></div>
+    <div class="ma" style="flex-wrap:wrap">
       <button class="btn btn-g" onclick="closeMod2('ms')">Annuler</button>
-      <button class="btn btn-p" onclick="addStudent()">Ajouter</button>
+      <button class="btn btn-g" onclick="addStudent(true)" title="Ajoute l'élève et garde la fenêtre ouverte pour le suivant (groupe et civilité conservés)">Ajouter et en saisir un autre</button>
+      <button class="btn btn-p" onclick="addStudent()">✓ Ajouter</button>
     </div>
   </div>
 </div>
@@ -7173,29 +7208,20 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ── MODAL Vue d'ensemble — tous les élèves toutes classes ── -->
 <div id="moverview" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:920px;width:100%">
-    <h2>📊 Vue d'ensemble — tous les élèves</h2>
-    <div class="modal-filters-bar" style="border-radius:4px;padding:8px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88em">
-      <label style="display:flex;align-items:center;gap:4px">
-        <span>Classe :</span>
-        <select id="ov-f-class" onchange="renderOverview()" style="padding:3px 6px;border:1px solid #ccc;border-radius:3px"></select>
-      </label>
-      <label style="display:flex;align-items:center;gap:4px" title="N'affiche que les élèves avec au moins ce nombre d'absences">
-        <span>Min. 🚫 :</span>
-        <input type="number" id="ov-f-minabs" min="0" value="0" oninput="renderOverview()" style="width:50px;padding:3px 5px;border:1px solid #ccc;border-radius:3px">
-      </label>
-      <label style="display:flex;align-items:center;gap:4px" title="N'affiche que les élèves avec au moins ce nombre de retards">
-        <span>Min. ⏰ :</span>
-        <input type="number" id="ov-f-minret" min="0" value="0" oninput="renderOverview()" style="width:50px;padding:3px 5px;border:1px solid #ccc;border-radius:3px">
-      </label>
-      <button class="btn btn-g btn-sm" onclick="resetOverviewFilters()" title="Réinitialiser les filtres">↺</button>
-      <span id="ov-info" style="margin-left:auto;color:var(--pencil)"></span>
-    </div>
-    <div id="ov-list" style="max-height:60vh;overflow-y:auto;border:1px solid #ddd;border-radius:4px"></div>
-    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
+  <!-- Vue d'ensemble — refonte v2.116.0 (maquette validée le 2026-10-07) : bandeau, classes en
+       pastilles par niveau, seuils en pastilles, période (ce mois · mois précédent · période · année),
+       aménagements après le nom, barre sur les absences. -->
+  <div class="mb" style="width:min(1000px,97vw);max-width:1000px">
+    <div class="lst-head"><h2 style="flex:1;margin:0">📊 Vue d'ensemble — tous les élèves</h2>
+      <input id="ov-search" type="text" placeholder="🔍 Chercher un nom" oninput="renderOverview()" style="width:190px;max-width:100%"></div>
+    <div id="ov-synth"></div>
+    <div id="ov-chips" class="ov-chips"></div>
+    <div id="ov-list" class="ov-list"></div>
+    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span id="ov-info" class="clf-hint" style="flex:1"></span>
       <button class="btn btn-g" onclick="printOverview()" title="Imprimer la liste affichée (filtres et tri compris)">🖨 Imprimer</button>
       <button class="btn btn-g" onclick="exportOverviewCSV()" title="Télécharger la liste affichée en CSV (filtres et tri compris)">💾 CSV</button>
-      <button class="btn btn-g" onclick="closeMod2('moverview')" style="margin-left:auto">Fermer</button>
+      <button class="btn btn-p" onclick="closeMod2('moverview')">Fermer</button>
     </div>
   </div>
 </div>
@@ -7903,11 +7929,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.115.0';
+const APP_VERSION    = '2.116.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T21:00:40Z';
+const APP_BUILD_DATE = '2026-10-07T21:16:24Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15678,6 +15704,7 @@ function renderTab(name) {
 function openMod(id) {
   // Peupler le select de salle initiale pour Nouvelle Classe
   if (id === 'mc') _ncPrepare();
+  if (id === 'ms') _nsPrepare();
   const el = document.getElementById(id);
   if (el) {
     // Si une autre modale est déjà ouverte, on bump le z-index pour stacker au-dessus.
@@ -16776,30 +16803,55 @@ function saveClassEdit() {
 // ═══════════════════════════════════════════════════════════
 // STUDENT MANAGEMENT
 // ═══════════════════════════════════════════════════════════
-function addStudent() {
+// Aménagements proposés à la création (mêmes clés que la modale d'édition ; exclusivité par
+// famille via _statusGroup, appliquée en direct sur les pastilles).
+var NS_AMEN = [['ppre', 'PPRE'], ['pap', 'PAP'], ['gevasco', 'PPS'], ['ulis', 'ULIS'], ['ulis_incl', 'ULIS+'],
+  ['upe2a', 'UPE2A'], ['upe2a_incl', 'UPE2A+'], ['pai', 'PAI'], ['agrandissement', '-A'], ['tiers_temps', '+⅓']];
+function _nsRenderAmen() {
+  const box = document.getElementById('ns-amen'); if (!box) return;
+  box.innerHTML = NS_AMEN.map(([k, l]) => `<label class="clf-pill"><input type="checkbox" class="ns-amen-cb" data-k="${k}" onchange="_nsAmenChange(this)">${l}</label>`).join('');
+}
+function _nsAmenChange(cb) {
+  if (!cb.checked) return;
+  const g = _statusGroup(cb.dataset.k);
+  if (g && g.length > 1) document.querySelectorAll('#ns-amen .ns-amen-cb').forEach(o => { if (o !== cb && g.includes(o.dataset.k)) o.checked = false; });
+}
+function _nsPrepare() {
+  const cls = getCls();
+  const t = document.getElementById('ms-title'); if (t) t.textContent = 'Ajouter un élève' + (cls ? ' — ' + cls.nom : '');
+  ['ns-nom', 'ns-prn', 'ns-arrival'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.querySelectorAll('#ms input[name="ns-civ"], #ms input[name="ns-grp"]').forEach(r => { r.checked = r.value === ''; });
+  _nsRenderAmen();
+}
+function addStudent(again) {
   const cls = getCls();
   if (!cls) return toast('⚠️ Sélectionne une classe.', 'warn');
   const nom = document.getElementById('ns-nom').value.trim().toUpperCase();
   const prn = document.getElementById('ns-prn').value.trim();
   if (!nom || !prn) { toast('⚠️ Remplis nom et prénom.', 'warn'); document.getElementById(!nom ? 'ns-nom' : 'ns-prn')?.focus(); return; }
-  const grp = parseInt(document.getElementById('ns-grp').value) || null;
-  const civ = document.getElementById('ns-civ').value || null;
+  const grp = parseInt(document.querySelector('#ms input[name="ns-grp"]:checked')?.value) || null;
+  const civ = document.querySelector('#ms input[name="ns-civ"]:checked')?.value || null;
   const arr = (document.getElementById('ns-arrival')?.value || '').trim() || null;
+  const amen = Array.from(document.querySelectorAll('#ns-amen .ns-amen-cb:checked')).map(cb => cb.dataset.k);
 
   pushUndo(); // l'ajout doit être annulable (Ctrl+Z) — cf. convention « pushUndo AVANT mutation »
   const id = uid();
   S.eleves[id] = { id, nom, prenom: prn, classe_id: cls.id, oublis: 0, non_travail: 0, groupe: grp, civilite: civ, tags: [], arrivalDate: arr, departureDate: null };
+  for (const k of amen) _setStudentStatusExclusive(S.eleves[id], k);
   cls.eleves.push(id);
-  document.getElementById('ns-nom').value = '';
-  document.getElementById('ns-prn').value = '';
-  document.getElementById('ns-grp').value = '';
-  document.getElementById('ns-civ').value = '';
-  const _arrEl = document.getElementById('ns-arrival'); if (_arrEl) _arrEl.value = '';
-  closeMod2('ms');
+  if (cls.virtual && (grp === 1 || grp === 2 || grp === 3)) { cls.stuGroups = cls.stuGroups || {}; cls.stuGroups[id] = grp; }
   save();
   renderStudents();
   renderUnplaced();
   toast(`${prn} ${nom} ajouté(e).`);
+  if (again) {
+    // Fenêtre gardée ouverte : nom, prénom, aménagements et arrivée vidés ; civilité et groupe conservés.
+    ['ns-nom', 'ns-prn', 'ns-arrival'].forEach(x => { const e = document.getElementById(x); if (e) e.value = ''; });
+    document.querySelectorAll('#ns-amen .ns-amen-cb').forEach(cb => { cb.checked = false; });
+    document.getElementById('ns-nom')?.focus();
+    return;
+  }
+  closeMod2('ms');
 }
 
 // Analyse une ligne d'import :
@@ -18210,69 +18262,96 @@ let _histNotesPeriode = '';  // période de l'historique : '' = toute l'année, 
 
 // ─── Vue d'ensemble — tous les élèves de toutes les classes ────────
 let _ovSort = { col: 'abs', dir: -1 }; // par défaut tri absences desc
+// Filtres (état de session) : classes choisies (vide = toutes), seuils (l'un OU l'autre),
+// période des compteurs ('month' | 'prev' | 'per' | 'year').
+var _ovF = { cls: new Set(), thr: new Set(), per: 'year' };
+var OV_THR = [
+  { k: 'abs', lbl: '3 absences ou plus', test: r => r.abs >= 3, appel: true },
+  { k: 'ret', lbl: '3 retards ou plus',  test: r => r.ret >= 3, appel: true },
+  { k: 'oub', lbl: '4 oublis ou plus',   test: r => r.oublis >= 4 },
+  { k: 'nt',  lbl: '4 non faits ou plus', test: r => r.non_travail >= 4 },
+];
+var OV_PER = [['month', 'Ce mois'], ['prev', 'Mois précédent'], ['per', 'Cette période'], ['year', 'Année']];
 
 function openOverviewModal() {
-  // Peupler le filtre classe
-  const sel = document.getElementById('ov-f-class');
-  let html = '<option value="">— Toutes les classes —</option>';
-  for (const [cid, c] of Object.entries(S.classes || {})) {
-    html += `<option value="${_escAttr(cid)}">${_escAttr(c.nom)}</option>`;
-  }
-  sel.innerHTML = html;
-  sel.value = '';
-  document.getElementById('ov-f-minabs').value = '0';
-  document.getElementById('ov-f-minret').value = '0';
+  _ovF = { cls: new Set(), thr: new Set(), per: 'year' };
   _ovSort = { col: 'abs', dir: -1 };
+  const q = document.getElementById('ov-search'); if (q) q.value = '';
   renderOverview();
   openMod('moverview');
 }
-
-function resetOverviewFilters() {
-  document.getElementById('ov-f-class').value = '';
-  document.getElementById('ov-f-minabs').value = '0';
-  document.getElementById('ov-f-minret').value = '0';
-  renderOverview();
-}
-
+function resetOverviewFilters() { _ovF = { cls: new Set(), thr: new Set(), per: 'year' }; renderOverview(); }
 function sortOverview(col) {
   if (_ovSort.col === col) _ovSort.dir = -_ovSort.dir;
   else { _ovSort.col = col; _ovSort.dir = (col === 'classe' || col === 'nom') ? 1 : -1; }
   renderOverview();
 }
+function _ovToggleCls(id) { _ovF.cls.has(id) ? _ovF.cls.delete(id) : _ovF.cls.add(id); renderOverview(); }
+function _ovToggleLevel(n) {
+  const cs = realClasses().filter(c => clsLevel(c) === n);
+  const all = cs.length && cs.every(c => _ovF.cls.has(c.id));
+  cs.forEach(c => all ? _ovF.cls.delete(c.id) : _ovF.cls.add(c.id));
+  renderOverview();
+}
+function _ovToggleThr(k) { _ovF.thr.has(k) ? _ovF.thr.delete(k) : _ovF.thr.add(k); renderOverview(); }
+function _ovSetPer(p) { _ovF.per = p; renderOverview(); }
+// Plage de dates de la période choisie (null = toute l'année : compteurs vivants).
+function _ovRange(per) {
+  const now = new Date();
+  if (per === 'month') return _statsMonthRange();
+  if (per === 'prev') return { from: _ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: _ymd(new Date(now.getFullYear(), now.getMonth(), 0)) };
+  if (per === 'per') { const p = _currentPeriode(); return { from: _periodStartDate(p), to: _periodEndDate(p) }; }
+  return null;
+}
+function _ovPerLabel(per) {
+  const r = _ovRange(per);
+  if (!r) return 'toute l\'année';
+  const f = d => d.split('-').reverse().slice(0, 2).join('/');
+  return `du ${f(r.from)} au ${f(r.to)}`;
+}
 
 // Lignes de la Vue d'ensemble, filtrées et triées comme à l'écran (partagé avec l'export CSV
-// et l'impression : l'export reproduit ce que l'on voit).
-function _overviewRows(fClass, fMinAbs, fMinRet) {
-  // Aggrège tous les élèves
+// et l'impression : l'export reproduit ce que l'on voit). `scope` = avant seuils et recherche
+// (sert au bandeau).
+function _overviewRows(opts) {
+  const range = _ovRange(_ovF.per);
+  const classes = Object.values(S.classes || {}).filter(c => _ovF.cls.size ? _ovF.cls.has(c.id) : !c.virtual);
   let rows = [];
-  const classIds = fClass ? [fClass] : Object.keys(S.classes || {});
-  for (const cid of classIds) {
-    const cls = S.classes[cid];
-    if (!cls) continue;
+  for (const cls of classes) {
     for (const sid of cls.eleves || []) {
       const stu = S.eleves[sid];
       if (!stu) continue;
-      const stats = getStudentAttendanceStats(cid, sid);
-      rows.push({
-        sid, classId: cid, className: cls.nom,
-        nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu, cls),
-        oublis: stu.oublis || 0, non_travail: stu.non_travail || 0,
-        abs: stats.abs, ret: stats.ret,
-      });
+      let abs, ret, oublis, nt;
+      if (range) {
+        ({ abs, ret } = getStudentAttendanceStatsInRange(cls.id, sid, range.from, range.to));
+        oublis = nt = 0;
+        for (const h of stu.history || []) {
+          const d = h.ts ? _ymd(new Date(h.ts)) : '';
+          if (!d || d < range.from || d > range.to) continue;
+          if (h.type === 'oubli') oublis++; else if (h.type === 'nt') nt++;
+        }
+      } else {
+        ({ abs, ret } = getStudentAttendanceStats(cls.id, sid));
+        oublis = stu.oublis || 0; nt = stu.non_travail || 0;
+      }
+      rows.push({ sid, classId: cls.id, className: cls.nom, nom: stu.nom, prenom: stu.prenom, groupe: _grp(stu, cls),
+        oublis, non_travail: nt, abs, ret });
     }
   }
-  // Mode confidentiel : filtres « Min. 🚫/⏰ » et tris par compteur IGNORÉS — la présence
-  // d'un élève dans la liste filtrée, ou son rang dans un tri par absences, révélerait
-  // l'information masquée. On trie alors par classe puis nom.
+  if (opts?.scope) return rows;
   const _ovConf = !!_conf.on;
-  if (!_ovConf && fMinAbs > 0) rows = rows.filter(r => r.abs >= fMinAbs);
-  if (!_ovConf && fMinRet > 0) rows = rows.filter(r => r.ret >= fMinRet);
-
-  // Tri
+  const q = (document.getElementById('ov-search')?.value || '').trim().toLowerCase();
+  if (q) rows = rows.filter(r => `${r.prenom} ${r.nom}`.toLowerCase().includes(q) || `${r.nom} ${r.prenom}`.toLowerCase().includes(q));
+  // Mode confidentiel : seuils et tris par compteur IGNORÉS — la présence d'un élève dans la
+  // liste filtrée, ou son rang dans un tri par absences, révélerait l'information masquée.
+  if (!_ovConf && _ovF.thr.size) {
+    const thr = OV_THR.filter(t => _ovF.thr.has(t.k));
+    rows = rows.filter(r => thr.some(t => t.test(r)));
+  }
   const dir = _ovConf ? 1 : _ovSort.dir;
   rows.sort((a, b) => {
     const c = _ovConf ? 'classe' : _ovSort.col;
-    if (c === 'classe') return (a.className || '').localeCompare(b.className || '', 'fr', { sensitivity: 'base' }) * dir || (a.nom).localeCompare(b.nom);
+    if (c === 'classe') return (a.className || '').localeCompare(b.className || '', 'fr', { sensitivity: 'base', numeric: true }) * dir || (a.nom).localeCompare(b.nom);
     if (c === 'nom')    return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr', { sensitivity: 'base' }) * dir;
     if (c === 'oublis') return ((a.oublis||0) - (b.oublis||0)) * dir || a.nom.localeCompare(b.nom);
     if (c === 'nt')     return ((a.non_travail||0) - (b.non_travail||0)) * dir || a.nom.localeCompare(b.nom);
@@ -18280,65 +18359,74 @@ function _overviewRows(fClass, fMinAbs, fMinRet) {
     if (c === 'ret')    return (a.ret - b.ret) * dir || a.nom.localeCompare(b.nom);
     return 0;
   });
-
   return rows;
 }
 
 function renderOverview() {
-  const fClass  = document.getElementById('ov-f-class')?.value || '';
-  const fMinAbs = parseInt(document.getElementById('ov-f-minabs')?.value || '0', 10) || 0;
-  const fMinRet = parseInt(document.getElementById('ov-f-minret')?.value || '0', 10) || 0;
   const list = document.getElementById('ov-list');
+  if (!list) return;
+  const conf = !!_conf.on;
+  const appel = _featureEnabled('appel');
+  // Bandeau (classes et période choisies, avant seuils et recherche)
+  const scope = _overviewRows({ scope: true });
+  const sum = k => scope.reduce((t, r) => t + (r[k] || 0), 0);
+  const cnt = f => scope.filter(f).length;
+  const nCls = new Set(scope.map(r => r.classId)).size;
+  const synth = document.getElementById('ov-synth');
+  if (synth) synth.innerHTML = `<div class="bsynth" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:10px 0">`
+    + _bsynthCard('Élèves', `<div class="bsynth-big">${scope.length}</div><div class="bsynth-line">${nCls} classe${nCls > 1 ? 's' : ''} · ${_esc(_ovPerLabel(_ovF.per))}</div>`)
+    + (appel ? _bsynthCard('Absences', `<div class="bsynth-big">${sum('abs')}</div><div class="bsynth-line">${cnt(r => r.abs >= 3)} élève(s) à 3 ou plus</div>`)
+      + _bsynthCard('Retards', `<div class="bsynth-big">${sum('ret')}</div><div class="bsynth-line">${cnt(r => r.ret >= 3)} élève(s) à 3 ou plus</div>`) : '')
+    + _bsynthCard('Oublis · non faits', `<div class="bsynth-big">${sum('oublis')} · ${sum('non_travail')}</div><div class="bsynth-line">${cnt(r => r.oublis >= 4 || r.non_travail >= 4)} élève(s) à 4 ou plus</div>`)
+    + '</div>';
+  // Pastilles : classes par niveau · seuils · période
+  const chips = document.getElementById('ov-chips');
+  if (chips) {
+    const pill = (on, oc, lbl, tip, extra) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${extra || ''}" onclick="${oc}" title="${_escAttr(tip || '')}">${lbl}</button>`;
+    const lvls = [...new Set(realClasses().map(c => clsLevel(c)))].sort((a, b) => a - b);
+    let h = '<div class="mvc-fp-row"><span class="mvc-fp-lbl">Classes :</span><span class="mvc-fp-chips">'
+      + pill(!_ovF.cls.size, "_ovF.cls.clear();renderOverview()", 'Toutes', 'Toutes les classes (hors recomposées)')
+      + lvls.map(n => {
+        const cs = realClasses().filter(c => clsLevel(c) === n).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+        const k = cs.filter(c => _ovF.cls.has(c.id)).length;
+        return `<span class="mvc-lvl-group">${pill(k === cs.length, `_ovToggleLevel(${n})`, _esc(_levelLabel(n)), 'Tout le niveau', ' mvc-lvl' + (k && k < cs.length ? ' part' : ''))}`
+          + cs.map(c => pill(_ovF.cls.has(c.id), `_ovToggleCls('${_escJsAttr(c.id)}')`, _esc(c.nom), '')).join('') + '</span>';
+      }).join('') + '</span></div>';
+    h += '<div class="mvc-fp-row"><span class="mvc-fp-lbl">Période :</span><span class="mvc-fp-chips">'
+      + OV_PER.map(([k, l]) => pill(_ovF.per === k, `_ovSetPer('${k}')`, l, _ovPerLabel(k))).join('') + '</span></div>';
+    h += '<div class="mvc-fp-row"><span class="mvc-fp-lbl">Seuils :</span><span class="mvc-fp-chips">'
+      + (conf ? '<span class="clf-hint">🔒 indisponibles en mode confidentiel</span>'
+        : OV_THR.filter(t => appel || !t.appel).map(t => pill(_ovF.thr.has(t.k), `_ovToggleThr('${t.k}')`, t.lbl, 'Plusieurs seuils : l\'un OU l\'autre')).join('')
+          + ((_ovF.cls.size || _ovF.thr.size || _ovF.per !== 'year') ? pill(false, 'resetOverviewFilters()', '↻', 'Tout réinitialiser') : ''))
+      + '</span></div>';
+    chips.innerHTML = h;
+  }
+  const rows = _overviewRows();
   const info = document.getElementById('ov-info');
-
-  const rows = _overviewRows(fClass, fMinAbs, fMinRet);
-  const _ovConf = !!_conf.on;
-
-  if (info && _ovConf) {
-    info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🔒 mode confidentiel (filtres et tris par compteur désactivés)`;
-  } else if (info) {
-    const totA = rows.reduce((s, r) => s + r.abs, 0);
-    const totR = rows.reduce((s, r) => s + r.ret, 0);
-    info.textContent = `${rows.length} élève${rows.length>1?'s':''} · 🚫 ${totA} · ⏰ ${totR}`;
-  }
-
-  if (!rows.length) {
-    list.innerHTML = '<p style="padding:20px;color:var(--pencil);text-align:center;font-size:.9em">Aucun élève ne correspond aux filtres.</p>';
-    return;
-  }
-
+  if (info) info.textContent = conf ? `${rows.length} élève${rows.length > 1 ? 's' : ''} · 🔒 mode confidentiel (seuils et tris par compteur désactivés)`
+    : `${rows.length} élève${rows.length > 1 ? 's' : ''} affiché${rows.length > 1 ? 's' : ''} · clic sur une ligne : fiche de l'élève`;
+  if (!rows.length) { list.innerHTML = '<p style="padding:20px;color:var(--pencil);text-align:center;font-size:.9em">Aucun élève ne correspond aux filtres.</p>'; return; }
+  const maxA = Math.max(1, ...rows.map(r => r.abs)), maxR = Math.max(1, ...rows.map(r => r.ret));
   const arrow = c => _ovSort.col === c ? (_ovSort.dir === 1 ? ' ▲' : ' ▼') : '';
+  const num = (v, hot, max, title) => `<td class="ov-n${hot ? ' hot' : ''}" title="${_escAttr(title)}">${v}${max ? `<span class="ov-bar" style="width:${Math.round(40 * v / max)}px"></span>` : ''}</td>`;
   const trs = rows.map(r => {
-    const grp = r.groupe === 1 ? '<span class="gbdg g1">G1</span>'
-              : r.groupe === 2 ? '<span class="gbdg g2">G2</span>'
-              : r.groupe === 3 ? '<span class="gbdg g3">G3</span>'
-              : '<span class="gbdg gn">—</span>';
-    return `<tr data-sid="${_escAttr(r.sid)}">
-      <td><span style="background:var(--info-bg);color:var(--link-fg);padding:1px 8px;border-radius:3px;font-size:.85em;font-weight:600">${_escName(r.className)}</span></td>
-      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')||openFiche('${_escAttr(r.sid)}')" title="Ouvrir la fiche complète de l'élève" style="cursor:pointer"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
-      <td>${grp}</td>
-      <td style="text-align:center" title="📦 Matériel oublié : ${r.oublis}"><span class="badge" style="background:${oubliColor(r.oublis)};color:#222">${r.oublis}</span></td>
-      <td style="text-align:center" title="📝 Travail non fait : ${r.non_travail}"><span class="badge" style="background:${oubliColor(r.non_travail)};color:#222">${r.non_travail}</span></td>
-      <td class="ff-appel" style="text-align:center" title="🚫 Absences cumulées : ${r.abs}"><span class="badge" style="background:${oubliColor(r.abs)};color:#222">${r.abs}</span></td>
-      <td class="ff-appel" style="text-align:center" title="⏰ Retards cumulés : ${r.ret}"><span class="badge" style="background:${oubliColor(r.ret)};color:#222">${r.ret}</span></td>
-      <td style="text-align:center"><button class="btn btn-g btn-sm" onclick="overviewOpenHist('${r.classId}','${r.sid}')" title="Voir l'historique complet de l'élève (incidents + absences/retards)">🕓</button></td>
+    const s = S.eleves[r.sid];
+    const g = r.groupe ? `<span class="gbdg g${r.groupe}" style="font-size:.7em;padding:0 4px">G${r.groupe}</span>` : '';
+    return `<tr data-sid="${_escAttr(r.sid)}" class="ov-row" onclick="if(!event.target.closest('button,.conf-keep'))_confNameClick('${_escAttr(r.sid)}')||openFiche('${_escAttr(r.sid)}')">
+      <td class="conf-keep" onclick="_confNameClick('${_escAttr(r.sid)}')||openFiche('${_escAttr(r.sid)}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escName(r.nom)}</strong> ${_escName(r.prenom)}</td>
+      <td class="ov-amen">${s ? _ficheSpecBadges(s) : ''}${g}</td>
+      <td><span class="ov-cls">${_escName(r.className)}</span></td>
+      ${appel ? num(r.abs, r.abs >= 3, maxA, `Absences : ${r.abs}`) + num(r.ret, r.ret >= 3, maxR, `Retards : ${r.ret}`) : ''}
+      ${num(r.oublis, r.oublis >= 4, 0, `Matériel oublié : ${r.oublis}`)}${num(r.non_travail, r.non_travail >= 4, 0, `Travail non fait : ${r.non_travail}`)}
+      <td style="text-align:center"><button class="btn btn-g btn-sm" onclick="overviewOpenHist('${r.classId}','${r.sid}')" title="Historique de l'élève">🕓</button></td>
     </tr>`;
   }).join('');
-
-  list.innerHTML = `
-    <table class="stbl" style="margin:0">
-      <thead><tr>
-        <th onclick="sortOverview('classe')" style="cursor:pointer" title="Classe de l'élève — cliquer pour trier">Classe${arrow('classe')}</th>
-        <th onclick="sortOverview('nom')" style="cursor:pointer" title="Nom et prénom — cliquer pour trier">Élève${arrow('nom')}</th>
-        <th title="Groupe G1 / G2 ou aucun">Grp</th>
-        <th onclick="sortOverview('oublis')" style="cursor:pointer" title="📦 Matériel oublié — cumul (cliquer pour trier)">📦${arrow('oublis')}</th>
-        <th onclick="sortOverview('nt')" style="cursor:pointer" title="📝 Travail non fait — cumul (cliquer pour trier)">📝${arrow('nt')}</th>
-        <th class="ff-appel" onclick="sortOverview('abs')" style="cursor:pointer" title="🚫 Absences cumulées sur tous les appels enregistrés (cliquer pour trier)">🚫${arrow('abs')}</th>
-        <th class="ff-appel" onclick="sortOverview('ret')" style="cursor:pointer" title="⏰ Retards cumulés sur tous les appels enregistrés (cliquer pour trier)">⏰${arrow('ret')}</th>
-        <th title="Actions"></th>
-      </tr></thead>
-      <tbody>${trs}</tbody>
-    </table>`;
+  const th = (c, l, tip, cls) => `<th${cls ? ` class="${cls}"` : ''} onclick="sortOverview('${c}')" style="cursor:pointer" title="${_escAttr(tip)} — cliquer pour trier">${l}${arrow(c)}</th>`;
+  list.innerHTML = `<table class="stbl ov-tbl" style="margin:0"><thead><tr>
+      ${th('nom', 'Élève', 'Nom et prénom')}<th title="Aménagements et groupe">Aménag.</th>${th('classe', 'Classe', 'Classe de l\'élève')}
+      ${appel ? th('abs', 'Absences', 'Absences sur la période', 'ov-n') + th('ret', 'Retards', 'Retards sur la période', 'ov-n') : ''}
+      ${th('oublis', 'Oublis', 'Matériel oublié sur la période', 'ov-n')}${th('nt', 'Non faits', 'Travail non fait sur la période', 'ov-n')}<th></th>
+    </tr></thead><tbody>${trs}</tbody></table>`;
 }
 
 // Ouvre l'historique d'un élève depuis la vue d'ensemble (bascule la classe si nécessaire).
@@ -18633,10 +18721,8 @@ function exportAttStatsCSV() {
 // Export CSV de la Vue d'ensemble (v2.71.0) — filtres et tri de l'écran.
 function exportOverviewCSV() {
   if (_conf.on) { toast('🔒 Mode confidentiel — export désactivé', 'warn'); return; }
-  const fClass = document.getElementById('ov-f-class')?.value || '';
-  const rows = _overviewRows(fClass,
-    parseInt(document.getElementById('ov-f-minabs')?.value || '0', 10) || 0,
-    parseInt(document.getElementById('ov-f-minret')?.value || '0', 10) || 0);
+  const rows = _overviewRows();
+  const fClass = _ovF.cls.size === 1 ? [..._ovF.cls][0] : '';
   if (!rows.length) return toast('Rien à exporter (aucun élève dans les filtres actuels).');
   const esc = v => { const x = _csvCellGuard(String(v ?? '')); return /[;"\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
   const grp = g => g === 1 ? 'G1' : g === 2 ? 'G2' : g === 3 ? 'G3' : '';
@@ -18650,11 +18736,12 @@ function exportOverviewCSV() {
 }
 function printOverview() {
   if (_conf.on) { toast('🔒 Mode confidentiel — impression désactivée', 'warn'); return; }
-  const fClass = document.getElementById('ov-f-class')?.value || '';
+  const names = [..._ovF.cls].map(id => S.classes[id]?.nom).filter(Boolean);
+  const fClass = names.length === 1 ? [..._ovF.cls][0] : '';
   _printConsultation({
     table: document.querySelector('#ov-list table'),
-    title: "Vue d'ensemble — " + (fClass ? (S.classes[fClass]?.nom || fClass) : 'toutes les classes'),
-    sub: document.getElementById('ov-info')?.textContent || '',
+    title: "Vue d'ensemble — " + (names.length ? names.join(', ') : 'toutes les classes'),
+    sub: `${_ovPerLabel(_ovF.per)} · ${document.querySelectorAll('#ov-list tbody tr').length} élève(s)`,
     docTitle: "Vue d'ensemble - " + (fClass ? (S.classes[fClass]?.nom || fClass) : 'toutes les classes'),
     orientation: 'portrait',
   });
@@ -19794,7 +19881,7 @@ function renderStudents() {
   renderClassSalleRow('el-salle-buttons', true);
 
   if (!cls) { el.innerHTML = _needClassHTML('afficher ses élèves'); updateEleveBulkBar(); return; }
-  if (!cls.eleves.length) { el.innerHTML = _emptyStateHTML('👥', 'Aucun élève dans cette classe', 'Clique sur <strong>⬆ Importer</strong> (barre ci-dessus) pour coller la liste depuis Pronote ou un tableur, ou sur <strong>+ Ajouter</strong> pour saisir un élève.'); updateEleveBulkBar(); return; }
+  if (!cls.eleves.length) { el.innerHTML = _emptyStateHTML('👥', 'Aucun élève dans cette classe', 'Clique sur <strong>+ Ajouter ▾</strong> (barre ci-dessus) : « Plusieurs élèves » pour coller la liste depuis Pronote ou un tableur, « Un élève » pour en saisir un.'); updateEleveBulkBar(); return; }
 
   // Nettoie les sélections d'élèves disparus
   for (const sid of [...selectedEleves]) {
