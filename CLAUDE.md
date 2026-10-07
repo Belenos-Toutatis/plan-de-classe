@@ -124,7 +124,7 @@ Encodées en `data:font/woff2;base64,...` via 3 blocs `@font-face` en tête du `
 - Variables d'espacement `--sp-1..8` (4 → 64 px), radius `--radius-sm/md/lg` (3, 5, 8 px), ombres `--shadow-card` et `--shadow-pop`
 
 ### Aides repliables (`data-help`, v2.73.0)
-Tout bloc d'aide marqué `data-help="clé"` reçoit un ✕ et un bouton « ❔ Aide » (inséré avant le premier bloc de la clé) le réaffiche ; mémorisé dans `localStorage.planClasse_help_<clé>` (`_helpInit` après `init()`, `_helpSet`, `_helpApplyAll`). Le pliage passe par la classe `.help-folded` (`display:none !important`) : Config Salle affiche ses aides par `style.display` selon le mode, une classe les masque toutes sans se battre avec lui. Clés : `cfg` (aides des 6 modes de Config Salle). Les onglets Évaluations gardent leur mécanisme `evhelp` historique. **Pastilles `?` au toucher** : un clic ou un toucher sur `.tb-hint` affiche son texte dans une bulle `#help-bubble` (l'infobulle native est invisible au doigt).
+Tout bloc d'aide marqué `data-help="clé"` reçoit un ✕ et un bouton « ❔ Aide » (inséré avant le premier bloc de la clé) le réaffiche ; mémorisé dans `localStorage.planClasse_help_<clé>` (`_helpInit` après `init()`, `_helpSet`, `_helpApplyAll`). Le pliage passe par la classe `.help-folded` (`display:none !important`) : Config Salle affiche ses aides par `style.display` selon le mode, une classe les masque toutes sans se battre avec lui. Clés : aucune aujourd'hui — `qcm`, `ipads` puis `cfg` ont été remplacées par des aides repliées propres à leur onglet (v2.100–2.102) ; le mécanisme reste disponible. Les onglets Évaluations gardent leur mécanisme `evhelp` historique. **Pastilles `?` au toucher** : un clic ou un toucher sur `.tb-hint` affiche son texte dans une bulle `#help-bubble` (l'infobulle native est invisible au doigt).
 
 ### Hints en pastilles `?`
 Les anciens textes d'astuce `<span class="tb-hint">…</span>` sont visuellement convertis en **pastilles rondes grises** avec leur contenu transformé en infobulle native (`title=`). Conversion faite au runtime par `_initHints()` (parcourt les `.tb-hint`, déplace le textContent dans `title`, vide le texte visible). Appelé à `init()` puis re-déclenché après chaque `renderStudents()` via un wrapper sur la fonction d'origine. Pastille stylée via `.tb-hint::after { content: "?" }`.
@@ -1701,6 +1701,15 @@ Le zoom du Plan Prof et de la Vue Élève est **persisté** (`localStorage.planC
 - **Bouton 📊 Vue d'ensemble** : modal cross-classe avec filtres et tri (cf. section dédiée)
 - **Bouton 📊 Export positions** : ouvre l'onglet caché `tab-notes` (tableau triable Position · Groupe · Nom · Prénom + export CSV). Bouton ↩ Retour Élèves dans le header de l'onglet ramène ici.
 - **Bouton 🖨 Imprimer la liste** : impression portrait (Élève · Groupe · 📦 · 📝)
+
+## Config Salle — modernisation v2.102.0 (maquette validée le 2026-10-07)
+
+- **Rangée 1** `#cfg-salle-list.cf-row1` : les salles (`renderSalleCatalog`) et ➕ Nouvelle salle. **Rangée 2** `.cf-row2` : Nom, Rangées, Colonnes (mêmes id `cfg-salle` / `cfg-rows` / `cfg-cols`), à droite 🖨 Plan vide, 🗂 Ordres de ramassage et **⋯ → 🗑 Supprimer cette salle** (arbitrage : plus de gros bouton rouge dans la barre).
+- **Bandeau** `#cfg-synth` (`_cfgSynthRender`, appelé par `_renderCfgSalleClasses`) : Disposition (tables, rangées × colonnes, cases sans table, îlots) · **Classes dans cette salle** en pastilles `.cf-cls-pill` (ex-cases à cocher ; allumée = la classe a la salle, nombre d'élèves placés, liseré jaune = classe courante ; clic → `_cfgToggleSalleClass(id, on, null)`, la dernière salle d'une classe ne se retire pas) · Horaires (résumé `_cfgSchedResume`, lien qui déplie la section).
+- **Modes en sélecteurs** `.ip-seg` (boutons `.cf-mode`, mêmes id `cfg-mode-*` ; `setCfgMode` retire `.on` des `.cf-mode` et non plus des `.gchip`) : Salle (Tables | Îlots) · Classe <nom> (Groupes | Tags | ⛓ Contraintes). **Aide courte** d'une phrase par mode (`_CFG_HINT_SHORT` → `#cfg-hint-short`) ; l'explication complète (les 5 blocs `cfg-hint-*`, toujours affichés selon le mode) et l'exemple dessiné des îlots sont dans **❔ Aide** (`#cfg-help`, `_cfgHelpToggle`, replié).
+- **Grille** plus large (150 px par colonne au lieu de 94, `#cfg-board` suit) ; **allées hachurées** comme sur le Plan (`#cfgg .cell.nt`), plus de « ✖ Sans table » ; légende adaptée (« ▨ allée »).
+- **Horaires repliés** (`<details id="cfg-schedule-wrap">`, « 📅 Horaires de l'établissement » + résumé `#cfg-sched-resume`) — arbitrage : repliés ici, pas déplacés dans les Réglages.
+- Audit : 0 écart en clair et en sombre sur les 5 modes, aide et horaires dépliés (hors `<text>` SVG de l'exemple des îlots, faux positifs connus) ; pas de débordement de page à 375 px.
 
 ## Config Salle — portée des modes (v2.70.0)
 

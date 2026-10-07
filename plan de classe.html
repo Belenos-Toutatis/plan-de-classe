@@ -766,7 +766,25 @@ html[data-theme="dark"] .ip-strip .ipl3{background:#1b324d;color:#d3e5fa}
 .cgrid .cell{cursor:pointer}
 .cgrid .cell.nt{cursor:pointer;position:relative}
 .cgrid .cell.nt:hover{background:#bbb}
-.cgrid .cell.nt::after{content:"✖ Sans table";color:var(--pencil-soft);font-size:.9em}
+.cgrid .cell.nt::after{content:none}
+/* v2.102.0 : allées hachurées comme sur le Plan (plus de « ✖ Sans table ») */
+#cfgg .cell.nt{background:repeating-linear-gradient(135deg,transparent 0 8px,var(--rule-line) 8px 10px) !important;border:1.5px dashed var(--pencil-soft) !important}
+#cfgg .cell.nt:hover{border-color:var(--ink-blue) !important}
+#tab-config .cf-row1{background:var(--paper-warm);border-bottom:1px solid var(--rule-line);align-items:center;min-height:40px;margin-bottom:0}
+#tab-config .cf-row2,#tab-config .cf-row3{align-items:center;font-size:.92em}
+#tab-config .cf-row2 label{display:inline-flex;gap:5px;align-items:center;font-size:.92em;color:var(--pencil)}
+#tab-config .cf-hint{font-size:.85em;color:var(--pencil);font-style:italic}
+.cf-cls{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 3px}
+.cf-cls-pill{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:999px;padding:1px 9px;font:500 .8em var(--font-sans);cursor:pointer;line-height:1.5}
+.cf-cls-pill .n{font-family:var(--font-mono);font-size:.9em;margin-left:5px}
+.cf-cls-pill.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
+.cf-cls-pill.cur{box-shadow:0 0 0 2px var(--highlighter)}
+.cf-cls-pill[aria-disabled="true"]{cursor:not-allowed}
+.cf-card-cls{grid-column:span 2}
+.cf-sched-sum{cursor:pointer;list-style:none}
+.cf-sched-sum::-webkit-details-marker{display:none}
+.cf-sched-sum::before{content:"▸ ";color:var(--pencil)}
+#cfg-schedule-wrap[open] .cf-sched-sum::before{content:"▾ "}
 .cgrid .cell.em:hover{background:#fff3cd;border-color:#f39c12}
 
 /* ─── STUDENT VIEW GRID ─── */
@@ -3771,89 +3789,43 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
   <!-- ── TAB: Config Salle ── -->
   <div id="tab-config" class="tab">
-    <div class="sh">
-      <h2>⚙️ Config Salle</h2>
-      <span style="font-size:.85em;color:var(--pencil)">Salles partagées entre les classes — la disposition vaut pour toutes ; groupes, tags, contraintes et AESH sont propres à chaque classe</span>
+    <div class="sh"><h2>⚙️ Config Salle</h2></div>
+    <!-- Barre (v2.102.0) : salles, puis réglages de la salle sélectionnée -->
+    <div id="cfg-salle-list" class="tb cf-row1"></div>
+    <div class="tb cf-row2">
+      <label>Nom <input id="cfg-salle" type="text" placeholder="ex : A101" style="width:120px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em" onchange="renameSelectedSalle()"></label>
+      <label>Rangées <input id="cfg-rows" type="number" min="1" max="15" value="4" style="width:68px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em;text-align:center" onchange="setCfgDimensions()"></label>
+      <label>Colonnes <input id="cfg-cols" type="number" min="1" max="15" value="10" style="width:68px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em;text-align:center" onchange="setCfgDimensions()"></label>
+      <span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">
+        <button class="btn btn-g btn-sm" onclick="doPrintEmptyConfigSalle()" title="Imprimer un plan vide à compléter à la main (Ctrl+P)">🖨 Plan vide</button>
+        <button class="btn btn-g btn-sm" onclick="openCollectPatternsModal()" title="Définir l'ordre dans lequel tu ramasses les copies dans cette salle. Plusieurs ordres possibles (par îlot, en serpentin…). Utilisés au tri dans la saisie d'évaluation.">🗂 Ordres de ramassage</button>
+        <span class="dd dd-right">
+          <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Autres actions sur cette salle" aria-label="Autres actions sur cette salle">⋯</button>
+          <div class="dd-menu">
+            <button onclick="closeAllDd();deleteSelectedSalle()" title="Supprimer la salle du catalogue (seulement si plus aucune classe ne l'utilise)">🗑 Supprimer cette salle</button>
+          </div>
+        </span>
+      </span>
     </div>
-    <!-- Liste des salles -->
-    <div id="cfg-salle-list" class="tb" style="margin-bottom:8px"></div>
-    <!-- Mode + dimensions + suppression -->
-    <div class="tb">
-      <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <span class="cfg-mode-lbl" title="La disposition vaut pour toutes les classes qui utilisent cette salle">Salle (toutes classes) :</span>
-        <span class="gchip gc-all on" id="cfg-mode-tables" onclick="setCfgMode('tables',this)" data-tip="Bascule table / sans-table (allée). Clic sur une cellule pour activer ou désactiver.">Tables</span>
-        <span class="gchip gc-i"      id="cfg-mode-ilots" onclick="setCfgMode('ilots',this)" data-tip="Regroupe des tables en îlots (ensembles physiques). Sélectionne des cases puis '+ Nouvel îlot' ou '✓ Affecter à…'.">Îlots</span>
-        <span class="cfg-mode-lbl" style="margin-left:10px;padding-left:10px;border-left:1px solid var(--rule-line)" title="Ces réglages sont propres à la classe choisie dans le bandeau">Classe <strong id="cfg-cls-name"></strong> dans cette salle :</span>
-        <span class="gchip gc-1"      id="cfg-mode-groupes" onclick="setCfgMode('groupes',this)" data-tip="Affecte des places aux zones G1, G2 ou G3. Sélectionne plusieurs cases puis clic sur G1 / G2 / G3. — Utile uniquement si tes élèves gardent LES MÊMES POSITIONS en classe entière et en demi-groupe (ou tiers-groupe) : la zone G1 indique quelles places sont occupées quand seul le groupe 1 est là. Si tes demi-groupes mélangent des élèves de plusieurs classes ou ont des places totalement différentes, crée plutôt une classe recomposée à part (onglet Classes → Nouvelle classe) avec son propre plan.">Groupes G1/G2/G3</span>
-        <span class="gchip gc-3"      id="cfg-mode-tags"     onclick="setCfgMode('tags',this)" data-tip="Affecte un tag (DF, DNL…) à des places. Sélectionne plusieurs cases puis clic sur un bouton de tag.">Tags</span>
-        <span class="gchip gc-2"      id="cfg-mode-contraintes" onclick="setCfgMode('contraintes',this)" data-tip="Règles de placement : paires d'élèves à séparer + places autorisées par élève.">⛓ Contraintes</span>
-        <span class="gchip" style="display:none"           id="cfg-mode-aesh" style="background:#fde2f3;color:#880e4f;border:1px solid #c2185b" onclick="setCfgMode('aesh',this)" data-tip="Place une ou plusieurs AESH dans cette salle pour cette classe, et indique quels élèves elles accompagnent.">🧑‍🏫 AESH</span>
+    <div id="cfg-synth"></div>
+    <!-- Modes : deux groupes (salle / classe) en sélecteurs ; aide courte + bouton Aide -->
+    <div class="tb cf-row3">
+      <span class="cfg-mode-lbl" title="La disposition vaut pour toutes les classes qui utilisent cette salle">Salle</span>
+      <span class="ip-seg" role="group" aria-label="Réglages de la salle">
+        <button type="button" class="cf-mode on" id="cfg-mode-tables" onclick="setCfgMode('tables',this)" title="Bascule table / sans-table (allée). Clic sur une cellule pour activer ou désactiver.">Tables</button>
+        <button type="button" class="cf-mode" id="cfg-mode-ilots" onclick="setCfgMode('ilots',this)" title="Regroupe des tables en îlots (ensembles physiques). Sélectionne des cases puis '+ Nouvel îlot' ou '✓ Affecter à…'.">Îlots</button>
+      </span>
+      <span class="cfg-mode-lbl" style="margin-left:8px" title="Ces réglages ne valent que pour cette classe dans cette salle">Classe <strong id="cfg-cls-name"></strong></span>
+      <span class="ip-seg" role="group" aria-label="Réglages de la classe dans cette salle">
+        <button type="button" class="cf-mode" id="cfg-mode-groupes" onclick="setCfgMode('groupes',this)" title="Affecte des places aux zones G1, G2 ou G3. Sélectionne plusieurs cases puis clic sur G1 / G2 / G3. — Utile uniquement si tes élèves gardent LES MÊMES POSITIONS en classe entière et en demi-groupe (ou tiers-groupe) : la zone G1 indique quelles places sont occupées quand seul le groupe 1 est là. Si tes demi-groupes mélangent des élèves de plusieurs classes ou ont des places totalement différentes, crée plutôt une classe recomposée à part (onglet Classes → Nouvelle classe) avec son propre plan.">Groupes</button>
+        <button type="button" class="cf-mode" id="cfg-mode-tags" onclick="setCfgMode('tags',this)" title="Affecte un tag (DF, DNL…) à des places. Sélectionne plusieurs cases puis clic sur un bouton de tag.">Tags</button>
+        <button type="button" class="cf-mode" id="cfg-mode-contraintes" onclick="setCfgMode('contraintes',this)" title="Règles de placement : paires d'élèves à séparer + places autorisées par élève.">⛓ Contraintes</button>
       </span>
       <button class="btn btn-s btn-sm" id="cfg-auto-grp" style="display:none" onclick="autoGroupConfig()" title="Répartit les places entre G1 et G2 d'après les allées (cases sans table)">⚡ Répartir G1/G2 selon les allées</button>
-      <span style="display:flex;gap:8px;align-items:center;font-size:.87em">
-        <label>Nom <input id="cfg-salle" type="text" placeholder="ex : A101" style="width:120px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em" onchange="renameSelectedSalle()"></label>
-        <label>Rangées <input id="cfg-rows" type="number" min="1" max="15" value="4" style="width:68px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em;text-align:center" onchange="setCfgDimensions()"></label>
-        <label>Colonnes <input id="cfg-cols" type="number" min="1" max="15" value="10" style="width:68px;padding:3px 5px;border:1px solid #ccc;border-radius:4px;font-size:1em;text-align:center" onchange="setCfgDimensions()"></label>
-      </span>
-      <button class="btn btn-g btn-sm" onclick="doPrintEmptyConfigSalle()" title="Imprimer un plan vide à compléter à la main (Ctrl+P)" style="margin-left:auto">🖨 Plan vide</button>
-      <button class="btn btn-g btn-sm" onclick="openCollectPatternsModal()" title="Définir l'ordre dans lequel tu ramasses les copies dans cette salle. Plusieurs ordres possibles (par îlot, en serpentin…). Utilisés au tri dans la saisie d'évaluation.">🗂 Ordres de ramassage</button>
-      <button class="btn btn-d btn-sm" onclick="deleteSelectedSalle()">🗑 Supprimer cette salle</button>
+      <span id="cfg-hint-short" class="cf-hint"></span>
+      <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="_cfgHelpToggle()" title="Explication complète du mode affiché">❔ Aide</button>
     </div>
-    <div id="cfg-salle-classes" style="display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:.85em;padding:6px 10px;margin-bottom:8px;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px"></div>
-    <div class="al al-i" data-help="cfg" id="cfg-hint-tables">
-      <strong>Tables</strong> — indique le <strong>positionnement physique des tables</strong> dans la salle. Clique sur une case (ou clic + glisser sur plusieurs) pour basculer <strong>Avec table ⬜</strong> ↔ <strong>Sans table ✖</strong>. Modifie le catalogue : toutes les classes utilisant cette salle sont impactées.
-    </div>
-    <div class="al al-i" data-help="cfg" id="cfg-hint-groupes" style="display:none">
-      <strong>Groupes G1/G2/G3</strong> — réserve des places pour chaque groupe lors du <strong>placement automatique</strong>. Utile quand les élèves conservent les <strong>mêmes places en classe entière et en groupe</strong>. <strong>1.</strong> Sélectionne des cases (clic + glisser). <strong>2.</strong> Bouton <strong style="color:var(--g1-fg)">G1</strong> / <strong style="color:var(--g2-fg)">G2</strong> / <strong style="color:var(--g3-fg)">G3</strong> / Aucun. Une place ne peut être que dans <em>un seul</em> groupe ou tag. Spécifique à la classe sélectionnée. <em>Si les élèves ont des places différentes selon le groupe, utilise plutôt l'onglet <strong>Tags</strong> ci-contre + crée une <strong>classe recomposée</strong> (onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🔀 Classe recomposée</strong>, ou onglet <strong>Classes</strong> → <strong>+ Nouvelle classe recomposée</strong>).</em>
-    </div>
-    <div class="al al-i" data-help="cfg" id="cfg-hint-tags" style="display:none">
-      <strong>Tags</strong> — réserve des places pour des <strong>sous-ensembles d'élèves taggés</strong> (DF, DNL, etc.). Utile pour les <strong>classes recomposées</strong> (DNL, Devoir Fait, accompagnement…). <strong>1.</strong> Sélectionne des cases. <strong>2.</strong> Bouton de tag. Une place ne peut être que dans <em>un seul</em> groupe ou tag. <em>Gérer les tags : onglet <strong>Élèves</strong> → <strong>🏷 Tags</strong>. Affecter un tag à des élèves : onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🏷 Tags…</strong>.</em><br>
-      <strong>Au placement automatique :</strong> un élève taggé T cherche en priorité une place taggée T. Sinon il prend une place sans tag (libre). Sinon (rare) une place taggée différemment, avec popup d'avertissement. Si une place taggée T reste sans candidat T, elle peut accueillir un autre élève en débordement (toast). <strong>Placement manuel</strong> (drag&drop) : aucune contrainte — on place qui on veut où on veut.
-    </div>
-    <div class="al al-i" data-help="cfg" id="cfg-hint-contraintes" style="display:none">
-      <strong>Contraintes</strong> — règles de placement <strong>par élève en particulier</strong>. <strong>Places autorisées</strong> : un élève ne peut s'asseoir qu'à certaines places (ex. élève à mobilité réduite ↔ table d'accès, ou élève qui ne voit pas bien ↔ tables de devant). Sélectionne un élève dans la liste, puis les cases autorisées et clique sur <strong>✓ Autoriser</strong>. Sans contrainte = peut s'asseoir partout. <strong>Paires séparées</strong> : 2 élèves qui ne doivent pas être proches (drag&drop d'un nom sur un autre dans la liste en bas). Une alerte rouge s'affiche sur le Plan en cas de violation.
-    </div>
-    <div class="al al-i" data-help="cfg" id="cfg-hint-ilots" style="display:none">
-      <strong>Îlots</strong> — facilite la configuration des salles avec des <strong>blocs de tables sur plusieurs rangées</strong> (regroupements physiques). Sert aussi à <strong>améliorer la séparation des paires d'élèves à éloigner</strong> (les élèves d'un même îlot sont systématiquement considérés comme proches). <strong>1.</strong> Clique sur un bouton <strong>Î1 / Î2 / …</strong> pour activer un îlot, ou sélectionne des cases puis <strong>+ Nouvel îlot</strong> (rattachement direct). <strong>2.</strong> <strong>✓ Affecter à</strong> ajoute la sélection à l'îlot actif. <em>Inutile si tes tables ne forment que des rangées 1D — utilise plutôt l'onglet Tables seul.</em>
-    </div>
-    <!-- Toolbar Îlots : sélection de l'îlot actif + actions -->
-    <div id="cfg-ilots-bar" style="display:none;background:#f8f9fa;border:1px solid #d1d5da;border-radius:4px;padding:8px 12px;margin-bottom:6px;flex-wrap:wrap;gap:8px;align-items:center">
-      <span style="font-weight:600;font-size:.9em;color:var(--danger-fg)">🟥 Îlot actif :</span>
-      <span id="cfg-ilots-buttons" style="display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
-      <button class="btn btn-s btn-sm" onclick="cfgIlotCreate()" title="Créer un nouvel îlot vide" style="padding:2px 8px">+ Nouvel îlot</button>
-      <button class="btn btn-sm" onclick="cfgIlotsAuto()" title="Détecte les îlots automatiquement (blocs de tables sur ≥ 2 rangées, séparés par des sans-tables) — remplace les îlots existants" style="padding:2px 8px;background:#16a085;color:#1a252f">🪄 Auto-îlots</button>
-      <span id="cfg-ilot-info" style="font-size:.82em;color:var(--pencil);margin-left:6px"></span>
-      <button class="btn btn-d btn-sm" id="cfg-ilot-delete-btn" onclick="cfgIlotDeleteActive()" title="Supprimer l'îlot actif (les cases redeviennent libres)" style="margin-left:auto;display:none">🗑 Supprimer cet îlot</button>
-    </div>
-    <!-- Bandeau d'invitation à l'auto-détection (visible uniquement en mode Îlots
-         quand la salle n'a aucun îlot défini) -->
-    <div id="cfg-ilots-empty-hint" style="display:none;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:4px;padding:8px 12px;margin-bottom:6px;font-size:.88em;color:var(--link-fg);line-height:1.4">
-      💡 <strong>Aucun îlot défini pour cette salle.</strong> Tu peux créer manuellement (sélectionne des cases puis <strong>+ Nouvel îlot</strong>) ou laisser l'app détecter les blocs automatiquement à partir des allées sans-tables.
-      <button class="btn btn-sm" onclick="cfgIlotsAuto()" style="background:#16a085;color:#1a252f;padding:3px 10px;margin-left:6px;font-size:.92em">🪄 Détecter automatiquement</button>
-    </div>
-    <!-- Sélecteur d'élève (mode Contraintes) — placé juste au-dessus de la grille -->
-    <div id="cfg-contraintes-bar" style="display:none;flex-direction:column;background:#fef9e7;border:1px solid #f4d03f;border-radius:4px;padding:8px 12px;margin-bottom:6px;gap:6px">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        <label style="font-weight:600;font-size:.9em">👤 Élève sélectionné :</label>
-        <select id="cfg-contraintes-stu" onchange="renderConfigGrid()" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em;min-width:200px"></select>
-        <span id="cfg-contraintes-info" style="font-size:.82em;color:var(--pencil)"></span>
-        <button class="btn btn-d btn-sm" onclick="cfgClearAllowedFor()" title="Retire toutes les contraintes pour cet élève (peut s'asseoir partout)" style="margin-left:auto">↻ Aucune contrainte</button>
-      </div>
-      <!-- Liste des élèves qui ont déjà des contraintes définies dans cette salle -->
-      <div id="cfg-allowed-list-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;border-top:1px dashed #f4d03f;padding-top:6px;font-size:.82em">
-        <span style="color:#7d3c00;font-weight:600;flex-shrink:0">⛓ Élèves avec contraintes dans cette salle :</span>
-        <span id="cfg-allowed-list" style="display:inline-flex;flex-wrap:wrap;gap:4px;flex:1;min-width:200px"></span>
-      </div>
-    </div>
-    <!-- Barre d'actions en lot pour la grille de config (Groupes ou Tags ou Contraintes) -->
-    <div id="cfg-bulk-bar" style="display:none;background:#e8f4fd;border:1px solid #3498db;border-radius:4px;padding:6px 10px;margin-bottom:6px;flex-wrap:wrap;gap:6px;align-items:center">
-      <strong style="font-size:.9em"><span id="cfg-bulk-count">0</span> case(s) sélectionnée(s) — affecter à :</strong>
-      <span id="cfg-bulk-actions" style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center"></span>
-      <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="cfgClearSelection()" title="Désélectionner toutes les cases">✕ Désélec.</button>
-    </div>
-    <div id="cfgg" class="gc cgrid"></div>
-    <div class="board" style="margin-top:6px">🖥 TABLEAU (vue prof)</div>
-    <p id="cfg-legend" style="font-size:.82em;color:var(--pencil);margin-top:6px">⬜ Blanc = table &nbsp;|&nbsp; ⬛ Gris = sans table</p>
+    <div id="cfg-help" style="display:none">
     <!-- Exemple visuel îlots — affiché uniquement en mode Îlots -->
     <div id="cfg-ilots-example" style="display:none;margin-top:14px;padding:12px;background:#f8f9fa;border:1px solid #d1d5da;border-radius:6px">
       <div style="font-size:.88em;color:var(--pencil);margin-bottom:8px"><strong>Exemple de configuration en îlots</strong> — 9 blocs 2×2 séparés par des allées sans-tables (vue prof, tableau en bas) :</div>
@@ -3963,6 +3935,61 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </svg>
       <div style="font-size:.82em;color:var(--pencil);margin-top:8px">Les <span style="color:var(--danger-fg);font-weight:700">cases bordées de rouge foncé</span> appartiennent à un îlot. Les <span style="color:var(--pencil)">cases grises</span> sont des allées sans-tables. <strong>Auto-îlots</strong> détecte ces blocs grâce aux séparations sans-tables.</div>
     </div>
+    <div class="al al-i" id="cfg-hint-tables">
+      <strong>Tables</strong> — indique le <strong>positionnement physique des tables</strong> dans la salle. Clique sur une case (ou clic + glisser sur plusieurs) pour basculer <strong>Avec table ⬜</strong> ↔ <strong>Sans table ✖</strong>. Modifie le catalogue : toutes les classes utilisant cette salle sont impactées.
+    </div>
+    <div class="al al-i" id="cfg-hint-groupes" style="display:none">
+      <strong>Groupes G1/G2/G3</strong> — réserve des places pour chaque groupe lors du <strong>placement automatique</strong>. Utile quand les élèves conservent les <strong>mêmes places en classe entière et en groupe</strong>. <strong>1.</strong> Sélectionne des cases (clic + glisser). <strong>2.</strong> Bouton <strong style="color:var(--g1-fg)">G1</strong> / <strong style="color:var(--g2-fg)">G2</strong> / <strong style="color:var(--g3-fg)">G3</strong> / Aucun. Une place ne peut être que dans <em>un seul</em> groupe ou tag. Spécifique à la classe sélectionnée. <em>Si les élèves ont des places différentes selon le groupe, utilise plutôt l'onglet <strong>Tags</strong> ci-contre + crée une <strong>classe recomposée</strong> (onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🔀 Classe recomposée</strong>, ou onglet <strong>Classes</strong> → <strong>+ Nouvelle classe recomposée</strong>).</em>
+    </div>
+    <div class="al al-i" id="cfg-hint-tags" style="display:none">
+      <strong>Tags</strong> — réserve des places pour des <strong>sous-ensembles d'élèves taggés</strong> (DF, DNL, etc.). Utile pour les <strong>classes recomposées</strong> (DNL, Devoir Fait, accompagnement…). <strong>1.</strong> Sélectionne des cases. <strong>2.</strong> Bouton de tag. Une place ne peut être que dans <em>un seul</em> groupe ou tag. <em>Gérer les tags : onglet <strong>Élèves</strong> → <strong>🏷 Tags</strong>. Affecter un tag à des élèves : onglet <strong>Élèves</strong> → sélectionner les élèves → <strong>🏷 Tags…</strong>.</em><br>
+      <strong>Au placement automatique :</strong> un élève taggé T cherche en priorité une place taggée T. Sinon il prend une place sans tag (libre). Sinon (rare) une place taggée différemment, avec popup d'avertissement. Si une place taggée T reste sans candidat T, elle peut accueillir un autre élève en débordement (toast). <strong>Placement manuel</strong> (drag&drop) : aucune contrainte — on place qui on veut où on veut.
+    </div>
+    <div class="al al-i" id="cfg-hint-contraintes" style="display:none">
+      <strong>Contraintes</strong> — règles de placement <strong>par élève en particulier</strong>. <strong>Places autorisées</strong> : un élève ne peut s'asseoir qu'à certaines places (ex. élève à mobilité réduite ↔ table d'accès, ou élève qui ne voit pas bien ↔ tables de devant). Sélectionne un élève dans la liste, puis les cases autorisées et clique sur <strong>✓ Autoriser</strong>. Sans contrainte = peut s'asseoir partout. <strong>Paires séparées</strong> : 2 élèves qui ne doivent pas être proches (drag&drop d'un nom sur un autre dans la liste en bas). Une alerte rouge s'affiche sur le Plan en cas de violation.
+    </div>
+    <div class="al al-i" id="cfg-hint-ilots" style="display:none">
+      <strong>Îlots</strong> — facilite la configuration des salles avec des <strong>blocs de tables sur plusieurs rangées</strong> (regroupements physiques). Sert aussi à <strong>améliorer la séparation des paires d'élèves à éloigner</strong> (les élèves d'un même îlot sont systématiquement considérés comme proches). <strong>1.</strong> Clique sur un bouton <strong>Î1 / Î2 / …</strong> pour activer un îlot, ou sélectionne des cases puis <strong>+ Nouvel îlot</strong> (rattachement direct). <strong>2.</strong> <strong>✓ Affecter à</strong> ajoute la sélection à l'îlot actif. <em>Inutile si tes tables ne forment que des rangées 1D — utilise plutôt l'onglet Tables seul.</em>
+    </div>
+    </div>
+    <!-- Toolbar Îlots : sélection de l'îlot actif + actions -->
+    <div id="cfg-ilots-bar" style="display:none;background:#f8f9fa;border:1px solid #d1d5da;border-radius:4px;padding:8px 12px;margin-bottom:6px;flex-wrap:wrap;gap:8px;align-items:center">
+      <span style="font-weight:600;font-size:.9em;color:var(--danger-fg)">🟥 Îlot actif :</span>
+      <span id="cfg-ilots-buttons" style="display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
+      <button class="btn btn-s btn-sm" onclick="cfgIlotCreate()" title="Créer un nouvel îlot vide" style="padding:2px 8px">+ Nouvel îlot</button>
+      <button class="btn btn-sm" onclick="cfgIlotsAuto()" title="Détecte les îlots automatiquement (blocs de tables sur ≥ 2 rangées, séparés par des sans-tables) — remplace les îlots existants" style="padding:2px 8px;background:#16a085;color:#1a252f">🪄 Auto-îlots</button>
+      <span id="cfg-ilot-info" style="font-size:.82em;color:var(--pencil);margin-left:6px"></span>
+      <button class="btn btn-d btn-sm" id="cfg-ilot-delete-btn" onclick="cfgIlotDeleteActive()" title="Supprimer l'îlot actif (les cases redeviennent libres)" style="margin-left:auto;display:none">🗑 Supprimer cet îlot</button>
+    </div>
+    <!-- Bandeau d'invitation à l'auto-détection (visible uniquement en mode Îlots
+         quand la salle n'a aucun îlot défini) -->
+    <div id="cfg-ilots-empty-hint" style="display:none;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:4px;padding:8px 12px;margin-bottom:6px;font-size:.88em;color:var(--link-fg);line-height:1.4">
+      💡 <strong>Aucun îlot défini pour cette salle.</strong> Tu peux créer manuellement (sélectionne des cases puis <strong>+ Nouvel îlot</strong>) ou laisser l'app détecter les blocs automatiquement à partir des allées sans-tables.
+      <button class="btn btn-sm" onclick="cfgIlotsAuto()" style="background:#16a085;color:#1a252f;padding:3px 10px;margin-left:6px;font-size:.92em">🪄 Détecter automatiquement</button>
+    </div>
+    <!-- Sélecteur d'élève (mode Contraintes) — placé juste au-dessus de la grille -->
+    <div id="cfg-contraintes-bar" style="display:none;flex-direction:column;background:#fef9e7;border:1px solid #f4d03f;border-radius:4px;padding:8px 12px;margin-bottom:6px;gap:6px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <label style="font-weight:600;font-size:.9em">👤 Élève sélectionné :</label>
+        <select id="cfg-contraintes-stu" onchange="renderConfigGrid()" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em;min-width:200px"></select>
+        <span id="cfg-contraintes-info" style="font-size:.82em;color:var(--pencil)"></span>
+        <button class="btn btn-d btn-sm" onclick="cfgClearAllowedFor()" title="Retire toutes les contraintes pour cet élève (peut s'asseoir partout)" style="margin-left:auto">↻ Aucune contrainte</button>
+      </div>
+      <!-- Liste des élèves qui ont déjà des contraintes définies dans cette salle -->
+      <div id="cfg-allowed-list-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;border-top:1px dashed #f4d03f;padding-top:6px;font-size:.82em">
+        <span style="color:#7d3c00;font-weight:600;flex-shrink:0">⛓ Élèves avec contraintes dans cette salle :</span>
+        <span id="cfg-allowed-list" style="display:inline-flex;flex-wrap:wrap;gap:4px;flex:1;min-width:200px"></span>
+      </div>
+    </div>
+    <!-- Barre d'actions en lot pour la grille de config (Groupes ou Tags ou Contraintes) -->
+    <div id="cfg-bulk-bar" style="display:none;background:#e8f4fd;border:1px solid #3498db;border-radius:4px;padding:6px 10px;margin-bottom:6px;flex-wrap:wrap;gap:6px;align-items:center">
+      <strong style="font-size:.9em"><span id="cfg-bulk-count">0</span> case(s) sélectionnée(s) — affecter à :</strong>
+      <span id="cfg-bulk-actions" style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center"></span>
+      <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="cfgClearSelection()" title="Désélectionner toutes les cases">✕ Désélec.</button>
+    </div>
+    <div id="cfgg" class="gc cgrid"></div>
+    <div class="board" id="cfg-board" style="margin-top:6px">🖥 TABLEAU (vue prof)</div>
+    <p id="cfg-legend" style="font-size:.82em;color:var(--pencil);margin-top:6px">⬜ Case = table &nbsp;|&nbsp; ▨ Hachuré = allée (sans table)</p>
     <!-- Section paires séparées (visible uniquement en mode Contraintes) — placée
          après la grille pour ne pas couper la visibilité de l'élève sélectionné. -->
     <div id="cfg-pairs-section" style="display:none;background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:10px 12px;margin-top:14px">
@@ -4000,11 +4027,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
 
     <!-- Section Horaires de la salle -->
-    <div id="cfg-schedule-wrap" style="margin-top:18px;border-top:1px solid #ddd;padding-top:14px">
-      <div class="sh" style="margin-bottom:6px">
-        <h2 style="font-size:1.05em;margin:0">📅 Horaires de la journée</h2>
-        <span style="font-size:.85em;color:var(--pencil)">Créneaux configurables par jour — utilisés pour l'appel</span>
-      </div>
+    <details id="cfg-schedule-wrap" style="margin-top:18px;border-top:1px solid var(--rule-line);padding-top:12px">
+      <summary class="cf-sched-sum"><span style="font-family:var(--font-serif);font-size:1.05em;font-weight:600">📅 Horaires de l'établissement</span> <span id="cfg-sched-resume" style="font-size:.85em;color:var(--pencil)"></span></summary>
+      <p style="font-size:.85em;color:var(--pencil);margin:6px 0">Créneaux de chaque jour, utilisés pour l'appel et les dates des devoirs. Ils se règlent ici pour la salle affichée ; « Appliquer à toutes les salles » les recopie partout.</p>
       <div class="tb" style="gap:6px;flex-wrap:wrap;align-items:center">
         <span style="font-size:.9em">Jour :</span>
         <span id="cfg-day-tabs" style="display:flex;gap:4px;flex-wrap:wrap"></span>
@@ -4012,7 +4037,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-w btn-sm" onclick="applyScheduleToAllSalles()" title="L'emploi du temps est celui de l'établissement : recopier tous les créneaux de cette salle sur toutes les autres salles">⧉ Appliquer à toutes les salles</button>
       </div>
       <div id="cfg-slots-list" style="margin-top:6px"></div>
-    </div>
+    </details>
   </div>
 
   <!-- ── TAB: Tablettes ── -->
@@ -7951,11 +7976,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.101.3';
+const APP_VERSION    = '2.102.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T18:23:32Z';
+const APP_BUILD_DATE = '2026-10-07T18:28:56Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -22823,11 +22848,46 @@ function renderStudentView() {
 // ═══════════════════════════════════════════════════════════
 // CONFIG GRID
 // ═══════════════════════════════════════════════════════════
+// Aide courte de chaque mode (v2.102.0) — l'explication complète est dans ❔ Aide (#cfg-help)
+var _CFG_HINT_SHORT = {
+  tables: 'Clic ou glisser sur les cases : table ↔ allée (vaut pour toutes les classes)',
+  ilots: 'Sélectionne des cases puis crée ou complète un îlot (ou 🪄 Auto-îlots)',
+  groupes: 'Sélectionne des places puis G1 / G2 / G3 — pour le placement automatique',
+  tags: 'Sélectionne des places puis un tag — pour les classes recomposées',
+  contraintes: 'Choisis un élève, sélectionne ses places autorisées ; paires à séparer sous la grille',
+};
+function _cfgHelpToggle() { const h = document.getElementById('cfg-help'); if (h) h.style.display = h.style.display === 'none' ? '' : 'none'; }
+function _cfgSchedResume(salle) {
+  const sc = salle?.schedule || {};
+  const days = DAY_KEYS.filter(k => (sc[k] || []).length);
+  if (!days.length) return 'aucun créneau';
+  const all = days.flatMap(k => sc[k]);
+  const st = all.map(x => x.start).filter(Boolean).sort()[0] || '', en = all.map(x => x.end).filter(Boolean).sort().slice(-1)[0] || '';
+  const maxN = Math.max(...days.map(k => sc[k].length));
+  const lbl = k => (DAY_LABELS[k] || k).slice(0, 3).toLowerCase();
+  return `${days.length} jour${days.length > 1 ? 's' : ''} (${days.map(lbl).join(', ')}) · jusqu'à ${maxN} créneau${maxN > 1 ? 'x' : ''} · ${st} – ${en}`;
+}
+// Bandeau de synthèse de la salle (v2.102.0)
+function _cfgSynthRender() {
+  const box = document.getElementById('cfg-synth'); if (!box) return;
+  const _hs = document.getElementById('cfg-hint-short'); if (_hs) _hs.textContent = _CFG_HINT_SHORT[cfgMode] || '';
+  const salle = selectedSalle();
+  if (!salle) { box.innerHTML = ''; return; }
+  const rows = salle.rows || 4, cols = salle.cols || 10;
+  const vides = new Set(salle.positions_vides || []);
+  const nTab = rows * cols - vides.size;
+  const nIl = Object.keys(salle.ilots || {}).length;
+  box.innerHTML = `<div class="bsynth">
+    ${_bsynthCard('Disposition', `<div class="bsynth-big">${nTab}<span class="bsynth-of"> tables</span></div><div class="bsynth-sub">${rows} rangées × ${cols} colonnes · ${vides.size} case${vides.size > 1 ? 's' : ''} sans table · ${nIl} îlot${nIl > 1 ? 's' : ''}</div>`)}
+    ${_bsynthCard('Classes dans cette salle', `<div id="cfg-salle-classes" class="cf-cls"></div><div class="bsynth-sub">clic = rattacher / détacher la classe</div>`, '', 'cf-card-cls')}
+    ${_bsynthCard('Horaires', `<div class="bsynth-sub" style="margin-top:4px">${_esc(_cfgSchedResume(salle))}</div><div class="bsynth-sub"><a href="#" style="color:var(--link-fg)" onclick="event.preventDefault();const d=document.getElementById('cfg-schedule-wrap');d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'})">voir / modifier</a></div>`)}
+  </div>`;
+}
 function setCfgMode(mode, chip) {
   // v2.93.0 : les AESH se règlent par classe (fenêtre AESH) et se placent sur le Plan.
   if (mode === 'aesh') { openAeshModal(getCls()); return; }
   cfgMode = mode;
-  document.querySelectorAll('#tab-config .gchip').forEach(c => c.classList.remove('on'));
+  document.querySelectorAll('#tab-config .cf-mode').forEach(c => c.classList.remove('on'));
   if (chip) {
     chip.classList.add('on');
   } else {
@@ -22837,6 +22897,8 @@ function setCfgMode(mode, chip) {
     if (el) el.classList.add('on');
   }
   const autoBtn = document.getElementById('cfg-auto-grp');
+  const _hs = document.getElementById('cfg-hint-short');
+  if (_hs) _hs.textContent = _CFG_HINT_SHORT[mode] || '';
   document.getElementById('cfg-hint-tables').style.display      = mode==='tables'      ? '' : 'none';
   document.getElementById('cfg-hint-groupes').style.display     = mode==='groupes'     ? '' : 'none';
   document.getElementById('cfg-hint-tags').style.display        = mode==='tags'        ? '' : 'none';
@@ -22859,10 +22921,10 @@ function setCfgMode(mode, chip) {
   if (autoBtn) autoBtn.style.display = mode==='groupes' ? '' : 'none';
   const legend = document.getElementById('cfg-legend');
   if (legend) {
-    if      (mode === 'tables')      legend.textContent = '⬜ Blanc = table | ⬛ Gris = sans table';
-    else if (mode === 'groupes')     legend.textContent = '🔵 G1 | 🟠 G2 | 🟣 G3 | ⬜ non assigné | ⬛ sans table';
+    if      (mode === 'tables')      legend.textContent = '⬜ Case = table | ▨ Hachuré = allée (sans table)';
+    else if (mode === 'groupes')     legend.textContent = '🔵 G1 | 🟠 G2 | 🟣 G3 | ⬜ non assigné | ▨ allée';
     else if (mode === 'tags')        legend.textContent = '⬜ Place sans tag | Cases colorées : tag affecté à la place';
-    else if (mode === 'ilots')       legend.textContent = '🟥 Cases d\'îlot (rouge foncé = îlot actif) | ⬜ hors îlot | ⬛ sans table';
+    else if (mode === 'ilots')       legend.textContent = '🟥 Cases d\'îlot (rouge foncé = îlot actif) | ⬜ hors îlot | ▨ allée';
     else                              legend.textContent = '🟢 Vert = autorisé | ⬜ Blanc = libre (aucune contrainte) | ⬛ Gris = interdit (si une liste autorisée existe)';
   }
   // Reset sélection lors du changement de mode (la sélection est par-mode)
@@ -24055,27 +24117,24 @@ function confirmNewSalle() {
 // salle », là où on nomme la salle : après un import qui a créé plusieurs classes, on
 // coche celles qui partagent la salle physique, sans passer classe par classe.
 function _renderCfgSalleClasses() {
+  _cfgSynthRender();
   const box = document.getElementById('cfg-salle-classes');
   if (!box) return;
   const salle = selectedSalle();
   const classes = Object.values(S.classes || {}).sort((a, b) => String(a.nom || a.id).localeCompare(String(b.nom || b.id), 'fr', { numeric: true }));
-  if (!salle || !classes.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  // ⚠️ 'flex', pas '' : le display est posé en ligne dans le HTML, le vider le retirerait
-  // et chaque puce retomberait sur sa propre ligne (block) — vu en usage réel sur 17 classes.
-  box.style.display = 'flex';
+  if (!salle || !classes.length) { box.innerHTML = '<span class="bsynth-sub">aucune classe</span>'; return; }
   const cur = getCls();
-  box.innerHTML = `<span style="color:var(--pencil);font-weight:600">🏫 Classes utilisant cette salle :</span>` +
-    classes.map(c => {
-      const on = !!(c.rooms && c.rooms[cfgSelectedSalle]);
-      const last = on && Object.keys(c.rooms).length === 1;
-      const placed = on ? Object.keys(c.rooms[cfgSelectedSalle].seating || {}).length : 0;
-      const tip = last ? 'Seule salle de cette classe — ajoute-lui d\'abord une autre salle pour pouvoir retirer celle-ci'
-                : (on && placed ? `${placed} élève${placed > 1 ? 's' : ''} placé${placed > 1 ? 's' : ''} ici — le retrait demandera confirmation` : '');
-      return `<label title="${_escAttr(tip)}" style="display:flex;align-items:center;gap:4px;padding:2px 7px;border:1px solid var(--rule-line);border-radius:4px;background:${on ? 'var(--paper)' : 'transparent'};cursor:${last ? 'not-allowed' : 'pointer'};${last ? 'opacity:.6' : ''}">
-        <input type="checkbox" ${on ? 'checked' : ''} ${last ? 'disabled' : ''} onchange="_cfgToggleSalleClass('${_escJsAttr(c.id)}', this.checked, this)">
-        <span${c === cur ? ' style="font-weight:600"' : ''}>${_escName(c.nom || c.id)}</span>${placed ? `<span style="color:var(--pencil);font-size:.85em">(${placed})</span>` : ''}
-      </label>`;
-    }).join('');
+  // Pastilles (v2.102.0, ex-cases à cocher) : allumée = la classe a cette salle
+  box.innerHTML = classes.map(c => {
+    const on = !!(c.rooms && c.rooms[cfgSelectedSalle]);
+    const last = on && Object.keys(c.rooms).length === 1;
+    const placed = on ? Object.keys(c.rooms[cfgSelectedSalle].seating || {}).length : 0;
+    const tip = last ? `${c.nom} : seule salle de cette classe — ajoute-lui d'abord une autre salle pour pouvoir retirer celle-ci`
+              : on ? `${c.nom} utilise cette salle${placed ? ` (${placed} élève${placed > 1 ? 's' : ''} placé${placed > 1 ? 's' : ''} — le retrait demandera confirmation)` : ''} — clic pour la retirer`
+              : `${c.nom} n'utilise pas cette salle — clic pour la lui ajouter`;
+    return `<button type="button" class="cf-cls-pill${on ? ' on' : ''}${c === cur ? ' cur' : ''}" aria-pressed="${on}" ${last ? 'aria-disabled="true"' : ''}
+      onclick="${last ? `toast('⚠️ ${_escJsAttr(c.nom)} doit conserver au moins une salle.','warn')` : `_cfgToggleSalleClass('${_escJsAttr(c.id)}', ${!on}, null)`}" title="${_escAttr(tip)}">${_escName(c.nom || c.id)}${placed ? `<span class="n">${placed}</span>` : ''}</button>`;
+  }).join('');
 }
 function _cfgToggleSalleClass(classId, on, cb) {
   const cls = S.classes?.[classId];
@@ -24220,7 +24279,8 @@ function renderConfigGrid() {
   else if (cfgMode === 'ilots') modeCls = ' cgrid-ilot';
   g.className = 'gc cgrid' + modeCls;
   g.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  g.style.maxWidth = `${94 * cols}px`;
+  g.style.maxWidth = `${150 * cols}px`;   // v2.102.0 : plus large (94 px par colonne avant)
+  { const bd = document.getElementById('cfg-board'); if (bd) bd.style.maxWidth = g.style.maxWidth; }
   g.innerHTML = '';
 
   for (let r = rows - 1; r >= 0; r--) {
@@ -24459,6 +24519,8 @@ function renderSalleSchedule() {
 
   if (!salle) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
+  const _res = document.getElementById('cfg-sched-resume');
+  if (_res) _res.textContent = '— ' + _cfgSchedResume(salle);
 
   if (!salle.schedule) salle.schedule = defaultSchedule();
   for (const k of DAY_KEYS) if (!Array.isArray(salle.schedule[k])) salle.schedule[k] = [];
