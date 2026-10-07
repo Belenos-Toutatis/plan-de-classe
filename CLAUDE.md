@@ -2895,6 +2895,15 @@ Bouton **🎓 Disciplines** dans la toolbar de l'onglet **Devoirs** (uniquement 
 
 Une « classe recomposée » est une `cls` avec `cls.virtual = true` créée via l'onglet Classes (bouton **+ Nouvelle classe recomposée**). Elle a son propre roster (sids issus de n'importe quelle(s) classe(s) réelle(s)), sa propre salle/plan, ses propres bilans et disciplines.
 
+### Refonte v2.114.0 (maquette validée le 2026-10-07) — remplace la description ci-dessous là où elle diffère
+
+Même gabarit que Nouvelle classe (`.clf-mb`, élargie à 1000 px, `.mvc-mb`) : aperçu de la carte (`_mvcPreview`, `.clf-prev.cc-virtual` : nom, effectif, « de 6e A 4 · 6e B 3 », salles, disciplines) ; bloc identité (nom, identifiant avec pastille « auto » — le vider rend la main au calcul —, année ; **salles en pastilles, plusieurs possibles** `_mvcRenderSalles`, la 1re cochée = salle affichée ; disciplines en pastilles ; AESH en modification) ; puis **deux colonnes** (arbitrages : a, b, c « actifs », d) :
+- **Candidats** (`#mvc-students`) : seulement les NON-membres que la recherche et les filtres laissent voir, groupés par classe (« ＋ tout ajouter ») ; clic sur une ligne = ajout. **Membres** (`#mvc-members`) : tous, groupés par classe d'origine (« ✕ tout retirer »), compte F / G, ✕ par élève.
+- **Présence par période = une pastille `<select class="mvc-per-pill">` sur chaque membre** (`_mvcPerPillOptions`, valeur `début|fin`, libellés `_mvcPerLabel` : « toute l'année », « à partir du S2 », « jusqu'au S1 », « T2 seulement », « du T2 au T3 » ; bornes normalisées par `_mvcNormBounds`) + « Pour tous » (`mvcSetAllPeriod`). Le bloc en deux étapes, la seconde case 🗓, « Cochés uniquement » et « Tout cocher » ont été **supprimés** (fonctions `_mvcBulk*`, `mvcBulk*`, `_mvcToggleAdvanced`, `mvcToggleShowOnly` retirées).
+- **Filtres : seuls les actifs sont visibles** (`#mvc-fp-active`, clic = retirer le critère via `mvcDropFilter`, puce « tags : OU/ET » dès deux tags) ; les quatre lignes (tags, classes groupées par niveau avec la puce de niveau en gras, civilité, aménagements, clic cyclique exigé / exclu inchangé) sont dans « Filtres ▾ » (`_mvcToggleFilters`, replié à chaque ouverture). Filtre actif → ligne `#mvc-cand-actions` : « N correspondent · M déjà membres », **＋ Ajouter les N**, **− Retirer les M**, ↻.
+- `mvcSave` : salles ajoutées / retirées (`_attachSalleToClass` / `_detachSalleFromClass`) ; **une seule confirmation** pour les salles retirées où des élèves étaient placés et pour une classe vide.
+- Audit : 0 écart en clair et en sombre (filtres dépliés, exclusion, présence limitée) ; 360 px à 375, sans débordement.
+
 ### Modale `mvc` — filtres et présence par période
 
 De haut en bas : nom / année / salle / identifiant, disciplines, **panneau de filtres** (toujours visible), recherche + « 👁 Cochés uniquement » + Tout cocher/décocher, bouton repliable **▸ 🗓 Présence par période**, liste des élèves groupée par classe. Tous les contrôles portent une infobulle ; couleurs en tokens (`.mvc-chip` / `.on` = `--chip-on-bg`, `.mvc-cls-head` = `--info-bg`, `.mvc-per-sel`, `.mvc-per-box`) — audit de contraste : 0 écart en clair et en sombre.
