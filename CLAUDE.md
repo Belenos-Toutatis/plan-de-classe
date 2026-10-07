@@ -1196,11 +1196,15 @@ Une seule zone de texte, deux formats détectés automatiquement (`_impDetect`),
 
 **Fichier** (`_impFileSelected`) : lu en `ArrayBuffer`, décodé en **UTF-8 strict** puis, si un octet ne passe pas, en **Windows-1252** — les exports Pronote / SIECLE le sont souvent, et lus en UTF-8 « Léa » devient « LÃ©a ». BOM retiré. Le contenu atterrit dans la zone de texte : même pipeline, même aperçu.
 
-## Onglet Élèves — historique enrichi
+## Onglet Élèves — historique (modale `mhist`, refonte v2.95.0)
 
-Le modal **🕓 Historique** d'un élève a deux onglets :
-- **📦 Incidents** : compteurs vivants `s.oublis` / `s.non_travail` dans le summary + liste détaillée des entrées de `s.history`. Si compteurs > 0 mais hist vide (legacy / import) : message expliquant. Suppression d'une entrée → décrémente le compteur.
-- **🚫 Absences & retards** : aggrège **toutes les classes** via `Object.entries(S.attendance)`, filtre les records mentionnant cet sid (`absents.includes(sid)` ou `retards[sid]`). Affichage par date desc avec classe / créneau / groupe / badge 🚫 ou ⏰ HH:MM. Lecture seule (pour modifier, on passe par 📅 Appels passés → ✏️ Éditer).
+Maquette validée le 2026-10-07 (une seule chronologie, photo dans l'en-tête, « Tout effacer » en lien discret).
+- **En-tête** : photo (`_photoUrl`, sinon initiales), classe, groupe (`_grp`), aménagements (`_ficheSpecBadges`), lien **🪪 Ouvrir la fiche** (`_histOpenFiche` : ferme l'historique ; si la fiche ne s'est pas rouverte d'elle-même — cas d'une parenthèse depuis la fiche — l'ouvre), choix **S1 | S2 | … | Année** commun à tout le contenu (`_histNotesPeriode`, `setHistNotesPeriode` ; nom historique gardé). Notes filtrées par `ev.periode`, vie de classe et absences par date (`_periodStartDate` → `_periodEndDate`).
+- **Bandeau** de 4 cartes cliquables (= filtre) : matériel oublié, travail non fait (avec la date du dernier), absences (+ retards), moyenne (`_computeStudentMeanForPeriod`, nombre de notes). Sur l'Année, les compteurs vivants `s.oublis` / `s.non_travail` font foi s'ils dépassent l'historique daté (élève importé).
+- **Une seule chronologie** groupée par mois (`_histCollect` → items `{kind: 'vie'|'notes'|'abs', d, …}`), pastilles Tout · Vie de classe · Notes · Absences & retards avec leur nombre (`_histTab` = `'all'|'vie'|'notes'|'abs'`). Créneau d'un oubli / travail non fait **déduit** de l'heure de saisie (comme la fiche). Notes : pastille colorée (`_noteColor` + `_contrastTextColor`), clic = `_evalShowNoteDetail`. Absences : **toutes les classes** (`S.attendance`), lecture seule (modifier par 📅 Appels passés). Évals sans date en fin, sous « Sans date ».
+- **✕ au survol** sur les seules entrées de vie de classe (`deleteHistEntry(idx)`, index d'origine dans `s.history`). « **Effacer la vie de classe…** » en lien discret (`clearHistEntries`, confirmation : oublis, travaux non faits, rappels traités ; notes et absences intactes), masqué s'il n'y a rien.
+- `openHist(sid, tab, periode)` accepte encore les anciens noms d'onglet (`incidents` → vie, `notes`, `attendance` → abs) : la fiche (`_ficheGo('hist', …)`) les passe.
+- CSS `#mhist .hh-*`, tokens seulement. Audit : 0 écart en clair et en sombre (Tout, Vie de classe, S1) ; 363 px de large à 375, sans débordement.
 
 ## Compteur enrichi `tg-count` (Plan Prof)
 
