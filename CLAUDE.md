@@ -458,6 +458,13 @@ Fenêtre élargie (860 px), qui tient presque sans défilement. Tout est rendu p
 - **Interrupteurs = vraies cases à cocher** stylées par `input.sw-chk` (`appearance:none` + `!important` contre la règle globale des inputs) : les `id` et les `onchange` d'origine sont gardés, le code qui pose `.checked` n'a pas bougé.
 - Tous les `id` d'origine conservés (`timer-*`, `noise-*`, `mbk-options`). Audit : 0 écart en clair et en sombre, détails dépliés ; aucun débordement à 375 px ; interrupteur vérifié au vrai clic.
 
+**Gabarit A — fait en v2.106.0** : Réglages des évaluations (`mevalprefs`) et À propos (`mabout`), élargies à 900 px.
+- **`_sumInit(modalId, groups?)`** construit, à la première ouverture, un **sommaire à gauche** à partir des `.about-section` enfants directs de la `.mb`, et une **recherche** dans l'en-tête (`.lst-head`). Les sections restent les mêmes nœuds (déplacés dans `.sum-body`) : leurs `id` et le code qui les remplit ne changent pas. Une entrée du sommaire = un groupe de sections (`groups = [{ label, idx }]`) ; une seule affichée à la fois (`.sum-hide`) ; la recherche (sans accents ni casse) montre toutes les sections qui contiennent les mots. Entrée courante gardée pour la session (`_sumState`). Au téléphone, le sommaire passe en rangée de boutons au-dessus.
+- Réglages des évaluations : 8 entrées — Niveaux de maîtrise (nombre + libellés) · Couleurs (niveaux + seuils de la note /20) · Points et barèmes (A–C + Type D) · Note → niveau · Période · Moyenne des compétences · Commentaires, ajustements · Défauts à la création. ⚠️ **Les indices `idx` suivent l'ordre des `.about-section` dans le HTML** : toute section ajoutée ou déplacée impose de les revoir (sinon une section n'apparaît dans aucune entrée).
+- **Nombre de niveaux** en boutons 2 à 6 (`#evalprefs-nb-seg`, `_evalNbSet` / `_evalNbSegSync`) ; le `<select id="evalprefs-nbLevels">` est gardé caché, c'est lui que lisent `_evalPrefsRebuildLabels` et `_evalPrefsSave`. **Période** en sélecteur Semestres | Trimestres : mêmes radios `evalprefs-periodMode`, habillées par `.seg-radio` (CSS `:has(input:checked)`). Rien n'est enregistré avant « ✓ Enregistrer », comme avant.
+- À propos : une entrée par section (Version, Crédits, Licence, Vie privée, Les mots, Raccourcis).
+- Audit : 0 écart en clair et en sombre sur toutes les entrées des deux fenêtres ; 363 px de large à 375, sans débordement (`.sum-body` défile en largeur pour les tableaux larges). Sélecteur de période vérifié au vrai clic.
+
 ### Ce qu'ils contenaient avant la refonte (historique)
 
 
