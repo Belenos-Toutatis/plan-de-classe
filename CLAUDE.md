@@ -354,6 +354,9 @@ Encart `#about-storage` en pied de la section Vie privée, rempli à chaque `ope
 
 ⚠️ **Compression écartée sciemment**, et la décision ne dépend PAS de la place disponible. Gain réel mesuré sur données à entropie réaliste : gzip 7,9×, brotli 13,8×. Deux raisons dirimantes : (1) `beforeunload` appelle `save()` de façon **synchrone** pour persister les dernières frappes, alors que `CompressionStream` est asynchrone — la rendre async ferait **perdre des données** à la fermeture de l'onglet ; (2) **un seul octet altéré détruit tout un fichier gzip** (`Z_DATA_ERROR`), là où un JSON en clair reste lisible, diffable et réparable à la main — or les fichiers de sync et les backups sont précisément le filet de sécurité.
 
+## Barre des onglets — refonte v2.121.0 (maquette validée le 2026-10-08)
+**Une seule ligne** (`#nav` en `nowrap`, défile en largeur s'il le faut), deux groupes Vie de classe / Évaluations, **onglet actif souligné** (plus d'onglet « intercalaire »). **Noms courts** : « ⚙️ Salles » (Config Salle), « 📜 Notes » (Bilan des notes), « 🎯 Compétences » (Bilan des compétences) — nom complet en infobulle ; Notes passe AVANT Compétences. Texte dans `.nb-txt` : **≤ 1280 px, icône seule sauf l'onglet actif**, intitulés de groupe masqués. **Pastille `#nb-plan-badge`** sur Plan : nombre de messages visibles de la classe affichée (`_navBadgeRender`, appelé par `_renderClassMsgBanner` et `_renderClassPicker`). Les clés d'onglet (`config`, `bilan`, `comp`) et la recherche des boutons par leur `onclick` (`switchTab`) sont inchangées. Audit : 0 écart en clair et en sombre.
+
 ## Onglets de navigation (à 2 niveaux)
 
 La nav `#nav` est structurée en **deux groupes** séparés par un filet vertical (`.tab-group` + `.group-label`), pour anticiper le futur volet Évaluation :
