@@ -124,7 +124,7 @@ Encodées en `data:font/woff2;base64,...` via 3 blocs `@font-face` en tête du `
 - Variables d'espacement `--sp-1..8` (4 → 64 px), radius `--radius-sm/md/lg` (3, 5, 8 px), ombres `--shadow-card` et `--shadow-pop`
 
 ### Aides repliables (`data-help`, v2.73.0)
-Tout bloc d'aide marqué `data-help="clé"` reçoit un ✕ et un bouton « ❔ Aide » (inséré avant le premier bloc de la clé) le réaffiche ; mémorisé dans `localStorage.planClasse_help_<clé>` (`_helpInit` après `init()`, `_helpSet`, `_helpApplyAll`). Le pliage passe par la classe `.help-folded` (`display:none !important`) : Config Salle affiche ses aides par `style.display` selon le mode, une classe les masque toutes sans se battre avec lui. Clés : `qcm` (3 bandeaux de l'onglet QCMcam), `cfg` (aides des 6 modes de Config Salle). Les onglets Évaluations gardent leur mécanisme `evhelp` historique. **Pastilles `?` au toucher** : un clic ou un toucher sur `.tb-hint` affiche son texte dans une bulle `#help-bubble` (l'infobulle native est invisible au doigt).
+Tout bloc d'aide marqué `data-help="clé"` reçoit un ✕ et un bouton « ❔ Aide » (inséré avant le premier bloc de la clé) le réaffiche ; mémorisé dans `localStorage.planClasse_help_<clé>` (`_helpInit` après `init()`, `_helpSet`, `_helpApplyAll`). Le pliage passe par la classe `.help-folded` (`display:none !important`) : Config Salle affiche ses aides par `style.display` selon le mode, une classe les masque toutes sans se battre avec lui. Clés : `cfg` (aides des 6 modes de Config Salle). Les onglets Évaluations gardent leur mécanisme `evhelp` historique. **Pastilles `?` au toucher** : un clic ou un toucher sur `.tb-hint` affiche son texte dans une bulle `#help-bubble` (l'infobulle native est invisible au doigt).
 
 ### Hints en pastilles `?`
 Les anciens textes d'astuce `<span class="tb-hint">…</span>` sont visuellement convertis en **pastilles rondes grises** avec leur contenu transformé en infobulle native (`title=`). Conversion faite au runtime par `_initHints()` (parcourt les `.tb-hint`, déplace le textContent dans `title`, vide le texte visible). Appelé à `init()` puis re-déclenché après chaque `renderStudents()` via un wrapper sur la fonction d'origine. Pastille stylée via `.tb-hint::after { content: "?" }`.
@@ -1239,6 +1239,14 @@ Maquette validée le 2026-10-07 (une seule chronologie, photo dans l'en-tête, �
 - **Note** : l'indicateur de pool actif (`📱 <nom-pool>`) historiquement affiché dans `tg-count` a été **retiré** — il est désormais visible directement dans la toolbar du Plan Prof à côté du sélecteur de salle (cf. `.pool-buttons-container` partagé entre Plan Prof et Tablettes). Évite le doublon.
 
 ## QCMCam — numérotation et marqueurs ArUco
+
+### Onglet — modernisation v2.101.0 (maquette validée le 2026-10-07)
+
+- **Rangée 1** `#qcm-salle-row` : 📍 Salle, et à droite `#qcm-num-info` (numérotation de la salle, nombre de places, plage de n°). **Rangée 2** `.qc-row2` en groupes `.tb-grp` : Liste élèves (💾 Exporter pour QCMcam en principal, ⧉ Copier = `copyQcmAllClasses`, `#qcm-dir-info`) · Marqueurs (🎯 Marqueurs ArUco, 🗺 Plans des salles…) · Résultats (📂 Importer…) · à droite ❔ Comment ça marche ?
+- **Aide regroupée et repliée par défaut** (`#qcm-help`, `_qcmHelpToggle`, non mémorisé) : principe de QCMcam, usage un marqueur par place, format des noms, règles de numérotation, incompatibilité avec QCMcam 1. La clé d'aide `qcm` (`data-help`) n'existe plus. **Remerciements** à Sébastien Cogez : une ligne `.qcm-credits` en pied d'onglet, toujours visible.
+- **Bandeau** (`.bsynth`) : Export (lignes, classes, salles, identifiants classe-salle — calculé par `_allQcmLines`) · Cette classe (élèves avec un n° / total, sans place NA…, au-delà de 157) · Marqueurs (plage à coller dans la salle, places exclues) · **« Remplacer » dans QCMcam 2** en carte permanente (`.qcm-card-warn`, arbitrage de l'utilisateur).
+- **Plan par défaut / Liste** (`planClasse_qcmView`, `_qcmSetView`, mêmes boutons `.ip-seg` que l'onglet Tablettes). Plan = `_buildQcmPlanHTML` avec les numéros agrandis par CSS **limité à `#qcm-sum`** (l'impression des plans écrit ailleurs, `#qcm-plan-print-area`), puis les élèves **sans place** en puces (`.qcm-na-chip`, NA1…). Liste = l'ancien tableau, avec « ⧉ Copier cette classe (sans en-tête) » (`copyQcmAll`).
+- Audit : 0 écart en clair et en sombre (Plan, Liste, aide dépliée) ; aucun débordement à 375 px.
 
 ### Stratégie de numérotation (`_qcmNumbering(cls, salleId)`)
 
