@@ -582,6 +582,12 @@ html[data-theme="dark"] .memo-choice.good{background:#16301f;border-color:#3f8f5
 #tab-plan .pl-seg button.on{background:var(--chip-on-bg);color:#fff}
 /* Appel en cours : le code pose un fond en ligne (#3b82f6, sérialisé « rgb(59, 130, 246) » dans l'attribut), battu par le !important de .btn-p — on le rend visible par un anneau. */
 html #btn-appel-mode.btn[style*="59, 130, 246"]{box-shadow:0 0 0 3px var(--highlighter) !important}
+/* Fenêtre de projection de la Vue Élève (v2.98.0) */
+.proj-only{display:none !important}
+body.proj-mode .proj-only{display:inline-flex !important}
+body.proj-mode #topbar, body.proj-mode #nav, body.proj-mode #conf-banner, body.proj-mode .proj-hide,
+body.proj-mode #app-version-tag, body.proj-mode #noise-widget, body.proj-mode #timer-widget{display:none !important}
+body.proj-mode::before{display:none}
 #tab-plan .pl-vtoggle,#tab-svue .pl-vtoggle{min-width:7.6em;justify-content:center;text-align:center}
 @media (pointer: coarse){#tab-plan .pl-seg button,#tab-svue .pl-seg button{padding:7px 12px;font-size:.92em}}
 @media (max-width:760px){.cl-synth{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -3509,7 +3515,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="tb pl-row2">
       <span class="tb-grp"><span class="tb-grp-lbl">Séance</span>
-      <button class="btn btn-p btn-sm pl-vtoggle" onclick="switchTab('svue')" title="Aller à la Vue Élève (à projeter : plan des élèves, interroger au hasard) — le bouton « Vue prof » est au même endroit">🔄 Vue Élève</button>
+      <button class="btn btn-p btn-sm pl-vtoggle" onclick="openStudentWindow()" title="Ouvre la Vue Élève dans une NOUVELLE FENÊTRE, à glisser sur l'écran de projection et à mettre en plein écran (⛶ ou F11). Cette fenêtre-ci reste en vue prof. « Vue prof » dans la fenêtre la ferme.">🔄 Vue Élève</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
       <button class="btn btn-p btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Faire l'appel : clic = absent / présent, clic droit = retard (raccourci touche A)">🙋 Faire l'appel</button>
       <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Appels passés : consulter, modifier ou supprimer les appels enregistrés" aria-label="Appels passés">📅</button>
@@ -3626,19 +3632,35 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
   <!-- ── TAB: Vue Élève ── -->
   <div id="tab-svue" class="tab">
-    <div class="tb pl-row1" id="sv-salle-row">
+    <div class="tb pl-row1 proj-hide" id="sv-salle-row">
       <span class="pl-lbl">📍 Salle</span>
       <span id="sv-salle-buttons" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
     </div>
-    <div class="tb">
-      <!-- Même place que « 🔄 Vue Élève » / « 🎲 Interroger » dans la barre du Plan (v2.97.1) : on passe de l'un à l'autre sans chercher. -->
+    <!-- Vue Élève : UNE seule barre (v2.98.0, demande de l'utilisateur) — Séance, Afficher, zoom, imprimer.
+         « 🔄 Vue prof » garde la place du « 🔄 Vue Élève » du Plan. Dans la fenêtre de projection
+         (?projection=1), il ferme la fenêtre. -->
+    <div class="tb pl-row2">
       <span class="tb-grp"><span class="tb-grp-lbl">Séance</span>
-      <button class="btn btn-p btn-sm pl-vtoggle" onclick="switchTab('plan')" title="Revenir au Plan (vue prof) — même place que le bouton « Vue Élève »">🔄 Vue prof</button>
+      <button class="btn btn-p btn-sm pl-vtoggle" onclick="_svueBackToProf()" title="Revenir au Plan (vue prof) — même place que le bouton « Vue Élève ». Dans la fenêtre de projection : la ferme.">🔄 Vue prof</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
       </span>
+      <span class="tb-grp"><span class="tb-grp-lbl">Afficher</span>
+      <span class="gchip gc-all on" onclick="setGroupFilter(0,this)" title="Tous (touche 0)">Tous</span>
+      <span class="gchip gc-1"      onclick="setGroupFilter(1,this)" title="Groupe 1 (touche 1)">🔵 G1</span>
+      <span class="gchip gc-2"      onclick="setGroupFilter(2,this)" title="Groupe 2 (touche 2)">🟠 G2</span>
+      <span class="gchip gc-3"      onclick="setGroupFilter(3,this)" title="Groupe 3 (touche 3)">🟣 G3</span>
+      <span id="sv-tagchips" class="tag-chips-wrap" style="display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap"></span>
+      <button class="btn btn-g btn-sm btn-toggle-moved" onclick="toggleMovedHighlight()" oncontextmenu="return moveHighlightContextMenu(event)" style="font-size:1em;padding:2px 6px" title="Masquer / réafficher le surlignage rose des places modifiées — clic droit pour effacer">💡</button>
+      <span class="moved-help-text" style="display:none;font-size:.78em;color:var(--pencil);font-style:italic;margin-left:-2px"></span>
+      </span>
       <span class="tb-hint">Prénoms uniquement — pour projection</span>
-      <!-- Même menu 🖨 ▾ qu'au Plan, au même endroit (v2.97.2). L'espace réservé invisible tient la place du ⋯ des tablettes du Plan. -->
       <span class="pl-right">
+      <span class="pl-seg" role="group" aria-label="Zoom">
+        <button type="button" onclick="svZoomOut()" title="Zoom − (touche −)">−</button>
+        <button type="button" onclick="svZoomReset()" id="sv-zoom-lbl" title="Zoom 100% (touche =)">100%</button>
+        <button type="button" onclick="svZoomIn()" title="Zoom + (touche +)">＋</button>
+      </span>
+      <button class="btn btn-g btn-sm proj-only" onclick="_projToggleFullscreen()" title="Plein écran (ou touche F11)" aria-label="Plein écran">⛶</button>
       <span class="dd dd-right">
         <button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Imprimer (Ctrl+P)">🖨 ▾</button>
         <div class="dd-menu">
@@ -3651,25 +3673,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
           <div class="dd-sep"></div>
           <button onclick="event.stopPropagation();togglePrintColors()" title="Bascule couleurs / noir & blanc pour toutes les impressions"><span class="pc-tog-lbl">🎨 Couleurs : ON</span></button>
         </div>
-      </span>
-      <span class="dd dd-right ff-tablettes" style="visibility:hidden" aria-hidden="true"><button class="btn btn-g btn-sm" tabindex="-1">⋯</button></span>
-      </span>
-    </div>
-    <div class="tb pl-row3">
-      <span class="tb-grp"><span class="tb-grp-lbl">Afficher</span>
-      <span class="gchip gc-all on" onclick="setGroupFilter(0,this)" title="Tous (touche 0)">Tous</span>
-      <span class="gchip gc-1"      onclick="setGroupFilter(1,this)" title="Groupe 1 (touche 1)">🔵 G1</span>
-      <span class="gchip gc-2"      onclick="setGroupFilter(2,this)" title="Groupe 2 (touche 2)">🟠 G2</span>
-      <span class="gchip gc-3"      onclick="setGroupFilter(3,this)" title="Groupe 3 (touche 3)">🟣 G3</span>
-      <span id="sv-tagchips" class="tag-chips-wrap" style="display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap"></span>
-      <button class="btn btn-g btn-sm btn-toggle-moved" onclick="toggleMovedHighlight()" oncontextmenu="return moveHighlightContextMenu(event)" style="font-size:1em;padding:2px 6px" title="Masquer / réafficher le surlignage rose des places modifiées — clic droit pour effacer">💡</button>
-      <span class="moved-help-text" style="display:none;font-size:.78em;color:var(--pencil);font-style:italic;margin-left:-2px"></span>
-      </span>
-      <span class="pl-right">
-      <span class="pl-seg" role="group" aria-label="Zoom">
-        <button type="button" onclick="svZoomOut()" title="Zoom − (touche −)">−</button>
-        <button type="button" onclick="svZoomReset()" id="sv-zoom-lbl" title="Zoom 100% (touche =)">100%</button>
-        <button type="button" onclick="svZoomIn()" title="Zoom + (touche +)">＋</button>
       </span>
       </span>
     </div>
@@ -7839,11 +7842,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.97.3';
+const APP_VERSION    = '2.98.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T12:28:03Z';
+const APP_BUILD_DATE = '2026-10-07T13:29:10Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10425,6 +10428,9 @@ function _clockCompare(a, b) {
 }
 
 function save() {
+  // Fenêtre de projection (Vue Élève, ?projection=1) : lecture seule, elle ne doit JAMAIS
+  // écrire — elle écraserait les modifications faites dans la fenêtre prof.
+  if (_isProj()) return;
   try {
     // Horodatage interne de la version des données : voyage DANS le JSON (localStorage,
     // sync auto, backups). Permet, à l'ouverture sur une autre machine, de détecter qu'un
@@ -15470,13 +15476,68 @@ function showTab(name, btn) {
   const tab = document.getElementById('tab-' + name);
   if (tab) tab.classList.add('on');
   if (btn) btn.classList.add('on');
-  localStorage.setItem('planClasse_tab', name);
+  if (!_isProj()) localStorage.setItem('planClasse_tab', name);
   if (name === 'config') _cfgSyncedCls = null;
   renderTab(name);
   _confRenderBanner();
 }
 
 // Bascule entre onglets via le nom (retrouve le bouton nav s'il existe)
+// ═══ Fenêtre de projection de la Vue Élève (v2.98.0) ═══
+// « 🔄 Vue Élève » du Plan ouvre la Vue Élève dans une AUTRE fenêtre (?projection=1), à glisser
+// sur l'écran de projection ; la fenêtre prof reste en vue prof. La fenêtre de projection est en
+// LECTURE SEULE (save / _saveAttTransient neutralisés) et suit la fenêtre prof par l'événement
+// `storage` (données, appel en cours, filtre de groupe). « 🔄 Vue prof » la ferme.
+function _isProj() { try { return /[?&]projection=1(&|$)/.test(location.search); } catch (e) { return false; } }
+var _projWin = null;
+function openStudentWindow() {
+  if (_projWin && !_projWin.closed) { try { _projWin.focus(); } catch (e) {} return; }
+  const url = location.pathname + '?projection=1';
+  let w = null;
+  try { w = window.open(url, 'planClasse_vueEleve', 'popup,width=1280,height=800'); } catch (e) {}
+  if (!w) { toast('⚠️ Le navigateur a bloqué la fenêtre — Vue Élève affichée ici. Autorise les fenêtres pour ce site.', 'warn'); switchTab('svue'); return; }
+  _projWin = w;
+}
+function _svueBackToProf() {
+  if (!_isProj()) { switchTab('plan'); return; }
+  try { window.close(); } catch (e) {}
+  // Fenêtre ouverte à la main (pas par le bouton) : le navigateur refuse de la fermer.
+  setTimeout(() => { if (!window.closed) location.href = location.pathname; }, 150);
+}
+function _projToggleFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  } catch (e) { toast('Plein écran indisponible — essaie F11.', 'warn'); }
+}
+var _projRaf = 0;
+function _projRerender() {
+  if (_projRaf) return;
+  _projRaf = requestAnimationFrame(() => { _projRaf = 0; try { renderStudentView(); } catch (e) {} });
+}
+function _projInit() {
+  document.body.classList.add('proj-mode');
+  document.title = 'Vue Élève — Plan de Classe';
+  showTab('svue');
+  window.addEventListener('storage', e => {
+    if (e.key === LS_KEY && e.newValue) {
+      try { S = JSON.parse(e.newValue); postLoadHook(); } catch (err) { return; }
+      _projRerender();
+    } else if (e.key === 'planClasse_attTransient') {
+      try { _loadAttTransient(); } catch (err) {}
+      _projRerender();
+    } else if (e.key === 'planClasse_groupFilter') {
+      const g = parseInt(e.newValue || '0', 10);
+      groupFilter = (g === 1 || g === 2 || g === 3) ? g : 0;
+      const cl = groupFilter === 0 ? 'gc-all' : 'gc-' + groupFilter;
+      document.querySelectorAll('.gchip').forEach(c => c.classList.toggle('on', c.classList.contains(cl)));
+      _projRerender();
+    }
+  });
+}
+// Fenêtre prof : fermer la projection avec elle (sinon elle resterait figée, sans source).
+window.addEventListener('beforeunload', () => { try { if (_projWin && !_projWin.closed) _projWin.close(); } catch (e) {} });
+
 function switchTab(name) {
   const navBtn = [...document.querySelectorAll('.nb')]
     .find(b => b.getAttribute('onclick')?.includes(`'${name}'`));
@@ -27594,6 +27655,7 @@ function _absencesAutoReset() {
 const _ATT_TRANSIENT_KEY = 'planClasse_attTransient';
 
 function _saveAttTransient() {
+  if (_isProj()) return;   // fenêtre de projection : lecture seule
   try {
     const data = {
       absentDate: _absentDate,
@@ -37674,6 +37736,7 @@ function init() {
   // Appliquer l'état des fonctionnalités (masque onglets/boutons désactivés) avant de
   // restaurer l'onglet actif — sinon on pourrait afficher un onglet masqué.
   _applyFeatureFlags();
+  if (_isProj()) { _projInit(); return; }
 
   // Restaurer l'onglet actif (svue n'a plus de bouton de nav, on retombe sur 'plan')
   let savedTab = localStorage.getItem('planClasse_tab') || 'classes';
