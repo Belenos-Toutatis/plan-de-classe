@@ -2816,6 +2816,18 @@ Deux pastilles dans la barre du Plan Prof — **📄 Agrandissement** et **⏱ T
 - **Plan Prof seulement.** Ni Vue Élève (projetée à la classe) ni impression — c'est une information privée à l'enseignant, comme les rappels. Un bloc `@media print` neutralise estompage et liserés au cas où.
 - ⚠️ `.moved-cell` (surlignage rose des places qui viennent de bouger) porte `outline … !important` et `z-index:10` : sur une case à la fois déplacée et concernée, **le rose gagne**. Voulu — l'information la plus fraîche prime.
 
+## Cases du Plan allégées (v2.99.0, maquette validée le 2026-10-08)
+
+Arbitrages de l'utilisateur, point par point :
+- **Compteurs 📦 / 📝** : à 0, classe `.cctr.zero`, masqués (`visibility:hidden`, la place reste) **seulement avec une souris** — `@media (hover: hover) and (pointer: fine)` — et réaffichés au survol de la case. **Au doigt** (Surface en mode tablette, iPad), aucun survol n'existe : ils restent visibles, sinon on ne pourrait plus noter un oubli en passant dans les rangs (motif explicite de l'utilisateur). Clic = +1 comme avant.
+- **Croix ✕ « retirer de sa place »** : même règle (survol à la souris, toujours visible au doigt).
+- **Groupe** : pastille G1/G2 et fond coloré INCHANGÉS (option C) — l'utilisateur lit le groupe par son NUMÉRO, pas par une couleur ; une bordure colorée a été écartée.
+- **Taille du nom** : ⚙ Réglages → Apparence, « Normal | Grand » (`planClasse_planNameSize`, réglage de la machine, `_planNameSize` / `_setPlanNameSize` / `_applyPlanNameSize` → `body.plan-name-big`, nom à 1,55 em). Vérifié : aucun débordement de case en Grand.
+- **Rappels** : la pastille « 🔔 1 rappel » devient **🔔** (ou « 🔔 3 »), le détail reste dans l'infobulle et au clic.
+- **Allées** (`#tg .cell.nt`, `#svg .svcell.nt`) : GARDENT la largeur d'une table (une allée fait au moins une table, rappel de l'utilisateur) ; plus de bloc gris avec ✖ mais un contour pointillé et des hachures très légères. ⚠️ Config Salle garde « ✖ Sans table » (`.cgrid .cell.nt`), c'est là qu'on les règle.
+- **Panneau de droite** (`_tpSideUpdate`, enveloppes posées sur `renderUnplaced` / `renderAttendanceSide`) : « Élèves non placés » se replie quand il n'y a personne à placer ; la **liste alphabétique des absents / retardataires** (l'utilisateur s'en sert pour les reporter dans MBN) garde sa place ; la colonne entière disparaît seulement si les deux sont vides, et le plan récupère la largeur. Conséquence assumée : sans panneau, on retire un élève de sa place par ✕ ou par le clic droit (plus de dépôt dans la liste).
+- Audit : 0 écart en clair et en sombre sur la grille et le réglage.
+
 ## Mode de coloration des cellules (Plan Prof)
 
 Sélecteur **🎨 Couleur** dans la toolbar Plan Prof (`#tg-color-mode`). 4 modes :

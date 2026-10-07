@@ -582,6 +582,21 @@ html[data-theme="dark"] .memo-choice.good{background:#16301f;border-color:#3f8f5
 #tab-plan .pl-seg button.on{background:var(--chip-on-bg);color:#fff}
 /* Appel en cours : le code pose un fond en ligne (#3b82f6, sérialisé « rgb(59, 130, 246) » dans l'attribut), battu par le !important de .btn-p — on le rend visible par un anneau. */
 html #btn-appel-mode.btn[style*="59, 130, 246"]{box-shadow:0 0 0 3px var(--highlighter) !important}
+/* Cases du Plan allégées (v2.99.0) — souris : compteurs à 0 et croix ✕ seulement au survol ;
+   au doigt (pas de survol), tout reste visible. Allées : largeur d'une table, lues comme un passage. */
+@media (hover: hover) and (pointer: fine){
+  #tg .cell .cctr.zero{visibility:hidden}
+  #tg .cell:hover .cctr.zero{visibility:visible}
+  #tg .cell .cell-unplace{opacity:0}
+  #tg .cell:hover .cell-unplace, #tg .cell .cell-unplace:focus{opacity:1}
+}
+#tg .cell.nt, #svg .svcell.nt{background:repeating-linear-gradient(135deg,transparent 0 9px,var(--rule-line-soft) 9px 10px) !important;border:1.5px dashed var(--rule-line) !important}
+#tg .cell.nt::after, #svg .svcell.nt::after{content:none !important}
+body.plan-name-big #tg .cell .cn{font-size:1.55em;line-height:1.12}
+#msettings .pl-seg{display:inline-flex;border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);overflow:hidden}
+#msettings .pl-seg button{border:none;background:var(--paper);color:var(--ink-deep);padding:3px 10px;font:500 .85em var(--font-sans);cursor:pointer}
+#msettings .pl-seg button + button{border-left:1px solid var(--rule-line)}
+#msettings .pl-seg button.on{background:var(--chip-on-bg);color:#fff}
 /* Fenêtre de projection de la Vue Élève (v2.98.0) */
 .proj-only{display:none !important}
 body.proj-mode .proj-only{display:inline-flex !important}
@@ -6725,6 +6740,14 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
           <button class="btn btn-g btn-sm" onclick="toggleAppTheme();_settingsRefreshLabels()" id="msettings-theme-btn">◐ Thème : …</button>
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px">
+          <span style="font-size:.88em">Nom des élèves sur le Plan :</span>
+          <span class="pl-seg" id="set-plan-name" role="group" aria-label="Taille du nom sur le Plan">
+            <button type="button" data-v="normal" onclick="_setPlanNameSize('normal')">Normal</button>
+            <button type="button" data-v="grand" onclick="_setPlanNameSize('grand')">Grand</button>
+          </span>
+          <span style="font-size:.85em;color:var(--pencil)">Plus lisible de loin ; réglage de cet ordinateur.</span>
+        </div>
       </div>
       <!-- Impression : réglage GLOBAL, rangé jusqu'ici seulement dans le menu 🖨 du Plan (audit 2026-10-03, § 3.2) -->
       <div class="about-section">
@@ -7844,11 +7867,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.98.1';
+const APP_VERSION    = '2.99.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T13:36:39Z';
+const APP_BUILD_DATE = '2026-10-07T16:36:25Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15490,6 +15513,17 @@ function showTab(name, btn) {
 // sur l'écran de projection ; la fenêtre prof reste en vue prof. La fenêtre de projection est en
 // LECTURE SEULE (save / _saveAttTransient neutralisés) et suit la fenêtre prof par l'événement
 // `storage` (données, appel en cours, filtre de groupe). « 🔄 Vue prof » la ferme.
+// Taille du nom dans les cases du Plan (v2.99.0) — réglage de la machine, ⚙ Réglages → Apparence.
+function _planNameSize() { try { return localStorage.getItem('planClasse_planNameSize') === 'grand' ? 'grand' : 'normal'; } catch (e) { return 'normal'; } }
+function _applyPlanNameSize() {
+  const v = _planNameSize();
+  document.body.classList.toggle('plan-name-big', v === 'grand');
+  document.querySelectorAll('#set-plan-name button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+}
+function _setPlanNameSize(v) {
+  try { localStorage.setItem('planClasse_planNameSize', v === 'grand' ? 'grand' : 'normal'); } catch (e) {}
+  _applyPlanNameSize();
+}
 function _isProj() { try { return /[?&]projection=1(&|$)/.test(location.search); } catch (e) { return false; } }
 var _projWin = null;
 function openStudentWindow() {
@@ -21470,7 +21504,7 @@ function buildCell(cls, row, col) {
     if (remCount > 0) {
       cell.classList.add('crem');
       const remTitle = remList.map(r => '• ' + r.label).join('\n');
-      const remLbl = remCount > 1 ? `🔔 ${remCount} rappels` : '🔔 1 rappel';
+      const remLbl = remCount > 1 ? `🔔 ${remCount}` : '🔔';   // v2.99.0 : la cloche suffit, le détail est dans l'infobulle
       remBadge = `<span class="crem-badge" onclick="event.stopPropagation();openReminders('${stu.id}')" title="${_escAttr('Rappels à vérifier :\n' + remTitle + '\n\n(Clic = gérer)')}">${remLbl}</span>`;
     }
     // Badges tags (DF, DNL, etc.) — affichés avant les statuts
@@ -21520,8 +21554,8 @@ function buildCell(cls, row, col) {
       <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
         ${_cellPhotoHTML(stu.id)}
       <div class="cell-ctrs">
-        <span class="cctr" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié">📦 ${stu.oublis}</span>
-        <span class="cctr" style="background:${oubliColor(stu.non_travail)};border-radius:3px" onclick="event.stopPropagation();incNT('${stu.id}')" title="Travail non fait">📝 ${stu.non_travail}</span>
+        <span class="cctr${stu.oublis ? '' : ' zero'}" style="background:${oubliColor(stu.oublis)};border-radius:3px" onclick="event.stopPropagation();incOubli('${stu.id}')" title="Matériel oublié (clic = +1)">📦 ${stu.oublis}</span>
+        <span class="cctr${stu.non_travail ? '' : ' zero'}" style="background:${oubliColor(stu.non_travail)};border-radius:3px" onclick="event.stopPropagation();incNT('${stu.id}')" title="Travail non fait (clic = +1)">📝 ${stu.non_travail}</span>
       </div>
       ${(() => {
         const _pool = S.tabletPools?.[cls.activePool];
@@ -22258,6 +22292,25 @@ function renderAttendanceSide() {
 
   el.innerHTML = html;
 }
+
+// Panneau de droite du Plan (v2.99.0) : « Élèves non placés » se replie quand il n'y a personne
+// à placer ; la liste des absents / retardataires (utile pour MBN) garde sa place ; la colonne
+// entière disparaît seulement si les deux sont vides — le plan récupère alors la largeur.
+function _tpSideUpdate() {
+  const unpl = document.getElementById('unpl'), att = document.getElementById('att-side');
+  const side = unpl?.closest('.tp-side');
+  if (!unpl || !side) return;
+  const q = (document.getElementById('unpl-search')?.value || '').trim();
+  const unplEmpty = !q && !document.querySelector('#unpl-body .us') && !document.querySelector('#unpl-selbar[style*="block"]');
+  const attEmpty = !(att && att.innerHTML.trim());
+  unpl.style.display = unplEmpty ? 'none' : '';
+  side.style.display = (unplEmpty && attEmpty) ? 'none' : '';
+}
+(function () {
+  const _ru = renderUnplaced, _ra = renderAttendanceSide;
+  renderUnplaced = function () { const r = _ru.apply(this, arguments); _tpSideUpdate(); return r; };
+  renderAttendanceSide = function () { const r = _ra.apply(this, arguments); _tpSideUpdate(); return r; };
+})();
 
 // ═══ Fenêtre AESH de la classe (v2.93.0) ═══
 var _aeshModalCls = null;
@@ -37752,6 +37805,7 @@ function init() {
   // Appliquer l'état des fonctionnalités (masque onglets/boutons désactivés) avant de
   // restaurer l'onglet actif — sinon on pourrait afficher un onglet masqué.
   _applyFeatureFlags();
+  _applyPlanNameSize();
   if (_isProj()) { _projInit(); return; }
 
   // Restaurer l'onglet actif (svue n'a plus de bouton de nav, on retombe sur 'plan')
