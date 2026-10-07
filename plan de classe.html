@@ -424,6 +424,8 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 #photo-pop .mnp{margin:4px auto 2px}
 #photo-pop img{margin-left:auto;margin-right:auto}
 #photo-pop .mnp-rooms{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center}
+/* Séparation discrète entre les plans de plusieurs salles (v2.88.0) */
+#photo-pop .mnp-rooms>div+div{border-left:1px solid var(--rule-line);padding-left:10px}
 #photo-pop .mnp-lbl{color:var(--pencil);font-size:.92em}
 /* Mini-plan « où est assis l'élève corrigé » (tableur d'éval) — orientation Plan Prof, bureau en bas */
 .mnp{display:grid;gap:1px;width:max-content}
@@ -1866,6 +1868,14 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
 .bsynth-chip:disabled { opacity:.45; cursor:default; }
 .bsynth-count { color:var(--pencil); font-size:.92em; }
 tr.bf-hide { display:none; }
+/* Réglages des évaluations — sélecteur de jeu de couleurs (v2.88.0) */
+.cset-picker { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+.cset-opt { display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px; border:1px solid var(--rule-line); background:var(--paper); color:var(--ink-deep); border-radius:var(--radius-md); padding:5px 9px 6px; cursor:pointer; font-family:var(--font-sans); font-size:.85em; line-height:1.2; }
+.cset-opt:hover { border-color:var(--ink-blue-soft); }
+.cset-opt.on { border-color:var(--ink-blue); box-shadow:0 0 0 2px var(--ink-blue); }
+.cset-name { font-weight:600; }
+.cset-sw { display:flex; gap:3px; }
+.cset-sw i { display:block; width:15px; height:13px; border-radius:3px; }
 /* Bilan des compétences — lot 3 (v2.87.0) : carte de maîtrise */
 .lvsq { display:inline-flex; align-items:center; justify-content:center; width:26px; height:24px; border-radius:6px; font-family:var(--font-mono); font-weight:600; font-size:.88em; line-height:1; vertical-align:middle; }
 .lvsq-sm { width:18px; height:16px; border-radius:4px; font-size:.78em; margin-right:4px; }
@@ -5061,12 +5071,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
     <div class="about-section">
       <h3>🎨 Couleurs des niveaux de maîtrise</h3>
-      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Couleurs utilisées pour les pastilles N1 → N4 dans la saisie et les bilans.</p>
-      <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;font-size:.9em">
-        <input type="checkbox" id="evalprefs-colorsAuto" onchange="_evalPrefsToggleColorsAuto()">
-        <strong>Mode auto</strong> <span style="color:var(--pencil);font-size:.88em">— palette générée selon le nombre de niveaux (rouge → bleu)</span>
-      </label>
-      <div id="evalprefs-colorsAuto-hint" style="display:none;font-size:.82em;color:var(--ink-blue-soft);font-style:italic;margin:0 0 6px;padding:4px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue-soft);border-radius:3px">↳ Les couleurs sont recalculées automatiquement quand tu changes le nombre de niveaux.</div>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Couleurs utilisées pour les pastilles des niveaux dans la saisie et les bilans. Chaque jeu a une version <strong>jour</strong> et une version <strong>nuit</strong> (aperçu dans le thème affiché) ; à l'impression et dans les exports, c'est toujours la version jour. <strong>Personnalisé</strong> : tes couleurs, les mêmes dans les deux thèmes.</p>
+      <div id="evalprefs-colorSet" class="cset-picker" data-value="classic" role="radiogroup" aria-label="Jeu de couleurs des niveaux"></div>
       <div id="evalprefs-colors" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center"></div>
     </div>
 
@@ -5075,7 +5081,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Combien de points vaut chaque niveau de maîtrise. Cette table sert à deux choses :<br>
       • <strong>Type B</strong> — calcul direct de la note /20 à partir des niveaux saisis ;<br>
       • <strong>Types A et C</strong> — <em>uniquement</em> si le mode « au milieu entre les points par niveau » est choisi ci-dessous : elle fixe alors les bornes entre niveaux quand les points d'une question sont convertis en niveau de compétence.<br>
-      Elle règle aussi les seuils de couleur de la note quand ceux-ci sont en mode auto.<br>
+      Elle règle aussi les seuils de couleur de la note quand ceux-ci suivent un jeu de couleurs (tout sauf « Personnalisé »).<br>
       ⚠️ <strong>Le Type D n'est pas concerné</strong> : il a son propre barème, juste en dessous.</p>
       <div id="evalprefs-points" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"></div>
     </div>
@@ -5181,11 +5187,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="about-section">
       <h3>🌡 Seuils de couleur pour la note /20</h3>
       <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Couleurs de fond appliquées à la colonne <strong>Total</strong> dans le tableur et le bilan. Chaque ligne définit le seuil <em>au-dessous duquel</em> on applique la couleur. La dernière ligne (sans seuil) couvre les valeurs au-dessus. Tu peux ajouter/retirer des plages.</p>
-      <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;font-size:.9em">
-        <input type="checkbox" id="evalprefs-thresholdsAuto" onchange="_evalPrefsToggleThresholdsAuto()">
-        <strong>Mode auto</strong> <span style="color:var(--pencil);font-size:.88em">— seuils = milieux entre les points par niveau · couleurs = palette des niveaux</span>
-      </label>
-      <div id="evalprefs-thresholdsAuto-hint" style="display:none;font-size:.82em;color:var(--ink-blue-soft);font-style:italic;margin:0 0 6px;padding:4px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue-soft);border-radius:3px">↳ Les seuils suivent automatiquement les <em>points par niveau</em> et la <em>palette niveau</em>.</div>
+      <div id="evalprefs-noteColorSet" class="cset-picker" data-value="custom" role="radiogroup" aria-label="Couleurs des notes"></div>
+      <div id="evalprefs-thresholdsAuto-hint" style="display:none;font-size:.82em;color:var(--ink-blue-soft);font-style:italic;margin:0 0 6px;padding:4px 8px;background:var(--paper-warm);border-left:3px solid var(--ink-blue-soft);border-radius:3px">↳ Seuils placés au milieu des <em>points par niveau</em>, couleurs du jeu choisi (version jour ou nuit selon le thème). Choisis <em>Personnalisé</em> pour régler les plages à la main.</div>
       <div id="evalprefs-noteThresholds" style="display:flex;flex-direction:column;gap:6px"></div>
       <button class="btn btn-g btn-sm" id="evalprefs-addNoteThreshold-btn" onclick="_evalPrefsAddNoteThreshold()" style="margin-top:8px">+ Ajouter une plage</button>
     </div>
@@ -7613,11 +7616,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.87.2';
+const APP_VERSION    = '2.88.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-06T22:53:44Z';
+const APP_BUILD_DATE = '2026-10-07T03:31:48Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -8671,6 +8674,10 @@ const DEFAULT_EVAL_PREFS = {
   // Mode auto pour la palette niveaux : si true, on ré-applique _defaultColorsForNb(nb)
   // à chaque enregistrement (et la palette s'adapte automatiquement quand on change nbLevels).
   maitriseColorsAuto: false,
+  // Jeu de couleurs des niveaux (_colorSetDefs) ou 'custom' ; jeu des notes : 'levels'
+  // (comme les niveaux), un jeu, ou 'custom' (plages saisies). Cf. _maitriseColors.
+  colorSet: 'classic',
+  noteColorSet: 'custom',
   // Mode auto pour les seuils de couleur de la note : si true, on dérive
   // {max, color} depuis maitriseColors + maitrisePoints (midpoints entre niveaux).
   noteThresholdsAuto: false,
@@ -8850,7 +8857,7 @@ function migrateEvalDefaults() {
   }
   const _nb = ep.nbLevels;
   if (!Array.isArray(ep.maitriseColors) || ep.maitriseColors.length !== _nb) {
-    ep.maitriseColors = _defaultColorsForNb(_nb);
+    ep.maitriseColors = _defaultColorsForNb(_nb, false);
   }
   if (!Array.isArray(ep.maitrisePoints) || ep.maitrisePoints.length !== _nb) {
     ep.maitrisePoints = _defaultPointsForNb(_nb);
@@ -8920,6 +8927,22 @@ function migrateEvalDefaults() {
   }
   if (typeof ep.maitriseColorsAuto !== 'boolean') ep.maitriseColorsAuto = false;
   if (typeof ep.noteThresholdsAuto !== 'boolean') ep.noteThresholdsAuto = false;
+  // Jeux de couleurs (v2.88.0). Ancien « Mode auto » → jeu Classique ; couleurs manuelles
+  // identiques au Classique (jour ou nuit — l'ancien mode auto écrivait la version du thème
+  // affiché) → Classique aussi ; sinon Personnalisé.
+  {
+    const ids = _colorSetDefs().map(x => x.id);
+    if (ep.colorSet !== 'custom' && !ids.includes(ep.colorSet)) {
+      const same = arr => arr.every((c, i) => String(ep.maitriseColors[i] || '').toLowerCase() === c.toLowerCase());
+      ep.colorSet = (ep.maitriseColorsAuto || same(_colorSetColors('classic', _nb, false)) || same(_colorSetColors('classic', _nb, true))) ? 'classic' : 'custom';
+    }
+    if (!['levels', 'custom', ...ids].includes(ep.noteColorSet)) ep.noteColorSet = ep.noteThresholdsAuto ? 'levels' : 'custom';
+    // Copies stockées = version JOUR (exports, anciennes versions) ; drapeaux historiques alignés.
+    if (ep.colorSet !== 'custom') ep.maitriseColors = _colorSetColors(ep.colorSet, _nb, false);
+    ep.maitriseColorsAuto = ep.colorSet !== 'custom';
+    if (ep.noteColorSet !== 'custom') ep.noteThresholds = _autoNoteThresholds(ep, false);
+    ep.noteThresholdsAuto = ep.noteColorSet !== 'custom';
+  }
   // Bibliothèque commentaires (regroupée positifs/négatifs ; liste plate dans chaque groupe)
   if (!S.evalCommentLibrary || typeof S.evalCommentLibrary !== 'object') {
     S.evalCommentLibrary = { positive: [], negative: [] };
@@ -18391,7 +18414,7 @@ function _renduRender() {
     body.innerHTML = '<p style="padding:14px;color:var(--pencil);font-style:italic">Aucun élève à afficher pour cette éval / classe.</p>';
     return;
   }
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   // Titre principal (visible UNIQUEMENT en mode projection — masqué en mode normal via CSS).
   // Inline dans le flux du tableau pour ne pas couvrir les notes (vs ancien bandeau flottant).
   const _dateLbl = (() => { const d = _evalDateFor(ev, _renduState.classId); return d ? _fmtDateFr(d) : ''; })();
@@ -18773,7 +18796,7 @@ function _evalShowNoteDetail(evalId, sid) {
         let nivCell;
         if (v === 'A') nivCell = `<span style="background:#9ca3af;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">A</span>`;
         else if (typeof v === 'number' && v >= 1 && v <= (S.evalPrefs?.nbLevels || 4)) {
-          const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+          const colors = _maitriseColors();
           const bg = colors[v - 1] || 'var(--paper-warm)';
           nivCell = `<span style="background:${bg};color:${_contrastTextColor(bg)};padding:2px 8px;border-radius:4px;font-weight:600">${_formatNiveau(v)}</span>`;
         } else nivCell = '—';
@@ -18797,7 +18820,7 @@ function _evalShowNoteDetail(evalId, sid) {
     const nb = table.length;
     const ptsMax = Math.max(...table);
     const dLevels = ev.notes?.[sid]?.levels || {};
-    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    const colors = _maitriseColors();
     // Ordre du tableur : questions groupées par exercice, orphelines en fin.
     const orderedD = [];
     for (const exo of (ev.exercices || [])) {
@@ -18937,7 +18960,7 @@ function _evalShowNoteDetail(evalId, sid) {
   // liées ; Type A: idem si des compétences sont rattachées aux mini-notes).
   const compsEval = _evalListEvaluatedCompetences(ev, 'code');
   if (compsEval.length > 0) {
-    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    const colors = _maitriseColors();
     html += `<h3 style="margin:14px 0 6px;font-family:var(--font-serif);font-size:1.05em;color:var(--ink-blue)">🧩 Bilan compétences évaluées</h3>`;
     html += `<table style="width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>`;
     html += `<th style="${hdr}">Compétence</th><th style="${hdr};text-align:center">Niveau atteint</th></tr></thead><tbody>`;
@@ -31814,7 +31837,16 @@ function _printCtxSub(tabKey) {
   const el = document.getElementById('tabctx-' + tabKey);
   return el ? el.textContent : '';
 }
-function printBilanNotes() {
+// Papier = jour : si le thème nuit est affiché, on re-rend l'écran avec la version JOUR des
+// jeux de couleurs le temps de le recopier pour l'impression, puis on le remet.
+function _withLightPalette(rerender, fn) {
+  if (!_isDarkPalette()) return fn();
+  _paletteForceLight = true;
+  try { rerender(); fn(); } finally { _paletteForceLight = false; rerender(); }
+}
+function printBilanNotes() { _withLightPalette(renderBilanTab, _printBilanNotes); }
+function printBilanComp() { _withLightPalette(renderCompetencesTab, _printBilanComp); }
+function _printBilanNotes() {
   const cls = getCls();
   if (!cls) return toast('⚠️ Sélectionne une classe.', 'warn');
   const sub = _printCtxSub('bilan');
@@ -31825,7 +31857,7 @@ function printBilanNotes() {
     docTitle: `Bilan des notes - ${cls.nom} - ${sub.split('·')[1]?.trim() || ''}`.replace(/[\\/:*?"<>|]/g, ''),
   });
 }
-function printBilanComp() {
+function _printBilanComp() {
   const cls = getCls();
   if (!cls) return toast('⚠️ Sélectionne une classe.', 'warn');
   const sub = _printCtxSub('comp');
@@ -33668,10 +33700,8 @@ const _NotesExport = (function () {
   function noteCellBg(score20) {
     if (score20 == null || !Number.isFinite(score20)) return null;
     const prefs = S.evalPrefs || {};
-    let thresholds = prefs.noteThresholds;
-    if (prefs.noteThresholdsAuto && typeof _autoNoteThresholds === 'function') {
-      thresholds = _autoNoteThresholds(prefs);
-    }
+    // Fichier tableur = papier : toujours la version JOUR des jeux de couleurs.
+    let thresholds = _noteThresholdsEff(prefs, false);
     if (!Array.isArray(thresholds) || !thresholds.length) {
       const colors = prefs.maitriseColors || ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'];
       thresholds = [{ max: 8, color: colors[0] }, { max: 12, color: colors[1] }, { max: 15, color: colors[2] }, { max: null, color: colors[3] }];
@@ -33684,7 +33714,7 @@ const _NotesExport = (function () {
   function levelCellBg(level) {
     if (!level || level < 1) return null;
     const prefs = S.evalPrefs || {};
-    const colors = prefs.maitriseColors || ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'];
+    const colors = _maitriseColors(prefs, false);
     const idx = Math.min(colors.length - 1, Math.max(0, Math.round(level) - 1));
     return toHex6(colors[idx]);
   }
@@ -38005,28 +38035,117 @@ function openEvalPrefs() {
 
 // Palette de couleurs par défaut pour 2..6 niveaux (interpolation simple
 // rouge → vert → bleu). On garde les défauts 4 niveaux historiques inchangés.
-function _defaultColorsForNb(n) {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  // Mode clair : palette vive, contraste fort sur fond crème → texte ink-deep
-  const light = {
-    2: ['#dc2626', '#16a34a'],
-    3: ['#dc2626', '#f59e0b', '#16a34a'],
-    4: ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'],
-    5: ['#dc2626', '#f59e0b', '#fbbf24', '#16a34a', '#2563eb'],
-    6: ['#dc2626', '#ef4444', '#f59e0b', '#fbbf24', '#16a34a', '#2563eb'],
+// ─── Jeux de couleurs des niveaux et des notes (v2.88.0) ───
+// Chaque jeu a une version JOUR et une version NUIT, avec le MÊME code (le niveau 1 et le
+// meilleur niveau gardent leur place dans la progression d'un thème à l'autre). Les
+// couleurs sont résolues À L'AFFICHAGE selon le thème (_maitriseColors / _noteThresholdsEff) :
+// plus rien de dépendant du thème n'est écrit dans le fichier. La copie stockée
+// (maitriseColors / noteThresholds) est toujours la version JOUR — c'est elle que lisent les
+// exports tableur et les anciennes versions de l'app.
+// ⚠️ Fonctions seulement (code déclaré après init(), lu pendant init()).
+// ⚠️ Chaque couleur doit porter l'encre sombre OU le blanc à 4,5:1 (_contrastTextColor
+// choisit la meilleure) : une couleur de luminosité moyenne n'en porte aucune (cf. design
+// system). Six couleurs ont été éclaircies/assombries pour ça — teinte inchangée. Un test
+// le vérifie pour tous les jeux.
+function _colorSetDefs() {
+  return [
+    { id: 'classic',        name: 'Classique',              day: ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'], night: ['#a83232', '#c07d2c', '#3f7a4e', '#3b5a8c'] },
+    { id: 'classic-pastel', name: 'Classique pastel',       day: ['#f4b6b0', '#f7d9a0', '#b9e0b0', '#a9c8ef'], night: ['#c98a85', '#c9aa72', '#86b08a', '#7f9fca'] },
+    { id: 'lsu',            name: 'Livret scolaire',        day: ['#d43d39', '#f2c94c', '#8bc34a', '#2e7d32'], night: ['#a8403d', '#b39a3e', '#6e9a3c', '#2f6b3a'] },
+    { id: 'lsu-pastel',     name: 'Livret scolaire pastel', day: ['#f2b3b1', '#f8e3a3', '#cfe6ad', '#9fcfa3'], night: ['#c48683', '#c7b47a', '#9db57e', '#6f9c74'] },
+    { id: 'cb',             name: 'Daltonisme',             day: ['#e76600', '#e69f00', '#56b4e9', '#0072b2'], night: ['#b35a1f', '#b98a2e', '#5093c1', '#2f6a9e'] },
+    { id: 'cb-pastel',      name: 'Daltonisme pastel',      day: ['#f2bf9c', '#f5d79a', '#b7dcf2', '#99c1e0'], night: ['#c4916f', '#c4a66d', '#86aec9', '#6c94b8'] },
+    { id: 'blue',           name: 'Dégradé bleu',           day: ['#c9d9ea', '#8fb1d4', '#4677aa', '#1f4e85'], night: ['#a9c0d8', '#7a9cc2', '#4d78a8', '#2c5584'] },
+  ];
+}
+function _colorSetById(id) { return _colorSetDefs().find(x => x.id === id) || null; }
+// Impression : posé le temps de re-rendre un écran avant de le recopier (papier = jour).
+var _paletteForceLight = false;
+function _isDarkPalette() {
+  return !_paletteForceLight && typeof document !== 'undefined'
+    && document.documentElement?.getAttribute?.('data-theme') === 'dark';
+}
+// Couleurs d'un jeu pour nb niveaux (2..6). Le Classique garde ses tables historiques ;
+// les autres : 2 → extrêmes, 3 → [1, 2, 4], 5 et 6 → interpolation entre les 4 ancres.
+function _colorSetColors(id, nb, dark) {
+  nb = Math.max(2, Math.min(6, nb || 4));
+  if (!id || id === 'classic' || !_colorSetById(id)) {
+    const light = {
+      2: ['#dc2626', '#16a34a'],
+      3: ['#dc2626', '#f59e0b', '#16a34a'],
+      4: ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'],
+      5: ['#dc2626', '#f59e0b', '#fbbf24', '#16a34a', '#2563eb'],
+      6: ['#dc2626', '#f15757', '#f59e0b', '#fbbf24', '#16a34a', '#2563eb'],
+    };
+    const darkT = {
+      2: ['#a83232', '#3f7a4e'],
+      3: ['#a83232', '#c07d2c', '#3f7a4e'],
+      4: ['#a83232', '#c07d2c', '#3f7a4e', '#3b5a8c'],
+      5: ['#a83232', '#c07d2c', '#c7a13a', '#3f7a4e', '#3b5a8c'],
+      6: ['#a83232', '#c2473e', '#c07d2c', '#c7a13a', '#3f7a4e', '#3b5a8c'],
+    };
+    return (dark ? darkT : light)[nb].slice();
+  }
+  const a = _colorSetById(id)[dark ? 'night' : 'day'];
+  if (nb === 4) return a.slice();
+  if (nb === 2) return [a[0], a[3]];
+  if (nb === 3) return [a[0], a[1], a[3]];
+  const hex = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+  const out = [];
+  for (let i = 0; i < nb; i++) {
+    const t = i * 3 / (nb - 1), k = Math.min(2, Math.floor(t)), f = t - k;
+    const c0 = hex(a[k]), c1 = hex(a[k + 1]);
+    out.push(_inkableColor('#' + c0.map((v, j) => Math.round(v + (c1[j] - v) * f).toString(16).padStart(2, '0')).join('')));
+  }
+  return out;
+}
+// Une couleur interpolée peut tomber dans la luminosité moyenne qui ne porte ni l'encre
+// sombre ni le blanc : on corrige sa CLARTÉ (jamais sa teinte) dans le sens le moins
+// coûteux jusqu'à 4,6:1 — même méthode que _rankGradientColor.
+function _inkableColor(hex) {
+  const rgbOf = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+  const ok = h => { const c = rgbOf(h); return Math.max(_wcagContrast(c[0], c[1], c[2], 0x1a, 0x25, 0x2f), _wcagContrast(c[0], c[1], c[2], 255, 255, 255)) >= 4.6; };
+  if (ok(hex)) return hex;
+  let [r, g, b] = rgbOf(hex).map(v => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l0 = (mx + mn) / 2, d = mx - mn;
+  let h = 0, sat = 0;
+  if (d) {
+    sat = l0 > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? ((b - r) / d + 2) : ((r - g) / d + 4);
+    h /= 6;
+  }
+  const hsl = (l) => {
+    const q = l < .5 ? l * (1 + sat) : l + sat - l * sat, p = 2 * l - q;
+    const t = x => { x = (x + 1) % 1; return x < 1 / 6 ? p + (q - p) * 6 * x : x < .5 ? q : x < 2 / 3 ? p + (q - p) * (2 / 3 - x) * 6 : p; };
+    return '#' + [t(h + 1 / 3), t(h), t(h - 1 / 3)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
   };
-  // Mode sombre : palette désaturée/assombrie, harmonieuse avec le fond bleu nuit
-  // et l'encre ambre. Les teintes sont préservées (rouge / orange / vert / bleu)
-  // mais ramenées vers des tons "veillée" plutôt que néon.
-  const dark = {
-    2: ['#a83232', '#3f7a4e'],
-    3: ['#a83232', '#b8782a', '#3f7a4e'],
-    4: ['#a83232', '#b8782a', '#3f7a4e', '#3b5a8c'],
-    5: ['#a83232', '#b8782a', '#c7a13a', '#3f7a4e', '#3b5a8c'],
-    6: ['#a83232', '#c2473e', '#b8782a', '#c7a13a', '#3f7a4e', '#3b5a8c'],
-  };
-  const palettes = isDark ? dark : light;
-  return (palettes[n] || palettes[4]).slice();
+  for (let k = 1; k < 100; k++) for (const l of [l0 - k * .005, l0 + k * .005]) {
+    if (l > 0 && l < 1) { const x = hsl(l); if (ok(x)) return x; }
+  }
+  return hex;
+}
+function _defaultColorsForNb(n, dark) {
+  return _colorSetColors('classic', n, dark === undefined ? _isDarkPalette() : dark);
+}
+// Couleurs des niveaux EFFECTIVES (jeu choisi, selon le thème ; « Personnalisé » = les
+// couleurs saisies, identiques dans les deux thèmes). dark omis = thème affiché.
+function _maitriseColors(prefs, dark) {
+  prefs = prefs || S.evalPrefs || {};
+  const nb = prefs.nbLevels || 4;
+  if (dark === undefined) dark = _isDarkPalette();
+  const set = prefs.colorSet;
+  if (set && set !== 'custom' && _colorSetById(set)) return _colorSetColors(set, nb, dark);
+  if (set !== 'custom' && prefs.maitriseColorsAuto) return _colorSetColors('classic', nb, dark);
+  if (Array.isArray(prefs.maitriseColors) && prefs.maitriseColors.length >= nb) return prefs.maitriseColors;
+  return _colorSetColors('classic', nb, dark);
+}
+// Seuils de couleur EFFECTIFS de la note /20 : « Personnalisé » = plages saisies ; sinon
+// seuils au milieu des points par niveau, couleurs = niveaux (« Comme les niveaux ») ou jeu.
+function _noteThresholdsEff(prefs, dark) {
+  prefs = prefs || S.evalPrefs || {};
+  const set = prefs.noteColorSet;
+  if (set === 'custom' || (!set && !prefs.noteThresholdsAuto)) return prefs.noteThresholds || [];
+  return _autoNoteThresholds(prefs, dark);
 }
 // Points par défaut : interpolation linéaire de 0 à 20 sur n paliers
 function _defaultPointsForNb(n) {
@@ -38039,12 +38158,14 @@ function _defaultPointsForNb(n) {
 // Calcule les seuils de couleur de la note /maxNote automatiquement à partir
 // de la palette niveau + des points par niveau. Seuils = milieux entre points
 // consécutifs ; couleurs = palette niveau (1..nb). Dernier seuil = max=null.
-function _autoNoteThresholds(prefs) {
+function _autoNoteThresholds(prefs, dark) {
   const nb = prefs.nbLevels || 4;
+  if (dark === undefined) dark = _isDarkPalette();
   const points = (Array.isArray(prefs.maitrisePoints) && prefs.maitrisePoints.length >= nb)
     ? prefs.maitrisePoints : _defaultPointsForNb(nb);
-  const colors = (prefs.maitriseColorsAuto || !Array.isArray(prefs.maitriseColors) || prefs.maitriseColors.length < nb)
-    ? _defaultColorsForNb(nb) : prefs.maitriseColors;
+  const ns = prefs.noteColorSet;
+  const colors = (ns && ns !== 'levels' && ns !== 'custom' && _colorSetById(ns))
+    ? _colorSetColors(ns, nb, dark) : _maitriseColors(prefs, dark);
   const out = [];
   for (let i = 0; i < nb - 1; i++) {
     const mid = Math.round(((points[i] + points[i+1]) / 2) * 100) / 100;
@@ -38085,17 +38206,19 @@ function _evalPrefsRenderAll(prefs) {
     prefs.thresholdPercents = _defaultPercentsForNb(nb);
     break;
   }
-  // ── Toggle auto couleurs ──
-  const wcAuto = document.getElementById('evalprefs-colorsAuto');
-  if (wcAuto) wcAuto.checked = !!prefs.maitriseColorsAuto;
-  const wcHint = document.getElementById('evalprefs-colorsAuto-hint');
-  if (wcHint) wcHint.style.display = prefs.maitriseColorsAuto ? '' : 'none';
+  // ── Jeu de couleurs des niveaux ──
+  const _cset = (prefs.colorSet && (prefs.colorSet === 'custom' || _colorSetById(prefs.colorSet))) ? prefs.colorSet
+              : (prefs.maitriseColorsAuto ? 'classic' : 'custom');
+  _evalPrefsRenderSetPicker('levels', _cset, prefs);
   // ── Couleurs ──
   const wc = document.getElementById('evalprefs-colors');
   if (wc) {
     wc.innerHTML = '';
-    const isAuto = !!prefs.maitriseColorsAuto;
-    const colors = isAuto ? _defaultColorsForNb(nb) : prefs.maitriseColors;
+    const isAuto = _cset !== 'custom';
+    // Cases de couleur : seulement en « Personnalisé » (les pastilles du sélecteur
+    // montrent déjà un jeu ; grisées, elles affadissaient ses couleurs).
+    wc.style.display = isAuto ? 'none' : 'flex';
+    const colors = _maitriseColors(Object.assign({}, prefs, { colorSet: _cset }));
     for (let i = 0; i < nb; i++) {
       const wrap = document.createElement('label');
       wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.8em;' + (isAuto ? 'cursor:not-allowed;opacity:.7' : 'cursor:pointer');
@@ -38188,30 +38311,54 @@ function _evalPrefsRenderAll(prefs) {
   const dg = document.getElementById('evalprefs-defaultGranularity'); if (dg) dg.value = String(prefs.defaultGranularity ?? 0);
   const mg = document.getElementById('evalprefs-meanGranularity'); if (mg) mg.value = String(prefs.meanGranularity ?? 0.01);
   // ── Seuils de couleur note ──
-  const wtAuto = document.getElementById('evalprefs-thresholdsAuto');
-  if (wtAuto) wtAuto.checked = !!prefs.noteThresholdsAuto;
+  const _nset = (prefs.noteColorSet && (['levels', 'custom'].includes(prefs.noteColorSet) || _colorSetById(prefs.noteColorSet))) ? prefs.noteColorSet
+              : (prefs.noteThresholdsAuto ? 'levels' : 'custom');
+  const _np = Object.assign({}, prefs, { colorSet: _cset, noteColorSet: _nset });
+  _evalPrefsRenderSetPicker('notes', _nset, _np);
+  const notesAuto = _nset !== 'custom';
   const wtHint = document.getElementById('evalprefs-thresholdsAuto-hint');
-  if (wtHint) wtHint.style.display = prefs.noteThresholdsAuto ? '' : 'none';
-  const thresholds = prefs.noteThresholdsAuto ? _autoNoteThresholds(prefs) : (prefs.noteThresholds || []);
-  _evalPrefsRenderNoteThresholds(thresholds, !!prefs.noteThresholdsAuto);
+  if (wtHint) wtHint.style.display = notesAuto ? '' : 'none';
+  const thresholds = notesAuto ? _autoNoteThresholds(_np) : (prefs.noteThresholds || []);
+  _evalPrefsRenderNoteThresholds(thresholds, notesAuto);
   const addBtn = document.getElementById('evalprefs-addNoteThreshold-btn');
-  if (addBtn) addBtn.style.display = prefs.noteThresholdsAuto ? 'none' : '';
+  if (addBtn) addBtn.style.display = notesAuto ? 'none' : '';
 }
 
-// Toggles : lus depuis la modale, on re-render avec les valeurs courantes
-function _evalPrefsToggleColorsAuto() {
-  const auto = document.getElementById('evalprefs-colorsAuto')?.checked;
-  // Lit les valeurs courantes pour les conserver dans le re-render
+// Sélecteur de jeu de couleurs (niveaux : kind 'levels' ; notes : kind 'notes', avec
+// « Comme les niveaux » en tête). Aperçu dans la version du thème affiché.
+function _evalPrefsRenderSetPicker(kind, cur, prefs) {
+  const box = document.getElementById(kind === 'levels' ? 'evalprefs-colorSet' : 'evalprefs-noteColorSet');
+  if (!box) return;
+  box.dataset.value = cur;
+  const nb = prefs.nbLevels || 4;
+  const sw = cols => `<span class="cset-sw">${cols.map(c => `<i style="background:${_safeColor(c)}"></i>`).join('')}</span>`;
+  const opt = (id, name, cols, tip) => `<button type="button" class="cset-opt${id === cur ? ' on' : ''}" role="radio" aria-checked="${id === cur}" onclick="_evalPrefsPickSet('${kind}','${id}')"${tip ? ` title="${_escAttr(tip)}"` : ''}><span class="cset-name">${_esc(name)}</span>${cols ? sw(cols) : ''}</button>`;
+  let h = '';
+  if (kind === 'notes') h += opt('levels', 'Comme les niveaux', _maitriseColors(prefs), 'Mêmes couleurs que les niveaux de maîtrise');
+  for (const d of _colorSetDefs()) h += opt(d.id, d.name, _colorSetColors(d.id, nb, _isDarkPalette()));
+  if (kind === 'levels') {
+    h += opt('custom', 'Personnalisé', (Array.isArray(prefs.maitriseColors) && prefs.maitriseColors.length >= nb) ? prefs.maitriseColors.slice(0, nb) : null, 'Tes couleurs, les mêmes dans les deux thèmes');
+  } else {
+    h += opt('custom', 'Personnalisé', (prefs.noteThresholds || []).map(t => t.color), 'Plages et couleurs réglées à la main, les mêmes dans les deux thèmes');
+  }
+  box.innerHTML = h;
+}
+// Choix d'un jeu : on relit la modale (rien n'est perdu), puis on re-rend. Passer en
+// « Personnalisé » part des couleurs affichées — on n'en retouche qu'une si on veut.
+function _evalPrefsPickSet(kind, id) {
   const prefs = _evalPrefsReadCurrent();
-  prefs.maitriseColorsAuto = !!auto;
+  if (kind === 'levels') {
+    if (id === 'custom' && prefs.colorSet !== 'custom') prefs.maitriseColors = _maitriseColors(prefs).slice();
+    prefs.colorSet = id;
+    prefs.maitriseColorsAuto = id !== 'custom';
+  } else {
+    if (id === 'custom' && prefs.noteColorSet !== 'custom') prefs.noteThresholds = _noteThresholdsEff(prefs).map(t => ({ ...t }));
+    prefs.noteColorSet = id;
+    prefs.noteThresholdsAuto = id !== 'custom';
+  }
   _evalPrefsRenderAll(prefs);
 }
-function _evalPrefsToggleThresholdsAuto() {
-  const auto = document.getElementById('evalprefs-thresholdsAuto')?.checked;
-  const prefs = _evalPrefsReadCurrent();
-  prefs.noteThresholdsAuto = !!auto;
-  _evalPrefsRenderAll(prefs);
-}
+
 
 // Lit les valeurs courantes affichées dans la modale (sans valider) pour re-render
 function _evalPrefsReadCurrent() {
@@ -38222,14 +38369,18 @@ function _evalPrefsReadCurrent() {
     .map(i => parseFloat(i.value)).filter(Number.isFinite);
   // Fallback si valeurs invalides ou incomplètes
   const base = S.evalPrefs || DEFAULT_EVAL_PREFS;
+  const _cs = document.getElementById('evalprefs-colorSet')?.dataset.value || base.colorSet || 'classic';
+  const _ns = document.getElementById('evalprefs-noteColorSet')?.dataset.value || base.noteColorSet || 'custom';
   return {
     ...base,
     nbLevels: nb,
     niveauLabels: base.niveauLabels,
     maitriseColors: (colors.length === nb) ? colors : (base.maitriseColors || _defaultColorsForNb(nb)),
     maitrisePoints: (points.length === nb) ? points : (base.maitrisePoints || _defaultPointsForNb(nb)),
-    maitriseColorsAuto: !!document.getElementById('evalprefs-colorsAuto')?.checked,
-    noteThresholdsAuto: !!document.getElementById('evalprefs-thresholdsAuto')?.checked,
+    colorSet: _cs,
+    noteColorSet: _ns,
+    maitriseColorsAuto: _cs !== 'custom',
+    noteThresholdsAuto: _ns !== 'custom',
     noteThresholds: _evalPrefsReadNoteThresholds(),
     thresholdMode: base.thresholdMode,
     thresholdPercents: base.thresholdPercents,
@@ -38337,12 +38488,16 @@ function _evalPrefsRebuildLabels() {
   for (let i = 0; i < nb - 1; i++) {
     percents.push(Number.isFinite(curPercents[i]) ? curPercents[i] : defPercents[i]);
   }
-  const colorsAuto = !!document.getElementById('evalprefs-colorsAuto')?.checked;
-  const thresholdsAuto = !!document.getElementById('evalprefs-thresholdsAuto')?.checked;
+  const _cs = document.getElementById('evalprefs-colorSet')?.dataset.value || 'classic';
+  const _ns = document.getElementById('evalprefs-noteColorSet')?.dataset.value || 'custom';
+  const colorsAuto = _cs !== 'custom';
+  const thresholdsAuto = _ns !== 'custom';
   _evalPrefsRenderAll({
+    colorSet: _cs,
+    noteColorSet: _ns,
     nbLevels: nb,
     niveauLabels: labels,
-    maitriseColors: colorsAuto ? _defaultColorsForNb(nb) : colors,
+    maitriseColors: colorsAuto ? _colorSetColors(_cs, nb, false) : colors,
     maitrisePoints: points,
     thresholdMode: document.querySelector('input[name="evalprefs-thresholdMode"]:checked')?.value || S.evalPrefs?.thresholdMode || 'midpoint',
     thresholdPercents: percents,
@@ -38419,6 +38574,8 @@ function _evalPrefsResetDefaults() {
         nbLevels:         DEFAULT_EVAL_PREFS.nbLevels,
         maitriseColorsAuto: DEFAULT_EVAL_PREFS.maitriseColorsAuto,
         noteThresholdsAuto: DEFAULT_EVAL_PREFS.noteThresholdsAuto,
+        colorSet:         DEFAULT_EVAL_PREFS.colorSet,
+        noteColorSet:     DEFAULT_EVAL_PREFS.noteColorSet,
         noteThresholds:   DEFAULT_EVAL_PREFS.noteThresholds.map(t => ({ ...t })),
       });
     },
@@ -38429,11 +38586,12 @@ function _evalPrefsResetDefaults() {
 function _evalPrefsSave() {
   const nbLvlRaw = parseInt(document.getElementById('evalprefs-nbLevels')?.value, 10);
   const nb = (nbLvlRaw >= 2 && nbLvlRaw <= 6) ? nbLvlRaw : 4;
-  // Couleurs (auto ou manuel)
-  const colorsAuto = !!document.getElementById('evalprefs-colorsAuto')?.checked;
+  // Couleurs : jeu choisi (copie stockée = version jour) ou personnalisées
+  const colorSet = document.getElementById('evalprefs-colorSet')?.dataset.value || 'classic';
+  const colorsAuto = colorSet !== 'custom';
   let colors;
   if (colorsAuto) {
-    colors = _defaultColorsForNb(nb);
+    colors = _colorSetColors(colorSet, nb, false);
   } else {
     colors = [];
     for (const inp of document.querySelectorAll('#evalprefs-colors input[type="color"]')) {
@@ -38557,6 +38715,7 @@ function _evalPrefsSave() {
   }
   S.evalPrefs.maitriseColors    = colors;
   S.evalPrefs.maitriseColorsAuto = colorsAuto;
+  S.evalPrefs.colorSet          = colorSet;
   S.evalPrefs.maitrisePoints    = points;
   S.evalPrefs.thresholdMode     = thresholdMode;
   S.evalPrefs.thresholdPercents = percents;
@@ -38605,19 +38764,22 @@ function _evalPrefsSave() {
   S.evalPrefs.defaultGranularity = (Number.isFinite(dGran) && dGran >= 0) ? dGran : 0;
   const mGran = parseFloat(document.getElementById('evalprefs-meanGranularity')?.value);
   S.evalPrefs.meanGranularity = (Number.isFinite(mGran) && mGran >= 0) ? mGran : 0;
-  // Seuils note /20 (auto ou manuel)
-  const thresholdsAuto = !!document.getElementById('evalprefs-thresholdsAuto')?.checked;
+  // Seuils note /20 : jeu (« comme les niveaux » ou un jeu) ou plages personnalisées
+  const noteColorSet = document.getElementById('evalprefs-noteColorSet')?.dataset.value || 'custom';
+  const thresholdsAuto = noteColorSet !== 'custom';
+  S.evalPrefs.noteColorSet = noteColorSet;
   S.evalPrefs.noteThresholdsAuto = thresholdsAuto;
   if (thresholdsAuto) {
-    S.evalPrefs.noteThresholds = _autoNoteThresholds(S.evalPrefs);
+    S.evalPrefs.noteThresholds = _autoNoteThresholds(S.evalPrefs, false);
   } else {
     const noteThresholds = _evalPrefsReadNoteThresholds();
     if (noteThresholds.length > 0) S.evalPrefs.noteThresholds = noteThresholds;
   }
   save();
   closeMod2('mevalprefs');
-  // Re-render le tableur courant si ouvert
+  // Re-render le tableur courant si ouvert, et l'onglet affiché (bilans…) : les couleurs ont pu changer
   if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
+  try { const at = document.querySelector('.tab.on'); if (at && typeof renderTab === 'function') renderTab(at.id.replace('tab-', '')); } catch (_) {}
   toast('✓ Réglages des évaluations enregistrés');
 }
 
@@ -43074,7 +43236,7 @@ function _computeStudentNoteBrut(ev, sid) {
 // Rendu sous forme de badge arrondi coloré (plus reconnaissable qu'une case pleine) ;
 // le mode Sobriété neutralise la couleur via la classe .comp-pill (cf. CSS).
 function _compPillHTML(niv) {
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   if (niv == null) {
     return `<span class="comp-pill comp-pill-empty" style="display:inline-block;min-width:20px;padding:1px 7px;border-radius:11px;border:1px dashed var(--rule-line);color:var(--pencil);font-family:var(--font-mono);font-size:.82em;font-weight:400">${_formatNiveau(0)}</span>`;
   }
@@ -44514,7 +44676,7 @@ function _evalRenderBilanComps() {
     return;
   }
   const sids = _evalTableurSortedSids(cls);
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
 
   // Pré-calcul des rangs : tri par note décroissante, gestion des ex æquo (rang "min")
   const notesBySid = {};
@@ -44846,7 +45008,7 @@ function _evalPlanOverlayRender() {
     return;
   }
   const rows = salle.rows, cols = salle.cols;
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   const _gPlan = _evalTableurGroup(cls);
   // Taille de cellule adaptative selon le total de compétences à afficher
   const cellMinH = Math.max(120, 70 + pairs.length * 36);
@@ -44958,7 +45120,7 @@ function _evalPlanOverlayPill(btn) {
   // la classe ET les styles inline.
   const cellPills = btn.parentElement;
   if (cellPills) {
-    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    const colors = _maitriseColors();
     const cur = pass.niveaux[sid][cid];
     const buttons = [
       { v: 'A', bgActive: '#9ca3af', fgActive: '#fff' },
@@ -45013,7 +45175,7 @@ function _evalTableurRenderB(ev, cls) {
   }
 
   const sids = _evalTableurSortedSids(cls);
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
 
   // Calcule le nombre total de colonnes (somme des comps par passation)
   let html = header;
@@ -45291,7 +45453,7 @@ function _statsCellHTML(values, opts) {
     const bg = _noteColor(stats.avg, noteMax);
     if (bg) { avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`; avgPillCls = 'stat-pill-note'; }
   } else if (compLevels) {
-    const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+    const colors = _maitriseColors();
     const idx = Math.max(1, Math.min(colors.length, Math.round(stats.avg))) - 1;
     const bg = colors[idx];
     if (bg) { avgPillStyle = `background:${bg};color:${_contrastTextColor(bg)};padding:1px 6px;border-radius:3px`; avgPillCls = 'stat-pill-comp'; }
@@ -45422,7 +45584,7 @@ function _rankGradientColor(rang, total) {
 // Note normalisée /20 (donc on rescale si maxNote ≠ 20). Retourne '' si pas de match.
 function _noteColor(note, noteMax) {
   if (note == null || !Number.isFinite(note)) return '';
-  const thresholds = S.evalPrefs?.noteThresholds || [];
+  const thresholds = _noteThresholdsEff();
   if (thresholds.length === 0) return '';
   const m = noteMax || 20;
   const scaled = (note / m) * 20; // ramène sur /20
@@ -45547,7 +45709,7 @@ function _evalTableurBUpdate(inputEl) {
   if (!sid || !cid) return;
   const nbMax = S.evalPrefs?.nbLevels || 4;
   const parsed = _parseNiveauInput(inputEl.value, nbMax);
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   _evalArmUndo();
 
   pass.niveaux = pass.niveaux || {};
@@ -45714,7 +45876,7 @@ function _typeDDisplayVal(v) {
 // alors NEUTRE — elle est exclue du calcul, lui donner la couleur du niveau max laissait
 // croire qu'elle comptait (divergence affichage/calcul silencieuse).
 function _typeDCellBg(v, nb) {
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   if (v === 'A') return '#9ca3af';
   if (v === 'NN') return '#6b7280';
   if (typeof v === 'number' && v >= 1) {
@@ -48859,7 +49021,7 @@ function _evalPassSaisieRender() {
 
   const wrap = document.getElementById('meval-pass-saisie-comps');
   wrap.innerHTML = '';
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   for (const cid of (p.competenceIds || [])) {
     const c = S.competences?.[cid];
     if (!c) continue;
@@ -49515,7 +49677,7 @@ function renderBilanTab() {
   //     trace n'importe où) — pour ne perdre personne dans la vue d'ensemble.
   const sids = _bilanSidsFor(cls, periode);
 
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
 
   // Évals de la classe + période (incluses dans la moyenne).
   // Tri configurable (4 modes — mêmes options que la liste des Devoirs, mais
@@ -50993,7 +51155,7 @@ function renderRemarkWriter(focusText) {
   const perLbl = yearMode ? 'Année' : periode;
   const dash = '<span style="color:var(--pencil-soft)">—</span>';
   const ico = (onclick, icon, title) => `<button type="button" class="fiche-ico" onclick="${onclick}" title="${_escAttr(title)}" aria-label="${_escAttr(title)}">${icon}</button>`;
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'];
+  const colors = _maitriseColors();
   const lvlPill = (v) => {
     if (v == null) return `<span class="rw-lv rw-lv-empty" title="Non évaluée sur cette période">·</span>`;
     const bg = _safeColor(colors[Math.max(0, Math.min(colors.length - 1, v - 1))]);
@@ -51217,7 +51379,8 @@ function _rwOpenNoteDetail(evId) {
   _rwHideTip();
   _evalShowNoteDetail(evId, _rw.sid);
 }
-function printFiche() {
+function printFiche() { _withLightPalette(() => renderRemarkWriter(), _printFiche); }
+function _printFiche() {
   const s = _rw && S.eleves[_rw.sid];
   if (!s) return;
   const cls = S.classes?.[_rw.classId];
@@ -52065,7 +52228,7 @@ function renderCompetencesTab() {
       return ka.localeCompare(kb, 'fr');
     });
 
-  const colors = S.evalPrefs?.maitriseColors || ['#dc2626','#f59e0b','#16a34a','#2563eb'];
+  const colors = _maitriseColors();
   // Agrégations mises en cache le temps du rendu : bandeau, lignes et pied lisent les
   // mêmes (élève × compétence × période), chaque appel n'est fait qu'une fois.
   const _aggCache = new Map();
@@ -55021,22 +55184,18 @@ function toggleAppTheme() {
   const btn = document.getElementById('btn-theme');
   if (btn) btn.textContent = next === 'dark' ? '☾' : '◐';
   try { _renderClassPicker(); } catch (_) {}
-  // Si la palette niveaux ou les seuils note sont en mode auto, on régénère
-  // depuis le nouveau thème puis on re-render les vues d'éval ouvertes.
+  // Les jeux de couleurs se résolvent à l'affichage selon le thème (_maitriseColors) :
+  // plus rien à écrire dans le fichier, on re-rend seulement les vues d'éval ouvertes.
+  // (Avant la v2.88.0, l'ancien « mode auto » réécrivait et SAUVEGARDAIT la palette du
+  // thème à chaque bascule — un aller-retour jour/nuit modifiait le fichier synchronisé.)
   try {
-    if (S?.evalPrefs?.maitriseColorsAuto) {
-      S.evalPrefs.maitriseColors = _defaultColorsForNb(S.evalPrefs.nbLevels || 4);
-    }
-    if (S?.evalPrefs?.noteThresholdsAuto) {
-      S.evalPrefs.noteThresholds = _autoNoteThresholds(S.evalPrefs);
-    }
-    if (S?.evalPrefs?.maitriseColorsAuto || S?.evalPrefs?.noteThresholdsAuto) save();
     if (document.getElementById('meval-tableur')?.classList.contains('on') && typeof _evalTableurRender === 'function') {
       _evalTableurRender();
     }
     if (document.getElementById('mevalprefs')?.classList.contains('on') && typeof _evalPrefsRenderAll === 'function') {
-      _evalPrefsRenderAll(S.evalPrefs);
+      _evalPrefsRenderAll(_evalPrefsReadCurrent());
     }
+    if (document.getElementById('mrw')?.classList.contains('on') && typeof renderRemarkWriter === 'function') renderRemarkWriter();
   } catch (_) {}
   // Re-render l'onglet courant pour rafraîchir toute couleur dérivée du thème
   // (badges, chips, fonds de cellules calculés via _noteColor / _contrastTextColor)

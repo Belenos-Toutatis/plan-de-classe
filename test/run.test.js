@@ -2765,3 +2765,58 @@ test('_bsynthGetFilter : « Tous » forcé en mode confidentiel', () => {
   try { assert.equal(ev(`_bsynthGetFilter('bilan')`), 'all'); }
   finally { ev(`_conf.on = false; localStorage.removeItem('planClasse_bilanFilter_bilan')`); }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Jeux de couleurs des niveaux et des notes (v2.88.0)
+// ─────────────────────────────────────────────────────────────────────────────
+test('_colorSetColors : tailles 2..6, même ordre de progression jour/nuit', () => {
+  for (const id of get('_colorSetDefs().map(x => x.id)')) {
+    for (let nb = 2; nb <= 6; nb++) {
+      const d = get(`_colorSetColors('${id}', ${nb}, false)`), n = get(`_colorSetColors('${id}', ${nb}, true)`);
+      assert.equal(d.length, nb, id + nb); assert.equal(n.length, nb, id + nb);
+      for (const c of d.concat(n)) assert.match(c, /^#[0-9a-f]{6}$/i, id);
+    }
+  }
+  assert.deepEqual(get(`_colorSetColors('lsu', 3, false)`), ['#d43d39', '#f2c94c', '#2e7d32']);
+});
+test('migration : ancien mode auto → Classique ; couleurs classiques → Classique ; autres → Personnalisé', () => {
+  const run = ep => { setState({ classes: {}, eleves: {}, evalPrefs: ep }); ev('migrateEvalDefaults()'); return get('S.evalPrefs'); };
+  let ep = run({ nbLevels: 4, maitriseColorsAuto: true, maitriseColors: ['#a83232', '#b8782a', '#3f7a4e', '#3b5a8c'] });
+  assert.equal(ep.colorSet, 'classic');
+  assert.deepEqual(ep.maitriseColors, ['#dc2626', '#f59e0b', '#16a34a', '#2563eb']);   // copie stockée = jour
+  ep = run({ nbLevels: 4, maitriseColorsAuto: false, maitriseColors: ['#dc2626', '#f59e0b', '#16a34a', '#2563eb'] });
+  assert.equal(ep.colorSet, 'classic');
+  ep = run({ nbLevels: 4, maitriseColorsAuto: false, maitriseColors: ['#111111', '#222222', '#333333', '#444444'] });
+  assert.equal(ep.colorSet, 'custom');
+  assert.equal(ep.maitriseColorsAuto, false);
+  ep = run({ nbLevels: 4, noteThresholdsAuto: true });
+  assert.equal(ep.noteColorSet, 'levels');
+  ep = run({ nbLevels: 4, colorSet: 'blue', noteColorSet: 'cb' });
+  assert.equal(ep.colorSet, 'blue'); assert.equal(ep.noteColorSet, 'cb');
+  assert.deepEqual(ep.maitriseColors, get(`_colorSetColors('blue', 4, false)`));
+});
+test('_maitriseColors / _noteThresholdsEff : version nuit à l\'écran, jour quand demandée ; personnalisé inchangé', () => {
+  setState({ classes: {}, eleves: {}, evalPrefs: { nbLevels: 4, colorSet: 'lsu', noteColorSet: 'levels', maitrisePoints: [5, 8, 15, 20] } });
+  assert.deepEqual(get('_maitriseColors(S.evalPrefs, true)'), get(`_colorSetColors('lsu', 4, true)`));
+  assert.deepEqual(get('_maitriseColors(S.evalPrefs, false)'), get(`_colorSetColors('lsu', 4, false)`));
+  const th = get('_noteThresholdsEff(S.evalPrefs, true)');
+  assert.deepEqual(th.map(t => t.max), [6.5, 11.5, 17.5, null]);
+  assert.deepEqual(th.map(t => t.color), get(`_colorSetColors('lsu', 4, true)`));
+  ev(`S.evalPrefs.colorSet = 'custom'; S.evalPrefs.maitriseColors = ['#010101','#020202','#030303','#040404']`);
+  assert.deepEqual(get('_maitriseColors(S.evalPrefs, true)'), ['#010101', '#020202', '#030303', '#040404']);
+});
+test('jeux de couleurs : chaque couleur porte l\'encre sombre ou le blanc à 4,5:1', () => {
+  const bad = get(`(() => {
+    const out = [];
+    for (const id of _colorSetDefs().map(x => x.id)) for (let nb = 2; nb <= 6; nb++) for (const dark of [false, true])
+      for (const c of _colorSetColors(id, nb, dark)) {
+        const h = c.slice(1), rgb = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16));
+        const ink = [0x1a, 0x25, 0x2f];
+        const r = _wcagContrast(rgb[0], rgb[1], rgb[2], ink[0], ink[1], ink[2]);
+        const w = _wcagContrast(rgb[0], rgb[1], rgb[2], 255, 255, 255);
+        if (Math.max(r, w) < 4.5) out.push(id + '/' + nb + (dark ? '/nuit ' : '/jour ') + c);
+      }
+    return out;
+  })()`);
+  assert.deepEqual(bad, []);
+});
