@@ -475,11 +475,20 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .trombi-st.ok{color:var(--ok-fg)}
 .trombi-st.bad{color:var(--danger-fg)}
 /* 🖼 Trombinoscope (affichage) */
-.tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
-.tv-card{text-align:center;cursor:pointer;border-radius:6px;padding:4px}
+.tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tv-w,130px),1fr));gap:12px}
+.tv-card{text-align:center;cursor:pointer;border-radius:6px;padding:4px;position:relative}
 .tv-card:hover{background:var(--paper-warm)}
 .tv-card img,.tv-none{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--rule-line);background:var(--paper-deep);display:block}
-.tv-none{display:flex;align-items:center;justify-content:center;font-size:2em;color:var(--pencil);border-style:dashed}
+.tv-none{display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;font-size:.8em;color:var(--pencil);border:1.5px dashed var(--rule-line);background:var(--paper)}
+.tv-none b{font-size:1.8em;font-weight:400}
+.tv-none.drop{border-color:var(--link-fg);background:var(--info-bg)}
+.tv-card .gbdg{position:absolute;top:8px;left:8px;font-size:.7em;padding:0 5px}
+.tv-syn{display:flex;gap:16px;flex-wrap:wrap;font-size:.86em;color:var(--pencil);margin:8px 0}
+.tv-syn b{font-family:var(--font-serif);font-size:1.35em;color:var(--ink-blue);font-weight:600;margin-right:3px}
+.tv-syn .warn,.tv-syn .warn b{color:var(--warn-fg)}
+.tv-opts{display:flex;gap:4px 14px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.tv-lbl{font-size:.78em;color:var(--pencil);margin-right:4px}
+.tv-print{align-items:center;flex-wrap:wrap;border-top:1px solid var(--rule-line);padding-top:10px}
 .tv-name{font-size:.9em;margin-top:4px;line-height:1.25}
 /* 🧠 Jeu de mémorisation */
 .memo-setup{display:flex;flex-direction:column;gap:10px}
@@ -4813,15 +4822,21 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- 🖼 Trombinoscope d'une classe (affichage + impression) -->
 <div id="mtrombiview" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:1000px;width:100%">
-    <h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">🖼 Trombinoscope
-      <select id="mtrombiview-cls" onchange="_tvClassId=this.value;renderTrombiView()" style="font-size:.6em"></select>
-      <span id="mtrombiview-count" class="muted-line" style="margin:0;font-size:.55em;font-weight:400"></span></h2>
-    <div id="mtrombiview-body" style="max-height:66vh;overflow-y:auto;padding-right:4px"></div>
-    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="printTrombi(false)" title="Une page A4 pour la classe affichée">🖨 Imprimer cette classe</button>
-      <button class="btn btn-g" onclick="printTrombi(true)" title="Une page A4 par classe (classes qui ont au moins une photo)">🖨 Imprimer toutes les classes</button>
-      <button class="btn btn-g" onclick="closeMod2('mtrombiview')" style="margin-left:auto">Fermer</button>
+  <!-- Trombinoscope — refonte v2.118.0 (maquette validée le 2026-10-07) : classes en pastilles,
+       bandeau, filtre de groupe / sans photo, ordre, taille, ajout de photo depuis une case vide,
+       options d'impression (photos par ligne, prénom seul). -->
+  <div class="mb" style="width:min(1060px,97vw);max-width:1060px">
+    <div class="lst-head"><h2 style="margin:0">🖼 Trombinoscope</h2><span id="mtrombiview-cls" class="mvc-fp-chips" style="flex:1;justify-content:flex-end"></span></div>
+    <div id="mtrombiview-count" class="tv-syn"></div>
+    <div id="mtrombiview-opts" class="tv-opts"></div>
+    <div id="mtrombiview-body" style="max-height:60vh;overflow-y:auto;padding-right:4px"></div>
+    <input type="file" id="tv-file" accept="image/*" style="display:none" onchange="_tvFileChosen(this)">
+    <div class="ma tv-print">
+      <span class="tv-lbl">Impression</span><span id="mtrombiview-popts" class="mvc-fp-chips"></span>
+      <span style="flex:1"></span>
+      <button class="btn btn-g" onclick="printTrombi(true)" title="Une page A4 par classe (classes qui ont au moins une photo)">🖨 Toutes les classes</button>
+      <button class="btn btn-p" id="tv-print-one" onclick="printTrombi(false)" title="Une page A4 pour la classe affichée">🖨 Imprimer</button>
+      <button class="btn btn-g" onclick="closeMod2('mtrombiview')">Fermer</button>
     </div>
   </div>
 </div>
@@ -7895,11 +7910,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.117.4';
+const APP_VERSION    = '2.118.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T21:44:06Z';
+const APP_BUILD_DATE = '2026-10-07T21:53:32Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32186,12 +32201,17 @@ async function _photoFileToJpeg(file) {
 }
 async function _fichePhotoChosen(file) {
   const sid = _ficheSid;
+  return _photoSetFromFile(sid, file, () => { if (_ficheSid === sid) _fichePhotoFill(sid); }, () => renderRemarkWriter());
+}
+// Enregistre une image comme photo d'un élève (fiche, trombinoscope). `after` : rafraîchissement
+// de l'écran appelant ; `afterDir` : après le choix du dossier de sauvegarde, s'il manquait.
+async function _photoSetFromFile(sid, file, after, afterDir) {
   if (!file || !sid || !S.eleves[sid]) return;
   if (!/^image\//.test(file.type)) { toast("⚠️ Ce fichier n'est pas une image.", 'warn'); return; }
   if (!dirHandle) {
     _uiConfirm({ title: '📂 Dossier de sauvegarde', okLabel: '📂 Choisir le dossier',
       message: "Les photos sont rangées dans le sous-dossier photos/ du dossier de sauvegarde, qui n'est pas encore choisi.\nChoisis-le, puis ajoute la photo à nouveau.",
-      onOk: async () => { await _trombiPickDir(); renderRemarkWriter(); } });
+      onOk: async () => { await _trombiPickDir(); (afterDir || after)?.(); } });
     return;
   }
   let bytes;
@@ -32205,7 +32225,7 @@ async function _fichePhotoChosen(file) {
   try { localStorage.setItem('planClasse_photosKnown', '1'); } catch (e) {}
   toast('📷 Photo enregistrée.');
   _photosChanged();
-  if (_ficheSid === sid) _fichePhotoFill(sid);
+  after?.();
 }
 function _fichePhotoRemove() {
   const sid = _ficheSid, s = S.eleves[sid];
@@ -32526,8 +32546,13 @@ async function printTrombiCurrent() {
   _tvClassId = c.id;
   printTrombi(false);
 }
+// Réglages d'affichage et d'impression, mémorisés sur la machine.
+var _tvOpt = (() => { try { return Object.assign({ grp: 0, sort: 'nom', size: 'M', cols: 6, name: 'full' }, JSON.parse(localStorage.getItem('planClasse_trombiView') || '{}')); } catch (e) { return { grp: 0, sort: 'nom', size: 'M', cols: 6, name: 'full' }; } })();
+function _tvSet(k, v) { _tvOpt[k] = v; try { localStorage.setItem('planClasse_trombiView', JSON.stringify(_tvOpt)); } catch (e) {} renderTrombiView(); }
+var _tvTarget = null;   // élève sans photo visé (dernière case vide cliquée ou survolée) — pour Ctrl+V
 function openTrombiView() {
   _tvClassId = getCls()?.id || _memoRealClasses()[0]?.id || null;
+  if (_tvClassId && S.classes[_tvClassId]?.virtual) _tvClassId = _memoRealClasses()[0]?.id || null;
   if (!_photos.ready && dirHandle) _photosRefresh(true).then(() => renderTrombiView());
   renderTrombiView();
   openMod('mtrombiview');
@@ -32536,19 +32561,74 @@ function renderTrombiView() {
   const box = document.getElementById('mtrombiview-body'); if (!box) return;
   const classes = _memoRealClasses();
   if (_tvClassId && !S.classes[_tvClassId]) _tvClassId = classes[0]?.id || null;
+  const pill = (on, oc, lbl, tip, extra) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${extra || ''}" aria-pressed="${!!on}" onclick="${oc}"${tip ? ` title="${_escAttr(tip)}"` : ''}>${lbl}</button>`;
+  // Classes en pastilles, groupées par niveau (la puce de niveau ouvre la 1re classe du niveau)
   const sel = document.getElementById('mtrombiview-cls');
-  if (sel) sel.innerHTML = classes.map(c => `<option value="${_escAttr(c.id)}"${c.id === _tvClassId ? ' selected' : ''}>${_escName(c.nom)}</option>`).join('');
+  if (sel) {
+    const lvls = [...new Set(classes.map(c => clsLevel(c)))].sort((a, b) => a - b);
+    sel.innerHTML = lvls.map(n => {
+      const cs = classes.filter(c => clsLevel(c) === n).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+      return `<span class="mvc-lvl-group"><span class="tv-lbl" style="font-weight:600">${_esc(_levelLabel(n))}</span>`
+        + cs.map(c => pill(c.id === _tvClassId, `_tvClassId='${_escJsAttr(c.id)}';renderTrombiView()`, _escName(c.nom), '')).join('') + '</span>';
+    }).join('');
+  }
   if (!_tvClassId) { box.innerHTML = _emptyStateHTML('🖼', 'Aucune classe', 'Crée ou importe d\'abord une classe.'); return; }
-  const studs = _tvStudents(_tvClassId);
-  const withPh = studs.filter(s => _photoHas(s.id)).length;
-  document.getElementById('mtrombiview-count').textContent = `${studs.length} élève${studs.length > 1 ? 's' : ''} · ${withPh} avec photo`;
-  box.innerHTML = studs.length ? `<div class="tv-grid">${studs.map(s => `
-    <div class="tv-card" onclick="closeMod2('mtrombiview');_modalReturnTo['mfiche']=()=>openTrombiView();openFiche('${_escAttr(s.id)}')" title="Ouvrir la fiche">
-      ${_photoHas(s.id) ? `<img data-tv-ph="${_escAttr(s.id)}" alt="">` : '<div class="tv-none">📷</div>'}
+  const cls = S.classes[_tvClassId];
+  const all = _tvStudents(_tvClassId);
+  const withPh = all.filter(s => _photoHas(s.id)).length, miss = all.length - withPh;
+  document.getElementById('mtrombiview-count').innerHTML = `<span><b>${all.length}</b>élève${all.length > 1 ? 's' : ''}</span><span><b>${withPh}</b>avec photo</span>`
+    + (miss ? `<span class="warn"><b>${miss}</b>sans photo · clic sur la case, image glissée ou Ctrl+V pour l'ajouter</span>` : '');
+  const grps = [1, 2, 3].filter(g => all.some(s => _grp(s, cls) === g));
+  if (typeof _tvOpt.grp === 'number' && _tvOpt.grp && !grps.includes(_tvOpt.grp)) _tvOpt.grp = 0;
+  const o = _tvOpt;
+  const opts = document.getElementById('mtrombiview-opts');
+  if (opts) opts.innerHTML = `<span class="mvc-fp-chips"><span class="tv-lbl">Afficher</span>${pill(o.grp === 0, "_tvSet('grp',0)", 'Tous')}${grps.map(g => pill(o.grp === g, `_tvSet('grp',${g})`, 'G' + g)).join('')}${miss ? pill(o.grp === 'miss', "_tvSet('grp','miss')", 'Sans photo') : ''}</span>`
+    + `<span class="mvc-fp-chips"><span class="tv-lbl">Ordre</span>${[['nom', 'Nom'], ['prenom', 'Prénom'], ['grp', 'Groupe']].map(([k, l]) => pill(o.sort === k, `_tvSet('sort','${k}')`, l)).join('')}</span>`
+    + `<span class="mvc-fp-chips"><span class="tv-lbl">Taille</span>${[['S', 'S'], ['M', 'M'], ['L', 'L']].map(([k, l]) => pill(o.size === k, `_tvSet('size','${k}')`, l, 'Taille des photos à l\'écran')).join('')}</span>`;
+  const popts = document.getElementById('mtrombiview-popts');
+  if (popts) popts.innerHTML = pill(o.cols === 6, "_tvSet('cols',6)", '6 par ligne', 'Photos de 27 mm — jusqu\'à ~40 élèves par page') + pill(o.cols === 8, "_tvSet('cols',8)", '8 par ligne', 'Photos de 20 mm')
+    + '<span style="width:8px"></span>' + pill(o.name === 'full', "_tvSet('name','full')", 'Prénom et nom') + pill(o.name === 'prenom', "_tvSet('name','prenom')", 'Prénom seul');
+  const pb = document.getElementById('tv-print-one'); if (pb) pb.textContent = '🖨 Imprimer ' + cls.nom;
+  let studs = _tvSorted(_tvClassId);
+  if (o.grp === 'miss') studs = studs.filter(s => !_photoHas(s.id)); else if (o.grp) studs = studs.filter(s => _grp(s, cls) === o.grp);
+  box.style.setProperty('--tv-w', { S: '96px', M: '130px', L: '180px' }[o.size] || '130px');
+  box.innerHTML = studs.length ? `<div class="tv-grid">${studs.map(s => {
+    const g = _grp(s, cls), has = _photoHas(s.id);
+    const ph = has ? `<img data-tv-ph="${_escAttr(s.id)}" alt="">`
+      : `<div class="tv-none" title="Clic : choisir une image · ou glisse une image ici · ou Ctrl+V" onclick="event.stopPropagation();_tvPick('${_escJsAttr(s.id)}')" onmouseenter="_tvTarget='${_escJsAttr(s.id)}'" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="_tvDrop(event,'${_escJsAttr(s.id)}')"><b>📷</b>Ajouter<br>ou glisser</div>`;
+    return `<div class="tv-card" onclick="closeMod2('mtrombiview');_modalReturnTo['mfiche']=()=>openTrombiView();openFiche('${_escAttr(s.id)}')" title="Ouvrir la fiche">
+      ${ph}${g ? `<span class="gbdg g${g}">G${g}</span>` : ''}
       <div class="tv-name${_delegueNameCls(s)}">${_escName(s.prenom)}<br><b>${_escName((s.nom || '').toLocaleUpperCase('fr'))}</b></div>
-    </div>`).join('')}</div>` : _emptyStateHTML('👥', 'Aucun élève dans cette classe', '');
+    </div>`; }).join('')}</div>` : _emptyStateHTML('👥', o.grp === 'miss' ? 'Tous les élèves ont une photo' : 'Aucun élève à afficher', '');
   box.querySelectorAll('img[data-tv-ph]').forEach(im => _photoUrl(im.dataset.tvPh).then(u => { if (u) im.src = u; }));
 }
+// Ordre choisi (nom, prénom, groupe puis nom) — aussi celui de l'impression.
+function _tvSorted(cid) {
+  const cls = S.classes[cid], list = _tvStudents(cid);
+  const byNom = (a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr');
+  if (_tvOpt.sort === 'prenom') return list.sort((a, b) => (a.prenom || '').localeCompare(b.prenom || '', 'fr') || byNom(a, b));
+  if (_tvOpt.sort === 'grp') return list.sort((a, b) => ((_grp(a, cls) || 9) - (_grp(b, cls) || 9)) || byNom(a, b));
+  return list.sort(byNom);
+}
+// Ajout d'une photo depuis une case vide : clic (sélecteur de fichier), image glissée, Ctrl+V.
+function _tvPick(sid) { _tvTarget = sid; const f = document.getElementById('tv-file'); if (f) { f.value = ''; f.click(); } }
+function _tvFileChosen(inp) { const f = inp.files?.[0]; if (f && _tvTarget) _photoSetFromFile(_tvTarget, f, renderTrombiView); }
+function _tvDrop(e, sid) {
+  e.preventDefault(); e.stopPropagation(); e.currentTarget?.classList.remove('drop');
+  const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/'));
+  if (!f) { toast("⚠️ Glisse un fichier image.", 'warn'); return; }
+  _photoSetFromFile(sid, f, renderTrombiView);
+}
+document.addEventListener('paste', e => {
+  const m = document.getElementById('mtrombiview');
+  if (!m?.classList.contains('on') || !_tvTarget) return;
+  if ([...document.querySelectorAll('.mo.on')].some(x => x !== m && +getComputedStyle(x).zIndex >= +getComputedStyle(m).zIndex)) return;
+  const f = [...(e.clipboardData?.items || [])].find(it => it.kind === 'file' && it.type.startsWith('image/'))?.getAsFile();
+  if (!f) return;
+  e.preventDefault();
+  if (_photoHas(_tvTarget)) return;
+  _photoSetFromFile(_tvTarget, f, renderTrombiView);
+});
 // Impression : une page par classe (A4 portrait, 6 colonnes de photos de 27 mm — mesuré : en 5 colonnes de
 // 30 mm, une classe de 32 élèves faisait 305 mm, plus qu'une page ; en 6 colonnes elle tient jusqu'à ~40 élèves). Couleurs LITTÉRALES (convention
 // des constructeurs d'impression : un token suivrait le thème de l'écran). Les photos sont des
@@ -32559,18 +32639,19 @@ async function printTrombi(all) {
   if (!ids.length) { toast('⚠️ Aucune classe avec photo à imprimer.', 'warn'); return; }
   const today = new Date().toLocaleDateString('fr-FR');
   const pages = ids.map((cid, i) => {
-    const cls = S.classes[cid], studs = _tvStudents(cid);
+    const cls = S.classes[cid], studs = _tvSorted(cid);
+    const W = _tvOpt.cols === 8 ? 20 : 27, NC = _tvOpt.cols === 8 ? 8 : 6;
     const sub = [cls.année ? `Année ${cls.année}` : '', cls.profPrincipal ? `PP : ${cls.profPrincipal}` : '', `${studs.length} élèves`].filter(Boolean).join(' · ');
     return `<div style="${i ? 'page-break-before:always;break-before:page;' : ''}font-family:Arial,sans-serif">
       <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #1a252f;padding-bottom:4px;margin-bottom:8px">
         <h1 style="font-size:15pt;margin:0;color:#0e1a26">Trombinoscope — ${_escName(cls.nom)}</h1>
         <span style="font-size:9pt;color:#56697f">${_escName(sub)} · imprimé le ${today}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:3mm 2.5mm">
+      <div style="display:grid;grid-template-columns:repeat(${NC},1fr);gap:3mm 2.5mm">
         ${studs.map(s => `<div style="text-align:center;break-inside:avoid;page-break-inside:avoid">
-          ${_photoHas(s.id) ? `<img data-tp-ph="${_escAttr(s.id)}" alt="" style="width:27mm;height:27mm;object-fit:cover;border:0.3mm solid #c8d2e0;border-radius:1.5mm;display:block;margin:0 auto">`
-                            : `<div style="width:27mm;height:27mm;border:0.3mm dashed #9aa6b5;border-radius:1.5mm;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8pt;color:#56697f">pas de photo</div>`}
-          <div style="font-size:8.5pt;line-height:1.2;margin-top:1mm;color:#0e1a26">${_escName(s.prenom)}<br><b>${_escName((s.nom || '').toLocaleUpperCase('fr'))}</b></div>
+          ${_photoHas(s.id) ? `<img data-tp-ph="${_escAttr(s.id)}" alt="" style="width:${W}mm;height:${W}mm;object-fit:cover;border:0.3mm solid #c8d2e0;border-radius:1.5mm;display:block;margin:0 auto">`
+                            : `<div style="width:${W}mm;height:${W}mm;border:0.3mm dashed #9aa6b5;border-radius:1.5mm;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8pt;color:#56697f">pas de photo</div>`}
+          <div style="font-size:${NC === 8 ? 7.5 : 8.5}pt;line-height:1.2;margin-top:1mm;color:#0e1a26">${_escName(s.prenom)}${_tvOpt.name === 'prenom' ? '' : `<br><b>${_escName((s.nom || '').toLocaleUpperCase('fr'))}</b>`}</div>
         </div>`).join('')}
       </div></div>`;
   }).join('');
