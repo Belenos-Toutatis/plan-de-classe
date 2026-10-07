@@ -2453,7 +2453,7 @@ Deux surfaces, à l'essai (l'utilisateur peut en supprimer une après usage) :
 
 ### Tableur B — descriptif de la passation au survol du code (v2.106.1)
 
-Le champ du code court d'une passation (en-tête du tableur Type B) porte un `data-tip` (bulle globale `#gtip`, ~0,5 s) : « code — descriptif » (`p.name`), ou « aucun descriptif (clic droit sur l'en-tête pour en ajouter un) ». Son ancien `title` (« Code court (édition directe) ») est remplacé par un `aria-label`, sinon l'infobulle native doublait la bulle. `#gtip` passe en `white-space:pre-line` (les `\n` d'un `data-tip` sont rendus).
+La ligne du code court d'une passation (en-tête du tableur Type B) porte un `data-tip` (bulle globale `#gtip`, ~0,5 s) : « code — descriptif » (`p.name`), ou « aucun descriptif (clic droit sur l'en-tête pour en ajouter un) ». ⚠️ **Aucun `title` natif sur l'en-tête ni sur le champ** (v2.106.2) : le `title` du `<th>` (« … clic droit pour les autres options ») s'affichait en même temps que la bulle — signalé par l'utilisateur ; son texte est passé dans la bulle. `#gtip` passe en `white-space:pre-line` (les `\n` d'un `data-tip` sont rendus).
 
 ### Tableur — filtre de groupe Tous / G1 / G2 / G3 (v2.56.0)
 
