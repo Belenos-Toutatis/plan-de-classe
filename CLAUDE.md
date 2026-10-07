@@ -413,6 +413,16 @@ Onglets sortis de la navigation principale (accessibles via bouton) :
 
 **Désactivation visuelle des chips G1/G2** (`_updateGroupChipsState()`) : si la classe courante n'a aucun élève dans le groupe G1 (resp. G2), le chip correspondant reçoit la classe `.disabled` (opacity .35 + cursor:not-allowed + tooltip explicatif). Empêche le piège « grille entièrement fantôme » qui survenait quand le filtre persisté G1 atterrissait sur une classe sans élève en G1 (toutes les cellules `.ghost`, click handlers non attachés, mode appel inopérant). Appelée au début de `renderTeacherGrid()` et `renderStudentView()`. Le clic sur un chip désactivé est ignoré dans `setGroupFilter()` (early return) et dans le raccourci clavier `1`/`2`.
 
+## Onglet Classes — modernisation v2.96.0 (maquette validée le 2026-10-07)
+
+- **Bandeau** `.cl-synth` (classes réelles seulement — les recomposées recompteraient leurs élèves) : classes (+ recomposées), élèves (présents en classe), aménagés (agrandissements, tiers-temps), à faire (messages à passer + élèves à placer, `_clsUnplaced` : actifs, hors ULIS/UPE2A hors inclusion, sans place dans la salle affichée).
+- **Cartes en grille** `.cl-grid` (`minmax(270px,1fr)`), **groupées par niveau** sous un intertitre `.cl-lv` (« 6e · 2 classes · 58 élèves »). ⚠️ Le fond de niveau (`levelBgColor`), la bordure `levelAccentColor` et l'encre `--cc-fg` sont **inchangés** (ne pas diluer). Carte (`_card` dans `renderClasses`) : nom, effectif + ♂/♀ (`.cc-chip`) + PP, salles, barre non aménagés / aménagés (`.cl-bar`, en `currentColor`), ligne présents / non aménagés / aménagés, pastilles 📄 ⏱ 🪑 à placer 📣.
+- **Infobulle** de la carte : année, inscrits / placés / présents, aménagés, PP, **délégué·es et suppléant·es**, disciplines.
+- **Clic sur la carte = choisir la classe ET ouvrir l'onglet Élèves** (`_clsOpenEleves`, arbitrage de l'utilisateur). Actions en haut à droite : ✏️ (Modifier) et menu ⋯ (`.dd.dd-right` : Élèves, Plan, Modifier, Supprimer) — plus les gros boutons vert / rouge.
+- **Classes recomposées** : même carte (`.cc-virtual`, avec « de 6e A 7 · … »), section à part ; « + 🧬 Classe recomposée » remonté dans la barre du titre (titre de l'onglet : « 🏫 Classes »).
+- **Récap photocopies** en `<details>` **replié par défaut** (`.cl-recap`, état gardé pour la session dans `_clsRecapOpen`), totaux sur la ligne résumé. Tableau inchangé ; l'impression « 🖨 Effectifs » (`printClassesBilan`) n'est pas touchée.
+- Audit : 0 écart en clair et en sombre (cartes, bandeau, récap ouvert, menu ⋯) ; aucun débordement à 375 px.
+
 ## Sélecteur de classe du bandeau — un bouton par niveau
 
 Le `<select id="cls-sel">` est **caché** (gardé comme support de valeur : une vingtaine de sites font `cls-sel.value = …`). À sa place, `#cls-lvl` rendu par `_renderClassPicker()` (appelé par `refreshSelector`, `switchClass`, `toggleAppTheme` et l'IIFE de restauration du thème — les couleurs dépendent du thème) : un bouton par niveau existant (`_levelLabel`), plus un bouton 🧬 pour les classes recomposées, en dernier. **Survol = la liste des classes du niveau apparaît aussitôt** (grâce de 180 ms en sortie pour descendre vers la liste) ; au toucher (`hover: none`), un clic déplie. Fonds = `levelBgColor(order, rang)` avec le **même rang que dans `renderClasses`** (même ordre `sortedClasses`), donc la même nuance que la carte ; bordure gauche `levelAccentColor` ; encre `_contrastTextColor`. Le bouton du niveau courant porte aussi le nom de la classe courante.
@@ -697,7 +707,7 @@ Classes CSS **génériques** `.dlg-t` (trait plein 2 px) / `.dlg-s` (pointillé 
 - **Plan Prof** : le `.cn` des deux branches de `buildCell` (appel et normale) — prénom ET nom soulignés (le `<br>` est dans le même bloc). L'infobulle de la cellule commence par « 🗳 Délégué·e » / « 🗳 Suppléant·e ».
 - **Plan imprimé** : le `.pn` de `doPrint('t')` et de `buildTeacherPageHTML` (Plusieurs plans). ⚠️ **Pas la Vue Élève ni son impression** (`doPrint('s')`) — arbitrage utilisateur : c'est un repère prof.
 - **Onglet Élèves** : pastille `.dlg-badge` après le prénom (tokens `--paper-warm` / `--ink-blue` / `--rule-line`, donc thème sombre OK) — **pas de bouton** dans la ligne, déjà chargée.
-- **Carte de classe** : ligne `🗳 Délégué·es : … — Suppléant·es : …`, chaque nom souligné selon son rôle.
+- **Carte de classe** : depuis la v2.96.0, délégué·es et suppléant·es sont dans l'**infobulle** de la carte (arbitrage de l'utilisateur), plus sur la carte elle-même. `_classDeleguesLine` n'est plus appelée par `renderClasses`.
 - **Fiche élève** (`renderRemarkWriter`) : « 🗳 Délégué·e » dans l'en-tête, cliquable vers Modifier l'élève.
 
 ### Où ça se règle

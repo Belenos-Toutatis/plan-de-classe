@@ -540,6 +540,32 @@ html[data-theme="dark"] .memo-choice.good{background:#16301f;border-color:#3f8f5
 .cc-chip-m{color:var(--civ-m)}
 .cc-chip-f{color:var(--civ-f)}
 .cc-chip-a{color:var(--agr-fg)}
+/* Onglet Classes (v2.96.0) : bandeau, grille par niveau, carte compacte */
+.cl-synth{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
+.cl-k{background:var(--paper);border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);padding:7px 11px;color:var(--ink-deep)}
+.cl-k span{display:block;font-size:.76em;color:var(--pencil);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-k b{display:block;font:600 1.5em var(--font-mono);margin:1px 0}
+.cl-lv{display:flex;align-items:center;gap:8px;font:600 .82em var(--font-sans);color:var(--pencil);margin:16px 0 7px}
+.cl-lv::after{content:"";flex:1;border-top:1px solid var(--rule-line)}
+.cl-lv-v{color:var(--disc-accent)}
+.cl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.cl-grid .cc.cl-card{display:block;margin:0;position:relative;padding:10px 12px 9px;min-width:0}
+.cl-card .cc-name{font:600 1.3em var(--font-serif);padding-right:62px;line-height:1.2}
+.cl-l{font-size:.82em;margin-top:2px;color:var(--cc-fg,var(--ink-deep))}
+.cl-s{font-size:.76em}
+.cl-acts{position:absolute;top:7px;right:7px;display:flex;gap:3px}
+.cl-btn{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:5px;padding:1px 7px;cursor:pointer;font-size:.88em;line-height:1.5}
+.cl-btn:hover{border-color:var(--ink-blue)}
+.cl-bar{height:5px;border-radius:3px;margin:6px 0 2px;overflow:hidden;background:color-mix(in srgb,currentColor 28%,transparent)}
+.cl-bar span{display:block;height:100%;background:currentColor}
+.cl-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;font-size:.8em}
+.cl-recap{margin-top:18px;border-radius:8px;padding:9px 14px}
+.cl-recap summary{cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cl-recap summary::-webkit-details-marker{display:none}
+.cl-recap summary::before{content:"▸";color:var(--pencil)}
+.cl-recap[open] summary::before{content:"▾"}
+.cl-recap-tot{margin-left:auto;font-size:.85em;color:var(--pencil);font-family:var(--font-mono)}
+@media (max-width:760px){.cl-synth{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* À l'impression on part sur du papier blanc : si l'app est en thème sombre, les tokens
    valent leurs variantes CLAIRES (bleu ciel, rose pâle) et seraient délavés. On repose
    donc les valeurs du thème clair, quel que soit le thème actif à l'écran. */
@@ -3366,8 +3392,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <!-- ── TAB: Classes ── -->
   <div id="tab-classes" class="tab on">
     <div class="sh">
-      <h2>🏫 Gestion des Classes</h2>
+      <h2>🏫 Classes</h2>
       <button class="btn btn-p" onclick="openMod('mc')">+ Nouvelle classe</button>
+      <button class="btn btn-g btn-sm" onclick="openVirtualClassModal()" title="Classe faite d'élèves d'une ou plusieurs classes (cours DNL, groupe DF, option…)">+ 🧬 Classe recomposée</button>
       <button class="btn btn-g btn-sm" onclick="printClassesBilan()" title="Imprimer les effectifs et le récap photocopies : détail par classe + récap par niveau (portrait — Ctrl+P)">🖨 Effectifs</button>
       <span style="margin-left:auto"></span>
       <button class="btn btn-g btn-sm ff-eval" onclick="openDisciplinesModal()" title="Gérer les disciplines (catalogue global)">🎓 Disciplines</button>
@@ -7754,11 +7781,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.95.0';
+const APP_VERSION    = '2.96.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T05:14:32Z';
+const APP_BUILD_DATE = '2026-10-07T12:06:51Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -16137,84 +16164,130 @@ function sortedClasses() {
 function realClasses() { return sortedClasses().filter(c => !c.virtual); }
 function virtualClasses() { return sortedClasses().filter(c => c.virtual); }
 
+// Onglet Classes — modernisé en v2.96.0 (maquette validée le 2026-10-07) : bandeau de
+// synthèse, cartes en grille groupées par niveau (fond de niveau CONSERVÉ — ne pas le
+// diluer), délégués / disciplines en infobulle, menu ⋯, récap photocopies replié,
+// clic sur une carte = choisir la classe ET ouvrir l'onglet Élèves.
+var _clsRecapOpen = false;
+function _clsOpenEleves(id) { switchClass(id); showTab('eleves'); }
+function _clsUnplaced(cls) {
+  const placed = new Set(Object.values(cls.seating || {}));
+  let n = 0;
+  for (const sid of (cls.eleves || [])) {
+    const st = S.eleves[sid];
+    if (!st || !_stuActiveOn(st)) continue;
+    if ((st.ulis && !st.ulis_incl) || (st.upe2a && !st.upe2a_incl)) continue;
+    if (!placed.has(sid)) n++;
+  }
+  return n;
+}
 function renderClasses() {
   const el = document.getElementById('cls-list');
   const arr = realClasses();      // classes réelles uniquement pour les cartes principales
   const vcs = virtualClasses();   // classes recomposées listées dans une section séparée
-  if (!arr.length && !vcs.length) { el.innerHTML = '<p style="color:var(--pencil)">Aucune classe. Crée-en une !</p>'; return; }
+  if (!arr.length && !vcs.length) { el.innerHTML = _emptyStateHTML('🏫', 'Aucune classe', 'Crée ta première classe avec <strong>+ Nouvelle classe</strong>, ou importe un fichier d\'élèves depuis l\'onglet Élèves.'); return; }
 
   const levelCount = {};
-  // Agrégation par niveau pour le récap photocopies en bas
-  const byLevel = {}; // order -> { present, amenagement, total, ulisOut, upe2aOut, outClass, m, f, civUnk, classes:[nom] }
-  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0, totDocStd = 0;
+  const byLevel = {}; // order -> agrégats du récap photocopies + cartes
+  let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0, totDocStd = 0, totTT = 0, totMsg = 0, totUnpl = 0;
+  const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
 
-  const cards = arr.map(cls => {
+  const _card = (cls, c, bg, accent, virtual) => {
+    const fg = virtual ? '' : _contrastTextColor(bg);
+    const nonAm = c.present - c.amenagement;
+    const np = Object.keys(cls.seating || {}).length;
+    const unpl = _clsUnplaced(cls);
+    const nMsg = Array.isArray(cls.classMessages) ? cls.classMessages.length : 0;
+    const civ = (c.m + c.f + c.civUnk) > 0
+      ? ` · <span class="cc-chip cc-chip-m">♂ ${c.m}</span> <span class="cc-chip cc-chip-f">♀ ${c.f}</span>${c.civUnk ? ` <span title="${c.civUnk} élève(s) sans civilité">+${c.civUnk} ?</span>` : ''}`
+      : '';
+    const pp = cls.profPrincipal ? ` · PP ${_escName(cls.profPrincipal)}` : '';
+    const salles = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id]);
+    const salleLine = salles.length ? `📍 ${salles.map(id => id === cls.activeRoom && salles.length > 1 ? `<strong>${_esc(S.salles[id].nom)}</strong>` : _esc(S.salles[id].nom)).join(' · ')}` : '';
+    // Infobulle : tout le détail que la carte ne montre plus (arbitrage : délégués en infobulle).
+    const dlg = (() => {
+      const T = [], Su = [];
+      for (const sid of (cls.eleves || [])) { const st = S.eleves[sid]; if (!st || !_stuActiveOn(st)) continue; if (st.delegue === 'T') T.push(st.prenom + ' ' + st.nom); else if (st.delegue === 'S') Su.push(st.prenom + ' ' + st.nom); }
+      return (T.length ? '\nDélégué·es : ' + T.join(', ') : '') + (Su.length ? '\nSuppléant·es : ' + Su.join(', ') : '');
+    })();
+    const discIds = _clsDisciplineIds(cls);
+    const disc = discIds.length >= 2 || (discIds.length === 1 && !S.disciplines[discIds[0]]?.isPrimary) ? '\nDisciplines : ' + discIds.map(_disciplineLabel).join(', ') : '';
+    const tip = `${cls.nom} — ${cls.année}–${cls.année + 1}\n${plural(c.total, 'inscrit')}, ${plural(np, 'placé')}, ${c.present} normalement présent${c.present > 1 ? 's' : ''}${c.outClass ? ` (${c.outClass} hors classe : ULIS / UPE2A)` : ''}\n${plural(nonAm, 'non aménagé')}, ${plural(c.amenagement, 'aménagé')}${cls.profPrincipal ? '\nPP : ' + cls.profPrincipal : ''}${dlg}${disc}\n\nClic : ouvrir les élèves de la classe`;
+    const pctAm = c.present ? Math.round(c.amenagement / c.present * 100) : 0;
+    const chips = (c.agrandissement ? `<span class="cc-chip cc-chip-a" title="Élèves à photocopies agrandies">📄 ${c.agrandissement}</span>` : '')
+      + (c.tiersTemps ? `<span class="cc-chip cc-chip-a" title="Élèves à tiers-temps">⏱ ${c.tiersTemps}</span>` : '')
+      + (unpl ? `<span class="cc-chip" title="Élèves présents sans place dans la salle affichée">🪑 ${unpl} à placer</span>` : '')
+      + (nMsg ? `<span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(cls.classMessages.map(m => '• ' + m.text).join('\n'))}">📣 ${plural(nMsg, 'message')}</span>` : '');
+    const origin = virtual ? (() => {
+      const by = {};
+      for (const sid of (cls.eleves || [])) { const st = S.eleves[sid]; if (st) by[st.classe_id] = (by[st.classe_id] || 0) + 1; }
+      const parts = Object.entries(by).map(([cid, n]) => `${_esc(S.classes[cid]?.nom || '(supprimée)')} ${n}`).sort().join(' · ');
+      return parts ? `<div class="cl-l">de ${parts}</div>` : '';
+    })() : '';
+    const tag = virtual && cls.fromTag && S.tags?.[cls.fromTag]
+      ? ` <span class="tagbdg" style="background:${_safeColor(S.tags[cls.fromTag].color)};color:${_contrastTextColor(_safeColor(S.tags[cls.fromTag].color))};font-size:.6em">${_escAttr(S.tags[cls.fromTag].abbr)}</span>` : '';
+    const style = virtual ? '' : ` style="background:${bg};border-left:6px solid ${accent};--cc-fg:${fg};color:${fg}"`;
+    const editFn = virtual ? `openVirtualClassModal('${cls.id}')` : `editClass('${cls.id}')`;
+    return `<div class="cc cl-card${virtual ? ' cc-virtual' : ''}${cls.id === S.cur ? ' on' : ''}"${style} title="${_escAttr(tip)}" onclick="_clsOpenEleves('${cls.id}')">
+      <div class="cl-acts" onclick="event.stopPropagation()">
+        <button class="cl-btn" onclick="${editFn}" title="Modifier la classe" aria-label="Modifier la classe">✏️</button>
+        <span class="dd dd-right">
+          <button class="cl-btn" onclick="toggleDd(this)" title="Autres actions" aria-label="Autres actions sur cette classe">⋯</button>
+          <div class="dd-menu">
+            <button onclick="closeAllDd();_clsOpenEleves('${cls.id}')">👥 Élèves</button>
+            <button onclick="closeAllDd();switchClass('${cls.id}');showTab('plan')">🪑 Plan</button>
+            <button onclick="closeAllDd();${editFn}">✏️ Modifier</button>
+            <div class="dd-sep"></div>
+            <button onclick="closeAllDd();deleteClass('${cls.id}')" style="color:var(--danger-fg)">🗑 Supprimer</button>
+          </div>
+        </span>
+      </div>
+      <div class="cc-name">${virtual ? '🧬 ' : ''}${_escAttr(cls.nom)}${tag}</div>
+      <div class="cl-l">${plural(c.total, 'élève')}${civ}${pp}</div>
+      ${salleLine ? `<div class="cl-l">${salleLine}</div>` : ''}${origin}
+      <div class="cl-bar" title="${pctAm} % des présents ont un aménagement"><span style="width:${100 - pctAm}%"></span></div>
+      <div class="cl-l cl-s">${c.present} présent${c.present > 1 ? 's' : ''} · ${nonAm} non aménagé${nonAm > 1 ? 's' : ''} · ${c.amenagement} aménagé${c.amenagement > 1 ? 's' : ''}</div>
+      ${chips ? `<div class="cl-chips">${chips}</div>` : ''}
+    </div>`;
+  };
+
+  for (const cls of arr) {
     const order = clsLevel(cls);
     const secIdx = levelCount[order] ?? 0;
     levelCount[order] = secIdx + 1;
     const bg = levelBgColor(order, secIdx);
-    const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
-    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[] };
-    byLevel[order].present     += c.present;
-    byLevel[order].amenagement += c.amenagement;
-    byLevel[order].agrandissement += c.agrandissement;
-    byLevel[order].docStd      += c.docStd;
-    byLevel[order].total       += c.total;
-    byLevel[order].ulisOut     += c.ulisOut;
-    byLevel[order].upe2aOut    += c.upe2aOut;
-    byLevel[order].outClass    += c.outClass;
-    byLevel[order].m           += c.m;
-    byLevel[order].f           += c.f;
-    byLevel[order].civUnk      += c.civUnk;
-    byLevel[order].classes.push(cls.nom);
+    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[], cards:[] };
+    const L = byLevel[order];
+    L.present += c.present; L.amenagement += c.amenagement; L.agrandissement += c.agrandissement; L.docStd += c.docStd;
+    L.total += c.total; L.ulisOut += c.ulisOut; L.upe2aOut += c.upe2aOut; L.outClass += c.outClass;
+    L.m += c.m; L.f += c.f; L.civUnk += c.civUnk; L.classes.push(cls.nom);
+    L.cards.push(_card(cls, c, bg, levelAccentColor(order), false));
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
     totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totAgr += c.agrandissement; totDocStd += c.docStd;
-    totM       += c.m;       totF  += c.f;           totCivUnk += c.civUnk;
+    totM += c.m; totF += c.f; totCivUnk += c.civUnk; totTT += c.tiersTemps;
+    totMsg += Array.isArray(cls.classMessages) ? cls.classMessages.length : 0;
+    totUnpl += _clsUnplaced(cls);
+  }
+  const orders = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
 
-    // Détail explicite pour les photocopies :
-    // « X inscrits, Y placés, Z normalement présents dont A non aménagés, B aménagés »
-    const nonAm = c.present - c.amenagement;
-    const presentLbl = c.outClass > 0 ? `${c.present} normalement présents` : `${c.present} normalement présent${c.present>1?'s':''}`;
-    // Détail civilité : "♂ 14 ♀ 14" (ou "♂ 14 ♀ 13 + 1 ?" si certains sans civilité)
-    // Sur une carte de niveau, TOUT le texte prend --cc-fg (dérivée du fond de la carte) :
-    // aucune teinte fixe ne reste lisible sur la gamme complète des niveaux. Les compteurs
-    // restent distingués par leur glyphe ♂/♀ et leur graisse.
-    const civDetail = (c.m + c.f + c.civUnk) > 0
-      ? ` <span class="cc-chip cc-chip-m">♂ ${c.m}</span> <span class="cc-chip cc-chip-f">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="opacity:.75" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
-      : '';
-    const agrLbl = (c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '')
-                 + (c.tiersTemps > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip cc-chip-a" title="Élèves disposant d'un tiers-temps (temps majoré +⅓)">⏱ ${c.tiersTemps} tiers-temps</span>` : '');
-    const _nMsg = Array.isArray(cls.classMessages) ? cls.classMessages.length : 0;
-    const msgLbl = _nMsg > 0 ? ` &nbsp;·&nbsp; <span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(cls.classMessages.map(m => '• ' + m.text).join('\n'))}">📣 ${_nMsg} message${_nMsg > 1 ? 's' : ''} à passer</span>` : '';
-    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}${msgLbl}`;
-    const _discIds = _clsDisciplineIds(cls);
-    const _discLine = _discIds.length >= 2
-      ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_discIds.map(id => _esc(_disciplineLabel(id))).join(' <span style="opacity:.5">·</span> ')}</div>`
-      : (_discIds.length === 1 && !S.disciplines[_discIds[0]]?.isPrimary ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.85">🎓 ${_esc(_disciplineLabel(_discIds[0]))}</div>` : '');
-    const _ppLine  = cls.profPrincipal ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.9" title="Professeur·e principal·e">👩‍🏫 PP : ${_escName(cls.profPrincipal)}</div>` : '';
-    const _dlgLine = _classDeleguesLine(cls);
-    const _salleIds = Object.keys(cls.rooms || {}).filter(sid => S.salles?.[sid]);
-    const _salleLine = _salleIds.length ? `<div class="cc-meta" style="font-size:.8em;margin-top:2px;opacity:.9" title="Salles de la classe (gras = salle affichée) — se changent dans Éditer">📍 ${_salleIds.map(sid => sid === cls.activeRoom && _salleIds.length > 1 ? `<strong>${_esc(S.salles[sid].nom)}</strong>` : _esc(S.salles[sid].nom)).join(' · ')}</div>` : '';
-    return `
-      <div class="cc ${cls.id===S.cur?'on':''}" style="background:${bg};border-left:6px solid ${levelAccentColor(order)};--cc-fg:${_contrastTextColor(bg)};color:${_contrastTextColor(bg)}" onclick="switchClass('${cls.id}');renderClasses()">
-        <div class="cc-info">
-          <div class="cc-name">${_escAttr(cls.nom)}</div>
-          <div class="cc-meta">${cls.année}–${cls.année+1} &nbsp;·&nbsp; ${detail}</div>
-          ${_salleLine}${_discLine}${_ppLine}${_dlgLine}
-        </div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-s btn-sm" onclick="event.stopPropagation();editClass('${cls.id}')" title="Modifier nom, année, niveau, PP, salles, disciplines">✏️ Modifier</button>
-          <button class="btn btn-d btn-sm" onclick="event.stopPropagation();deleteClass('${cls.id}')">Supprimer</button>
-        </div>
-      </div>
-    `;
+  // Bandeau de synthèse (classes réelles seulement : les recomposées recompteraient leurs élèves)
+  const k = (lbl, val, sub) => `<div class="cl-k"><span>${lbl}</span><b>${val}</b><span>${sub}</span></div>`;
+  const synth = `<div class="cl-synth">
+    ${k('🏫 Classes', arr.length, vcs.length ? `+ ${vcs.length} recomposée${vcs.length > 1 ? 's' : ''}` : `${orders.length} niveau${orders.length > 1 ? 'x' : ''}`)}
+    ${k('👥 Élèves', totTotal, `${totPresent} présents en classe`)}
+    ${k('🎓 Aménagés', totAm, `📄 ${totAgr} agrandissement${totAgr > 1 ? 's' : ''} · ⏱ ${totTT} tiers-temps`)}
+    ${k('📌 À faire', totMsg + totUnpl, `📣 ${plural(totMsg, 'message')} · 🪑 ${totUnpl} à placer`)}
+  </div>`;
+
+  const groups = orders.map(o => {
+    const r = byLevel[o];
+    return `<div class="cl-lv">${_esc(_levelLabel(o))} · ${plural(r.classes.length, 'classe')} · ${plural(r.total, 'élève')}</div>
+      <div class="cl-grid">${r.cards.join('')}</div>`;
   }).join('');
 
-  // Récap par niveau (utile pour les photocopies)
-  const orders = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
-  const tdNum = 'padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-variant-numeric:tabular-nums';
-  // Construit un libellé "X hors classe" avec décomposition ULIS/UPE2A en tooltip
+  // Récap par niveau (utile pour les photocopies) — replié par défaut (arbitrage de l'utilisateur)
+  const tdNum = 'padding:5px 10px;border-bottom:1px solid var(--rule-line-soft);text-align:right;font-variant-numeric:tabular-nums';
   const _outHint = (ulisN, upe2aN) => {
     const tot = ulisN + upe2aN;
     if (tot === 0) return '';
@@ -16223,7 +16296,6 @@ function renderClasses() {
     if (upe2aN > 0) parts.push(`${upe2aN} UPE2A`);
     return ` <span style="color:var(--pencil-soft);font-size:.85em" title="${parts.join(' + ')}">(${tot} hors classe)</span>`;
   };
-  // Cellule "♂ / ♀" pour le récap par niveau (avec mention des "?" si certains sans civilité)
   const _civCell = (m, f, unk) => {
     if (m + f + unk === 0) return '<span style="color:var(--pencil-soft)">—</span>';
     const unkPart = unk > 0 ? ` <span style="color:var(--pencil);font-size:.85em" title="${unk} sans civilité">+${unk}?</span>` : '';
@@ -16233,7 +16305,7 @@ function renderClasses() {
     const r = byLevel[o];
     const nonAm = r.present - r.amenagement;
     return `<tr>
-      <td style="padding:5px 10px;border-bottom:1px solid #eee"><strong>${_levelLabel(o)}</strong> <span style="color:var(--pencil);font-size:.85em">(${r.classes.length} classe${r.classes.length>1?'s':''})</span></td>
+      <td style="padding:5px 10px;border-bottom:1px solid var(--rule-line-soft)"><strong>${_levelLabel(o)}</strong> <span style="color:var(--pencil);font-size:.85em">(${r.classes.length} classe${r.classes.length>1?'s':''})</span></td>
       <td style="${tdNum}">${r.total}</td>
       <td style="${tdNum}">${_civCell(r.m, r.f, r.civUnk)}</td>
       <td style="${tdNum}">${r.present}${_outHint(r.ulisOut, r.upe2aOut)}</td>
@@ -16243,23 +16315,22 @@ function renderClasses() {
       <td style="${tdNum}${r.agrandissement>0?';color:var(--agr-fg);font-weight:700':''}">${r.agrandissement>0?'📄 '+r.agrandissement:'<span style="color:var(--pencil-soft)">—</span>'}</td>
     </tr>`;
   }).join('');
-
   const totNonAm = totPresent - totAm;
   const tfNum = 'padding:6px 10px;border-top:2px solid var(--rule-line);text-align:right;font-variant-numeric:tabular-nums';
-
-  const recap = `
-    <div class="recap-photocopies" style="margin-top:18px;border-radius:8px;padding:12px 14px">
-      <div style="font-weight:600;font-size:.95em;margin-bottom:8px">📄 Récap photocopies par niveau</div>
-      <table style="width:100%;border-collapse:collapse;font-size:.9em">
+  const th = (lbl, tip, left) => `<th style="text-align:${left ? 'left' : 'right'};padding:5px 10px;border-bottom:2px solid var(--rule-line)"${tip ? ` title="${tip}"` : ''}>${lbl}</th>`;
+  const recap = arr.length ? `
+    <details class="recap-photocopies cl-recap"${_clsRecapOpen ? ' open' : ''} ontoggle="_clsRecapOpen=this.open">
+      <summary><strong>📄 Récap photocopies par niveau</strong><span class="cl-recap-tot">${totTotal} inscrits · ${totDocStd} docs non aménagés · ${totAgr} aménagés</span></summary>
+      <table style="width:100%;border-collapse:collapse;font-size:.9em;margin-top:8px">
         <thead><tr class="rp-head">
-          <th style="text-align:left;padding:5px 10px;border-bottom:2px solid var(--rule-line)">Niveau</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Total des élèves de la classe (incluant ULIS et UPE2A hors-inclusion)">Inscrits</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Répartition par civilité (♂ garçons / ♀ filles / ? non spécifié)">♂ / ♀</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves normalement en classe (inscrits moins ULIS et UPE2A hors-inclusion)">Normalement présents</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves présents sans aménagement particulier (copie standard)">Non aménagés</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Élèves avec PPRE / PAP / PPS / ULIS+ / UPE2A+ / PAI — copies souvent adaptées">Aménagés</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Documents au format standard à tirer (présents sans agrandissement)">📄 Docs non aménagés</th>
-          <th style="text-align:right;padding:5px 10px;border-bottom:2px solid var(--rule-line)" title="Documents aménagés à tirer : photocopies AGRANDIES (élèves avec agrandissement, hors-inclusion compris)">📄 Docs aménagés</th>
+          ${th('Niveau', '', true)}
+          ${th('Inscrits', 'Total des élèves de la classe (incluant ULIS et UPE2A hors-inclusion)')}
+          ${th('♂ / ♀', 'Répartition par civilité (♂ garçons / ♀ filles / ? non spécifié)')}
+          ${th('Normalement présents', 'Élèves normalement en classe (inscrits moins ULIS et UPE2A hors-inclusion)')}
+          ${th('Non aménagés', 'Élèves présents sans aménagement particulier (copie standard)')}
+          ${th('Aménagés', 'Élèves avec PPRE / PAP / PPS / ULIS+ / UPE2A+ / PAI — copies souvent adaptées')}
+          ${th('📄 Docs non aménagés', 'Documents au format standard à tirer (présents sans agrandissement)')}
+          ${th('📄 Docs aménagés', 'Documents aménagés à tirer : photocopies AGRANDIES (élèves avec agrandissement, hors-inclusion compris)')}
         </tr></thead>
         <tbody>${recapRows}</tbody>
         <tfoot><tr class="rp-foot" style="font-weight:700">
@@ -16280,72 +16351,14 @@ function renderClasses() {
         <strong>📄 Docs non aménagés</strong> = documents au format standard à tirer (présents sans agrandissement).
         <strong>📄 Docs aménagés</strong> = documents agrandis à tirer (élèves avec agrandissement, y compris hors-inclusion quand ils viennent).
       </div>
-    </div>
-  `;
+    </details>` : '';
 
-  // Section Classes recomposées (en bas, séparée du bilan)
-  const vcCards = vcs.length ? vcs.map(cls => {
-    // Regroupement des élèves par classe d'origine pour affichage compact
-    const byCls = {};
-    for (const sid of (cls.eleves || [])) {
-      const stu = S.eleves[sid];
-      if (!stu) continue;
-      const cid = stu.classe_id;
-      byCls[cid] = (byCls[cid] || 0) + 1;
-    }
-    const parts = Object.entries(byCls)
-      .map(([cid, n]) => {
-        const c = S.classes[cid];
-        const nom = c ? c.nom : '(supprimée)';
-        return `${_escAttr(nom)}: ${n}`;
-      })
-      .sort()
-      .join(' · ');
-    const tagLbl = cls.fromTag && S.tags?.[cls.fromTag]
-      ? ` <span class="tagbdg" style="background:${_safeColor(S.tags[cls.fromTag].color)};color:${_contrastTextColor(_safeColor(S.tags[cls.fromTag].color))};font-size:.78em">${_escAttr(S.tags[cls.fromTag].abbr)}</span>`
-      : '';
-    // Mêmes infos que les classes réelles : inscrits / placés / présents / aménagements
-    const np = Object.keys(cls.seating || {}).length;
-    const c  = _classCounts(cls);
-    const nonAm = c.present - c.amenagement;
-    const presentLbl = c.outClass > 0 ? `${c.present} normalement présents` : `${c.present} normalement présent${c.present>1?'s':''}`;
-    // Détail civilité : "♂ 14 ♀ 14" (ou "♂ 14 ♀ 13 + 1 ?" si certains sans civilité)
-    // Teintes déclinées par thème : les valeurs vives (#3498db / #e91e63 / #00838f) ne
-    // tenaient que 1,4–2,6:1 sur le fond coloré de la carte.
-    const _ccDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const _cM   = _ccDark ? '#7ec3f0' : '#1c6ea4';
-    const _cF   = _ccDark ? '#f296b6' : '#b3123f';
-    const _cAgr = _ccDark ? '#63c9d4' : '#00707d';
-    const civDetail = (c.m + c.f + c.civUnk) > 0
-      ? ` <span style="color:${_cM};font-weight:600">♂ ${c.m}</span> <span style="color:${_cF};font-weight:600">♀ ${c.f}</span>${c.civUnk > 0 ? ` <span style="color:var(--pencil)" title="${c.civUnk} élève(s) sans civilité spécifiée">+ ${c.civUnk} ?</span>` : ''}`
-      : '';
-    const agrLbl = c.agrandissement > 0 ? ` &nbsp;·&nbsp; <span style="color:${_cAgr};font-weight:600" title="Élèves nécessitant des photocopies agrandies">📄 ${c.agrandissement} agrandissement${c.agrandissement>1?'s':''}</span>` : '';
-    const detail = `${c.total} inscrit${c.total>1?'s':''}${civDetail ? ' &nbsp;(' + civDetail + ')' : ''}, ${np} placé${np>1?'s':''}, <strong>${presentLbl}</strong> dont ${nonAm} non aménagé${nonAm>1?'s':''}, ${c.amenagement} aménagé${c.amenagement>1?'s':''}${agrLbl}`;
-    const salleNom = S.salles?.[cls.activeRoom]?.nom || '(salle inconnue)';
-    // #5b2c6f était illisible sur le fond sombre de la carte recomposée (1,4:1)
-    const partsLbl = parts ? ` &nbsp;·&nbsp; <span style="color:var(--disc-accent)">${parts}</span>` : '';
-    return `<div class="cc cc-virtual ${cls.id===S.cur?'on':''}" onclick="switchClass('${cls.id}');renderClasses()">
-      <div class="cc-info">
-        <div class="cc-name">🧬 ${_escAttr(cls.nom)}${tagLbl}</div>
-        <div class="cc-meta">${cls.année}–${cls.année+1} &nbsp;·&nbsp; 📍 ${_escAttr(salleNom)} &nbsp;·&nbsp; ${detail}${partsLbl}</div>
-      </div>
-      <div style="display:flex;gap:4px">
-        <button class="btn btn-p btn-sm" onclick="event.stopPropagation();openVirtualClassModal('${cls.id}')" title="Modifier nom, année, salle, membres…">✏️ Modifier</button>
-        <button class="btn btn-d btn-sm" onclick="event.stopPropagation();deleteClass('${cls.id}')">Supprimer</button>
-      </div>
-    </div>`;
-  }).join('') : '';
   const vcSection = `
-    <div style="margin-top:18px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <h3 style="font-size:1em;color:var(--disc-accent)">🧬 Classes recomposées</h3>
-        <button class="btn btn-p btn-sm" onclick="openVirtualClassModal()">+ Nouvelle classe recomposée</button>
-        <span style="font-size:.78em;color:var(--pencil)">— Élèves issus d'une ou plusieurs classes (ex. cours DNL multi-classes, groupe DF, etc.)</span>
-      </div>
-      ${vcs.length ? vcCards : '<p style="font-size:.85em;color:var(--pencil);padding:8px 0">Aucune classe recomposée. Clique sur le bouton ci-dessus pour en créer une.</p>'}
-    </div>`;
+    <div class="cl-lv cl-lv-v">🧬 Classes recomposées · ${vcs.length}</div>
+    ${vcs.length ? `<div class="cl-grid">${vcs.map(cls => _card(cls, _classCounts(cls), '', '', true)).join('')}</div>`
+      : '<p style="font-size:.85em;color:var(--pencil);padding:4px 0">Aucune classe recomposée — élèves issus d\'une ou plusieurs classes (cours DNL, groupe DF…). Bouton <strong>+ 🧬 Classe recomposée</strong> en haut.</p>'}`;
 
-  el.innerHTML = cards + recap + vcSection;
+  el.innerHTML = synth + groups + vcSection + recap;
 }
 
 // Bandeau : année scolaire + professeur·e principal·e de la classe active. Source unique pour
