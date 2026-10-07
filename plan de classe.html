@@ -1584,6 +1584,29 @@ html[data-theme="dark"] button[style*="background:#16a085"] { background: #1c626
 .eval-class-row-checked { background: #e6f0fa; border: 1px solid var(--ink-blue-soft); }
 html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important; border-color: #3b5a8c !important; }
 
+/* Fenêtres de liste (v2.104.0) : une ligne commune pour Tags, Disciplines, Compétences,
+   Mentions, Motifs de rappel, Liens. Ligne d'ajout toujours en bas, au même format. */
+.lst-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.lst-head h2{margin:0}
+.lst-count{font-size:.85em;color:var(--pencil)}
+.lst-head input[type=search]{margin-left:auto;width:220px;max-width:100%}
+.lst-intro{font-size:.84em;color:var(--pencil);margin:0 0 10px;line-height:1.45}
+.lst-box{border:1px solid var(--rule-line);border-radius:var(--radius-md);overflow:hidden;margin-bottom:6px}
+.lst{max-height:55vh;overflow-y:auto}
+.lst-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--rule-line-soft);background:var(--paper);color:var(--ink-deep)}
+.lst-row:last-child{border-bottom:none}
+.lst-row.lst-wrap{flex-wrap:wrap}
+.lst-grp{padding:4px 10px;background:var(--paper-warm);font-family:var(--font-mono);font-size:.76em;color:var(--ink-blue-soft);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--rule-line-soft)}
+.lst-use{font-size:.78em;color:var(--pencil);white-space:nowrap;text-align:right;min-width:72px}
+.lst-del{background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1em;padding:2px 4px;line-height:1}
+.lst-del:hover,.lst-del:focus-visible{color:var(--danger-fg);outline:none}
+.lst-del:disabled{opacity:.3;cursor:not-allowed}
+.lst-add{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:var(--paper-warm);border-top:1px dashed var(--rule-line)}
+.lst-add .lst-plus{font-weight:700;color:var(--pencil)}
+.lst-empty{padding:14px;text-align:center;color:var(--pencil);font-size:.9em;font-style:italic}
+.lst-sub{font-size:.78em;color:var(--pencil);flex-basis:100%;padding-left:26px}
+.lst-flex{flex:1;min-width:0}
+@media (max-width:700px){ .mcompmgr-row{display:flex !important;flex-wrap:wrap} .mcompmgr-row input:nth-child(2){flex:1 1 60%} .mcompmgr-row select{flex:1 1 100%;min-width:0;max-width:100%;width:100%} .lst-use{min-width:0} }
 /* Tags cumulables — lignes de la modale (.mtags-row) */
 .mtags-row { background: #fff; border: 1px solid #e0e0e0; color: var(--ink-deep); }
 html[data-theme="dark"] .mtags-row { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
@@ -4244,11 +4267,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- Gérer les disciplines (catalogue global) -->
 <div id="mdisciplines" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:640px;width:100%">
-    <h2>🎓 Disciplines</h2>
-    <p style="font-size:.86em;color:var(--pencil);margin:0 0 12px;line-height:1.45">
-      Les disciplines permettent de séparer plusieurs flux d'enseignement (notes, bilans, compétences).
-      Une classe peut être enseignée dans une ou plusieurs disciplines, et chaque évaluation est rattachée à une discipline.
-    </p>
+    <div class="lst-head"><h2>🎓 Disciplines</h2><span class="lst-count" id="mdisciplines-count"></span></div>
+    <p class="lst-intro">Séparent plusieurs flux d'enseignement (notes, bilans, compétences). Une classe peut en avoir plusieurs ; chaque évaluation est rattachée à une discipline.</p>
     <!-- Section "Affecter à la classe active" — visible uniquement quand on entre par
          le bouton 🎓 de l'onglet Devoirs. Permet de cocher les disciplines enseignées
          à la classe courante sans devoir naviguer vers Classes → Modifier. -->
@@ -4256,10 +4276,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <div style="font-weight:600;font-size:.92em;color:var(--disc-accent);margin-bottom:4px">📚 Disciplines enseignées à <span id="mdisc-class-name"></span></div>
       <div id="mdisc-class-checks" style="display:flex;flex-wrap:wrap;gap:4px 12px"></div>
     </div>
-    <div style="font-weight:600;font-size:.9em;margin-bottom:6px">📚 Catalogue des disciplines</div>
-    <div id="mdisciplines-list" style="border:1px solid var(--rule-line);border-radius:4px;margin-bottom:10px;max-height:42vh;overflow-y:auto"></div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-      <button class="btn btn-s btn-sm" onclick="_addDiscipline()">+ Ajouter une discipline</button>
+    <div class="lst-box">
+      <div id="mdisciplines-list" class="lst"></div>
+      <div class="lst-add"><span class="lst-plus">＋</span><button class="btn btn-s btn-sm" onclick="_addDiscipline()">Ajouter une discipline</button><span class="lst-use" style="text-align:left">son nom se saisit directement dans la liste</span></div>
     </div>
     <div class="ma">
       <button class="btn btn-p" onclick="closeMod2('mdisciplines')">Fermer</button>
@@ -4658,30 +4677,17 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- ── MODAL Bienvenue (1er lancement avec données fictives) ── -->
 <!-- ── MODAL Gestion des tags (DF, DNL, etc.) ── -->
 <div id="mtags" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:600px;width:100%">
-    <h2>🏷 Tags cumulables</h2>
-    <p style="font-size:.85em;color:var(--pencil);margin-bottom:12px;line-height:1.5">
-      Groupes <strong>indépendants des G1/G2/G3</strong> et <strong>cumulables</strong> entre eux.
-      Exemples : <code>DF</code> (Devoirs faits), <code>DNL</code> (Discipline Non Linguistique), <code>LV2</code>…<br>
-      Les tags sont partagés entre toutes les classes. Un élève peut en avoir plusieurs.
-    </p>
-    <div id="mtags-list" style="margin-bottom:14px"></div>
-    <div style="border-top:1px solid #eee;padding-top:12px">
-      <h3 style="font-size:.95em;margin-bottom:8px">➕ Nouveau tag</h3>
-      <div style="display:flex;gap:6px;align-items:end;flex-wrap:wrap">
-        <div style="flex:0 0 80px">
-          <label style="font-size:.78em;color:var(--pencil);display:block;margin-bottom:2px">Abrév.</label>
-          <input id="mtags-abbr" type="text" maxlength="6" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:.95em;text-transform:uppercase" placeholder="DF">
-        </div>
-        <div style="flex:1;min-width:160px">
-          <label style="font-size:.78em;color:var(--pencil);display:block;margin-bottom:2px">Nom complet</label>
-          <input id="mtags-name" type="text" maxlength="60" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:.95em" placeholder="Devoirs faits">
-        </div>
-        <div style="flex:0 0 60px">
-          <label style="font-size:.78em;color:var(--pencil);display:block;margin-bottom:2px">Couleur</label>
-          <input id="mtags-color" type="color" style="width:100%;height:34px;padding:1px;border:1px solid #ccc;border-radius:4px;cursor:pointer">
-        </div>
-        <button class="btn btn-s" onclick="mtagsAdd()">Ajouter</button>
+  <div class="mb" style="max-width:640px;width:100%">
+    <div class="lst-head"><h2>🏷 Tags</h2><span class="lst-count" id="mtags-count"></span></div>
+    <p class="lst-intro">Groupes <strong>indépendants des G1/G2/G3</strong> et cumulables (DF, DNL, LV2…), partagés entre toutes les classes. Glisse ⠿ pour changer l'ordre d'affichage.</p>
+    <div class="lst-box">
+      <div id="mtags-list" class="lst"></div>
+      <div class="lst-add">
+        <span class="lst-plus">＋</span>
+        <input id="mtags-abbr" type="text" maxlength="6" style="width:74px;text-transform:uppercase;font-family:var(--font-mono)" placeholder="DF" aria-label="Abréviation du nouveau tag" onkeydown="if(event.key==='Enter'){event.preventDefault();mtagsAdd()}">
+        <input id="mtags-name" type="text" maxlength="60" class="lst-flex" placeholder="Nom du nouveau tag (Devoirs faits…)" aria-label="Nom complet du nouveau tag" onkeydown="if(event.key==='Enter'){event.preventDefault();mtagsAdd()}">
+        <input id="mtags-color" type="color" style="width:40px;height:32px;padding:1px;cursor:pointer" aria-label="Couleur du nouveau tag">
+        <button class="btn btn-s btn-sm" onclick="mtagsAdd()">Ajouter</button>
       </div>
     </div>
     <div class="ma" style="margin-top:12px">
@@ -4693,32 +4699,19 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- ── MODAL Conseil de classe : mentions configurables ── -->
 <div id="mconseil-mentions" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:660px;width:100%">
-    <h2>🎓 Mentions du conseil de classe</h2>
-    <p style="font-size:.85em;color:var(--pencil);margin-bottom:10px">
-      Personnalise les mentions de la colonne <strong>🎓 Conseil</strong> du Bilan des notes : nom,
-      abréviation, couleur. Règle aussi les <strong>incompatibilités</strong> — deux mentions incompatibles
-      ne peuvent pas être actives en même temps pour un élève (cocher l'une retire l'autre).
-    </p>
+    <div class="lst-head"><h2>🎓 Conseil de classe</h2><span class="lst-count" id="mconseil-count"></span></div>
+    <p class="lst-intro">Les mentions de la colonne <strong>🎓 Conseil</strong> du Bilan des notes, dans l'ordre des colonnes (glisse ⠿). Sous chaque mention, ⊘ : les mentions <strong>incompatibles</strong> — en attribuer une retire l'autre.</p>
     <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px;font-size:.9em" title="Au-delà, le compteur passe au rouge (rien n'est coupé). Défaut : 600, la limite usuelle des ENT.">✍ Longueur maximale d'une remarque de bulletin :
       <input type="number" id="mconseil-rem-max" min="50" max="5000" step="10" style="width:90px" onchange="_setRemMax(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"> caractères
     </label>
-    <div id="mconseil-list" style="margin-bottom:14px"></div>
-    <div style="border-top:1px dashed var(--rule-line);padding-top:10px">
-      <div style="font-weight:600;font-size:.9em;margin-bottom:6px">➕ Ajouter une mention</div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-        <div>
-          <label style="display:block;font-size:.78em;color:var(--pencil);margin-bottom:2px">Abrév.</label>
-          <input id="mconseil-abbr" type="text" maxlength="4" style="width:64px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:.95em;text-transform:uppercase" placeholder="F" onkeydown="if(event.key==='Enter'){event.preventDefault();conseilAddMention()}">
-        </div>
-        <div style="flex:1;min-width:160px">
-          <label style="display:block;font-size:.78em;color:var(--pencil);margin-bottom:2px">Nom complet</label>
-          <input id="mconseil-name" type="text" maxlength="60" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:.95em" placeholder="Félicitations" onkeydown="if(event.key==='Enter'){event.preventDefault();conseilAddMention()}">
-        </div>
-        <div>
-          <label style="display:block;font-size:.78em;color:var(--pencil);margin-bottom:2px">Couleur</label>
-          <input id="mconseil-color" type="color" style="width:48px;height:34px;padding:1px;border:1px solid #ccc;border-radius:4px;cursor:pointer">
-        </div>
-        <button class="btn btn-s" onclick="conseilAddMention()">Ajouter</button>
+    <div class="lst-box">
+      <div id="mconseil-list" class="lst"></div>
+      <div class="lst-add">
+        <span class="lst-plus">＋</span>
+        <input id="mconseil-abbr" type="text" maxlength="4" style="width:64px;text-transform:uppercase;font-family:var(--font-mono)" placeholder="F" aria-label="Abréviation de la nouvelle mention" onkeydown="if(event.key==='Enter'){event.preventDefault();conseilAddMention()}">
+        <input id="mconseil-name" type="text" maxlength="60" class="lst-flex" placeholder="Nom de la nouvelle mention (Félicitations…)" aria-label="Nom de la nouvelle mention" onkeydown="if(event.key==='Enter'){event.preventDefault();conseilAddMention()}">
+        <input id="mconseil-color" type="color" style="width:40px;height:32px;padding:1px;cursor:pointer" aria-label="Couleur de la nouvelle mention">
+        <button class="btn btn-s btn-sm" onclick="conseilAddMention()">Ajouter</button>
       </div>
     </div>
     <div class="ma" style="margin-top:12px">
@@ -4929,22 +4922,19 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- ── MODAL Configuration des liens externes (ENT, Pronote, etc.) ── -->
 <!-- ── MODAL Motifs de rappels personnalisables (cf. mreminders) ── -->
 <div id="mrempresets" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:600px;width:100%">
-    <h2>🔔 Motifs de rappels « À vérifier »</h2>
-    <p style="font-size:.85em;color:var(--pencil);margin-bottom:12px;line-height:1.5">
-      Liste des motifs proposés en un clic dans la modale Rappels (clic droit sur un élève en Plan Prof → 🔔 Rappels). Pré-remplissent le champ — l'enseignant peut ensuite éditer avant validation. Stockés dans ton fichier de données (sync, backups).
-    </p>
-    <div id="mrempresets-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
-    <div style="border-top:1px solid #eee;padding-top:12px;margin-top:8px">
-      <div style="font-weight:600;font-size:.95em;margin-bottom:8px">+ Ajouter un motif</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-        <input type="text" id="mrempresets-add" maxlength="120" placeholder="Faire signer une autorisation de sortie…" style="flex:1;min-width:180px;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.95em" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderPresetFromInput()}">
-        <span id="mrempresets-add-swatches" style="display:inline-flex;gap:3px;align-items:center;padding:0 4px" title="Couleur du prochain motif ajouté"></span>
-        <button class="btn btn-p btn-sm" onclick="addReminderPresetFromInput()">+ Ajouter</button>
+  <div class="mb" style="max-width:660px;width:100%">
+    <div class="lst-head"><h2>🔔 Motifs de rappel</h2><span class="lst-count" id="mrempresets-count"></span></div>
+    <p class="lst-intro">Proposés en un clic dans la fenêtre Rappels (clic droit sur un élève → 🔔), dans cet ordre (glisse ⠿) et regroupés par couleur. Un emoji en tête est bienvenu (✍️, 📤, 📞…).</p>
+    <div class="lst-box">
+      <div id="mrempresets-list" class="lst"></div>
+      <div class="lst-add">
+        <span class="lst-plus">＋</span>
+        <input type="text" id="mrempresets-add" maxlength="120" class="lst-flex" placeholder="Nouveau motif (Faire signer une autorisation de sortie…)" aria-label="Nouveau motif" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderPresetFromInput()}">
+        <span id="mrempresets-add-swatches" style="display:inline-flex;gap:3px;align-items:center" title="Couleur du nouveau motif"></span>
+        <button class="btn btn-s btn-sm" onclick="addReminderPresetFromInput()">Ajouter</button>
       </div>
-      <div style="font-size:.78em;color:var(--pencil)">Tu peux préfixer par un emoji si tu le souhaites (✍️, 📤, 📞, ⚠️…). Choisis aussi une couleur — dans la modale Rappels, les motifs sont regroupés par couleur. Le champ accepte 120 caractères max.</div>
     </div>
-    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+    <div class="ma" style="display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn-w btn-sm" onclick="restoreDefaultReminderPresets()" title="Remplace la liste par les motifs proposés par défaut">↻ Restaurer les motifs par défaut</button>
       <button class="btn btn-g" onclick="closeMod2('mrempresets')">Fermer</button>
     </div>
@@ -4952,36 +4942,22 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <div id="mlinks" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:560px;width:100%">
-    <h2>🔗 Liens externes</h2>
-    <p style="font-size:.85em;color:var(--pencil);margin-bottom:12px;line-height:1.5">
-      Tes accès directs (ENT, Pronote, Klassroom…) — visibles dans la barre du haut. Stockés dans ton fichier de données : ils suivent tes classes lors d'un export / import / sync.
-    </p>
-    <div id="mlinks-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
-    <div style="border-top:1px solid #eee;padding-top:12px;margin-top:8px">
-      <div style="font-weight:600;font-size:.95em;margin-bottom:8px" id="mlinks-form-title">+ Ajouter un lien</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:.88em">
-          <span>Icône</span>
-          <input type="text" id="mlinks-add-icon" maxlength="3" placeholder="🔗" style="width:50px;padding:5px;border:1px solid #ccc;border-radius:4px;text-align:center;font-size:1.1em">
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:.88em;flex:1;min-width:160px">
-          <span>Libellé</span>
-          <input type="text" id="mlinks-add-label" maxlength="30" placeholder="ENT" style="flex:1;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.95em">
-        </label>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;font-size:1.1em" id="mlinks-icon-presets"></div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:.88em;flex:1">
-          <span>URL</span>
-          <input type="url" id="mlinks-add-url" placeholder="https://..." style="flex:1;padding:5px;border:1px solid #ccc;border-radius:4px;font-size:.9em" onkeydown="if(event.key==='Enter'){event.preventDefault();addUserLinkFromInputs()}">
-        </label>
-        <button class="btn btn-p btn-sm" id="mlinks-add-btn" onclick="addUserLinkFromInputs()">+ Ajouter</button>
+  <div class="mb" style="max-width:640px;width:100%">
+    <div class="lst-head"><h2>🔗 Liens externes</h2><span class="lst-count" id="mlinks-count"></span></div>
+    <p class="lst-intro">Tes accès directs (ENT, Pronote, Klassroom…), dans la barre du haut et dans cet ordre (glisse ⠿). Ils voyagent avec ton fichier de données.</p>
+    <div class="lst-box">
+      <div id="mlinks-list" class="lst"></div>
+      <div class="lst-add">
+        <span class="lst-plus" id="mlinks-form-title">＋</span>
+        <input type="text" id="mlinks-add-icon" maxlength="3" placeholder="🔗" style="width:52px;text-align:center;font-size:1.1em" aria-label="Icône du lien">
+        <input type="text" id="mlinks-add-label" maxlength="30" placeholder="Libellé (ENT)" style="width:140px" aria-label="Libellé du lien">
+        <input type="url" id="mlinks-add-url" placeholder="https://…" class="lst-flex" style="min-width:160px" aria-label="Adresse du lien" onkeydown="if(event.key==='Enter'){event.preventDefault();addUserLinkFromInputs()}">
+        <button class="btn btn-s btn-sm" id="mlinks-add-btn" onclick="addUserLinkFromInputs()">Ajouter</button>
         <button class="btn btn-g btn-sm" id="mlinks-edit-cancel" onclick="_resetMlinksAddForm()" style="display:none">✕ Annuler</button>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;font-size:1.1em;flex-basis:100%;padding-left:22px" id="mlinks-icon-presets"></div>
       </div>
-      <div style="font-size:.78em;color:var(--pencil)">L'URL doit commencer par <code>http://</code> ou <code>https://</code>. Les liens s'ouvrent dans un nouvel onglet.</div>
     </div>
-    <div class="ma">
+    <div class="ma" style="margin-top:12px">
       <button class="btn btn-g" onclick="closeMod2('mlinks')">Fermer</button>
     </div>
   </div>
@@ -6194,19 +6170,16 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- ── MODAL Gestion des compétences (codes courts, noms, domaines du socle) ── -->
 <div id="mcompmgr" class="mo" onclick="closeMod(this,event)">
   <div class="mb" style="max-width:880px;width:100%;max-height:90vh;display:flex;flex-direction:column">
-    <h2>🎯 Gérer les compétences du socle</h2>
-    <p style="margin:0 0 12px;font-size:.88em;color:var(--pencil);line-height:1.5">
-      Modifie le <strong>code court</strong> (affiché dans le tableur, ex. <code>C1</code>), le <strong>nom complet</strong> (descriptif au survol) et le <strong>domaine du socle</strong> auquel chaque compétence est rattachée. Les compétences sont partagées entre toutes les classes et toutes les évaluations.
-    </p>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn btn-p btn-sm" onclick="mcompmgrAdd()">+ Ajouter une compétence</button>
-      <button class="btn btn-g btn-sm" onclick="mcompmgrSortByDomain()" title="Trier l'affichage par domaine du socle">📂 Grouper par domaine</button>
-      <button class="btn btn-g btn-sm" onclick="mcompmgrSortByCode()" title="Trier par code court (ordre alphanumérique)">🔤 Trier par code</button>
-      <span id="mcompmgr-count" style="margin-left:auto;font-size:.85em;color:var(--pencil)"></span>
+    <div class="lst-head"><h2>🎯 Compétences</h2><span class="lst-count" id="mcompmgr-count"></span>
+      <span class="pl-seg" id="mcompmgr-sort" role="group" aria-label="Ordre d'affichage" style="margin-left:8px"><button type="button" data-v="domain" onclick="mcompmgrSortByDomain()">Par domaine</button><button type="button" data-v="code" onclick="mcompmgrSortByCode()">Par code</button></span>
+      <input type="search" id="mcompmgr-search" placeholder="🔍 Rechercher (code, nom)…" oninput="_renderCompMgrList()" onkeydown="if(event.key==='Escape'&&this.value){event.stopPropagation();this.value='';_renderCompMgrList()}">
     </div>
-    <div id="mcompmgr-list" style="flex:1;overflow-y:auto;border:1px solid var(--rule-line);border-radius:4px;padding:6px"></div>
-    <div class="ma" style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <span style="font-size:.82em;color:var(--pencil);font-style:italic">Les modifications sont enregistrées au fur et à mesure.</span>
+    <p class="lst-intro">Code court (affiché dans les tableurs, ex. <code>C1</code>), nom complet et domaine du socle. Partagées entre toutes les classes et évaluations ; l'ordre suit le code. Enregistré au fil de la saisie.</p>
+    <div class="lst-box" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div id="mcompmgr-list" class="lst" style="flex:1;max-height:none"></div>
+      <div class="lst-add"><span class="lst-plus">＋</span><button class="btn btn-s btn-sm" onclick="mcompmgrAdd()">Ajouter une compétence</button><span class="lst-use" style="text-align:left">code, nom et domaine se saisissent dans la nouvelle ligne</span></div>
+    </div>
+    <div class="ma" style="margin-top:12px">
       <button class="btn btn-p" onclick="closeMod2('mcompmgr')">Fermer</button>
     </div>
   </div>
@@ -7885,11 +7858,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.103.0';
+const APP_VERSION    = '2.104.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T18:44:38Z';
+const APP_BUILD_DATE = '2026-10-07T18:57:16Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10819,7 +10792,7 @@ function showCtxMenu(e, cls, key, sid) {
   const tagSub = document.getElementById('ctx-tags-sub');
   if (tagSub) {
     const mine = new Set(Array.isArray(s?.tags) ? s.tags : []);
-    const tags = Object.values(S.tags || {}).sort((a, b) => String(a.abbr).localeCompare(String(b.abbr), 'fr'));
+    const tags = _tagsOrdered();
     tagSub.innerHTML = tags.map(t => `<div class="ctx-item" onclick="ctxToggleTag('${_escJsAttr(t.id)}')">${mine.has(t.id) ? '●' : '○'} <b style="font-family:var(--font-mono)">${_escName(t.abbr)}</b> ${_escName(t.name || '')}</div>`).join('')
       + (tags.length ? '<div class="ctx-sep"></div>' : '<div class="ctx-item disabled">Aucun tag défini</div>')
       + `<div class="ctx-item" onclick="closeCtxMenu();openTagsModal()">⚙ Gérer les tags…</div>`;
@@ -11900,30 +11873,25 @@ function renderReminderPresetsModal() {
   const listEl = document.getElementById('mrempresets-list');
   if (!listEl) return;
   if (!list.length) {
-    listEl.innerHTML = '<div style="color:var(--cell-meta);font-size:.9em;padding:10px;text-align:center;background:var(--paper-warm);border-radius:4px;border:1px dashed var(--rule-line)">Aucun motif — ajoute-en un ci-dessous ou clique sur « ↻ Restaurer les motifs par défaut ».</div>';
+    listEl.innerHTML = '<div class="lst-empty">Aucun motif — ajoute-en un sur la ligne ci-dessous, ou « ↻ Restaurer les motifs par défaut ».</div>';
   } else {
+    // Usage : rappels en cours qui portent exactement ce libellé
+    const live = {};
+    for (const st of Object.values(S.eleves || {})) for (const r of (st.reminders || [])) live[r.label] = (live[r.label] || 0) + 1;
     listEl.innerHTML = list.map((p, i) => {
       const c = _reminderColorById(p.color);
-      const upDisabled = (i === 0) ? 'disabled' : '';
-      const dnDisabled = (i === list.length - 1) ? 'disabled' : '';
-      return `
-        <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:${c.bg};border-left:3px solid ${c.border};border-radius:3px">
-          <input type="text" value="${_escAttr(p.label)}" maxlength="120"
-                 oninput="updateReminderPreset(${i}, this.value)"
-                 style="flex:1;padding:5px 7px;border:1px solid ${c.border};border-radius:3px;font-size:.92em;background:#fff;color:${c.fg}">
-          <span style="display:inline-flex;gap:3px;align-items:center;padding:0 4px"
-                title="Couleur — clic sur un point pour changer">
-            ${_mrempSwatchesHTML(p.color, `updateReminderPresetColor.bind(null, ${i})`)}
-          </span>
-          <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, -1)" ${upDisabled}
-                  title="Monter" style="padding:3px 7px;font-size:.85em">↑</button>
-          <button class="btn btn-w btn-sm" onclick="moveReminderPreset(${i}, 1)" ${dnDisabled}
-                  title="Descendre" style="padding:3px 7px;font-size:.85em">↓</button>
-          <button class="btn btn-d btn-sm" onclick="deleteReminderPreset(${i})"
-                  title="Supprimer ce motif" style="padding:3px 7px;font-size:.85em">✕</button>
+      const n = live[p.label] || 0;
+      return `<div class="lst-row sort-row" data-sort-idx="${i}" style="box-shadow:inset 3px 0 0 ${c.border}">
+          ${_sortHandleHTML('var(--pencil)')}
+          <input type="text" class="lst-flex" value="${_escAttr(p.label)}" maxlength="120" oninput="updateReminderPreset(${i}, this.value)" aria-label="Motif ${i + 1}">
+          <span style="display:inline-flex;gap:3px;align-items:center" title="Couleur — clic sur un point pour changer">${_mrempSwatchesHTML(p.color, `updateReminderPresetColor.bind(null, ${i})`)}</span>
+          <span class="lst-use" title="Rappels en cours qui portent exactement ce libellé">${n ? `${n} en cours` : '—'}</span>
+          <button class="lst-del" onclick="deleteReminderPreset(${i})" title="Supprimer ce motif" aria-label="Supprimer ce motif">🗑</button>
         </div>`;
     }).join('');
+    _makeSortable('mrempresets-list', moveReminderPresetTo);
   }
+  { const cnt = document.getElementById('mrempresets-count'); if (cnt) cnt.textContent = `${list.length} motif${list.length > 1 ? 's' : ''}`; }
   // Rangée de swatches pour la couleur du prochain motif ajouté
   const swEl = document.getElementById('mrempresets-add-swatches');
   if (swEl) {
@@ -11983,6 +11951,13 @@ function updateReminderPresetColor(idx, colorId) {
   renderReminderPresetsModal();
 }
 
+function moveReminderPresetTo(from, to) {
+  const arr = S.reminderPresets;
+  if (!Array.isArray(arr) || from < 0 || to < 0 || from >= arr.length || to >= arr.length || from === to) { renderReminderPresetsModal(); return; }
+  pushUndo();
+  const [it] = arr.splice(from, 1); arr.splice(to, 0, it);
+  save(); renderReminderPresetsModal();
+}
 function moveReminderPreset(idx, delta) {
   if (!Array.isArray(S.reminderPresets)) return;
   const arr = S.reminderPresets;
@@ -12118,34 +12093,43 @@ function openTagsModal() {
   setTimeout(() => document.getElementById('mtags-abbr')?.focus(), 80);
 }
 
+// Ordre des tags (v2.104.0) : `t.ord` posé par le glisser ⠿ de la fenêtre Tags, puis abréviation.
+// ⚠️ Toute liste de tags affichée passe par ici, pour que l'ordre choisi vaille partout.
+function _tagsOrdered() {
+  return Object.values(S.tags || {}).sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || String(a.abbr).localeCompare(String(b.abbr), 'fr'));
+}
+function _tagMoveTo(from, to) {
+  const arr = _tagsOrdered();
+  if (from < 0 || to < 0 || from >= arr.length || to >= arr.length || from === to) { renderTagsModal(); return; }
+  pushUndo();
+  const [it] = arr.splice(from, 1); arr.splice(to, 0, it);
+  arr.forEach((t, i) => { t.ord = i; });
+  save(); renderTagsModal(); _tagsRefreshSurfaces();
+}
 function renderTagsModal() {
   const list = document.getElementById('mtags-list');
   if (!list) return;
-  const tags = Object.values(S.tags || {}).sort((a, b) => a.abbr.localeCompare(b.abbr));
-  if (!tags.length) {
-    list.innerHTML = '<div style="color:var(--cell-meta);font-size:.9em;padding:14px;text-align:center;background:var(--paper-warm);border-radius:4px;border:1px dashed var(--rule-line)">Aucun tag défini. Utilise le formulaire ci-dessous pour en créer.</div>';
-    return;
-  }
-  // Compte d'utilisation par tag (combien d'élèves au total)
-  const usage = {};
-  for (const stu of Object.values(S.eleves)) {
-    if (Array.isArray(stu.tags)) for (const tid of stu.tags) usage[tid] = (usage[tid] || 0) + 1;
-  }
-  list.innerHTML = tags.map(t => {
-    const n = usage[t.id] || 0;
-    return `<div class="mtags-row" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;margin-bottom:4px">
+  const tags = _tagsOrdered();
+  const cnt = document.getElementById('mtags-count'); if (cnt) cnt.textContent = `${tags.length} tag${tags.length > 1 ? 's' : ''}`;
+  if (!tags.length) { list.innerHTML = '<div class="lst-empty">Aucun tag — crée le premier sur la ligne ci-dessous.</div>'; return; }
+  // Usage : élèves qui portent le tag, et places réservées (zones de tag de Config Salle)
+  const usage = {}, places = {};
+  for (const stu of Object.values(S.eleves)) if (Array.isArray(stu.tags)) for (const tid of stu.tags) usage[tid] = (usage[tid] || 0) + 1;
+  for (const c of Object.values(S.classes || {})) for (const r of Object.values(c.rooms || {})) for (const tid of Object.values(r.posTagId || {})) places[tid] = (places[tid] || 0) + 1;
+  list.innerHTML = tags.map((t, i) => {
+    const n = usage[t.id] || 0, np = places[t.id] || 0;
+    return `<div class="lst-row sort-row" data-sort-idx="${i}">
+      ${_sortHandleHTML('var(--pencil)')}
       <input type="text" value="${_escAttr(t.abbr)}" maxlength="6" onchange="renameTagAbbr('${_esc(t.id)}',this.value)"
-             title="Abréviation affichée sur le plan et les listes (1 à 6 lettres ou chiffres)"
-             aria-label="Abréviation du tag ${_escAttr(t.abbr)}"
-             style="width:68px;text-align:center;text-transform:uppercase;font-family:var(--font-mono);font-weight:700;font-size:.82em;padding:4px 3px;border:1px solid var(--rule-line);border-radius:9px;background:${_safeColor(t.color)};color:${_contrastTextColor(_safeColor(t.color))}">
-      <span style="flex:1;min-width:0">
-        <input type="text" value="${_escAttr(t.name)}" onchange="renameTagFull('${t.id}',this.value)" style="width:100%;border:1px solid transparent;background:transparent;padding:2px 4px;font-size:.9em" onfocus="this.style.borderColor='#ccc';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">
-      </span>
-      <input type="color" value="${_safeColor(t.color)}" onchange="changeTagColor('${t.id}',this.value)" style="width:32px;height:28px;padding:1px;border:1px solid #ccc;border-radius:3px;cursor:pointer" title="Changer la couleur">
-      <span style="font-size:.78em;color:var(--pencil);min-width:60px;text-align:right">${n} élève${n > 1 ? 's' : ''}</span>
-      <button class="btn btn-d btn-sm" onclick="deleteTagConfirm('${t.id}')" title="Supprimer ce tag (le retire de tous les élèves)">🗑</button>
+             title="Abréviation affichée sur le plan et les listes (1 à 6 lettres ou chiffres)" aria-label="Abréviation du tag ${_escAttr(t.abbr)}"
+             style="width:74px;text-align:center;text-transform:uppercase;font-family:var(--font-mono);font-weight:700;font-size:.85em;border-radius:9px;background:${_safeColor(t.color)} !important;color:${_contrastTextColor(_safeColor(t.color))} !important">
+      <input type="text" class="lst-flex" value="${_escAttr(t.name)}" onchange="renameTagFull('${t.id}',this.value)" aria-label="Nom complet du tag ${_escAttr(t.abbr)}">
+      <input type="color" value="${_safeColor(t.color)}" onchange="changeTagColor('${t.id}',this.value)" style="width:34px;height:30px;padding:1px;cursor:pointer" title="Changer la couleur" aria-label="Couleur du tag ${_escAttr(t.abbr)}">
+      <span class="lst-use" title="Élèves qui portent ce tag · places réservées à ce tag dans Config Salle">${n} élève${n > 1 ? 's' : ''}${np ? ` · ${np} place${np > 1 ? 's' : ''}` : ''}</span>
+      <button class="lst-del" onclick="deleteTagConfirm('${t.id}')" title="Supprimer ce tag (le retire de tous les élèves)" aria-label="Supprimer le tag ${_escAttr(t.abbr)}">🗑</button>
     </div>`;
   }).join('');
+  _makeSortable('mtags-list', _tagMoveTo);
 }
 
 function mtagsAdd() {
@@ -12287,7 +12271,7 @@ function openTagBulkModal() {
 function renderTagBulkModal() {
   const list = document.getElementById('mtagbulk-list');
   if (!list) return;
-  const tags = Object.values(S.tags || {}).sort((a, b) => a.abbr.localeCompare(b.abbr));
+  const tags = _tagsOrdered();
   list.innerHTML = tags.map(t => {
     const state = _mtagBulkInitial[t.id] || 'none';
     const checked = state === 'all' ? 'checked' : '';
@@ -12898,7 +12882,7 @@ function renderMvcFilterPanel() {
   const $ = id => document.getElementById(id);
 
   // Tags : clic cyclique neutre → exigé → exclu (⊘) → neutre.
-  const tagList = Object.values(S.tags || {}).sort((a,b) => a.abbr.localeCompare(b.abbr));
+  const tagList = _tagsOrdered();
   if ($('mvc-fp-tags')) {
     $('mvc-fp-tags').innerHTML = !tagList.length
       ? '<span style="font-size:.78em;color:var(--pencil-soft);font-style:italic">aucun tag défini</span>'
@@ -13265,23 +13249,21 @@ function renderMlinksList() {
   if (!list) return;
   const links = S.userLinks || [];
   if (!links.length) {
-    list.innerHTML = '<div style="color:var(--cell-meta);font-size:.9em;padding:14px;text-align:center;background:var(--paper-warm);border-radius:4px;border:1px dashed var(--rule-line)">Aucun lien configuré. Utilise le formulaire ci-dessous pour en ajouter.</div>';
+    list.innerHTML = '<div class="lst-empty">Aucun lien — ajoute le premier sur la ligne ci-dessous.</div>';
+    { const cnt = document.getElementById('mlinks-count'); if (cnt) cnt.textContent = '0 lien'; }
     return;
   }
-  list.innerHTML = links.map((l, i) => {
-    const last = i === links.length - 1;
-    return `<div class="mlink-row" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px">
-      <span style="font-size:1.2em;width:28px;text-align:center">${_escAttr(l.icon || '🔗')}</span>
-      <span style="flex:1;min-width:0">
-        <strong>${_escAttr(l.label || '')}</strong>
-        <span class="mlink-url" style="font-size:.78em;display:block;text-overflow:ellipsis;overflow:hidden;white-space:nowrap">${_escAttr(l.url || '')}</span>
-      </span>
-      <button class="btn btn-g btn-sm" onclick="moveUserLink(${i}, -1)" ${i===0?'disabled':''} title="Monter">↑</button>
-      <button class="btn btn-g btn-sm" onclick="moveUserLink(${i}, 1)" ${last?'disabled':''} title="Descendre">↓</button>
-      <button class="btn btn-g btn-sm" onclick="editUserLinkPrompt(${i})" title="Modifier">✏️</button>
-      <button class="btn btn-d btn-sm" onclick="deleteUserLink(${i})" title="Supprimer">🗑</button>
-    </div>`;
-  }).join('');
+  { const cnt = document.getElementById('mlinks-count'); if (cnt) cnt.textContent = `${links.length} lien${links.length > 1 ? 's' : ''}`; }
+  const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u || ''; } };
+  list.innerHTML = links.map((l, i) => `<div class="lst-row sort-row" data-sort-idx="${i}">
+      ${_sortHandleHTML('var(--pencil)')}
+      <span style="font-size:1.2em;width:26px;text-align:center">${_escAttr(l.icon || '🔗')}</span>
+      <strong class="lst-flex" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escAttr(l.label || '')}</strong>
+      <span class="lst-use" title="${_escAttr(l.url || '')}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${_escAttr(host(l.url))}</span>
+      <button class="lst-del" onclick="editUserLinkPrompt(${i})" title="Modifier (dans la ligne du bas)" aria-label="Modifier le lien ${_escAttr(l.label || '')}">✏️</button>
+      <button class="lst-del" onclick="deleteUserLink(${i})" title="Supprimer" aria-label="Supprimer le lien ${_escAttr(l.label || '')}">🗑</button>
+    </div>`).join('');
+  _makeSortable('mlinks-list', moveUserLinkTo);
 }
 
 // Index du lien en cours d'édition dans le formulaire de la modale 🔗 (null = mode ajout)
@@ -13334,6 +13316,11 @@ function deleteUserLink(idx) {
   });
 }
 
+function moveUserLinkTo(from, to) {
+  const links = S.userLinks || [];
+  if (from < 0 || to < 0 || from >= links.length || to >= links.length || from === to) { renderMlinksList(); return; }
+  moveUserLink(from, to - from);
+}
 function moveUserLink(idx, delta) {
   const links = S.userLinks || [];
   const newIdx = idx + delta;
@@ -18024,7 +18011,7 @@ function saveEdit() {
 function _renderEditTags(s, keepChecks) {
   const box = document.getElementById('es-tags');
   if (!box) return;
-  const tags = Object.values(S.tags || {}).sort((a, b) => String(a.abbr).localeCompare(String(b.abbr), 'fr'));
+  const tags = _tagsOrdered();
   // keepChecks : re-rendu après « ⚙ Gérer » — on garde les cases cochées mais pas encore enregistrées.
   const mine = new Set(keepChecks && box.dataset.ready === '1'
     ? [...box.querySelectorAll('input[data-tag]:checked')].map(i => i.dataset.tag)
@@ -22904,7 +22891,7 @@ function _renderCfgBulkBar() {
       <button class="btn btn-sm" style="background:var(--g3);color:#fff" onclick="cfgApplyToSelection('grp',3)">🟣 G3</button>
       <button class="btn btn-g btn-sm" onclick="cfgApplyToSelection('grp',null)">— Aucun</button>`;
   } else if (cfgMode === 'tags') {
-    const tags = Object.values(S.tags || {}).sort((a,b)=>a.abbr.localeCompare(b.abbr));
+    const tags = _tagsOrdered();
     if (!tags.length) {
       acts.innerHTML = '<span style="color:var(--pencil);font-size:.85em">Aucun tag défini. <a href="#" onclick="event.preventDefault();openTagsModal()" style="color:#3498db">⚙ Gérer les tags</a></span>';
       return;
@@ -24849,7 +24836,7 @@ function cycleTag(key) {
   if (!cls) return;
   const room = selectedRoomFor(cls);
   if (!room) return;
-  const tags = Object.values(S.tags || {}).sort((a,b) => a.abbr.localeCompare(b.abbr));
+  const tags = _tagsOrdered();
   if (!tags.length) {
     _uiConfirm({ title: '🏷 Aucun tag', okLabel: '＋ Créer un tag', message: 'Aucun tag n\'est défini. Veux-tu en créer un maintenant ?', onOk: openTagsModal });
     return;
@@ -42399,8 +42386,9 @@ function _renderDisciplinesList() {
   const _ass = document.getElementById('mdisc-class-assign');
   if (_ass && _ass.style.display !== 'none') _renderDiscClassAssign(true);
   const discs = Object.values(S.disciplines || {});
+  { const cnt = document.getElementById('mdisciplines-count'); if (cnt) cnt.textContent = `${discs.length} discipline${discs.length > 1 ? 's' : ''}`; }
   if (discs.length === 0) {
-    wrap.innerHTML = '<p style="color:var(--pencil);font-style:italic;padding:6px 4px">Aucune discipline pour l\'instant — utilise <strong>+ Ajouter une discipline</strong> ci-dessous.</p>';
+    wrap.innerHTML = '<div class="lst-empty">Aucune discipline — ajoute la première ci-dessous.</div>';
     return;
   }
   // Compteurs : nb de classes par discipline, nb d'évals par discipline
@@ -42421,14 +42409,11 @@ function _renderDisciplinesList() {
     const delTitle = d.isPrimary
       ? 'La discipline principale ne peut pas être supprimée.'
       : (used ? `Utilisée par ${nbCls} classe(s) et ${nbEv} éval(s) — retire-les d'abord pour pouvoir supprimer.` : 'Supprimer cette discipline');
-    return `<div data-disc-id="${_escAttr(d.id)}" style="display:grid;grid-template-columns:1fr 110px 110px;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--rule-line-soft)">
-      <input type="text" value="${_escAttr(d.nom || '')}" maxlength="60" placeholder="Nom de la discipline"
-        oninput="_disciplineUpdateName('${_esc(d.id)}', this.value)"
-        style="padding:4px 8px;font-size:.95em;font-family:var(--font-serif)">
-      <span style="font-size:.82em;color:var(--pencil);text-align:center">
-        ${d.isPrimary ? '<strong style="color:var(--disc-accent)">Principale</strong>' : (nbCls + nbEv > 0 ? `${nbCls} cl. · ${nbEv} év.` : 'inutilisée')}
-      </span>
-      <button class="btn btn-d btn-sm" onclick="_deleteDiscipline('${_esc(d.id)}')" title="${_escAttr(delTitle)}"${canDelete ? '' : ' disabled style="opacity:.4;cursor:not-allowed"'}>✕ Supprimer</button>
+    return `<div class="lst-row" data-disc-id="${_escAttr(d.id)}">
+      <input type="text" class="lst-flex" value="${_escAttr(d.nom || '')}" maxlength="60" placeholder="Nom de la discipline" aria-label="Nom de la discipline"
+        oninput="_disciplineUpdateName('${_esc(d.id)}', this.value)" style="font-family:var(--font-serif)">
+      <span class="lst-use">${d.isPrimary ? '<strong style="color:var(--disc-accent)">principale</strong>' + (nbCls + nbEv ? ' · ' : '') : ''}${nbCls + nbEv > 0 ? `${nbCls} classe${nbCls > 1 ? 's' : ''} · ${nbEv} éval${nbEv > 1 ? 's' : ''}` : (d.isPrimary ? '' : 'inutilisée')}</span>
+      <button class="lst-del" onclick="_deleteDiscipline('${_esc(d.id)}')" title="${_escAttr(delTitle)}" aria-label="Supprimer la discipline"${canDelete ? '' : ' disabled'}>🗑</button>
     </div>`;
   }).join('');
 }
@@ -42560,11 +42545,15 @@ function _renderCompMgrList() {
   if (!list) return;
   const comps = Object.values(S.competences || {});
   const doms = Object.values(S.competenceDomains || {});
-  if (count) count.textContent = `${comps.length} compétence${comps.length > 1 ? 's' : ''} · ${doms.length} domaine${doms.length > 1 ? 's' : ''} du socle`;
+  if (count) count.textContent = `${comps.length} compétence${comps.length > 1 ? 's' : ''} · ${doms.length} domaine${doms.length > 1 ? 's' : ''}`;
+  document.querySelectorAll('#mcompmgr-sort button').forEach(b => b.classList.toggle('on', b.dataset.v === _mcompmgrSortMode));
   if (comps.length === 0) {
-    list.innerHTML = '<p style="color:var(--pencil);font-style:italic;text-align:center;padding:14px">Aucune compétence pour l\'instant. Clique sur <strong>+ Ajouter une compétence</strong>.</p>';
+    list.innerHTML = '<div class="lst-empty">Aucune compétence — ajoute la première ci-dessous.</div>';
     return;
   }
+  // Recherche (v2.104.0) : code ou nom, sans accents ni casse ; une compétence vide (en cours de saisie) reste visible
+  const _q = (document.getElementById('mcompmgr-search')?.value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const _keep = c => !_q || !(c.code || c.name) || `${c.code || ''} ${c.name || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(_q);
   // Options du <select> domaine
   const domOpts = doms
     .slice().sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }))
@@ -42572,22 +42561,22 @@ function _renderCompMgrList() {
 
   const buildRow = c => {
     const usage = _countCompUsage(c.id);
-    return `<div class="mcompmgr-row" data-cid="${_esc(c.id)}" style="display:grid;grid-template-columns:80px 1fr 220px 60px 36px;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--rule-line-soft)">
+    return `<div class="mcompmgr-row lst-row" data-cid="${_esc(c.id)}" style="display:grid;grid-template-columns:84px 1fr 230px 70px 30px">
       <input type="text" value="${_escAttr(c.code || '')}" maxlength="8" placeholder="Code" onchange="updateCompField('${_esc(c.id)}','code',this.value)" style="padding:3px 6px;font-family:var(--font-mono);font-weight:600;text-align:center" title="Code court (ex. C1, D1.1, Lec)">
       <input type="text" value="${_escAttr(c.name || '')}" maxlength="120" placeholder="Nom complet (descriptif)" onchange="updateCompField('${_esc(c.id)}','name',this.value)" style="padding:3px 6px" title="Descriptif complet (affiché au survol et dans le dropdown du tableur)">
       <select onchange="updateCompField('${_esc(c.id)}','domainId',this.value)" title="Domaine du socle de référence" style="padding:3px 6px;font-size:.88em">
         <option value="">— Sans domaine —</option>
         ${domOpts.replace(`value="${_esc(c.domainId || '')}"`, `value="${_esc(c.domainId || '')}" selected`)}
       </select>
-      <span style="font-size:.78em;color:var(--pencil);text-align:right" title="Nombre d'évaluations qui référencent cette compétence">${usage ? usage + ' éval' + (usage > 1 ? 's' : '') : '—'}</span>
-      <button class="btn btn-d btn-sm" onclick="deleteCompetence('${_esc(c.id)}')" title="Supprimer cette compétence (refusé si utilisée par une évaluation)" style="padding:2px 6px">🗑</button>
+      <span class="lst-use" style="min-width:0" title="Nombre d'évaluations qui référencent cette compétence">${usage ? usage + ' éval' + (usage > 1 ? 's' : '') : 'inutilisée'}</span>
+      <button class="lst-del" onclick="deleteCompetence('${_esc(c.id)}')" title="Supprimer cette compétence (refusé si utilisée par une évaluation)" aria-label="Supprimer la compétence"${usage ? ' disabled' : ''}>🗑</button>
     </div>`;
   };
 
   if (_mcompmgrSortMode === 'domain') {
     // Groupé par domaine
     const byDom = {};
-    for (const c of comps) {
+    for (const c of comps.filter(_keep)) {
       const key = c.domainId || '_nodom';
       (byDom[key] = byDom[key] || []).push(c);
     }
@@ -42600,14 +42589,14 @@ function _renderCompMgrList() {
       arr.sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
       const dom = S.competenceDomains?.[dId];
       const lbl = dom ? `${dom.code} — ${dom.name}` : 'Sans domaine';
-      html += `<div style="margin:8px 0 2px;padding:4px 8px;background:var(--paper-warm);font-family:var(--font-mono);font-size:.82em;color:var(--ink-blue);font-weight:600;letter-spacing:0.05em;text-transform:uppercase">${_esc(lbl)}</div>`;
+      html += `<div class="lst-grp">${_esc(lbl)} · ${arr.length}</div>`;
       html += arr.map(buildRow).join('');
     }
-    list.innerHTML = html;
+    list.innerHTML = html || '<div class="lst-empty">Aucune compétence ne correspond.</div>';
   } else {
     // Tri à plat par code
-    comps.sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
-    list.innerHTML = comps.map(buildRow).join('');
+    const shown = comps.filter(_keep).sort((a,b) => (a.code || '').localeCompare(b.code || '', 'fr', { numeric: true }));
+    list.innerHTML = shown.map(buildRow).join('') || '<div class="lst-empty">Aucune compétence ne correspond.</div>';
   }
 }
 
@@ -52598,10 +52587,12 @@ function renderConseilMentions() {
   const list = document.getElementById('mconseil-list'); if (!list) return;
   const ms = _conseilMentionsSorted();
   if (!ms.length) {
-    list.innerHTML = '<div style="color:var(--pencil);font-size:.9em;padding:14px;text-align:center;background:var(--paper-warm);border-radius:4px;border:1px dashed var(--rule-line)">Aucune mention. Ajoute-en une ci-dessous.</div>';
+    list.innerHTML = '<div class="lst-empty">Aucune mention — crée la première sur la ligne ci-dessous.</div>';
+    { const cnt = document.getElementById('mconseil-count'); if (cnt) cnt.textContent = '0 mention'; }
     return;
   }
-  list.innerHTML = ms.map(m => {
+  { const cnt = document.getElementById('mconseil-count'); if (cnt) cnt.textContent = `${ms.length} mention${ms.length > 1 ? 's' : ''}`; }
+  list.innerHTML = ms.map((m, idx) => {
     const color = _safeColor(m.color);
     const usage = _conseilUsageCount(m.id);
     const others = ms.filter(o => o.id !== m.id);
@@ -52609,15 +52600,25 @@ function renderConseilMentions() {
       const inc = _conseilAreIncompat(m.id, o.id);
       return `<button type="button" onclick="conseilToggleIncompatUI('${_esc(m.id)}','${_esc(o.id)}')" title="${_escAttr((inc ? 'Incompatible' : 'Compatible') + ' avec ' + o.nom + ' — cliquer pour basculer')}" style="font-family:var(--font-mono);font-size:.74em;font-weight:700;padding:2px 7px;border-radius:9px;cursor:pointer;border:1px solid ${inc ? 'var(--danger-bg)' : 'var(--rule-line)'};background:${inc ? 'var(--danger-bg)' : 'transparent'};color:${inc ? 'var(--danger-on)' : 'var(--pencil)'}">${_esc(o.abbr)}</button>`;
     }).join('');
-    return `<div class="mtags-row" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:4px;margin-bottom:6px;flex-wrap:wrap">
-      <input type="text" value="${_escAttr(m.abbr)}" maxlength="4" onchange="conseilSetAbbr('${_esc(m.id)}',this.value)" title="Abréviation (label affiché)" style="width:56px;text-align:center;text-transform:uppercase;font-family:var(--font-mono);font-weight:700;padding:5px 4px;border:1px solid #ccc;border-radius:4px;background:${color};color:${_contrastTextColor(color)}">
-      <input type="text" value="${_escAttr(m.nom)}" onchange="conseilRenameMention('${_esc(m.id)}',this.value)" title="Nom complet" style="flex:1;min-width:120px;border:1px solid transparent;background:transparent;padding:4px 6px;font-size:.9em" onfocus="this.style.borderColor='#ccc';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">
-      <input type="color" value="${color}" onchange="conseilSetColor('${_esc(m.id)}',this.value)" title="Couleur" style="width:32px;height:28px;padding:1px;border:1px solid #ccc;border-radius:3px;cursor:pointer">
-      <span style="font-size:.74em;color:var(--pencil);min-width:54px;text-align:right" title="Nombre d'attributions actuelles">${usage} att.</span>
-      <button class="btn btn-d btn-sm" onclick="conseilDeleteMention('${_esc(m.id)}')" title="Supprimer cette mention (la retire de tous les élèves)">🗑</button>
-      ${others.length ? `<div style="flex-basis:100%;display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:4px 0 0 2px"><span style="font-size:.76em;color:var(--pencil);margin-right:2px">⊘ incompatible avec :</span>${chips}</div>` : ''}
+    return `<div class="lst-row lst-wrap sort-row" data-sort-idx="${idx}">
+      ${_sortHandleHTML('var(--pencil)')}
+      <input type="text" value="${_escAttr(m.abbr)}" maxlength="4" onchange="conseilSetAbbr('${_esc(m.id)}',this.value)" title="Abréviation (affichée dans la colonne)" aria-label="Abréviation de la mention ${_escAttr(m.nom)}" style="width:60px;text-align:center;text-transform:uppercase;font-family:var(--font-mono);font-weight:700;background:${color} !important;color:${_contrastTextColor(color)} !important">
+      <input type="text" class="lst-flex" value="${_escAttr(m.nom)}" onchange="conseilRenameMention('${_esc(m.id)}',this.value)" aria-label="Nom de la mention ${_escAttr(m.abbr)}">
+      <input type="color" value="${color}" onchange="conseilSetColor('${_esc(m.id)}',this.value)" title="Couleur" aria-label="Couleur de la mention ${_escAttr(m.abbr)}" style="width:34px;height:30px;padding:1px;cursor:pointer">
+      <span class="lst-use" title="Nombre d'attributions actuelles (tous élèves, toutes périodes)">${usage} attribution${usage > 1 ? 's' : ''}</span>
+      <button class="lst-del" onclick="conseilDeleteMention('${_esc(m.id)}')" title="Supprimer cette mention (la retire de tous les élèves)" aria-label="Supprimer la mention ${_escAttr(m.abbr)}">🗑</button>
+      ${others.length ? `<div class="lst-sub" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">⊘ incompatible avec : ${chips}</div>` : ''}
     </div>`;
   }).join('');
+  _makeSortable('mconseil-list', _conseilMoveTo);
+}
+function _conseilMoveTo(from, to) {
+  const arr = _conseilMentionsSorted();
+  if (from < 0 || to < 0 || from >= arr.length || to >= arr.length || from === to) { renderConseilMentions(); return; }
+  pushUndo();
+  const [it] = arr.splice(from, 1); arr.splice(to, 0, it);
+  arr.forEach((m, i) => { m.ord = i; });
+  save(); renderConseilMentions(); _conseilRefreshBilan();
 }
 function conseilAddMention() {
   const abbr = (document.getElementById('mconseil-abbr').value || '').trim().toUpperCase();
@@ -55765,7 +55766,7 @@ function _makeSortable(containerId, onMove) {
     const row = e.target.closest && e.target.closest('.sort-row');
     if (!row || row.parentElement !== c) return;
     if (e.button > 0) return;                       // clic droit / molette : pas une saisie
-    if (e.target.closest('button')) return;         // ↑ ↓ ✕ gardent leur clic
+    if (e.target.closest('button, input, select, textarea, label, a')) return;   // ↑ ↓ ✕ et les champs gardent leur clic (v2.104.0)
     // ⚠️ Hors souris, seule la poignée saisit : ailleurs sur la ligne, le geste doit rester
     // un défilement de la modale (ces listes dépassent l'écran sur une tablette). Le stylet
     // est logé à la même enseigne que le doigt — `touch-action` s'applique aux deux.

@@ -440,6 +440,18 @@ Fenêtre élargie (860 px), qui tient presque sans défilement. Tout est rendu p
 - **Tuiles par thème** (`_settingsTiles()` : Évaluations · Vie de classe · Outils et données), chacune avec son **état en une ligne** (nombre de tags, disciplines, seuil du sonomètre, stratégie de sauvegarde, version…) ; clic = la même fenêtre qu'avant via `_settingsOpenChild` (ou l'onglet). Les tuiles d'une fonction désactivée sont masquées.
 - Audit : 0 écart en clair et en sombre (fenêtre et champ ajouté aux mentions) ; 363 px de large à 375, sans débordement.
 
+### Fenêtres ouvertes depuis Réglages — trois gabarits (arbitrages du 2026-10-07)
+
+**A** fenêtre longue à sommaire (Réglages des évaluations, À propos) · **B** fenêtre d'outil compacte (Minuteur, Sonomètre, Sauvegarde) · **C** fenêtre de liste. Ordre de réalisation C → B → A.
+
+**Gabarit C — fait en v2.104.0** : Tags (`mtags`), Disciplines (`mdisciplines`), Compétences (`mcompmgr`), Conseil de classe (`mconseil-mentions`), Motifs de rappel (`mrempresets`), Liens (`mlinks`).
+- En-tête `.lst-head` : titre + compteur `.lst-count` (+ recherche pour les Compétences, `#mcompmgr-search`, code ou nom, sans accents ; un sélecteur Par domaine | Par code remplace les deux boutons). Une phrase d'intro `.lst-intro`.
+- Liste `.lst-box` > `.lst` (défile) + **ligne d'ajout `.lst-add` toujours en bas, même format** ; lignes `.lst-row` : poignée ⠿, aperçu (pastille colorée), champs modifiables sur place, **usage** `.lst-use` (Tags : élèves · places réservées ; Mentions : attributions ; Motifs : rappels en cours portant ce libellé ; Liens : domaine ; Disciplines : classes · évals ; Compétences : évals), 🗑 `.lst-del` (désactivé si la suppression serait refusée).
+- **Réordonner par glisser ⠿** (`_makeSortable`) : Tags (`_tagMoveTo`, nouveau champ `t.ord` ; ⚠️ **toute liste de tags passe par `_tagsOrdered()`**, sept tris par abréviation remplacés — l'ordre choisi vaut sur le plan, les filtres, Config Salle…), Mentions (`_conseilMoveTo`, `m.ord` existant = ordre des colonnes), Motifs (`moveReminderPresetTo`), Liens (`moveUserLinkTo`). **Pas de glisser pour les Disciplines et les Compétences** : leur ordre est fixé ailleurs (liste des disciplines de chaque classe ; code des compétences dans tous les tableurs).
+- ⚠️ `_makeSortable` ignore désormais un `pointerdown` sur `input, select, textarea, label, a` (en plus des boutons) : sans ça, un clic dans un champ d'une ligne déplaçable démarrait un glisser (`preventDefault`) et le champ ne prenait jamais le focus.
+- Compétences au téléphone : la grille de la ligne passe en flex qui se replie (`@media (max-width:700px)`), le `<select>` du domaine sur sa propre ligne.
+- Audit : 0 écart en clair et en sombre sur les six fenêtres ; aucun débordement à 375 px. Glisser vérifié au vrai pointeur (Tags), clic dans un champ d'une ligne déplaçable aussi.
+
 ### Ce qu'ils contenaient avant la refonte (historique)
 
 
