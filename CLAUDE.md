@@ -3037,6 +3037,14 @@ Bouton **📷 Photos** de l'onglet Élèves → modale `mtrombi` (`openTrombiImp
 - **Survol** (`_photoSidFromTarget`, écouteurs `mouseover`/`mousemove` sur `document`) : attribut `data-photo-sid` explicite (QCMCam, Tablettes, Export positions) · **1ʳᵉ cellule d'une ligne `tr[data-sid]`** (Élèves, tableurs d'éval, bilans) ou cellule `.conf-keep` sans champ (Vue d'ensemble, Stats d'appel) · `.cn` / `.svname` d'une case du plan ou de la Vue Élève (via `seating`, hors consultation de snapshot) · `.us[data-sid]` (non placés). **Tout nouveau tableau par élève qui respecte le contrat du mode confidentiel (nom en 1ʳᵉ cellule de `tr[data-sid]`) a la photo au survol sans rien faire.** Masquée pour un élève caché en mode confidentiel.
 - Tests : `test/trombi.test.js` sur `test/fixtures/trombi/fake-trombi.pdf` (faux trombinoscope imprimé par Chrome, même structure que l'export MBN : noms inventés, carrés de couleur). Le harnais expose `DecompressionStream`.
 
+## 📷 Import des photos — refonte v2.122.0 (maquette validée le 2026-10-08)
+- **Plusieurs fichiers d'un coup** (`_trombiFiles`, glisser-déposer `_trombiDrop`, `#trombi-file` multiple, `#trombi-dir` en `webkitdirectory`) : chaque PDF MBN devient un **lot** (une classe), les **images** (« NOM Prénom.jpg/png », `_` = espace) rejoignent un lot « Images » qui cherche par défaut dans **toutes les classes** (`classId '*'`, `_trombiStudents('*')`) — réencodées en JPEG ≤ 400 px par `_photoFileToJpeg`. État `_trombi = { items, cur, keep, filter }` ; pastilles des lots avec « N à vérifier ».
+- Par lot : classe, PP, bandeau (photos, associées, **à vérifier** = non associée ou nom approché `score < 100`, élèves sans photo), filtres Toutes / À vérifier / Élèves qui ont déjà une photo, cartes à liseré vert ou cadre orange.
+- **« Garder les photos déjà présentes »** (`_trombi.keep`, **coché par défaut**) : un élève qui a déjà une photo la garde (« 📷 gardée ») — protège les photos retouchées (agrandies) d'un réimport. Décoché : « 🔁 remplace ».
+- `_trombiSave` écrit tous les lots (un élève reçoit une seule photo, la première), PP de chaque lot coché.
+- Correction au passage : `_photosRefresh` ne compte plus les `.jpeg` (ils étaient comptés mais jamais affichés, `_photoUrl` ne lit que `<sid>.jpg`).
+- Audit : 0 écart en clair et en sombre ; 363 px à 375. Testé avec `test/fixtures/trombi/fake-trombi.pdf` et des images fabriquées.
+
 ## 🖼 Trombinoscope — affichage et impression (modale `mtrombiview`, v2.68.0)
 
 Bouton **🖼 Trombinoscope** de l'onglet Élèves (`#btn-trombiview`, visible seulement s'il existe au moins une photo, comme 🧠 Mémoriser — `_updateMemoBtn` gère les deux). La modale montre la classe choisie dans son sélecteur (défaut : classe courante ; classes réelles seulement, élèves actifs, triés par nom) : photo, prénom, NOM — case pointillée 📷 si pas de photo. Un clic sur un élève ouvre sa fiche, qui rouvre le trombinoscope à la fermeture.

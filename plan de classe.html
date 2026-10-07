@@ -474,6 +474,16 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .trombi-st{font-size:.85em;color:var(--pencil)}
 .trombi-st.ok{color:var(--ok-fg)}
 .trombi-st.bad{color:var(--danger-fg)}
+.trombi-drop{border:1.5px dashed var(--rule-line);border-radius:8px;padding:12px;text-align:center;margin:6px 0 10px;background:var(--paper)}
+.trombi-drop.drop{border-color:var(--link-fg);background:var(--info-bg)}
+.trombi-lots{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px}
+.trombi-warn{color:var(--warn-fg)}
+.mvc-chip.on .trombi-warn{color:inherit}
+.trombi-filt{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-bottom:8px}
+.trombi-keep{font-size:.88em;display:inline-flex;gap:5px;align-items:center}
+.trombi-card.chk{border:1.5px solid var(--warn-fg)}
+.trombi-card.ok{border-left:3px solid var(--ok-fg)}
+
 /* 🖼 Trombinoscope (affichage) */
 .tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tv-w,130px),1fr));gap:12px}
 .tv-card{text-align:center;cursor:pointer;border-radius:6px;padding:4px;position:relative}
@@ -4834,13 +4844,14 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- 📷 Import des photos depuis le thrombinoscope PDF (MBN) -->
 <div id="mtrombi" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:980px;width:100%">
-    <h2>📷 Photos des élèves — thrombinoscope</h2>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-      <input type="file" id="trombi-file" accept="application/pdf,.pdf" onchange="_trombiFileSelected(this.files[0])">
-      <span id="trombi-status" class="muted-line" style="margin:0"></span>
-    </div>
-    <div id="trombi-body" style="max-height:62vh;overflow-y:auto;padding-right:4px"></div>
+  <!-- Import des photos — refonte v2.122.0 (maquette validée le 2026-10-08) : plusieurs PDF MBN d'un
+       coup (une pastille par classe), ou des images nommées « NOM Prénom.jpg » ; bandeau, filtres,
+       « Garder les photos déjà présentes » (coché par défaut), enregistrement de tout en une fois. -->
+  <div class="mb" style="width:min(1040px,97vw);max-width:1040px">
+    <h2>📷 Photos des élèves</h2>
+    <input type="file" id="trombi-file" accept="application/pdf,.pdf,image/*" multiple style="display:none" onchange="_trombiFiles(this.files)">
+    <input type="file" id="trombi-dir" webkitdirectory multiple style="display:none" onchange="_trombiFiles(this.files)">
+    <div id="trombi-body" style="max-height:66vh;overflow-y:auto;padding-right:4px"></div>
     <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-g" onclick="closeMod2('mtrombi')" style="margin-left:auto">Annuler</button>
       <button class="btn btn-p" id="trombi-go" onclick="_trombiSave()" disabled>📷 Enregistrer les photos</button>
@@ -7938,11 +7949,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.121.0';
+const APP_VERSION    = '2.122.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T22:38:52Z';
+const APP_BUILD_DATE = '2026-10-07T22:45:29Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31843,7 +31854,7 @@ async function _photosRefresh(ask) {
   const found = new Set();
   try {
     for await (const [name, h] of d.entries()) {
-      const m = /^(.+)\.jpe?g$/i.exec(name);
+      const m = /^(.+)\.jpg$/i.exec(name);   // seul <sid>.jpg est lu par _photoUrl : un .jpeg serait compté sans jamais s'afficher
       if (m && h.kind === 'file') found.add(m[1]);
     }
   } catch (e) { return false; }
@@ -31934,116 +31945,160 @@ async function _photoDelete(sid, ask) {
 }
 
 // ─── Modale d'import (mtrombi) ───────────────────────────────────────────────
-let _trombi = null;   // { header, entries: [{ ..., url, sid, score, candidates }], classId, savePP }
+// Lots lus : un par PDF (une classe) + un pour les images isolées. _trombi.cur = lot affiché.
+// Entrée : { text, lines, jpeg, url, sid, score, candidates, auto }.
+var _trombi = null;   // { items: [{ kind:'pdf'|'img', label, header, entries, classId, classAuto, savePP }], cur, keep, filter }
 function openTrombiImport() {
-  _trombi = null;
-  const inp = document.getElementById('trombi-file'); if (inp) inp.value = '';
+  _trombiReleaseAll();
+  _trombi = { items: [], cur: 0, keep: true, filter: 'all' };
+  ['trombi-file', 'trombi-dir'].forEach(id => { const inp = document.getElementById(id); if (inp) inp.value = ''; });
   renderTrombi();
   openMod('mtrombi');
 }
-async function _trombiFileSelected(file) {
-  if (!file) return;
-  const st = document.getElementById('trombi-status');
-  if (st) st.textContent = '⏳ Lecture du PDF…';
-  try {
-    const u8 = new Uint8Array(await file.arrayBuffer());
-    const res = await _trombiParsePdf(u8);
-    _trombiRelease();
-    res.entries.forEach(e => { e.url = e.jpeg ? URL.createObjectURL(new Blob([e.jpeg], { type: 'image/jpeg' })) : null; });
-    const cid = _trombiResolveClass(res.header.classLabel) || (getCls()?.id ?? null);
-    _trombi = { ...res, classId: cid, classAuto: !!_trombiResolveClass(res.header.classLabel), savePP: false };
-    _trombiRematch();
-    const cls = S.classes[cid];
-    _trombi.savePP = !!(res.header.pp && cls && !cls.profPrincipal);
-    if (st) st.textContent = '';
-  } catch (e) {
-    console.warn('Import thrombinoscope :', e);
-    _trombi = null;
-    if (st) st.textContent = '';
-    appAlert('Lecture du PDF impossible', (e && e.message) || String(e), 'error');
+const _trombiItem = () => _trombi?.items[_trombi.cur] || null;
+function _trombiReleaseAll() { if (_trombi?.items) for (const it of _trombi.items) for (const e of it.entries) if (e.url) URL.revokeObjectURL(e.url); }
+function _trombiRelease() { _trombiReleaseAll(); }
+// Fichiers choisis ou déposés : chaque PDF devient un lot ; les images rejoignent un lot « Images ».
+async function _trombiFiles(fileList) {
+  const files = [...(fileList || [])];
+  if (!files.length || !_trombi) return;
+  const pdfs = files.filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+  const imgs = files.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name));
+  _trombiBusy(`⏳ Lecture de ${files.length} fichier${files.length > 1 ? 's' : ''}…`);
+  let first = null;
+  for (const f of pdfs) {
+    try {
+      const res = await _trombiParsePdf(new Uint8Array(await f.arrayBuffer()));
+      res.entries.forEach(e => { e.url = e.jpeg ? URL.createObjectURL(new Blob([e.jpeg], { type: 'image/jpeg' })) : null; });
+      const auto = _trombiResolveClass(res.header.classLabel);
+      const it = { kind: 'pdf', label: res.header.classLabel || f.name, header: res.header, entries: res.entries, classId: auto || getCls()?.id || null, classAuto: !!auto, savePP: false };
+      const cls = S.classes[it.classId];
+      it.savePP = !!(res.header.pp && cls && !cls.profPrincipal);
+      _trombiRematch(it);
+      _trombi.items.push(it); if (first == null) first = _trombi.items.length - 1;
+    } catch (e) {
+      console.warn('Import thrombinoscope :', f.name, e);
+      appAlert('Lecture du PDF impossible', `${f.name} : ${(e && e.message) || e}`, 'error');
+    }
   }
+  if (imgs.length) {
+    let it = _trombi.items.find(x => x.kind === 'img');
+    if (!it) { it = { kind: 'img', label: 'Images', header: {}, entries: [], classId: '*', classAuto: true, savePP: false }; _trombi.items.push(it); }
+    for (const f of imgs) {
+      let jpeg = null; try { jpeg = await _photoFileToJpeg(f); } catch (e) {}
+      const name = f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim();
+      it.entries.push({ text: name, lines: [name], jpeg, url: jpeg ? URL.createObjectURL(new Blob([jpeg], { type: 'image/jpeg' })) : null });
+    }
+    _trombiRematch(it);
+    if (first == null) first = _trombi.items.indexOf(it);
+  }
+  if (!pdfs.length && !imgs.length) toast('⚠️ Choisis des PDF de trombinoscope ou des images (JPG, PNG…).', 'warn');
+  if (first != null) _trombi.cur = first;
+  _trombiBusy('');
   renderTrombi();
 }
-function _trombiRelease() {
-  if (_trombi) for (const e of _trombi.entries) if (e.url) URL.revokeObjectURL(e.url);
+function _trombiBusy(msg) { const el = document.getElementById('trombi-busy'); if (el) el.textContent = msg; }
+function _trombiDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('drop');
+  _trombiFiles(e.dataTransfer?.files);
 }
+// Élèves candidats : ceux de la classe, ou de toutes les classes (« * », lot d'images).
 function _trombiStudents(cid) {
-  const cls = S.classes[cid];
-  return (cls?.eleves || []).map(id => S.eleves[id]).filter(Boolean)
+  const list = cid === '*' ? [...new Set(_memoRealClasses().flatMap(c => c.eleves || []))].map(id => S.eleves[id])
+                           : (S.classes[cid]?.eleves || []).map(id => S.eleves[id]);
+  return list.filter(Boolean)
     .sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr'));
 }
-function _trombiRematch() {
-  if (!_trombi) return;
-  const props = _trombiMatch(_trombi.entries.map(e => e.text), _trombiStudents(_trombi.classId));
-  _trombi.entries.forEach((e, i) => { e.sid = e.jpeg ? props[i].sid : null; e.score = props[i].score; e.candidates = props[i].candidates; e.auto = !!props[i].sid; });
+function _trombiRematch(it) {
+  it = it || _trombiItem(); if (!it) return;
+  const props = _trombiMatch(it.entries.map(e => e.text), _trombiStudents(it.classId));
+  it.entries.forEach((e, i) => { e.sid = e.jpeg ? props[i].sid : null; e.score = props[i].score; e.candidates = props[i].candidates; e.auto = !!props[i].sid; });
 }
 function _trombiSetClass(cid) {
-  if (!_trombi) return;
-  _trombi.classId = cid || null;
+  const it = _trombiItem(); if (!it) return;
+  it.classId = cid || null; it.classAuto = true;
   const cls = S.classes[cid];
-  _trombi.savePP = !!(_trombi.header.pp && cls && !cls.profPrincipal);
-  _trombiRematch();
+  it.savePP = !!(it.header.pp && cls && !cls.profPrincipal);
+  _trombiRematch(it);
   renderTrombi();
 }
 function _trombiSetSid(i, sid) {
-  const e = _trombi?.entries[i]; if (!e) return;
+  const it = _trombiItem(); const e = it?.entries[i]; if (!e) return;
   // Un élève ne reçoit qu'une photo : on le retire d'une autre ligne qui l'aurait.
-  if (sid) _trombi.entries.forEach((o, k) => { if (k !== i && o.sid === sid) { o.sid = null; o.auto = false; } });
+  if (sid) _trombi.items.forEach(x => x.entries.forEach(o => { if (o !== e && o.sid === sid) { o.sid = null; o.auto = false; } }));
   e.sid = sid || null; e.auto = false;
   renderTrombi();
 }
+// Une photo sera-t-elle écrite ? (associée, lisible, et pas une photo gardée)
+const _trombiWillWrite = e => !!(e.sid && e.jpeg && !(_trombi.keep && _photoHas(e.sid)));
+const _trombiToCheck = e => !!(e.jpeg && (!e.sid || (e.auto && e.score < 100)));
 function renderTrombi() {
   const box = document.getElementById('trombi-body');
   const btn = document.getElementById('trombi-go');
-  if (!box) return;
+  if (!box || !_trombi) return;
   const dirOk = !!dirHandle;
   const dirLine = dirOk
-    ? `<div class="muted-line">📂 Les photos seront enregistrées dans <code>${_escName(dirHandle.name)}/${PHOTOS_SUBDIR}/</code> — le dossier de sauvegarde, synchronisé par Nextcloud.</div>`
+    ? `<div class="muted-line">📂 Les photos sont enregistrées dans <code>${_escName(dirHandle.name)}/${PHOTOS_SUBDIR}/</code> — le dossier de sauvegarde, synchronisé par Nextcloud.</div>`
     : `<div class="al al-w" style="margin:0 0 10px">⚠️ Aucun dossier de sauvegarde n'est choisi. Les photos sont rangées dans un sous-dossier <code>${PHOTOS_SUBDIR}/</code> du dossier où l'app enregistre ses JSON.
         <button class="btn btn-p btn-sm" style="margin-left:6px" onclick="_trombiPickDir()">📂 Choisir le dossier de sauvegarde</button></div>`;
-  if (!_trombi) {
-    box.innerHTML = dirLine + `<p style="margin:8px 0">Exporte le trombinoscope d'une classe depuis MBN (PDF), puis choisis-le ici. Le fichier est lu dans le navigateur et n'est envoyé nulle part.</p>`;
-    if (btn) { btn.disabled = true; btn.textContent = '📷 Enregistrer les photos'; }
-    return;
-  }
-  const h = _trombi.header, cls = S.classes[_trombi.classId];
-  const studs = _trombiStudents(_trombi.classId);
-  const taken = new Set(_trombi.entries.map(e => e.sid).filter(Boolean));
-  const opts = Object.values(S.classes || {}).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }))
-    .map(c => `<option value="${_escAttr(c.id)}"${c.id === _trombi.classId ? ' selected' : ''}>${_escName(c.nom)}</option>`).join('');
-  const found = _trombi.entries.length;
-  const countWarn = h.count != null && h.count !== found ? ` <span style="color:var(--warn-fg)">⚠ ${h.count} annoncés</span>` : '';
+  const drop = `<div class="trombi-drop" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="_trombiDrop(event)">
+      <div>Dépose ici <b>un ou plusieurs PDF</b> de trombinoscope MBN (un par classe), ou des <b>images</b> nommées « NOM Prénom.jpg ».</div>
+      <div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="document.getElementById('trombi-file').click()">📄 Choisir des PDF ou des images…</button>
+        <button class="btn btn-g btn-sm" onclick="document.getElementById('trombi-dir').click()">📁 Choisir un dossier d'images…</button></div>
+      <div class="muted-line" style="margin:6px 0 0">Les fichiers sont lus dans le navigateur et ne sont envoyés nulle part. <span id="trombi-busy"></span></div></div>`;
+  const items = _trombi.items;
+  const nWrite = items.reduce((t, it) => t + it.entries.filter(_trombiWillWrite).length, 0);
+  const nCls = items.filter(it => it.entries.some(_trombiWillWrite)).length;
+  if (btn) { btn.disabled = !nWrite || !dirOk; btn.textContent = `📷 Enregistrer ${nWrite} photo${nWrite > 1 ? 's' : ''}${items.length > 1 ? ` (${nCls} lot${nCls > 1 ? 's' : ''})` : ''}`; }
+  if (!items.length) { box.innerHTML = dirLine + drop; return; }
+  const pill = (on, oc, lbl, tip) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}" onclick="${oc}"${tip ? ` title="${_escAttr(tip)}"` : ''}>${lbl}</button>`;
+  const lots = items.map((it, k) => {
+    const chk = it.entries.filter(_trombiToCheck).length;
+    const nm = it.kind === 'img' ? `🖼 Images · ${it.entries.length}` : `${_escName(S.classes[it.classId]?.nom || it.label)} · ${it.entries.length}`;
+    return pill(k === _trombi.cur, `_trombi.cur=${k};renderTrombi()`, nm + (chk ? ` · <span class="trombi-warn">${chk} à vérifier</span>` : ' ✓'), it.kind === 'pdf' ? 'PDF : ' + it.label : 'Images isolées');
+  }).join('');
+  const it = _trombiItem(), h = it.header, cls = S.classes[it.classId];
+  const studs = _trombiStudents(it.classId);
+  const taken = new Set(items.flatMap(x => x.entries.map(e => e.sid)).filter(Boolean));
+  const opts = (it.kind === 'img' ? `<option value="*"${it.classId === '*' ? ' selected' : ''}>Toutes les classes</option>` : '')
+    + _memoRealClasses().map(c => `<option value="${_escAttr(c.id)}"${c.id === it.classId ? ' selected' : ''}>${_escName(c.nom)}</option>`).join('');
+  const nOk = it.entries.filter(e => e.sid && e.jpeg).length, nChk = it.entries.filter(_trombiToCheck).length;
+  const missing = it.classId === '*' ? [] : studs.filter(st => !taken.has(st.id) && _stuActiveOn(st) && !_photoHas(st.id));
+  const countWarn = h.count != null && h.count !== it.entries.length ? ` <span class="trombi-warn">⚠ ${h.count} annoncés</span>` : '';
   let head = `<div class="trombi-head">
-    <div><b>Classe du PDF :</b> ${h.classLabel ? _escName(h.classLabel) : '<i>non lue</i>'}
-      → <select onchange="_trombiSetClass(this.value)">${opts}</select>
-      ${_trombi.classAuto ? '' : '<span style="color:var(--warn-fg)" title="Le nom de classe du PDF ne correspond à aucune classe : vérifie le choix">⚠ à vérifier</span>'}</div>
-    <div><b>${found}</b> photo${found > 1 ? 's' : ''} trouvée${found > 1 ? 's' : ''}${countWarn}${h.year ? ` · ${_escName(h.year)}` : ''}${h.date ? ` · édité le ${_escName(h.date)}` : ''}</div>`;
-  if (h.pp && cls) {
-    head += `<div><label><input type="checkbox" ${_trombi.savePP ? 'checked' : ''} onchange="_trombi.savePP=this.checked">
-      Renseigner le professeur principal : <b>${_escName(h.pp)}</b></label>
-      ${cls.profPrincipal ? `<span class="muted-line" style="display:inline"> (actuellement : ${_escName(cls.profPrincipal)})</span>` : ''}</div>`;
-  }
-  head += `</div>`;
-  const cards = _trombi.entries.map((e, i) => {
+    <div>${it.kind === 'pdf' ? `<b>Classe du PDF :</b> ${h.classLabel ? _escName(h.classLabel) : '<i>non lue</i>'} →` : '<b>Élèves cherchés dans :</b>'}
+      <select onchange="_trombiSetClass(this.value)">${opts}</select>
+      ${it.classAuto ? '' : '<span class="trombi-warn" title="Le nom de classe du PDF ne correspond à aucune classe : vérifie le choix">⚠ à vérifier</span>'}
+      ${countWarn}${h.year ? ` · ${_escName(h.year)}` : ''}${h.date ? ` · édité le ${_escName(h.date)}` : ''}</div>`;
+  if (h.pp && cls) head += `<div><label><input type="checkbox" ${it.savePP ? 'checked' : ''} onchange="_trombiItem().savePP=this.checked">
+      Renseigner le professeur principal : <b>${_escName(h.pp)}</b></label>${cls.profPrincipal ? `<span class="muted-line" style="display:inline"> (actuellement : ${_escName(cls.profPrincipal)})</span>` : ''}</div>`;
+  head += '</div>';
+  const syn = `<div class="bsynth" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin:8px 0">
+    ${_bsynthCard(it.kind === 'pdf' ? 'Photos du PDF' : 'Images', `<div class="bsynth-big">${it.entries.length}</div>`)}
+    ${_bsynthCard('Associées', `<div class="bsynth-big">${nOk}</div>`)}
+    ${_bsynthCard('À vérifier', `<div class="bsynth-big${nChk ? ' bsynth-down' : ''}">${nChk}</div><div class="bsynth-line">nom approché ou non trouvé</div>`)}
+    ${it.classId === '*' ? '' : _bsynthCard('Élèves sans photo', `<div class="bsynth-big">${missing.length}</div>`)}</div>`;
+  const nRep = it.entries.filter(e => e.sid && e.jpeg && _photoHas(e.sid)).length;
+  const filt = `<div class="trombi-filt"><span class="mvc-fp-chips"><span class="tv-lbl">Afficher</span>${pill(_trombi.filter === 'all', "_trombi.filter='all';renderTrombi()", 'Toutes')}${pill(_trombi.filter === 'chk', "_trombi.filter='chk';renderTrombi()", `À vérifier (${nChk})`)}${pill(_trombi.filter === 'rep', "_trombi.filter='rep';renderTrombi()", `Élèves qui ont déjà une photo (${nRep})`)}</span>
+    <label class="trombi-keep" title="Coché : un élève qui a déjà une photo la garde (utile si tu l'as améliorée) ; décoché : elle est remplacée"><input type="checkbox" ${_trombi.keep ? 'checked' : ''} onchange="_trombi.keep=this.checked;renderTrombi()"> Garder les photos déjà présentes</label></div>`;
+  const shown = it.entries.map((e, i) => [e, i]).filter(([e]) => _trombi.filter === 'chk' ? _trombiToCheck(e) : _trombi.filter === 'rep' ? (e.sid && _photoHas(e.sid)) : true);
+  const cards = shown.map(([e, i]) => {
     const has = e.sid && _photoHas(e.sid);
+    const chk = _trombiToCheck(e);
     const state = !e.jpeg ? '<span class="trombi-st bad">image illisible</span>'
       : !e.sid ? '<span class="trombi-st bad">✗ à associer</span>'
-      : e.auto ? `<span class="trombi-st ok">✓ ${e.score >= 100 ? 'trouvé' : 'proche'}</span>` : '<span class="trombi-st ok">✎ choisi</span>';
-    const sopts = `<option value="">— ignorer cette photo —</option>` + studs.map(s =>
-      `<option value="${_escAttr(s.id)}"${s.id === e.sid ? ' selected' : ''}>${_escName(s.nom)} ${_escName(s.prenom)}${taken.has(s.id) && s.id !== e.sid ? ' (déjà pris)' : ''}${_photoHas(s.id) ? ' 📷' : ''}</option>`).join('');
-    return `<div class="trombi-card${e.sid ? '' : ' off'}">
+      : e.auto ? `<span class="trombi-st ok">${e.score >= 100 ? '✓ trouvé' : '≈ proche'}</span>` : '<span class="trombi-st ok">✎ choisi</span>';
+    const sopts = `<option value="">— ignorer cette photo —</option>` + studs.map(st =>
+      `<option value="${_escAttr(st.id)}"${st.id === e.sid ? ' selected' : ''}>${_escName(st.nom)} ${_escName(st.prenom)}${it.classId === '*' ? ' · ' + _escName(S.classes[st.classe_id]?.nom || '') : ''}${taken.has(st.id) && st.id !== e.sid ? ' (déjà pris)' : ''}${_photoHas(st.id) ? ' 📷' : ''}</option>`).join('');
+    return `<div class="trombi-card${e.sid ? '' : ' off'}${chk ? ' chk' : ' ok'}">
       ${e.url ? `<img src="${e.url}" alt="">` : '<div class="trombi-noimg">?</div>'}
-      <div class="trombi-pdfname" title="Nom lu sur le PDF">${_escName(e.lines.join(' / ') || '(aucun nom lu)')}</div>
+      <div class="trombi-pdfname" title="Nom lu">${_escName(e.lines.join(' / ') || '(aucun nom lu)')}</div>
       <select ${e.jpeg ? '' : 'disabled'} onchange="_trombiSetSid(${i}, this.value)">${sopts}</select>
-      <div>${state}${has ? ' <span class="trombi-st" title="Cet élève a déjà une photo : elle sera remplacée">🔁 remplace</span>' : ''}</div>
+      <div>${state}${has ? (_trombi.keep ? ' <span class="trombi-st" title="Cet élève a déjà une photo : elle est gardée">📷 gardée</span>' : ' <span class="trombi-st" title="Cet élève a déjà une photo : elle sera remplacée">🔁 remplace</span>') : ''}</div>
     </div>`;
-  }).join('');
-  const missing = studs.filter(s => !taken.has(s.id) && _stuActiveOn(s));
-  const miss = missing.length
-    ? `<div class="muted-line" style="margin-top:10px"><b>Élèves de la classe sans photo dans ce PDF (${missing.length}) :</b> ${missing.map(s => _escName(s.nom + ' ' + s.prenom)).join(', ')}</div>` : '';
-  box.innerHTML = dirLine + head + `<div class="trombi-grid">${cards}</div>` + miss;
-  const n = _trombi.entries.filter(e => e.sid && e.jpeg).length;
-  if (btn) { btn.disabled = !n || !dirOk; btn.textContent = `📷 Enregistrer ${n} photo${n > 1 ? 's' : ''}`; }
+  }).join('') || '<div class="muted-line">Rien à afficher avec ce filtre.</div>';
+  const miss = missing.length ? `<div class="muted-line" style="margin-top:10px"><b>Sans photo, ni dans ce PDF ni déjà enregistrée (${missing.length}) :</b> ${missing.map(st => _escName(st.nom + ' ' + st.prenom)).join(', ')} — ajoute-la ensuite depuis le 🖼 Trombinoscope.</div>` : '';
+  box.innerHTML = dirLine + drop + `<div class="trombi-lots"><span class="tv-lbl">Fichiers lus</span>${lots}</div>` + head + syn + filt + `<div class="trombi-grid">${cards}</div>` + miss;
 }
 async function _trombiPickDir() {
   if (!window.showDirectoryPicker) { toast('⚠️ Ton navigateur ne permet pas de choisir un dossier. Utilise Chrome ou Edge.', 'warn'); return; }
@@ -32056,7 +32111,8 @@ async function _trombiPickDir() {
 }
 async function _trombiSave() {
   if (!_trombi) return;
-  const todo = _trombi.entries.filter(e => e.sid && e.jpeg);
+  const seen = new Set(), todo = [];
+  for (const it of _trombi.items) for (const e of it.entries) if (_trombiWillWrite(e) && !seen.has(e.sid)) { seen.add(e.sid); todo.push(e); }
   if (!todo.length) return;
   const dir = await _photosDir(true, true);
   if (!dir) { appAlert('Dossier inaccessible', "L'autorisation d'écrire dans le dossier de sauvegarde n'a pas été accordée. Les photos n'ont pas été enregistrées.", 'error'); return; }
@@ -32065,15 +32121,15 @@ async function _trombiSave() {
   for (const e of todo) { try { await _photoWrite(dir, e.sid, e.jpeg); ok++; } catch (err) { ko++; console.warn('Photo non écrite', e.sid, err); } }
   try { localStorage.setItem('planClasse_photosKnown', '1'); } catch (e) {}
   _photos.ready = true;
-  const cls = S.classes[_trombi.classId];
-  if (_trombi.savePP && cls && _trombi.header.pp && cls.profPrincipal !== _trombi.header.pp) {
+  const pp = _trombi.items.filter(it => it.savePP && S.classes[it.classId] && it.header.pp && S.classes[it.classId].profPrincipal !== it.header.pp);
+  if (pp.length) {
     pushUndo();
-    cls.profPrincipal = _trombi.header.pp;
+    for (const it of pp) S.classes[it.classId].profPrincipal = it.header.pp;
     save();
-    if (typeof _refreshHdrClassInfo === 'function' && S.cur === cls.id) _refreshHdrClassInfo(cls);
+    const cur = getCls(); if (cur && typeof _refreshHdrClassInfo === 'function') _refreshHdrClassInfo(cur);
     if (typeof renderClasses === 'function') try { renderClasses(); } catch (e) {}
   }
-  _trombiRelease(); _trombi = null;
+  _trombiReleaseAll(); _trombi = null;
   closeMod2('mtrombi');
   _photosChanged();
   toast(ko ? `📷 ${ok} photo(s) enregistrée(s), ${ko} en échec (voir la console).` : `📷 ${ok} photo${ok > 1 ? 's' : ''} enregistrée${ok > 1 ? 's' : ''}.`, ko ? 'warn' : undefined);
