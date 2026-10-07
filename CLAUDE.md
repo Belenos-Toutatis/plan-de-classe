@@ -431,7 +431,17 @@ Le `<select id="cls-sel">` est **caché** (gardé comme support de valeur : une 
 
 `<span class="tab-ctx" id="tabctx-<onglet>">` à côté du titre d'Élèves, Devoirs, Bilan des notes et Bilan des compétences : « **6e A** · Semestre 1 · 🎓 Physique-chimie » (classe seule pour Élèves). Rempli par `_renderTabCtx(key)`, appelé par des **enveloppes** posées sur `renderStudents` / `renderEvalNotes` / `renderBilanTab` / `renderCompetencesTab` **juste avant `init()`** (pour couvrir le premier rendu). La période est lue dans le sélecteur de l'onglet, la discipline par `_currentDiscipline` — affichée même quand son sélecteur est masqué, puisque remarques et éléments travaillés sont rangés par discipline. Tableur : titre en pleine largeur (la barre d'outils passe à la ligne, elle le tronquait à « Déma… ») et ligne `#meval-tableur-ctx` (« classe · période · date de la classe · discipline ») posée par `_evalTableurRenderCtx` à chaque rendu, donc à chaque changement de classe.
 
-## Réglages (`msettings`) — ce qu'ils contiennent
+## Réglages (`msettings`) — refonte v2.103.0 (maquette validée le 2026-10-07)
+
+Fenêtre élargie (860 px), qui tient presque sans défilement. Tout est rendu par **`_settingsRender()`** (`_settingsRefreshLabels` n'en est plus qu'un alias, appelé au retour d'une fenêtre fille par `_settingsOpenChild`).
+- **🔍 Recherche** `#set-search` (focus à l'ouverture, vidée à chaque ouverture, Échap la vide) → `_settingsFilter` : sans accents ni casse, chaque mot doit figurer dans le texte ou les mots-clés `data-k` d'une tuile ou d'une ligne ; les groupes vides se masquent, « Aucun réglage ne correspond » sinon. **Toute nouvelle tuile ou ligne porte des mots-clés `data-k`** (synonymes : « nuit », « nb », « sync »…).
+- **Réglages rapides** (`.set-q`) : Thème Clair | Sombre (`_settingsSetTheme`), Impression Couleurs | N&B (`_settingsSetPrint`), Nom sur le Plan Normal | Grand (`#set-plan-name`, inchangé), Synchronisation auto en interrupteur `.set-sw` (`toggleAutoSync`), **longueur maximale d'une remarque** (`#set-rem-max`). ⚠️ Cette longueur est **aussi** dans la fenêtre des mentions du conseil (`#mconseil-rem-max`, arbitrage « les deux ») : `_setRemMax` resynchronise les deux champs.
+- **Fonctions activées** : 4 interrupteurs `#ff-sw-*` (ex-cases `#ff-chk-*`), descriptions en infobulle.
+- **Tuiles par thème** (`_settingsTiles()` : Évaluations · Vie de classe · Outils et données), chacune avec son **état en une ligne** (nombre de tags, disciplines, seuil du sonomètre, stratégie de sauvegarde, version…) ; clic = la même fenêtre qu'avant via `_settingsOpenChild` (ou l'onglet). Les tuiles d'une fonction désactivée sont masquées.
+- Audit : 0 écart en clair et en sombre (fenêtre et champ ajouté aux mentions) ; 363 px de large à 375, sans débordement.
+
+### Ce qu'ils contenaient avant la refonte (historique)
+
 
 Sections : 🧩 Fonctionnalités · 📊 Évaluations · 🎓 Conseil de classe · 🎓 Disciplines · 🧩 Compétences · 🏷 Tags · 🔔 Rappels · 💾 Sauvegarde · 🔗 Liens · 🎨 Apparence · **🖨 Impression** (couleurs / N&B, réglage global — aussi dans 🖨 Imprimer du Plan, le libellé `.pc-tog-lbl` est rafraîchi partout par `updatePrintColorsUI`) · **🧭 Autres réglages, rangés là où ils servent** (liens : Salles et horaires → Config Salle, Classes mobiles → Tablettes, ⏲ Minuteur, 🎙 Sonomètre, 📷 Photos) · ℹ À propos. Les deux sections en gras datent de v2.68.2 (audit 2026-10-03, § 3.2) : la phrase d'en-tête promettait « tous les réglages en un seul endroit » alors qu'il en manquait une dizaine. `_settingsOpenChild` **enchaîne** l'action de fermeture propre à la modale fille (minuteur, sonomètre : couper le son d'essai) avec le retour aux Réglages, au lieu de la perdre.
 
