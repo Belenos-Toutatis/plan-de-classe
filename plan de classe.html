@@ -1882,6 +1882,12 @@ tr.bf-hide { display:none; }
 #stl .stbl td.el-amen:not(.all) { white-space:normal; }
 #stl .stbl td.el-amen.all { white-space:nowrap; }
 .el-aesh { font-size:.82em; color:var(--pencil); margin:0 6px 0 2px; white-space:nowrap; }
+#el-synth .bsynth-big { font-size:1.65em; }
+#el-synth .bsynth-link.on { background:var(--chip-on-bg); color:#fff; }
+#el-synth .bsynth-link.on .bsynth-num, #el-synth .bsynth-link.on .bsynth-big, #el-synth .bsynth-link.on .bsynth-down, #el-synth .bsynth-link.on b { color:#fff; }
+#el-synth .el-card-filt { border-color:var(--chip-on-bg); }
+.el-filt-on { color:var(--ink-blue); font-weight:600; margin-top:3px; }
+#el-amen-toggle { display:inline-flex; margin-left:6px; font-size:.86em; }
 .el-add { font-size:.78em; color:var(--pencil); background:transparent; border:1px dashed var(--rule-line); border-radius:4px; padding:1px 7px; cursor:pointer; white-space:nowrap; margin-left:2px; }
 .el-add:hover { color:var(--ink-blue); border-color:var(--ink-blue-soft); }
 .el-pop { display:none; position:fixed; z-index:1200; background:var(--paper); border:1px solid var(--rule-line); border-radius:var(--radius-md); box-shadow:var(--shadow-pop); padding:8px 10px; max-width:min(560px, 94vw); }
@@ -3342,6 +3348,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="sh">
       <h2>👥 Élèves</h2>
       <span class="tab-ctx" id="tabctx-eleves"></span>
+      <span id="el-amen-toggle"></span>
       <span class="tb-grp"><span class="tb-grp-lbl">Élèves</span>
         <button class="btn btn-p" onclick="openMod('ms')">+ Ajouter</button>
         <button class="btn btn-s" onclick="openImportStudents()">⬆ Importer</button>
@@ -7712,11 +7719,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.94.0';
+const APP_VERSION    = '2.94.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T05:02:36Z';
+const APP_BUILD_DATE = '2026-10-07T05:06:17Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19401,7 +19408,7 @@ function _elAmenMode() { try { return localStorage.getItem('planClasse_elevesAme
 function _elSetAmenMode(m) { try { localStorage.setItem('planClasse_elevesAmenMode', m); } catch (e) {} _elPopClose(); renderStudents(); }
 function _elHasAmen(s) { return !!(s.ppre || s.pap || s.gevasco || s.ulis || s.ulis_incl || s.upe2a || s.upe2a_incl || s.pai || s.agrandissement || s.tiers_temps); }
 // Données du bandeau + drapeaux par élève (amen | rem | inc | abs | unpl).
-function _elSynth(cls, list, attStats) {
+function _elSynth(cls, list, attStats, cur) {
   const td = todayKey();
   const act = list.filter(s => _stuActiveOn(s, td));
   const placed = new Set(Object.values(cls.seating || {}));
@@ -19425,26 +19432,31 @@ function _elSynth(cls, list, attStats) {
   const nRem = act.reduce((a, s) => a + (s.reminders || []).length, 0);
   const nLeave = act.filter(s => s.departureDate && s.departureDate > td).length;
   const nArr = list.filter(s => s.arrivalDate && s.arrivalDate > td).length;
-  const L = (f, html, tip) => _conf?.on ? `<div class="bsynth-line">${html}</div>` : `<div class="bsynth-line bsynth-link" role="button" tabindex="0" onclick="_elSetFilter('${f}')" onkeydown="if(event.key==='Enter')_elSetFilter('${f}')" title="${_escAttr(tip || "Clic = n'afficher que ces élèves")}">${html}</div>`;
+  // Chaque ligne du bandeau EST un filtre (v2.94.1 — la rangée de pastilles faisait doublon).
+  // La ligne du filtre actif est marquée ; « Effectif » remet tout. Inerte en mode confidentiel.
+  const L = (f, html, tip, n) => {
+    const on = f === cur && f !== 'all';
+    if (_conf?.on || (n === 0 && !on)) return `<div class="bsynth-line">${html}</div>`;
+    return `<div class="bsynth-line bsynth-link${on ? ' on' : ''}" role="button" tabindex="0" aria-pressed="${on}" onclick="_elSetFilter('${on ? 'all' : f}')" onkeydown="if(event.key==='Enter')_elSetFilter('${on ? 'all' : f}')" title="${_escAttr(on ? 'Filtre actif — clic pour tout réafficher' : (tip || "Clic = n'afficher que ces élèves"))}">${html}</div>`;
+  };
+  const shown = cur === 'all' ? list.length : cnt(cur);
+  const effTip = cur === 'all' ? 'Tous les élèves sont affichés' : 'Clic = tout réafficher';
   let h = '<div class="bsynth">';
-  h += _bsynthCard('Effectif', `<div class="bsynth-big">${act.length}</div><div class="bsynth-sub">${[nF ? nF + ' F' : '', nM ? nM + ' M' : ''].filter(Boolean).join(' · ')}${grp.length ? ' · ' + grp.map(([g, n]) => `G${g} ${n}`).join(' · ') : ''}${nArr ? ` · ${nArr} à venir` : ''}</div>`);
-  h += _bsynthCard('Aménagements', L('amen', `<span class="bsynth-num">${cnt('amen')}</span> élève${cnt('amen') > 1 ? 's' : ''}`) + `<div class="bsynth-sub">${lab.map(([l, n]) => `${_esc(l)} ${n}`).join(' · ') || 'aucun'}</div>`);
-  h += _bsynthCard('Vie de classe', L('inc', `<span class="bsynth-num">${totO}</span> oubli${totO > 1 ? 's' : ''} · <b>${totN}</b> non fait${totN > 1 ? 's' : ''}`) + `<div class="bsynth-sub">${heavy ? `<span class="bsynth-down">⚠ ${heavy} élève${heavy > 1 ? 's' : ''} à 4 ou plus</span>` : 'aucun élève à 4 ou plus'}</div>`);
-  h += _bsynthCard('À faire', L('rem', `<span class="bsynth-num${nRem ? ' bsynth-down' : ''}">${nRem}</span> rappel${nRem > 1 ? 's' : ''}`) + L('unpl', `<span class="bsynth-num">${cnt('unpl')}</span> non placé${cnt('unpl') > 1 ? 's' : ''}${nLeave ? ` · ${nLeave} départ${nLeave > 1 ? 's' : ''} prévu${nLeave > 1 ? 's' : ''}` : ''}`));
+  h += _bsynthCard('Effectif', L('all', `<span class="bsynth-big">${act.length}</span>`, effTip)
+    + `<div class="bsynth-sub">${[nF ? nF + ' F' : '', nM ? nM + ' M' : ''].filter(Boolean).join(' · ')}${grp.length ? ' · ' + grp.map(([g, n]) => `G${g} ${n}`).join(' · ') : ''}${nArr ? ` · ${nArr} à venir` : ''}</div>`
+    + (cur !== 'all' ? `<div class="bsynth-sub el-filt-on">Filtre : ${shown} élève${shown > 1 ? 's' : ''} affiché${shown > 1 ? 's' : ''} — clic sur l'effectif pour tout voir</div>` : ''), cur === 'all' ? '' : '', cur !== 'all' ? 'el-card-filt' : '');
+  h += _bsynthCard('Aménagements', L('amen', `<span class="bsynth-num">${cnt('amen')}</span> élève${cnt('amen') > 1 ? 's' : ''}`, '', cnt('amen')) + `<div class="bsynth-sub">${lab.map(([l, n]) => `${_esc(l)} ${n}`).join(' · ') || 'aucun'}</div>`);
+  h += _bsynthCard('Vie de classe', L('inc', `<span class="bsynth-num">${totO}</span> oubli${totO > 1 ? 's' : ''} · <b>${totN}</b> non fait${totN > 1 ? 's' : ''}`, "Clic = n'afficher que les élèves avec au moins un oubli ou un travail non fait", cnt('inc'))
+    + L('abs', `<span class="bsynth-num${cnt('abs') ? ' bsynth-down' : ''}">${cnt('abs')}</span> élève${cnt('abs') > 1 ? 's' : ''} à 3 absences ou plus`, '', cnt('abs'))
+    + `<div class="bsynth-sub">${heavy ? `<span class="bsynth-down">⚠ ${heavy} élève${heavy > 1 ? 's' : ''} à 4 oublis / non faits ou plus</span>` : 'aucun élève à 4 oublis / non faits ou plus'}</div>`);
+  h += _bsynthCard('À faire', L('rem', `<span class="bsynth-num${nRem ? ' bsynth-down' : ''}">${nRem}</span> rappel${nRem > 1 ? 's' : ''}`, '', cnt('rem'))
+    + L('unpl', `<span class="bsynth-num">${cnt('unpl')}</span> non placé${cnt('unpl') > 1 ? 's' : ''}`, '', cnt('unpl'))
+    + (nLeave ? `<div class="bsynth-sub">${nLeave} départ${nLeave > 1 ? 's' : ''} prévu${nLeave > 1 ? 's' : ''}</div>` : ''));
   h += '</div>';
   return { html: h, flags, cnt };
 }
-function _elChipsHTML(es, cur, shown, total) {
-  const seg = `<span class="bsynth-right"><span class="bsynth-seg" title="Actifs : seulement les aménagements présents (＋ aménagement pour en ajouter). Tous : un bouton par aménagement, pratique pour tout saisir à la rentrée."><span class="bsynth-seg-lbl">Aménagements</span>${[['active', 'Actifs'], ['all', 'Tous']].map(([v, t]) => `<button type="button" class="${_elAmenMode() === v ? 'on' : ''}" aria-pressed="${_elAmenMode() === v}" onclick="_elSetAmenMode('${v}')">${t}</button>`).join('')}</span></span>`;
-  if (_conf?.on) return `<div class="bsynth-chips"><span class="bsynth-count">🔒 Filtres indisponibles en mode confidentiel</span>${seg}</div>`;
-  const chips = [['all', 'Tous'], ['amen', 'Avec aménagement'], ['rem', 'Avec rappel'], ['inc', 'Oublis / non faits'], ['abs', 'Absences ≥ 3'], ['unpl', 'Non placés']];
-  let h = '<div class="bsynth-chips" role="toolbar" aria-label="Filtrer les élèves">';
-  for (const [v, l] of chips) {
-    const n = v === 'all' ? null : es.cnt(v), on = v === cur, dis = !on && v !== 'all' && n === 0;
-    h += `<button type="button" class="bsynth-chip${on ? ' on' : ''}" aria-pressed="${on}"${dis ? ' disabled' : ''} onclick="_elSetFilter('${v}')">${l}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
-  }
-  if (cur !== 'all') h += `<span class="bsynth-count">${shown} élève${shown > 1 ? 's' : ''} sur ${total}</span>`;
-  return h + seg + '</div>';
+function _elAmenToggleHTML() {
+  return `<span class="bsynth-seg" title="Actifs : seulement les aménagements présents (＋ aménagement pour en ajouter). Tous : un bouton par aménagement, pratique pour tout saisir à la rentrée."><span class="bsynth-seg-lbl">Aménagements</span>${[['active', 'Actifs'], ['all', 'Tous']].map(([v, t]) => `<button type="button" class="${_elAmenMode() === v ? 'on' : ''}" aria-pressed="${_elAmenMode() === v}" onclick="_elSetAmenMode('${v}')">${t}</button>`).join('')}</span>`;
 }
 // Fenêtre flottante (position:fixed) : le tableau défile dans #stl, un menu déroulant
 // classique y serait coupé sur les dernières lignes.
@@ -19545,11 +19557,12 @@ function renderStudents() {
   const cc = cls.configuration?.cols || 10;
   const hasActiveRoom = cls.activeRoom && S.salles?.[cls.activeRoom];
   // Bandeau + filtres (v2.94.0) — calculés sur toute la classe, filtre ignoré.
-  const _es = _elSynth(cls, list, attStats);
   const _ef = _elFilter();
+  const _es = _elSynth(cls, list, attStats, _ef);
   const _efShow = s => _ef === 'all' || _es.flags.get(s.id)?.has(_ef);
   const _amenAll = _elAmenMode() === 'all';
-  { const box = document.getElementById('el-synth'); if (box) box.innerHTML = _es.html + _elChipsHTML(_es, _ef, list.filter(_efShow).length, list.length); }
+  { const box = document.getElementById('el-synth'); if (box) box.innerHTML = _es.html; }
+  { const t = document.getElementById('el-amen-toggle'); if (t) t.innerHTML = _elAmenToggleHTML(); }
 
   const rows = list.map((s, idx) => {
     const _g = _grp(s), grpBadge = _g
