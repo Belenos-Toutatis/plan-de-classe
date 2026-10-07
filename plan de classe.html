@@ -1608,6 +1608,13 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .lst-empty{padding:14px;text-align:center;color:var(--pencil);font-size:.9em;font-style:italic}
 .lst-sub{font-size:.78em;color:var(--pencil);flex-basis:100%;padding-left:26px}
 .lst-flex{flex:1;min-width:0}
+/* Rappels d'un élève (v2.110.0) */
+.rem-av{width:44px;height:44px;border-radius:50%;background:var(--paper-warm);border:1px solid var(--rule-line);color:var(--ink-blue);display:flex;align-items:center;justify-content:center;font-weight:600;overflow:hidden;flex:0 0 44px}
+.rem-av img{width:100%;height:100%;object-fit:cover}
+.rem-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--notice-bg);color:var(--notice-fg);border:1px solid var(--notice-bd);border-left:3px solid var(--notice-bd);border-radius:var(--radius-md);margin-bottom:4px}
+.rem-row .lst-count{color:inherit;opacity:1}
+.rem-presets{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.rem-chip{border:1px solid;border-radius:999px;padding:2px 10px;font:500 .84em var(--font-sans);cursor:pointer}
 /* Nouvelle évaluation / Réglages d'une évaluation (v2.109.0) */
 .ev-h{font-family:var(--font-mono);font-size:.72em;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-blue-soft);margin:6px 0 6px}
 .ev-types{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
@@ -7413,26 +7420,28 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Modal Rappels / À vérifier (par élève) -->
 <div id="mreminders" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:520px">
-    <h2>🔔 Rappels — <span id="mrem-name"></span></h2>
+  <div class="mb" style="max-width:600px;width:100%">
+    <!-- Refonte v2.110.0 (maquette validée le 2026-10-07) -->
+    <div class="lst-head">
+      <span id="mrem-photo" class="rem-av"></span>
+      <div style="min-width:0"><h2 style="margin:0;font-size:1.15em">🔔 <span id="mrem-name"></span></h2><div id="mrem-meta" class="lst-count"></div></div>
+      <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="_remOpenPresets()" title="Modifier la liste des motifs proposés">⚙ Motifs</button>
+    </div>
     <input type="hidden" id="mrem-sid">
-    <div style="font-size:.85em;color:var(--pencil);margin-bottom:10px">
-      Petites choses à vérifier ou à faire la prochaine fois que tu vois cet élève.
-      Le badge orange 🔔 sur sa cellule te le rappellera.
+    <div class="ev-h" style="margin-top:12px">En cours</div>
+    <div id="mrem-list"></div>
+    <div class="ev-h" style="margin-top:12px">Ajouter</div>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="mrem-custom" placeholder="Saisis ou choisis un motif ci-dessous…" maxlength="120" class="lst-flex" aria-label="Nouveau rappel" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderFromInput()}">
+      <button class="btn btn-p btn-sm" onclick="addReminderFromInput()">Ajouter</button>
     </div>
-    <div id="mrem-list" style="margin-bottom:14px"></div>
-    <div style="border-top:1px solid #eee;padding-top:12px">
-      <div style="font-weight:600;margin-bottom:8px;font-size:.95em">+ Ajouter un rappel</div>
-      <div style="font-size:.82em;color:var(--pencil);margin-bottom:6px">Motifs courants (clic = pré-remplir le champ ci-dessous, à éditer puis valider) :</div>
-      <div id="mrem-presets" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px"></div>
-      <div style="display:flex;gap:5px">
-        <input type="text" id="mrem-custom" placeholder="Saisir ou personnaliser le rappel…" maxlength="120" style="flex:1;padding:7px;border:1px solid #ccc;border-radius:4px;font-size:.92em" onkeydown="if(event.key==='Enter'){event.preventDefault();addReminderFromInput()}">
-        <button class="btn btn-p" onclick="addReminderFromInput()" style="padding:7px 14px">Ajouter</button>
-      </div>
+    <div id="mrem-presets" class="rem-presets"></div>
+    <div class="lst-count" style="margin-top:4px">Clic sur un motif = il remplit le champ (à compléter) · <strong>double-clic</strong> = rappel ajouté tout de suite</div>
+    <div id="mrem-done-wrap" style="display:none">
+      <div class="ev-h" style="margin-top:12px">Traités récemment</div>
+      <div id="mrem-done" class="lst-count"></div>
     </div>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('mreminders')">Fermer</button>
-    </div>
+    <div class="ma"><button class="btn btn-g" onclick="closeMod2('mreminders')">Fermer</button></div>
   </div>
 </div>
 
@@ -7811,11 +7820,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.109.1';
+const APP_VERSION    = '2.110.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T19:49:15Z';
+const APP_BUILD_DATE = '2026-10-07T20:04:53Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11466,6 +11475,7 @@ function openReminders(sid) {
   document.getElementById('mrem-name').textContent = `${s.prenom} ${s.nom}`;
   document.getElementById('mrem-custom').value = '';
   renderRemindersModal();
+  _remPhoto(sid);
   openMod('mreminders');
   setTimeout(() => { const i = document.getElementById('mrem-custom'); if (i) i.focus(); }, 80);
 }
@@ -11490,51 +11500,72 @@ function renderRemindersModal() {
   const s = S.eleves[sid];
   if (!s) return;
   const list = (s.reminders || []).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  // En-tête : classe, groupe, nombre de rappels en cours
+  const meta = document.getElementById('mrem-meta');
+  if (meta) meta.textContent = [S.classes[s.classe_id]?.nom, _grp(s) ? 'G' + _grp(s) : '', list.length ? `${list.length} rappel${list.length > 1 ? 's' : ''} en cours` : 'aucun rappel en cours'].filter(Boolean).join(' · ');
   const listEl = document.getElementById('mrem-list');
   if (!list.length) {
-    listEl.innerHTML = '<div style="color:var(--cell-meta);font-size:.9em;padding:10px;text-align:center;background:var(--paper-warm);border-radius:4px;border:1px dashed var(--rule-line)">Aucun rappel actif pour cet élève.</div>';
+    listEl.innerHTML = '<div class="lst-empty" style="border:1px dashed var(--rule-line);border-radius:var(--radius-md)">Aucun rappel en cours pour cet élève.</div>';
   } else {
-    listEl.innerHTML =
-      `<div style="font-weight:600;margin-bottom:6px;font-size:.95em">Rappels actifs (${list.length})</div>` +
-      list.map(r => {
-        const date = r.ts ? new Date(r.ts).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) : '';
-        return `
-          <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--notice-bg);border-left:3px solid var(--notice-bd);border-radius:3px;margin-bottom:4px">
-            <div style="flex:1;font-size:.92em">${_escAttr(r.label)}${date ? ` <span style="color:var(--pencil-soft);font-size:.85em">· ajouté le ${date}</span>` : ''}</div>
-            <button class="btn btn-s" onclick="markReminderDone('${r.id}')" style="padding:4px 10px;font-size:.85em" title="Marquer comme fait — archivé dans 🕓 Historique de l'élève">✓ Fait</button>
-            <button class="btn btn-d" onclick="deleteReminder('${r.id}')" style="padding:4px 8px;font-size:.85em" title="Supprimer définitivement (pour un rappel ajouté par erreur, sans trace dans l'historique)">🗑</button>
-          </div>`;
-      }).join('');
+    listEl.innerHTML = list.map(r => {
+      const date = r.ts ? new Date(r.ts).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) : '';
+      return `<div class="rem-row" data-rid="${_escAttr(r.id)}">
+          <div class="lst-flex"><span class="rem-lbl">${_escAttr(r.label)}</span>${date ? `<div class="lst-count">ajouté le ${date}</div>` : ''}</div>
+          <button class="btn btn-s btn-sm" onclick="markReminderDone('${r.id}')" title="Marquer comme fait — archivé dans 🕓 Historique de l'élève">✓ Fait</button>
+          <button class="lst-del" onclick="_remEdit('${r.id}')" title="Modifier le texte" aria-label="Modifier le rappel">✏️</button>
+          <button class="lst-del" onclick="deleteReminder('${r.id}')" title="Supprimer définitivement (rappel ajouté par erreur, sans trace dans l'historique)" aria-label="Supprimer le rappel">🗑</button>
+        </div>`;
+    }).join('');
   }
-  // Boutons motifs prédéfinis — regroupés par couleur (ordre de la palette)
+  // Motifs en puces, regroupées par couleur (ordre de la palette)
   const presetsEl = document.getElementById('mrem-presets');
-  const presets = _reminderPresets();
-  // On garde l'index d'origine pour pouvoir appeler addReminderPreset(idx) correctement
-  // après tri par couleur.
-  const enriched = presets.map((p, i) => ({
-    label: p.label, color: p.color, idx: i,
-    orderIdx: _reminderColorOrderIndex(p.color),
-  }));
-  // Tri stable par ordre de couleur (les items d'une même couleur conservent
-  // leur ordre relatif d'origine)
+  const enriched = _reminderPresets().map((p, i) => ({ label: p.label, color: p.color || REMINDER_DEFAULT_COLOR_ID, idx: i, orderIdx: _reminderColorOrderIndex(p.color) }));
   enriched.sort((a, b) => (a.orderIdx - b.orderIdx) || (a.idx - b.idx));
-  // Groupe par couleur
-  const byColor = new Map();
-  for (const e of enriched) {
-    if (!byColor.has(e.color || REMINDER_DEFAULT_COLOR_ID)) byColor.set(e.color || REMINDER_DEFAULT_COLOR_ID, []);
-    byColor.get(e.color || REMINDER_DEFAULT_COLOR_ID).push(e);
+  presetsEl.innerHTML = enriched.map(e => { const c = _reminderColorById(e.color);
+    return `<button type="button" class="rem-chip" onclick="addReminderPreset(${e.idx})" ondblclick="_remAddPresetNow(${e.idx})" style="background:${c.bg};border-color:${c.border};color:${c.fg}" title="Clic = remplir le champ · double-clic = ajouter tout de suite">${_escAttr(e.label)}</button>`; }).join('');
+  // Traités récemment : les 3 derniers « rappel_fait » de l'historique
+  const done = (s.history || []).filter(h => h.type === 'rappel_fait').sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
+  const dw = document.getElementById('mrem-done-wrap'), dl = document.getElementById('mrem-done');
+  if (dw) dw.style.display = done.length ? '' : 'none';
+  if (dl) dl.innerHTML = done.map(h => `✓ ${new Date(h.ts).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' })} ${_escAttr(h.label || '')}`).join(' · ');
+}
+// Photo de l'élève (ou initiales) dans l'en-tête
+async function _remPhoto(sid) {
+  const el = document.getElementById('mrem-photo'); const s = S.eleves[sid]; if (!el || !s) return;
+  el.textContent = ((s.prenom || '')[0] || '') + ((s.nom || '')[0] || '');
+  try { if (_photos.ready && _photoHas(sid)) { const u = await _photoUrl(sid); if (u && document.getElementById('mrem-sid').value === sid) el.innerHTML = `<img src="${u}" alt="">`; } } catch (e) {}
+}
+// Double-clic sur un motif : rappel ajouté tout de suite (et fenêtre refermée, comme « Ajouter »)
+function _remAddPresetNow(idx) {
+  const p = _reminderPresets()[idx]; if (!p?.label) return;
+  const inp = document.getElementById('mrem-custom'); if (inp) inp.value = '';
+  _addReminder(p.label);
+  closeMod2('mreminders');
+}
+// Modifier le texte d'un rappel en cours, sur place
+function _remEdit(rid) {
+  const row = document.querySelector(`#mrem-list .rem-row[data-rid="${CSS.escape(rid)}"] .rem-lbl`);
+  const sid = document.getElementById('mrem-sid').value; const s = S.eleves[sid];
+  const r = s?.reminders?.find(x => x.id === rid); if (!row || !r) return;
+  row.outerHTML = `<input type="text" class="rem-lbl lst-flex" maxlength="120" value="${_escAttr(r.label)}" style="width:100%" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}else if(event.key==='Escape'){event.stopPropagation();this.dataset.cancel='1';this.blur()}" onblur="_remEditDone('${rid}',this)">`;
+  const inp = document.querySelector(`#mrem-list .rem-row[data-rid="${CSS.escape(rid)}"] input.rem-lbl`); if (inp) { inp.focus(); inp.select(); }
+}
+function _remEditDone(rid, inp) {
+  const sid = document.getElementById('mrem-sid').value; const s = S.eleves[sid];
+  const r = s?.reminders?.find(x => x.id === rid);
+  const v = (inp.value || '').trim();
+  if (r && !inp.dataset.cancel && v && v !== r.label) {
+    pushUndo(); r.label = v; save();
+    if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
+    toast('✏️ Rappel modifié');
   }
-  // Rendu : un wrap flex par groupe, séparateurs naturels (gap vertical)
-  const groups = [];
-  for (const [cid, items] of byColor) {
-    const c = _reminderColorById(cid);
-    const buttons = items.map(e =>
-      `<button class="btn" onclick="addReminderPreset(${e.idx})" style="padding:4px 9px;font-size:.85em;background:${c.bg};border:1px solid ${c.border};color:${c.fg};border-radius:4px;cursor:pointer" title="Pré-remplir le champ — tu peux ensuite éditer puis valider">${_escAttr(e.label)}</button>`
-    ).join('');
-    groups.push(`<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${buttons}</div>`);
-  }
-  presetsEl.innerHTML = groups.join('');
-  presetsEl.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+  renderRemindersModal();
+}
+function _remOpenPresets() {
+  const sid = document.getElementById('mrem-sid').value;
+  closeMod2('mreminders');
+  _modalReturnTo['mrempresets'] = () => openReminders(sid);
+  openReminderPresets();
 }
 
 // Clic sur un motif prédéfini → pré-remplit le champ texte pour permettre de personnaliser

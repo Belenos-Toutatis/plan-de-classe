@@ -1805,7 +1805,16 @@ Petites tâches mémo attachées à un élève — visibles directement sur sa c
 ### Menu contextuel
 Item **🔔 Rappels / À vérifier…** ajouté dans `#ctx` entre 📋 Informations et Retirer. Label dynamique : `Rappels (N)…` si N > 0, sinon `Rappels / À vérifier…`. Mis à jour dans `showCtxMenu()`.
 
-### Modale `mreminders`
+### Modale `mreminders` — refonte v2.110.0 (maquette validée le 2026-10-07)
+
+- **En-tête** : photo de l'élève (`_remPhoto`, initiales sinon), prénom nom, « classe · groupe · N rappels en cours » (`#mrem-meta`), bouton **⚙ Motifs** (`_remOpenPresets` → `mrempresets`, puis retour à la fiche des rappels du même élève).
+- **En cours** : lignes `.rem-row` (✓ Fait · ✏️ · 🗑). **✏️ modifie le texte sur place** (`_remEdit` → champ, Entrée valide, Échap annule, `_remEditDone` : `pushUndo` + save si changé).
+- **Ajouter** : champ juste sous la liste, puis les motifs en **puces** `.rem-chip` de la couleur de leur groupe. Clic = remplit le champ (inchangé, `addReminderPreset`) ; **double-clic = ajouté tout de suite** (`_remAddPresetNow`, la fenêtre se ferme comme avec « Ajouter »).
+- **Traités récemment** : les 3 derniers `rappel_fait` de `stu.history`, en une ligne.
+- Audit : 0 écart en clair et en sombre ; 363 px à 375. Modification au clavier et double-clic vérifiés au vrai pointeur.
+
+### Ancienne description (avant v2.110.0)
+#### Modale `mreminders`
 - Titre : `🔔 Rappels — <prénom nom>`
 - **Liste des rappels actifs** : pour chaque rappel, ligne fond crème + bordure gauche orange, label + date d'ajout, bouton **✓ Fait** (= supprime).
 - **Boutons motifs prédéfinis** (constante `REMINDER_PRESETS`, 9 motifs courants) : clic = **pré-remplit le champ texte** (curseur en fin), à éditer si besoin puis valider via Enter ou bouton "Ajouter". Pas d'ajout direct — chaque rappel passe systématiquement par le champ pour pouvoir être personnalisé (ex. ajouter " — page 12" ou un nom).
