@@ -4062,7 +4062,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <span class="tb-grp"><span class="tb-grp-lbl">Liste élèves</span>
         <button class="btn btn-p btn-sm" onclick="exportQcmCsv()" title="Exporte en une seule fois la liste complète de TOUS les élèves de TOUTES les classes et TOUTES les salles configurées dans ce logiciel, au format CSV directement importable dans QCMcam (identifiants `classe-salle`, prénoms désambiguïsés, numéros de position QCMcam déjà calculés). Plus besoin de saisir manuellement quoi que ce soit côté QCMcam.&#10;&#10;⚠️ Dans QCMcam 2, choisis « Remplacer » et non « Mettre à jour » : la mise à jour n'ajoute et ne retire que des élèves, elle ne réécrit JAMAIS les numéros de carte d'un élève déjà présent — après un changement de plan, tu garderais les anciens numéros.">💾 Exporter pour QCMcam</button>
         <button class="btn btn-g btn-sm" onclick="copyQcmAllClasses()" title="Copier la liste de toutes les classes et toutes les salles (même contenu que le fichier exporté)">⧉ Copier</button>
-        <span id="qcm-dir-info" style="font-size:.78em;color:var(--pencil);align-self:center"></span>
+        <button class="btn btn-g btn-sm" id="qcm-dir-info" onclick="pickQcmDir()" title="Dossier où « Exporter pour QCMcam » écrit le fichier liste eleves.csv — clic pour le choisir ou le changer">📂 Choisir le dossier…</button>
       </span>
       <span class="tb-grp"><span class="tb-grp-lbl">Marqueurs</span>
         <button class="btn btn-g btn-sm" onclick="openQcmMarkersDialog()" title="Imprimer les marqueurs ArUco distribués aux élèves (raccourci : Ctrl+P)">🎯 Marqueurs ArUco</button>
@@ -7951,11 +7951,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.101.0';
+const APP_VERSION    = '2.101.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T18:08:20Z';
+const APP_BUILD_DATE = '2026-10-07T18:19:34Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -33291,15 +33291,18 @@ function _idbPut(key, val) {
 }
 function _idbGet(key) { return idbLoadHandleKey(key); }
 async function tryRestoreQcmDirHandle() {
-  if (!window.showDirectoryPicker) return;
+  if (!window.showDirectoryPicker) { updateQcmDirInfo(); return; }
   const h = await idbLoadHandleKey('qcm-dir');
   if (!h) return;
+  // On garde le dossier même si l'autorisation est « à redemander » (cas habituel après un
+  // redémarrage du navigateur) : exportQcmCsv la redemande au moment d'écrire (v2.101.1).
+  // Avant, le dossier était oublié et il fallait le rechoisir à chaque session.
   qcmDirHandle = h;
   try {
     const perm = await h.queryPermission({ mode: 'readwrite' });
-    if (perm === 'granted') updateQcmDirInfo();
-    else qcmDirHandle = null;
+    if (perm === 'denied') qcmDirHandle = null;
   } catch(e) { qcmDirHandle = null; }
+  updateQcmDirInfo();
 }
 
 // Bandeau RGPD au tout 1er lancement — affiché 1 seule fois pour rappeler à
@@ -33326,19 +33329,13 @@ function dismissRgpdBanner() {
 function updateQcmDirInfo() {
   const el = document.getElementById('qcm-dir-info');
   if (!el) return;
-  if (qcmDirHandle) {
-    el.textContent = `📂 ${qcmDirHandle.name}`;
-    el.style.cursor = 'pointer';
-    el.style.textDecoration = 'underline dotted';
-    el.title = 'Clique pour changer de dossier de destination QCMcam';
-    el.onclick = pickQcmDir;
-  } else {
-    el.textContent = '';
-    el.style.cursor = '';
-    el.style.textDecoration = '';
-    el.title = '';
-    el.onclick = null;
-  }
+  // Navigateur sans choix de dossier (Firefox, Safari) : l'export passe par un téléchargement
+  if (!window.showDirectoryPicker) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.textContent = qcmDirHandle ? `📂 ${qcmDirHandle.name}` : '📂 Choisir le dossier…';
+  el.title = qcmDirHandle
+    ? `Dossier où « Exporter pour QCMcam » écrit liste eleves.csv : ${qcmDirHandle.name} — clic pour le changer`
+    : 'Choisir le dossier où « Exporter pour QCMcam » écrira liste eleves.csv (sinon il est demandé au premier export)';
 }
 
 // Permet à l'utilisateur de choisir un autre dossier de destination QCMcam
