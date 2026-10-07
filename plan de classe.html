@@ -2240,7 +2240,10 @@ tr.bf-hide { display:none; }
 #stl .stbl input.el-cnt-inp::-webkit-outer-spin-button, #stl .stbl input.el-cnt-inp::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 #stl .stbl input.el-cnt-inp.zero { color:var(--pencil-soft) !important; font-weight:400 !important; }
 #stl .stbl input.el-cnt-inp.hi { color:var(--danger-fg) !important; }
-.el-att { font-family:var(--font-mono); color:var(--ink-deep); }
+.el-att { font-family:var(--font-mono); color:var(--ink-deep); display:inline-block; min-width:1.6em; text-align:right; }
+#stl .stbl td.el-num, #stl .stbl th.el-num { white-space:nowrap; }
+#stl .stbl td.el-num .ov-bar { vertical-align:middle; margin:0 4px 0 2px; }
+#stl .stbl td.el-num .ov-bar[style*="width:0px"] { margin:0; }
 .el-att.zero { color:var(--pencil-soft); }
 .el-att.hi { color:var(--danger-fg); font-weight:700; }
 #stl .stbl td.el-amen:not(.all) { white-space:normal; }
@@ -7889,11 +7892,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.117.2';
+const APP_VERSION    = '2.117.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T21:33:25Z';
+const APP_BUILD_DATE = '2026-10-07T21:40:09Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19676,6 +19679,10 @@ function renderStudents() {
   { const t = document.getElementById('el-amen-toggle'); if (t) t.innerHTML = _elAmenToggleHTML(); }
   let _zi = 0;   // zébrage une ligne sur deux, compté sur les lignes VISIBLES (un filtre masque des lignes)
 
+  // Barres proportionnelles au maximum de la classe, comme la Vue d'ensemble (v2.117.3).
+  const _mx = k => Math.max(1, ...list.map(x => k === 'abs' || k === 'ret' ? (attStats[x.id]?.[k] || 0) : (x[k] || 0)));
+  const _max = { oublis: _mx('oublis'), non_travail: _mx('non_travail'), abs: _mx('abs'), ret: _mx('ret') };
+  const _bar = (v, max, vie) => `<span class="ov-bar${vie ? ' vie' : ''}" style="width:${Math.round(40 * (v || 0) / max)}px"></span>`;
   const rows = list.map((s, idx) => {
     const _g = _grp(s), grpBadge = _g
       ? `<span class="gbdg g${_g}" onclick="cycleGroupe('${s.id}')" title="Cliquer pour changer">G${_g}</span>`
@@ -19776,19 +19783,19 @@ function renderStudents() {
     const _rowStyle = _inactive ? 'opacity:.55;font-style:italic' : '';
     const _cnt = (field, v, setter, lbl) => `<span class="el-cnt" onmousedown="event.stopPropagation()">
           <button type="button" tabindex="-1" onclick="${setter}('${s.id}', ${Math.max(0, (v || 0) - 1)})" aria-label="${lbl} : moins un"${v ? '' : ' disabled'}>−</button>
-          <input type="number" min="0" class="el-cnt-inp${v ? (v >= 3 ? ' hi' : '') : ' zero'}" value="${v || 0}" onchange="${setter}('${s.id}', this.value)" onfocus="this.select()" title="${lbl} (saisie directe, ou − / ＋)">
+          <input type="number" min="0" class="el-cnt-inp${v ? (v >= 4 ? ' hi' : '') : ' zero'}" value="${v || 0}" onchange="${setter}('${s.id}', this.value)" onfocus="this.select()" title="${lbl} (saisie directe, ou − / ＋)">${_bar(v, _max[field], true)}
           <button type="button" tabindex="-1" onclick="${setter}('${s.id}', ${(v || 0) + 1})" aria-label="${lbl} : plus un">＋</button></span>`;
-    const _att = (n, lbl) => `<span class="el-att${n ? (n >= 3 ? ' hi' : '') : ' zero'}" title="${lbl}">${n || '·'}</span>`;
+    const _att = (n, lbl, k) => `<span class="el-att${n ? (n >= 3 ? ' hi' : '') : ' zero'}" title="${lbl}">${n || 0}</span>${_bar(n, _max[k])}`;
     return `
       <tr data-sid="${s.id}" class="${(sel + (_efShow(s) ? ((_zi++ % 2) ? ' el-alt' : '') : ' bf-hide')).trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)">
         <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link${_delegueNameCls(s)}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}${_remBadgeInline(s)}</td>
         <td class="conf-keep">${posInput}</td>
         <td style="white-space:nowrap">${grpBadge}${tagBadgesEl ? '<br><span style="display:inline-block;margin-top:2px">' + tagBadgesEl + '</span>' : ''}</td>
-        <td>${_cnt('oublis', s.oublis, 'setOubli', 'Matériel oublié')}</td>
-        <td>${_cnt('non_travail', s.non_travail, 'setNT', 'Travail non fait')}</td>
-        <td class="ff-appel" style="text-align:center">${_att(stats.abs, "Cumul d'absences sur tous les appels enregistrés")}</td>
-        <td class="ff-appel" style="text-align:center">${_att(stats.ret, 'Cumul de retards sur tous les appels enregistrés')}</td>
+        <td class="el-num">${_cnt('oublis', s.oublis, 'setOubli', 'Matériel oublié')}</td>
+        <td class="el-num">${_cnt('non_travail', s.non_travail, 'setNT', 'Travail non fait')}</td>
+        <td class="ff-appel el-num">${_att(stats.abs, "Absences sur tous les appels enregistrés", 'abs')}</td>
+        <td class="ff-appel el-num">${_att(stats.ret, 'Retards sur tous les appels enregistrés', 'ret')}</td>
         <td class="el-amen${_amenAll ? ' all' : ''}">${amenCell}</td>
         <td style="white-space:nowrap;text-align:right">
           <button class="btn btn-g btn-sm" onclick="openEdit('${s.id}')" title="Modifier l'élève">✏️</button>
@@ -19809,10 +19816,10 @@ function renderStudents() {
         <th onclick="sortEleves('nom')">Élève${arrow('nom')}</th>
         <th onclick="sortEleves('pos')" title="Tri par position dans la salle (non placés en fin de liste)">📍 Position${arrow('pos')} ${posHint}</th>
         <th>Grp</th>
-        <th onclick="sortEleves('oublis')" title="Matériel oublié">📦 Oublis${arrow('oublis')}</th>
-        <th onclick="sortEleves('nt')" title="Travail non fait">📝 Non faits${arrow('nt')}</th>
-        <th class="ff-appel" onclick="sortEleves('abs')" title="Cumul absences sur tous les appels enregistrés" style="text-align:center">🚫${arrow('abs')}</th>
-        <th class="ff-appel" onclick="sortEleves('ret')" title="Cumul retards sur tous les appels enregistrés" style="text-align:center">⏰${arrow('ret')}</th>
+        <th class="el-num" onclick="sortEleves('oublis')" title="Matériel oublié — cliquer pour trier">Oublis${arrow('oublis')}</th>
+        <th class="el-num" onclick="sortEleves('nt')" title="Travail non fait — cliquer pour trier">Non faits${arrow('nt')}</th>
+        <th class="ff-appel el-num" onclick="sortEleves('abs')" title="Absences sur tous les appels enregistrés — cliquer pour trier">Absences${arrow('abs')}</th>
+        <th class="ff-appel el-num" onclick="sortEleves('ret')" title="Retards sur tous les appels enregistrés — cliquer pour trier">Retards${arrow('ret')}</th>
         <th style="cursor:default" title="Aménagements pédagogiques (PPRE / PAP / PPS / ULIS / UPE2A — exclusifs intra-groupe), médicaux (PAI) et d'examen (📄-A agrandissement, ⏱+⅓ tiers-temps — cumulables, en suffixe « PPRE-A »…), AESH et 📋 informations. Interrupteur « actifs | tous » au-dessus du tableau.">Aménagements · infos</th>
         <th style="cursor:default"></th>
       </tr></thead>
