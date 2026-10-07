@@ -291,6 +291,7 @@ L'app compare `APP_BUILD_DATE` à la **date d'auteur** du dernier commit GitHub 
 - Tous les élèves placés dans leur(s) salle(s), n° de tablette CM1 affectés
 - Quelques élèves PPRE / PPS / ULIS+, et compteurs d'oublis pré-remplis
 - Une tablette indisponible dans CM2 (#7) pour démontrer la fonctionnalité
+- **AESH** (`_seedDemoAesh`, v2.93.1) : « Mme Leroy » en 6A (les deux élèves PPS), « M. Garnier » + une AESH anonyme en 5B (PPS, puis PPS + PPRE). Placées dans la salle PRINCIPALE avec leurs élèves déplacés à côté, **« à placer »** dans la seconde salle (montre la liste des non placés). ⚠️ Appelée **après `_seedDemoEvaluations`** : celle-ci transfère une élève de 5B en 5A et pose des départs — les élèves sont choisis par dispositif parmi les membres présents toute l'année. Annoncées dans `mwelcome`.
 - Listes de noms : `_DEMO_PRENOMS` (~80) × `_DEMO_NOMS` (~50) avec génération pseudo-aléatoire déterministe (seed différent par classe)
 
 À la fin de `createDemo()` : `localStorage.setItem('planClasse_demoInstalled', '1')` → ne se réinstalle jamais. La fonction de reset (totale ou partielle) ne touche pas ce flag, donc l'utilisateur ne revoit pas la démo après reset volontaire.

@@ -6301,6 +6301,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <li>Tous les élèves sont <strong>placés</strong>, avec n° QCMcam configurés (pour le pool CM1)</li>
       <li>Quelques élèves marqués <strong>PPRE</strong> ou <strong>PPS</strong>, des <strong>compteurs d'oublis</strong>, des <strong>appels</strong> enregistrés</li>
       <li>Des <strong>rappels</strong> 🔔 sur quelques élèves et, sur la 6e A et la 5e B, un <strong>📣 message à passer à la classe</strong> — affiché en jaune au-dessus du plan</li>
+      <li>Des <strong>🧑‍🏫 AESH</strong> : Mme Leroy en 6e A, deux en 5e B — placées à côté de leurs élèves dans la salle principale, et <em>à placer</em> (liste des non placés) dans la seconde salle</li>
       <li><strong>41 évaluations</strong> : les <strong>4 types (A, B, C, D)</strong> dans chaque classe et à <strong>chaque semestre</strong>, avec bulletins et conseils de classe remplis</li>
       <li><strong>2 disciplines en parallèle</strong> sur la 6ᵉ A (Physique-chimie + Bilingue) — sélecteur de flux dans les onglets Devoirs / Bilans</li>
       <li>La <strong>3e A n'a aucune évaluation</strong> : c'est volontaire, pour te montrer à quoi ressemble une classe qui démarre</li>
@@ -7681,11 +7682,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.93.0';
+const APP_VERSION    = '2.93.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T04:29:21Z';
+const APP_BUILD_DATE = '2026-10-07T04:43:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -34743,6 +34744,53 @@ const _NotesExport = (function () {
   return { run };
 })();
 
+// Démo : AESH de la 6A (une, nommée, avec les deux élèves PPS) et de la 5B (une nommée, une
+// anonyme). Placées dans la salle PRINCIPALE, élèves accompagnés déplacés à côté d'elles ;
+// dans la seconde salle elles restent « à placer » — pour montrer la liste des non placés.
+function _seedDemoAesh() {
+  // Élèves choisis par dispositif (PPS d'abord, puis PPRE), parmi les membres présents toute l'année.
+  const pick = (cls, key, n, skip) => (cls.eleves || []).filter(sid => {
+    const s = S.eleves[sid];
+    return s && s[key] && s.classe_id === cls.id && !s.departureDate && !s.arrivalDate && !skip.has(sid);
+  }).slice(0, n);
+  const spec = { '6A': [{ nom: 'Mme Leroy', take: [['gevasco', 2]] }],
+                 '5B': [{ nom: 'M. Garnier', take: [['gevasco', 1]] }, { nom: '', take: [['gevasco', 1], ['ppre', 1]] }] };
+  for (const [cid, list] of Object.entries(spec)) {
+    const cls = S.classes[cid];
+    if (!cls) continue;
+    const used = new Set();
+    cls.aesh = list.map(a => {
+      const sids = [];
+      for (const [key, n] of a.take) for (const sid of pick(cls, key, n, used)) { used.add(sid); sids.push(sid); }
+      return { id: uid(), nom: a.nom, sids };
+    });
+    _aeshSyncRooms(cls);
+    const rid = cls.activeRoom, room = cls.rooms[rid], salle = S.salles[rid];
+    if (!room || !salle) continue;
+    const pv = new Set(salle.positions_vides || []);
+    const isTable = (r, c) => r >= 0 && c >= 0 && r < salle.rows && c < salle.cols && !pv.has(`${r},${c}`);
+    cls.aesh.forEach((a, i) => {
+      const used = new Set(Object.values(room.aeshSeating || {}));
+      for (let r = 0; r < salle.rows; r++) for (let c = 0; c < salle.cols; c++) {
+        if (room.aeshSeating[i] != null) return;
+        const k = `${r},${c}`;
+        if (!isTable(r, c) || room.seating[k] || used.has(k)) continue;
+        const nb = [[r, c - 1], [r, c + 1], [r - 1, c], [r + 1, c]].filter(([rr, cc]) => isTable(rr, cc))
+          .map(x => x.join(',')).filter(x => !used.has(x));
+        if (nb.length < a.sids.length) continue;
+        room.aeshSeating[i] = k;
+        a.sids.forEach((sid, j) => {
+          const target = nb[j], cur = Object.keys(room.seating).find(x => room.seating[x] === sid);
+          if (cur === target) return;
+          const occ = room.seating[target];
+          if (cur) { if (occ) room.seating[cur] = occ; else delete room.seating[cur]; }
+          room.seating[target] = sid;
+        });
+      }
+    });
+  }
+}
+
 function createDemo(opts) {
   const force = !!(opts && opts.force);
   if (!force) {
@@ -35052,6 +35100,10 @@ function createDemo(opts) {
   // ({classId:{sid:{periode:txt}}}) plus lisibles que le format wrappé. On normalise
   // en post-traitement pour les passer en format per-disciplineId.
   _bulletinWrapAll();
+
+  // AESH (réglage par classe, v2.93.0) — APRÈS les évaluations : celles-ci transfèrent une
+  // élève de 5B en 5A et posent des départs ; on choisit des élèves encore là.
+  _seedDemoAesh();
 
   S.cur = '6A';
   save();
