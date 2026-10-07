@@ -452,6 +452,12 @@ Fenêtre élargie (860 px), qui tient presque sans défilement. Tout est rendu p
 - Compétences au téléphone : la grille de la ligne passe en flex qui se replie (`@media (max-width:700px)`), le `<select>` du domaine sur sa propre ligne.
 - Audit : 0 écart en clair et en sombre sur les six fenêtres ; aucun débordement à 375 px. Glisser vérifié au vrai pointeur (Tags), clic dans un champ d'une ligne déplaçable aussi.
 
+**Gabarit B — fait en v2.105.0** : Minuteur (`mtimer`), Sonomètre (`mnoise`), Sauvegarde (`mbackup-settings`, titre « 💾 Sauvegarde »).
+- Deux colonnes `.tool-grid` (une seule sous 700 px), titres de colonne `.tool-h`, lignes `.tool-q` (libellé à gauche, réglage à droite), détails rarement touchés dans des `<details class="tool-more">` (moments de l'annonce vocale, volumes, plancher de silence — son résumé affiche la valeur), note de pied `.tool-note`.
+- Minuteur : Démarrer (11 durées, durée libre) | Options (annonce vocale, tiers-temps, sonnerie). Sonomètre : Mesure (niveau actuel, seuil, durée, temporisation, plancher) | Alerte sonore. Sauvegarde : **Synchronisation** (interrupteur `#mbk-sync` → `toggleAutoSync`, dossier `#mbk-dir`, 💾 Exporter) | Sauvegardes horodatées (cartes `.bk-card`, inchangées sur le fond).
+- **Interrupteurs = vraies cases à cocher** stylées par `input.sw-chk` (`appearance:none` + `!important` contre la règle globale des inputs) : les `id` et les `onchange` d'origine sont gardés, le code qui pose `.checked` n'a pas bougé.
+- Tous les `id` d'origine conservés (`timer-*`, `noise-*`, `mbk-options`). Audit : 0 écart en clair et en sombre, détails dépliés ; aucun débordement à 375 px ; interrupteur vérifié au vrai clic.
+
 ### Ce qu'ils contenaient avant la refonte (historique)
 
 

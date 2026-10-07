@@ -1606,6 +1606,26 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .lst-empty{padding:14px;text-align:center;color:var(--pencil);font-size:.9em;font-style:italic}
 .lst-sub{font-size:.78em;color:var(--pencil);flex-basis:100%;padding-left:26px}
 .lst-flex{flex:1;min-width:0}
+/* Fenêtres d'outil (v2.105.0, gabarit B) : deux colonnes, interrupteurs, détails dépliables */
+.tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+@media (max-width:700px){ .tool-grid{grid-template-columns:1fr} }
+.tool-h{font-family:var(--font-mono);font-size:.72em;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-blue-soft);margin:0 0 6px}
+.tool-q{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.92em;padding:5px 0;border-bottom:1px dashed var(--rule-line-soft);flex-wrap:wrap}
+.tool-q > span:first-child{min-width:0}
+.tool-more{font-size:.88em;margin:4px 0 6px}
+.tool-more > summary{cursor:pointer;color:var(--pencil);list-style:none;padding:3px 0}
+.tool-more > summary::-webkit-details-marker{display:none}
+.tool-more > summary::before{content:"▸ "}
+.tool-more[open] > summary::before{content:"▾ "}
+.tool-note{font-size:.82em;color:var(--pencil);line-height:1.45;margin:12px 0 0}
+input.sw-chk{appearance:none !important;-webkit-appearance:none !important;width:36px !important;height:20px !important;min-width:36px;border-radius:10px !important;border:none !important;background:var(--rule-line) !important;position:relative;cursor:pointer;margin:0;padding:0 !important;flex:0 0 36px}
+input.sw-chk::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--paper);transition:left .15s}
+input.sw-chk:checked{background:var(--chip-on-bg) !important}
+input.sw-chk:checked::after{left:19px}
+input.sw-chk:focus-visible{outline:2px solid var(--ink-blue);outline-offset:2px}
+.tool-range{width:100%;margin-top:4px}
+.bk-card{display:flex;gap:8px;align-items:flex-start;padding:6px 10px;border:1px solid var(--rule-line);border-radius:var(--radius-md);cursor:pointer;background:var(--paper);margin-bottom:6px}
+.bk-card.on{border-color:var(--ink-blue);background:var(--paper-warm);box-shadow:inset 3px 0 0 var(--ink-blue)}
 @media (max-width:700px){ .mcompmgr-row{display:flex !important;flex-wrap:wrap} .mcompmgr-row input:nth-child(2){flex:1 1 60%} .mcompmgr-row select{flex:1 1 100%;min-width:0;max-width:100%;width:100%} .lst-use{min-width:0} }
 /* Tags cumulables — lignes de la modale (.mtags-row) */
 .mtags-row { background: #fff; border: 1px solid #e0e0e0; color: var(--ink-deep); }
@@ -5156,56 +5176,34 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ── MODAL Sonomètre — réglages ── -->
 <div id="mnoise" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:480px;width:100%">
-    <h2>🎙 Sonomètre — réglages</h2>
-    <p style="margin:0 0 10px;font-size:.9em;line-height:1.5;color:var(--pencil)">
-      Calibre le seuil pour <strong>ta</strong> salle : le niveau est <strong>relatif</strong> (pas des décibels calibrés).
-      Observe la jauge au calme puis en activité, et place le seuil juste au-dessus du niveau acceptable.
-    </p>
-    <div style="background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:8px 12px;margin-bottom:12px;text-align:center;font-size:.92em">
-      Niveau actuel : <strong id="noise-live-num" style="font-family:var(--font-mono);font-size:1.2em">—</strong> <span style="color:var(--pencil)">/ 100</span>
-    </div>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:14px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🤫 Plancher de silence (niveau 0)</legend>
-      <p style="margin:0 0 8px;font-size:.84em;line-height:1.45;color:var(--pencil)">
-        Définit le bruit de fond de ta salle qui doit correspondre à <strong>0</strong>. Fais le calme, puis clique pour mesurer : la jauge retombera alors vraiment à zéro quand la classe est silencieuse, pour un réglage plus juste.
-      </p>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <button id="noise-calib-btn" class="btn btn-g btn-sm" onclick="noiseCalibrateSilence()">🤫 Calibrer le silence</button>
-        <button class="btn btn-p btn-sm" onclick="noiseResetSilence()">↺ Défaut</button>
-        <span id="noise-calib-hint" style="font-size:.82em;color:var(--danger-fg)">Active d'abord le sonomètre 🎙</span>
+  <div class="mb" style="max-width:780px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>🎙 Sonomètre</h2>
+    <p class="lst-intro">Le niveau est <strong>relatif</strong> (0 à 100, pas des décibels) : observe la jauge au calme puis en activité, et place le seuil juste au-dessus du niveau acceptable.</p>
+    <div class="tool-grid">
+      <div>
+        <div class="tool-h">Mesure</div>
+        <div class="tool-q"><span>Niveau actuel</span><span><strong id="noise-live-num" style="font-family:var(--font-mono);font-size:1.2em">—</strong> <span style="color:var(--pencil)">/ 100</span></span></div>
+        <div class="tool-q" style="display:block"><span>Seuil d'alerte : <strong id="noise-thr-val" style="font-family:var(--font-mono)">60</strong> / 100</span>
+          <input type="range" id="noise-thr-range" class="tool-range" min="10" max="100" value="60" oninput="noiseSetThreshold(this.value)" aria-label="Seuil d'alerte"></div>
+        <div class="tool-q" style="display:block"><span title="Évite les bruits ponctuels">Durée avant alerte : <strong id="noise-sustain-val" style="font-family:var(--font-mono)">3</strong> s</span>
+          <input type="range" id="noise-sustain-range" class="tool-range" min="1" max="10" value="3" oninput="noiseSetSustain(this.value)" aria-label="Durée avant alerte"></div>
+        <div class="tool-q" style="display:block"><span>Temporisation entre deux alertes : <strong id="noise-cooldown-val" style="font-family:var(--font-mono)">15</strong> s</span>
+          <input type="range" id="noise-cooldown-range" class="tool-range" min="5" max="60" value="15" oninput="noiseSetCooldown(this.value)" aria-label="Temporisation entre deux alertes"></div>
+        <details class="tool-more"><summary>🤫 Plancher de silence (niveau 0) : <span id="noise-silence-val" style="font-family:var(--font-mono)">-60</span> dB</summary>
+          <p style="margin:4px 0 6px;color:var(--pencil);line-height:1.4">Le bruit de fond de ta salle qui doit valoir 0. Fais le calme, puis mesure : la jauge retombera vraiment à zéro quand la classe est silencieuse.</p>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <button id="noise-calib-btn" class="btn btn-g btn-sm" onclick="noiseCalibrateSilence()">🤫 Calibrer le silence</button>
+            <button class="btn btn-g btn-sm" onclick="noiseResetSilence()">↺ Défaut</button>
+            <span id="noise-calib-hint" style="color:var(--danger-fg)">Active d'abord le sonomètre 🎙</span>
+          </div>
+          <input type="range" id="noise-silence-range" class="tool-range" min="-80" max="-25" step="1" value="-60" oninput="noiseSetSilence(this.value)" aria-label="Plancher de silence">
+          <span style="display:flex;justify-content:space-between;color:var(--pencil);font-size:.9em;margin-top:2px"><span>← capte les sons faibles</span><span>ignore le bruit de fond →</span></span>
+        </details>
       </div>
-      <label style="display:block;font-size:.88em;font-weight:600">
-        Réglage fin : plancher = <span id="noise-silence-val" style="font-family:var(--font-mono)">-60</span> dB
-        <input type="range" id="noise-silence-range" min="-80" max="-25" step="1" value="-60" oninput="noiseSetSilence(this.value)" style="width:100%;margin-top:4px">
-        <span style="display:flex;justify-content:space-between;font-weight:normal;color:var(--pencil);font-size:.78em;margin-top:2px">
-          <span>← capte les sons faibles</span><span>ignore le bruit de fond →</span>
-        </span>
-      </label>
-    </fieldset>
-
-    <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
-      Seuil d'alerte : <span id="noise-thr-val" style="font-family:var(--font-mono)">60</span> / 100
-      <input type="range" id="noise-thr-range" min="10" max="100" value="60" oninput="noiseSetThreshold(this.value)" style="width:100%;margin-top:4px">
-    </label>
-    <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
-      Durée avant alerte : <span id="noise-sustain-val" style="font-family:var(--font-mono)">3</span> s
-      <span style="font-weight:normal;color:var(--pencil);font-size:.85em">(évite les bruits ponctuels)</span>
-      <input type="range" id="noise-sustain-range" min="1" max="10" value="3" oninput="noiseSetSustain(this.value)" style="width:100%;margin-top:4px">
-    </label>
-    <label style="display:block;font-size:.9em;font-weight:600;margin-bottom:14px">
-      Temporisation entre 2 alertes : <span id="noise-cooldown-val" style="font-family:var(--font-mono)">15</span> s
-      <input type="range" id="noise-cooldown-range" min="5" max="60" value="15" oninput="noiseSetCooldown(this.value)" style="width:100%;margin-top:4px">
-    </label>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">Alerte sonore</legend>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.9em;margin-bottom:8px">
-        <input type="checkbox" id="noise-sound-on" onchange="noiseSetSoundOn(this.checked)"> Activer le son
-      </label>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <select id="noise-sound-type" onchange="noiseSetSoundType(this.value); noisePlayAlert(true)" style="padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px">
+      <div>
+        <div class="tool-h">Alerte sonore</div>
+        <div class="tool-q"><span>🔔 Son à l'alerte</span><input type="checkbox" class="sw-chk" id="noise-sound-on" onchange="noiseSetSoundOn(this.checked)" aria-label="Son à l'alerte"></div>
+        <div class="tool-q"><span><select id="noise-sound-type" onchange="noiseSetSoundType(this.value); noisePlayAlert(true)" style="padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px">
           <optgroup label="Sons classiques">
             <option value="bell">Cloche claire</option>
             <option value="beep">Bip doux</option>
@@ -5221,103 +5219,51 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
             <option value="tetris">Tetris</option>
             <option value="retro-random">🎲 Au hasard (jeu rétro)</option>
           </optgroup>
-        </select>
-        <button class="btn btn-g btn-sm" onclick="noisePlayAlert(true)">▶ Tester</button>
+        </select></span><button class="btn btn-g btn-sm" onclick="noisePlayAlert(true)">▶ Tester</button></div>
+        <details class="tool-more"><summary>Volume : <span id="noise-vol-val" style="font-family:var(--font-mono)">70</span> / 100</summary>
+          <input type="range" id="noise-vol-range" class="tool-range" min="0" max="100" value="70" oninput="noiseSetVolume(this.value)" onchange="noisePlayAlert(true)" aria-label="Volume de l'alerte">
+          <span style="color:var(--pencil);font-size:.9em">100 = signal maximal, à la limite de la saturation</span>
+        </details>
       </div>
-      <label style="display:block;font-size:.9em;font-weight:600">
-        Volume : <span id="noise-vol-val" style="font-family:var(--font-mono)">70</span> / 100
-        <span style="font-weight:normal;color:var(--pencil);font-size:.85em">(100 = signal maximal, à la limite de la saturation)</span>
-        <input type="range" id="noise-vol-range" min="0" max="100" value="70" oninput="noiseSetVolume(this.value)" onchange="noisePlayAlert(true)" style="width:100%;margin-top:4px">
-      </label>
-    </fieldset>
-
-    <p style="margin:0;font-size:.85em;line-height:1.5;color:var(--pencil)">
-      🔒 Le micro est analysé <strong>en local, en temps réel</strong>. Aucun son n'est enregistré ni transmis.
-      Nécessite HTTPS ou localhost (pas un fichier ouvert en <code>file://</code>).
-    </p>
-
-    <div class="ma">
-      <button class="btn btn-p" onclick="closeMod2('mnoise')">Fermer</button>
     </div>
+    <p class="tool-note">🔒 Le micro est analysé <strong>en local, en temps réel</strong> : aucun son n'est enregistré ni transmis. Nécessite HTTPS ou localhost (pas un fichier ouvert en <code>file://</code>).</p>
+    <div class="ma"><button class="btn btn-p" onclick="closeMod2('mnoise')">Fermer</button></div>
   </div>
 </div>
 
 <!-- ── MODAL Minuteur — compte à rebours ── -->
 <div id="mtimer" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:500px;width:100%;max-height:88vh;overflow-y:auto">
-    <h2>⏲ Compte à rebours</h2>
-    <p style="margin:0 0 12px;font-size:.9em;line-height:1.5;color:var(--pencil)">
-      Choisis une durée prédéfinie (démarre aussitôt) ou saisis une durée libre.
-      Une fois lancé, le minuteur s'ouvre dans une <strong>fenêtre flottante déplaçable, toujours au premier plan</strong> (Chrome/Edge ; repli fenêtre classique sinon), avec un widget de secours en bas à droite.
-    </p>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">⏱ Durées prédéfinies</legend>
-      <div class="timer-presets">
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(5)">5 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(10)">10 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(15)">15 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(20)">20 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(25)">25 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(30)">30 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(35)">35 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(40)">40 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(45)">45 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(50)">50 min</button>
-        <button class="btn btn-p btn-sm" onclick="timerSetDurationPreset(55)">55 min</button>
+  <div class="mb" style="max-width:780px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>⏲ Minuteur</h2>
+    <p class="lst-intro">Une durée prédéfinie démarre aussitôt. Le minuteur s'ouvre dans une <strong>fenêtre flottante, toujours au premier plan</strong> (Chrome/Edge), avec un petit widget de secours en bas à droite.</p>
+    <div class="tool-grid">
+      <div>
+        <div class="tool-h">Démarrer</div>
+        <div class="timer-presets">
+          <button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(5)">5 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(10)">10 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(15)">15 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(20)">20 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(25)">25 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(30)">30 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(35)">35 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(40)">40 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(45)">45 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(50)">50 min</button><button class="btn btn-g btn-sm" onclick="timerSetDurationPreset(55)">55 min</button>
+        </div>
+        <div class="tool-q" style="margin-top:8px"><span>Durée libre</span>
+          <span style="display:inline-flex;align-items:center;gap:6px">
+            <input type="number" id="timer-min" min="0" max="599" value="10" style="width:64px;font-family:var(--font-mono)" aria-label="Minutes"> min
+            <input type="number" id="timer-sec" min="0" max="59" value="0" style="width:58px;font-family:var(--font-mono)" aria-label="Secondes"> s
+            <button class="btn btn-p btn-sm" onclick="timerStartFromInputs()">▶ Démarrer</button>
+          </span>
+        </div>
       </div>
-    </fieldset>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🛠 Durée libre</legend>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input type="number" id="timer-min" min="0" max="599" value="10" style="width:64px;padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px;font-family:var(--font-mono)"> min
-        <input type="number" id="timer-sec" min="0" max="59" value="0" style="width:64px;padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px;font-family:var(--font-mono)"> s
-        <button class="btn btn-p" style="margin-left:auto" onclick="timerStartFromInputs()">▶ Démarrer</button>
-      </div>
-    </fieldset>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🗣 Annonce vocale</legend>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.9em;margin-bottom:8px">
-        <input type="checkbox" id="timer-speech-on" onchange="timerSetSpeechOn(this.checked)"> Annoncer vocalement le temps restant
-      </label>
-      <div style="font-size:.85em;color:var(--pencil);margin-bottom:6px">Déclencher l'annonce quand il reste (plusieurs choix possibles) :</div>
-      <div class="timer-ann-opts" id="timer-announce-opts">
-        <label><input type="checkbox" value="900" onchange="timerToggleAnnounce(this.value,this.checked)"> 15 min</label>
-        <label><input type="checkbox" value="600" onchange="timerToggleAnnounce(this.value,this.checked)"> 10 min</label>
-        <label><input type="checkbox" value="300" onchange="timerToggleAnnounce(this.value,this.checked)"> 5 min</label>
-        <label><input type="checkbox" value="180" onchange="timerToggleAnnounce(this.value,this.checked)"> 3 min</label>
-        <label><input type="checkbox" value="120" onchange="timerToggleAnnounce(this.value,this.checked)"> 2 min</label>
-        <label><input type="checkbox" value="60" onchange="timerToggleAnnounce(this.value,this.checked)"> 1 min</label>
-        <label><input type="checkbox" value="30" onchange="timerToggleAnnounce(this.value,this.checked)"> 30 s</label>
-        <label><input type="checkbox" value="10" onchange="timerToggleAnnounce(this.value,this.checked)"> 10 s</label>
-      </div>
-      <div style="margin-top:8px">
-        <button class="btn btn-g btn-sm" onclick="_timerSpeak('Il reste 5 minutes')">▶ Tester la voix</button>
-        <span id="timer-speech-warn" style="display:none;font-size:.82em;color:var(--danger-fg)">⚠ Synthèse vocale indisponible dans ce navigateur.</span>
-      </div>
-    </fieldset>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">⏱ Tiers-temps</legend>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.9em">
-        <input type="checkbox" id="timer-tt-on" onchange="timerSetTtOn(this.checked)"> Afficher aussi le décompte du <strong>tiers-temps</strong> (+⅓)
-      </label>
-      <div style="font-size:.82em;color:var(--pencil);margin-top:6px;line-height:1.4">
-        Un second décompte s'affiche à côté du premier, allongé d'un tiers de la durée. Le minuteur sonne
-        <strong>deux fois</strong> : à la fin du temps de la classe, puis à la fin du tiers-temps.
-        Se règle aussi en cours de route, par le bouton <strong>+⅓</strong> du minuteur.
-      </div>
-    </fieldset>
-
-    <fieldset style="border:1px solid var(--rule-line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px">
-      <legend style="font-size:.88em;font-weight:600;padding:0 6px">🔔 Sonnerie de fin</legend>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.9em;margin-bottom:8px">
-        <input type="checkbox" id="timer-sound-on" onchange="timerSetSoundOn(this.checked)"> Jouer un son court à la fin (≈ 7 s)
-      </label>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <select id="timer-sound-type" onchange="timerSetSoundType(this.value); _timerPlaySound(true)" style="padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px">
+      <div>
+        <div class="tool-h">Options</div>
+        <div class="tool-q"><span>🗣 Annonce vocale du temps restant</span><input type="checkbox" class="sw-chk" id="timer-speech-on" onchange="timerSetSpeechOn(this.checked)" aria-label="Annonce vocale"></div>
+        <details class="tool-more"><summary>Moments de l'annonce · tester la voix</summary>
+          <div class="timer-ann-opts" id="timer-announce-opts">
+            <label><input type="checkbox" value="900" onchange="timerToggleAnnounce(this.value,this.checked)"> 15 min</label><label><input type="checkbox" value="600" onchange="timerToggleAnnounce(this.value,this.checked)"> 10 min</label><label><input type="checkbox" value="300" onchange="timerToggleAnnounce(this.value,this.checked)"> 5 min</label><label><input type="checkbox" value="180" onchange="timerToggleAnnounce(this.value,this.checked)"> 3 min</label><label><input type="checkbox" value="120" onchange="timerToggleAnnounce(this.value,this.checked)"> 2 min</label><label><input type="checkbox" value="60" onchange="timerToggleAnnounce(this.value,this.checked)"> 1 min</label><label><input type="checkbox" value="30" onchange="timerToggleAnnounce(this.value,this.checked)"> 30 s</label><label><input type="checkbox" value="10" onchange="timerToggleAnnounce(this.value,this.checked)"> 10 s</label>
+          </div>
+          <div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="_timerSpeak('Il reste 5 minutes')">▶ Tester la voix</button>
+            <span id="timer-speech-warn" style="display:none;font-size:.9em;color:var(--danger-fg)">⚠ Synthèse vocale indisponible dans ce navigateur.</span></div>
+        </details>
+        <div class="tool-q"><span title="Un second décompte, allongé d'un tiers, s'affiche à côté du premier ; le minuteur sonne deux fois. Se règle aussi en cours de route (bouton +⅓).">⏱ Tiers-temps (+<span class="frac">⅓</span>)</span><input type="checkbox" class="sw-chk" id="timer-tt-on" onchange="timerSetTtOn(this.checked)" aria-label="Tiers-temps"></div>
+        <div class="tool-q"><span>🔔 Sonnerie de fin</span><input type="checkbox" class="sw-chk" id="timer-sound-on" onchange="timerSetSoundOn(this.checked)" aria-label="Sonnerie de fin"></div>
+        <div class="tool-q"><span>
+          <select id="timer-sound-type" onchange="timerSetSoundType(this.value); _timerPlaySound(true)" style="padding:5px 8px;border:1px solid var(--rule-line);border-radius:4px">
           <optgroup label="Sons classiques">
             <option value="bell">Cloche claire</option>
             <option value="beep">Bip doux</option>
@@ -5333,22 +5279,16 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
             <option value="tetris">Tetris</option>
             <option value="retro-random">🎲 Au hasard (jeu rétro)</option>
           </optgroup>
-        </select>
-        <button class="btn btn-g btn-sm" onclick="_timerTestSound()" title="Écouter la sonnerie de fin (re-cliquer pour couper)">▶ Tester</button>
+        </select></span>
+          <button class="btn btn-g btn-sm" onclick="_timerTestSound()" title="Écouter la sonnerie de fin (re-cliquer pour couper)">▶ Tester</button>
+        </div>
+        <details class="tool-more"><summary>Volume : <span id="timer-vol-val" style="font-family:var(--font-mono)">80</span> / 100</summary>
+          <input type="range" id="timer-vol-range" class="tool-range" min="0" max="100" value="80" oninput="timerSetVolume(this.value)" onchange="_timerPlaySound(true)" aria-label="Volume de la sonnerie">
+        </details>
       </div>
-      <label style="display:block;font-size:.9em;font-weight:600">
-        Volume : <span id="timer-vol-val" style="font-family:var(--font-mono)">80</span> / 100
-        <input type="range" id="timer-vol-range" min="0" max="100" value="80" oninput="timerSetVolume(this.value)" onchange="_timerPlaySound(true)" style="width:100%;margin-top:4px">
-      </label>
-    </fieldset>
-
-    <p style="margin:0;font-size:.84em;line-height:1.5;color:var(--pencil)">
-      💡 Pendant le décompte, la fenêtre flottante propose les mêmes boutons (⚙ réglages · 🗣 voix · 🔔 son · ⏸ pause). Tout est traité localement, hors-ligne.
-    </p>
-
-    <div class="ma">
-      <button class="btn btn-p" onclick="closeMod2('mtimer')">Fermer</button>
     </div>
+    <p class="tool-note">💡 Pendant le décompte, la fenêtre flottante reprend ces boutons (⚙ · 🗣 · 🔔 · +⅓) ; clic sur les chiffres = pause. Tout fonctionne hors ligne.</p>
+    <div class="ma"><button class="btn btn-p" onclick="closeMod2('mtimer')">Fermer</button></div>
   </div>
 </div>
 
@@ -6774,15 +6714,22 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <div id="mbackup-settings" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:640px;width:100%">
-    <h2>⚙ Stratégie de sauvegarde automatique</h2>
-    <p style="font-size:.86em;color:var(--pencil);margin-bottom:12px;line-height:1.5">
-      Quand la <strong>Sync ON</strong> est active, l'app écrit automatiquement <code>plan-classe-auto.json</code> dans ton dossier et crée régulièrement des <strong>backups horodatés</strong> (<code>plan-classe-bk-…</code>). Choisis la stratégie selon la place disque que tu acceptes et la profondeur d'historique que tu veux conserver.
-    </p>
-    <div id="mbk-options" style="display:flex;flex-direction:column;gap:10px"></div>
-    <p style="font-size:.78em;color:var(--pencil);font-style:italic;margin-top:12px;line-height:1.4">
-      💡 Cette politique <strong>ne s'applique qu'aux backups horodatés</strong>. Le fichier de sync principal (<code>plan-classe-auto.json</code>) est toujours écrit à chaque modification quel que soit le choix (sauf en mode « ⏸ Désactivée », où aucun backup horodaté n'est créé — le fichier principal reste lui synchronisé).
-    </p>
+  <div class="mb" style="max-width:820px;width:100%;max-height:88vh;overflow-y:auto">
+    <h2>💾 Sauvegarde</h2>
+    <p class="lst-intro">Tes données vivent dans ce navigateur. La synchronisation les écrit aussi dans un dossier (Nextcloud…) ; les sauvegardes horodatées gardent l'historique.</p>
+    <div class="tool-grid">
+      <div>
+        <div class="tool-h">Synchronisation</div>
+        <div class="tool-q"><span title="Écrit plan-classe-auto.json dans ton dossier à chaque modification">🔄 Synchronisation auto</span><input type="checkbox" class="sw-chk" id="mbk-sync" onchange="toggleAutoSync();setTimeout(openBackupSettings,300)" aria-label="Synchronisation auto"></div>
+        <div class="tool-q"><span>📂 Dossier</span><span id="mbk-dir" style="font-family:var(--font-mono);font-size:.92em"></span></div>
+        <div class="tool-q"><span>Copie complète, maintenant</span><button class="btn btn-g btn-sm" onclick="closeMod2('mbackup-settings');exportJSON()">💾 Exporter (.json)</button></div>
+        <p class="tool-note" style="margin-top:8px">Le fichier de synchronisation (<code>plan-classe-auto.json</code>) est réécrit à chaque modification, quelle que soit la stratégie choisie à droite.</p>
+      </div>
+      <div>
+        <div class="tool-h">Sauvegardes horodatées</div>
+        <div id="mbk-options"></div>
+      </div>
+    </div>
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-g" onclick="closeMod2('mbackup-settings')">Fermer</button>
     </div>
@@ -7858,11 +7805,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.104.0';
+const APP_VERSION    = '2.105.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T18:57:16Z';
+const APP_BUILD_DATE = '2026-10-07T19:00:02Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -32927,13 +32874,15 @@ function openBackupSettings() {
   const wrap = document.getElementById('mbk-options');
   if (!wrap) return;
   const cur = _currentBackupStrategyKey();
+  { const sw = document.getElementById('mbk-sync'); if (sw) sw.checked = !!autoSyncEnabled; }
+  { const d = document.getElementById('mbk-dir'); if (d) d.textContent = (typeof dirHandle !== 'undefined' && dirHandle) ? dirHandle.name : 'aucun (choisi à l\'activation)'; }
   const html = Object.entries(BACKUP_STRATEGIES).map(([key, s]) => {
     const isCur = (key === cur);
-    return `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid ${isCur ? 'var(--ink-blue)' : 'var(--rule-line)'};border-radius:4px;cursor:pointer;background:${isCur ? 'var(--paper-warm)' : 'var(--paper)'}">
+    return `<label class="bk-card${isCur ? ' on' : ''}">
       <input type="radio" name="bk-strategy" value="${_escAttr(key)}" ${isCur ? 'checked' : ''} onchange="setBackupStrategy(this.value)" style="margin-top:3px">
       <div style="flex:1">
-        <div style="font-weight:600;font-size:.95em">${s.label}</div>
-        <div style="font-size:.82em;color:var(--pencil);margin-top:2px">${_esc(s.desc)}</div>
+        <div style="font-weight:600;font-size:.92em">${s.label}</div>
+        <div style="font-size:.8em;color:var(--pencil);margin-top:1px;line-height:1.35">${_esc(s.desc)}</div>
       </div>
     </label>`;
   }).join('');
