@@ -1869,15 +1869,19 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
 .bsynth-count { color:var(--pencil); font-size:.92em; }
 tr.bf-hide { display:none; }
 /* Tableur de saisie — liseré, bandeau, filtres (v2.90.0) */
+/* v2.92.0 : le liseré (jugé trop discret) est remplacé par une PASTILLE devant la valeur,
+   comme dans le Bilan des notes. Même mécanisme : --lis = fond en ligne de la case. */
 body.tableur-lisere #meval-tableur-wrap td.meval-cell-note,
-body.tableur-lisere #meval-tableur-wrap td.meval-cell-comp { background:transparent !important; box-shadow:inset 4px 0 0 var(--lis, transparent); }
+body.tableur-lisere #meval-tableur-wrap td.meval-cell-comp { background:transparent !important; position:relative; }
+body.tableur-lisere #meval-tableur-wrap td.meval-cell-note::before,
+body.tableur-lisere #meval-tableur-wrap td.meval-cell-comp::before { content:''; position:absolute; left:max(3px, calc(50% - 2.1em)); top:50%; width:8px; height:8px; margin-top:-4px; border-radius:50%; background:var(--lis, transparent); pointer-events:none; }
 body.tableur-lisere #meval-tableur-wrap td.meval-cell-note,
 body.tableur-lisere #meval-tableur-wrap td.meval-cell-comp,
 body.tableur-lisere #meval-tableur-wrap td.meval-cell-note input.meval-niveau-input,
 body.tableur-lisere #meval-tableur-wrap td.meval-cell-comp input.meval-niveau-input { color:var(--ink-deep) !important; }
 body.tableur-lisere #meval-tableur-wrap .tcom-corner { border-top-color:var(--margin-red) !important; }
-body.tableur-sobr-notes #meval-tableur-wrap td.meval-cell-note,
-body.tableur-sobr-comps #meval-tableur-wrap td.meval-cell-comp { box-shadow:none !important; }
+body.tableur-sobr-notes #meval-tableur-wrap td.meval-cell-note::before,
+body.tableur-sobr-comps #meval-tableur-wrap td.meval-cell-comp::before { display:none; }
 #meval-tableur-synth { margin:0 0 8px; }
 .tsynth { display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:7px 12px; background:var(--paper); border:1px solid var(--rule-line); border-radius:var(--radius-md); }
 .tsynth-item { min-width:0; }
@@ -6241,7 +6245,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="_evalTableurCopyAll()" title="⧉ Copier tout : TSV prêt à coller dans Excel/Pronote/ENT" aria-label="Copier le tableau (TSV)" style="padding:4px 6px">⧉</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenExportFromTableur()" title="📤 Export ENT : tableau triable + copie TSV / CSV (avec ou sans la colonne Compétences)" aria-label="Export ENT" style="padding:4px 6px;font-weight:600">📤 ENT</button>
         <button class="btn btn-g btn-sm" onclick="_evalOpenRenduFromTableur()" title="👀 Projeter les notes : vue épurée plein écran avec grands caractères, pour que les élèves voient leur note du fond de la salle" aria-label="Projeter les notes" style="padding:4px 6px">👀</button>
-        <button class="btn btn-g btn-sm" id="meval-tableur-cellstyle-btn" onclick="_tableurSetCellStyle(_tableurCellStyle() === 'bar' ? 'fill' : 'bar')" style="padding:4px 8px;white-space:nowrap" title="Couleur des cases : liseré à gauche ou case entièrement colorée (clic pour basculer)">▌ Liseré</button>
+        <button class="btn btn-g btn-sm" id="meval-tableur-cellstyle-btn" onclick="_tableurSetCellStyle(_tableurCellStyle() === 'bar' ? 'fill' : 'bar')" style="padding:4px 8px;white-space:nowrap" title="Couleur des cases : pastille devant la valeur ou case entièrement colorée (clic pour basculer)">● Pastilles</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-sobr-btn" onclick="_evalTableurSobrToggleMenu(event)" title="🎨 Sobriété : retirer les fonds colorés (notes et/ou compétences) — choix indépendants persistés." aria-label="Sobriété" style="padding:4px 6px">🎨</button>
         <button class="btn btn-g btn-sm" id="meval-tableur-crosstab-btn" onclick="_evalOpenCrossTab()" title="🆚 Comparer classes : tableau croisé (moyenne, σ) par classe × civilité" aria-label="Tableau croisé inter-classes" style="display:none;padding:4px 6px">🆚</button>
       </div>
@@ -7409,7 +7413,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 0"><input type="checkbox" id="meval-tableur-sobr-comps" onchange="_evalTableurSobrApply()"> Niveaux de compétences (1–4, A)</label>
   <div style="border-top:1px dashed var(--rule-line);margin:7px 0 6px"></div>
   <div style="font-weight:600;margin-bottom:4px;color:var(--ink-blue);font-family:var(--font-serif)">Couleur des cases</div>
-  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 0"><input type="radio" name="tableur-cellstyle" value="bar" onchange="_tableurSetCellStyle('bar')"> Liseré à gauche de la case</label>
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 0"><input type="radio" name="tableur-cellstyle" value="bar" onchange="_tableurSetCellStyle('bar')"> Pastille devant la valeur</label>
   <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 0"><input type="radio" name="tableur-cellstyle" value="fill" onchange="_tableurSetCellStyle('fill')"> Case entièrement colorée</label>
 </div>
 
@@ -7659,11 +7663,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.91.0';
+const APP_VERSION    = '2.92.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T04:09:42Z';
+const APP_BUILD_DATE = '2026-10-07T04:15:04Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -42733,7 +42737,8 @@ function _NAME_HEAD_ATTRS() {
 // tableur-sobr-comps). Les cellules à dégrader portent les classes meval-cell-note
 // ou meval-cell-comp ajoutées dans les fonctions de rendu.
 // ═══ Tableur de saisie — liseré, bandeau d'avancement, filtres (v2.90.0) ═══
-// Couleur des cases : 'bar' (liseré à gauche, défaut — arbitrage de l'utilisateur) ou 'fill'
+// Couleur des cases : 'bar' (= PASTILLE devant la valeur depuis la v2.92.0 — le liseré à gauche
+// d'origine a été jugé trop discret ; valeur stockée inchangée) ou 'fill'
 // (case entièrement colorée, l'affichage historique). Plutôt que de modifier la trentaine
 // d'endroits qui posent un fond de case (rendu ET rafraîchissements en place des 4 types),
 // un MutationObserver recopie le fond inline de chaque case dans la variable --lis, que le
@@ -42748,7 +42753,7 @@ function _tableurApplyCellStyle() {
   document.body?.classList?.toggle('tableur-lisere', bar);
   document.querySelectorAll('input[name="tableur-cellstyle"]').forEach(r => { r.checked = (r.value === (bar ? 'bar' : 'fill')); });
   const b = document.getElementById('meval-tableur-cellstyle-btn');
-  if (b) b.textContent = bar ? '▌ Liseré' : '■ Cases pleines';
+  if (b) b.textContent = bar ? '● Pastilles' : '■ Cases pleines';
 }
 function _tlSync(td) {
   const raw = td.style.background || td.style.backgroundColor || '';
