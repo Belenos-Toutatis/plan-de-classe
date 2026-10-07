@@ -295,11 +295,13 @@ td.meval-cell-disp{text-align:center;font-family:var(--font-mono);font-size:.78e
 #pick-float .pf-cycle{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;padding:3px 8px;border-radius:4px;font-size:.78em;text-align:center;margin-bottom:6px}
 /* Grille de la modale "Plan de l'appel" — version compacte lecture seule */
 .mp-grid{display:grid;gap:3px;margin:6px 0}
-.mp-cell{min-height:60px;border:1px solid #c8ccd0;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.78em;padding:3px;text-align:center;position:relative}
-.mp-cell.nt{background:#ddd}
-.mp-cell.nt::after{content:"✖";color:var(--pencil-soft);font-size:1.1em}
-.mp-cell.em{background:#fff}
-.mp-cell.oc{background:#d6eaf8;border-color:#3498db}
+.mp-cell{min-height:60px;border:1px solid var(--rule-line);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.78em;padding:3px;text-align:center;position:relative}
+.mp-cell.nt{background:repeating-linear-gradient(135deg,transparent 0 8px,var(--rule-line) 8px 10px) !important;border:1.5px dashed var(--pencil-soft) !important}
+.mp-cell.nt::after{content:none}
+.mp-cell.mp-edit{cursor:pointer}
+.mp-cell.mp-edit:hover{box-shadow:0 0 0 2px var(--ink-blue)}
+.mp-cell.em{background:transparent;border-style:dashed}
+.mp-cell.oc{background:var(--paper);border-color:var(--rule-line);color:var(--ink-deep)}
 .mp-cell.oc.absent{opacity:.45;background:repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 6px,#e8e8e8 6px,#e8e8e8 12px) !important;border-color:#999 !important}
 .mp-cell.oc.absent .mp-name{text-decoration:line-through;color:var(--pencil)}
 .mp-cell.oc.late{background:#fef9c3 !important;border-color:#facc15 !important}
@@ -1729,7 +1731,7 @@ html[data-theme="dark"] .mp-cell.oc.absent { background: repeating-linear-gradie
 html[data-theme="dark"] .mp-cell.oc.absent .mp-name { color: var(--pencil) !important; }
 html[data-theme="dark"] .mp-cell.oc.late { background: #3a2f1a !important; border-color: var(--warn-bd) !important; color: var(--warn-fg) !important; }
 html[data-theme="dark"] .mp-cell.oc.aesh { background: #4a2538 !important; border-color: #8a2f5a !important; }
-html[data-theme="dark"] .mp-cell.nt       { background: var(--paper-deep) !important; color: var(--pencil) !important; }
+
 html[data-theme="dark"] .mp-board         { background: var(--paper-deep) !important; color: var(--ink-deep) !important; }
 
 /* mipovf — modale "Choisir les tables qui recevront une tablette" */
@@ -7202,15 +7204,22 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <div id="mattPlan" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:min(95vw,1100px);width:100%">
-    <h2 id="mattPlan-title" style="margin-bottom:4px">🖼 Plan de l'appel</h2>
-    <p id="mattPlan-subtitle" style="font-size:.85em;color:var(--pencil);margin-bottom:10px"></p>
-    <div id="mattPlan-grid" style="overflow:auto;max-height:65vh"></div>
-    <div class="ma">
-      <button class="btn btn-g btn-sm" id="mattPlan-prev" onclick="mattPlanPrev()" title="Appel précédent (plus ancien) de la même classe">◀</button>
-      <button class="btn btn-g btn-sm" id="mattPlan-next" onclick="mattPlanNext()" title="Appel suivant (plus récent) de la même classe">▶</button>
-      <button class="btn btn-p btn-sm" onclick="switchMattPlanToDet()" title="Basculer vers la liste détaillée des absents et retards">📝 Liste</button>
-      <button class="btn btn-g" onclick="closeMod2('mattPlan')">Fermer</button>
+  <div class="mb" style="max-width:min(95vw,1100px);width:100%;max-height:92vh;display:flex;flex-direction:column">
+    <!-- v2.108.0 : en-tête modernisé, mode Consulter | Modifier (clic = absent, clic droit = retard) -->
+    <div class="lst-head">
+      <h2 id="mattPlan-title" style="margin:0">🖼 Plan de l'appel</h2>
+      <span class="ip-seg" id="mattPlan-mode" role="group" aria-label="Mode"><button type="button" data-v="view" onclick="_mpSetMode('view')">Consulter</button><button type="button" data-v="edit" onclick="_mpSetMode('edit')">✏️ Modifier</button></span>
+      <span style="margin-left:auto;display:inline-flex;gap:4px">
+        <button class="btn btn-g btn-sm" id="mattPlan-prev" onclick="mattPlanPrev()" title="Appel précédent (plus ancien) de la même classe">◀</button>
+        <button class="btn btn-g btn-sm" id="mattPlan-next" onclick="mattPlanNext()" title="Appel suivant (plus récent) de la même classe">▶</button>
+      </span>
+    </div>
+    <p id="mattPlan-subtitle" class="lst-intro" style="margin:4px 0 8px"></p>
+    <div id="mattPlan-editbar" style="display:none"></div>
+    <div id="mattPlan-grid" style="overflow:auto;flex:1;min-height:0"></div>
+    <div class="ma" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="switchMattPlanToDet()" title="Basculer vers la liste détaillée des absents et retards">📝 Liste</button>
+      <span style="margin-left:auto;display:inline-flex;gap:8px" id="mattPlan-acts"></span>
     </div>
   </div>
 </div>
@@ -7812,11 +7821,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.107.0';
+const APP_VERSION    = '2.108.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T19:25:23Z';
+const APP_BUILD_DATE = '2026-10-07T19:36:53Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27783,6 +27792,9 @@ function viewAttRecordOnPlan(id, classId) {
     aeshCountSnap: r.aeshCountSnap || 0,
     aeshSalleIdSnap: r.aeshSalleIdSnap || null,
   };
+  _viewingAttRecord.aeshAbsents = (_viewingAttRecord.aeshAbsents || []).slice();
+  _mpDirty = false;
+  if (!document.getElementById('mattPlan')?.classList.contains('on')) _mpMode = 'view';
   // Met à jour la "currentRecord" pour que la navigation prev/next fonctionne dans cette modale
   _mattCurrentRecordId = id;
   _mattCurrentClassId = cid;
@@ -28451,14 +28463,16 @@ function resetPickedHistory() {
 // pénible au tactile) : input type="time" pré-rempli à l'heure courante (cas usuel :
 // l'élève arrive maintenant), Entrée = enregistrer, bouton dédié pour retirer le retard.
 let _lateSid = null;
-function promptLateForStudent(sid) {
+var _lateCtx = null;   // 'rec' = retard d'un appel passé modifié sur son plan (v2.108.0)
+function promptLateForStudent(sid, ctx) {
   const stu = S.eleves[sid];
   if (!stu) return;
+  _lateCtx = ctx || null;
   // Garde anti-double : sur Surface/Android, un appui long déclenche À LA FOIS
   // le contextmenu synthétisé par l'OS ET notre timer d'appui long maison.
   if (document.getElementById('mlate')?.classList.contains('on')) return;
   _lateSid = sid;
-  const cur = _lateToday.get(sid);
+  const cur = _lateCtx === 'rec' ? _viewingAttRecord?.retardsMap.get(sid) : _lateToday.get(sid);
   const now = new Date();
   const t = document.getElementById('mlate-title');
   if (t) t.textContent = `⏰ Retard — ${stu.prenom} ${stu.nom}`;
@@ -28475,6 +28489,10 @@ function _lateConfirm() {
   const hhmm = inp ? (inp.value || '').trim() : '';
   if (!sid || !S.eleves[sid]) { closeMod2('mlate'); return; }
   if (!hhmm) { toast('⏰ Choisis une heure d\'arrivée (ou « Retirer le retard »).', 'warn'); return; }
+  if (_lateCtx === 'rec' && _viewingAttRecord) {
+    _viewingAttRecord.retardsMap.set(sid, hhmm); _viewingAttRecord.absentsSet.delete(sid);
+    _mpDirty = true; closeMod2('mlate'); renderMattPlan(); return;
+  }
   _lateToday.set(sid, hhmm);
   _absentToday.delete(sid); // un retard n'est pas absent
   _saveAttTransient();
@@ -28483,6 +28501,10 @@ function _lateConfirm() {
 }
 function _lateRemove() {
   const sid = _lateSid;
+  if (_lateCtx === 'rec' && _viewingAttRecord) {
+    if (sid) _viewingAttRecord.retardsMap.delete(sid);
+    _mpDirty = true; closeMod2('mlate'); renderMattPlan(); return;
+  }
   if (sid) { _lateToday.delete(sid); _saveAttTransient(); }
   closeMod2('mlate');
   renderTeacherGrid();
@@ -29021,10 +29043,10 @@ function _doSaveAttendance({ dateStr, slotId, groupe, label, endTime, overwriteI
 
 // ─── Liste des appels passés (avec filtres) ───
 // ═══ Appels passés (v2.107.0) : état des filtres, partagé par les deux vues ═══
-var _attF = { view: 'list', cls: '', per: 'month', from: '', to: '', abs: false, ret: false, hz: false };
+var _attF = { view: 'list', cls: '', per: 'sem', from: '', to: '', abs: false, ret: false, hz: false };
 var _attOpen = new Set();       // appels dépliés (détail sur place)
 function openAttendanceModal(view) {
-  _attF = { view: view === 'stu' ? 'stu' : 'list', cls: getCls()?.id || '', per: 'month', from: '', to: '', abs: false, ret: false, hz: false };
+  _attF = { view: view === 'stu' ? 'stu' : 'list', cls: getCls()?.id || '', per: 'sem', from: '', to: '', abs: false, ret: false, hz: false };
   _attOpen = new Set();
   if (typeof _statsSort !== 'undefined') _statsSort = { col: 'abs', dir: -1 };
   _attRender();
@@ -29140,7 +29162,7 @@ function renderAttendanceList(rg) {
         ${auto ? '' : `<span class="att-lbl">${_esc(r.label)}</span>`}
         <span class="att-acts">
           <button class="btn btn-g btn-sm" onclick="viewAttRecordOnPlan('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Voir l'appel sur le plan (lecture seule)">🖼 Plan</button>
-          <button class="btn btn-g btn-sm" onclick="editAttendance('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Modifier les absents et retards de cet appel">✏️ Modifier</button>
+          <button class="btn btn-g btn-sm" onclick="editAttRecordOnPlan('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Modifier les absents et retards sur le plan de l'appel">✏️ Modifier</button>
           <button class="lst-del" onclick="renameAttendance('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Renommer" aria-label="Renommer l'appel">📝</button>
           <button class="lst-del" onclick="deleteAttendance('${_escJsAttr(r.id)}','${_escJsAttr(classId)}')" title="Supprimer" aria-label="Supprimer l'appel">🗑</button>
         </span>
@@ -29224,18 +29246,24 @@ function renderMattPlan() {
       : v.groupe === 3
         ? `<span class="gbdg g3" style="font-size:.7em;vertical-align:middle">🟣 G3</span>`
         : '';
-  // Titre : Classe · [Groupe] · Salle · Date · Horaire
-  const titleParts = [`📝 ${_escAttr(cls.nom)}`];
-  if (grpLbl)   titleParts.push(grpLbl);
-  if (salleNom) titleParts.push(`<span style="font-weight:500;color:var(--pencil)">${_escAttr(salleNom)}</span>`);
-  if (dateFr)   titleParts.push(`<span style="font-weight:500;color:var(--pencil)">${_escAttr(dateFr)}</span>`);
-  if (horaire)  titleParts.push(`<span style="font-weight:500;color:var(--pencil)">${_escAttr(horaire)}</span>`);
-  if (titleEl) titleEl.innerHTML = titleParts.join(' · ');
+  // Titre : date ; sous-titre : classe · groupe · salle · créneau · compteurs (v2.108.0)
+  const dateLong = v.date ? new Date(v.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }) : '';
+  if (titleEl) titleEl.innerHTML = `🖼 Appel du ${_escAttr(dateLong)}`;
   if (subEl) {
-    const nA = v.absentsSet.size;
-    const nR = v.retardsMap.size;
-    subEl.textContent = `« ${v.label} » · 🚫 ${nA} absent${nA>1?'s':''}${nR ? ' · ⏰ '+nR+' retard'+(nR>1?'s':'') : ''}`;
+    const nA = v.absentsSet.size, nR = v.retardsMap.size;
+    const parts = [_escAttr(cls.nom)]; if (grpLbl) parts.push(grpLbl); if (salleNom) parts.push(_escAttr(salleNom)); if (horaire) parts.push(_escAttr(horaire));
+    parts.push(nA ? `<span class="att-pa">🚫 ${nA}</span>` : '<span class="att-ok">✓ aucun absent</span>');
+    if (nR) parts.push(`<span class="att-pr">⏰ ${nR}</span>`);
+    subEl.innerHTML = parts.join(' · ');
   }
+  document.querySelectorAll('#mattPlan-mode button').forEach(b => b.classList.toggle('on', b.dataset.v === _mpMode));
+  const eb = document.getElementById('mattPlan-editbar');
+  if (eb) { eb.style.display = _mpMode === 'edit' ? '' : 'none';
+    eb.innerHTML = _mpMode === 'edit' ? `<div class="al al-i" style="margin:0 0 8px">✏️ <strong>Clic</strong> sur un élève = absent / présent · <strong>clic droit</strong> (ou appui long) = retard et heure d'arrivée${_mpDirty ? ' · <strong>modifications non enregistrées</strong>' : ''}</div>` : ''; }
+  const acts = document.getElementById('mattPlan-acts');
+  if (acts) acts.innerHTML = _mpMode === 'edit'
+    ? `<button class="btn btn-g" onclick="_mpReload();renderMattPlan()"${_mpDirty ? '' : ' disabled'}>↺ Annuler</button><button class="btn btn-p" onclick="_mpSave();renderMattPlan()"${_mpDirty ? '' : ' disabled'}>✓ Enregistrer</button><button class="btn btn-g" onclick="_mpClose()">Fermer</button>`
+    : `<button class="btn btn-g" onclick="_mpClose()">Fermer</button>`;
 
   // Met à jour les boutons prev/next selon la disponibilité de voisins
   const prevR = _findAttNeighbor(v.classId, v.recordId, -1);
@@ -29315,7 +29343,7 @@ function renderMattPlan() {
 
       const aeshIdxHere = _aeshAtKeyMap[key];
       let cellClass = 'mp-cell' + aisleCls;
-      let inner = '';
+      let inner = '', cellAttrs = '';
       if (posVides.has(key)) {
         cellClass += ' nt';
       } else if (typeof aeshIdxHere === 'number') {
@@ -29323,14 +29351,19 @@ function renderMattPlan() {
         const isAeshAbsent = _aeshAbsentSet.has(aeshIdxHere);
         if (isAeshAbsent) cellClass += ' absent';
         const lbl = aeshLabel(aeshIdxHere, _aeshTotal);
+        if (_mpMode === 'edit') { cellClass += ' mp-edit'; cellAttrs = ` onclick="_mpToggleAeshAbs(${aeshIdxHere})" title="Clic = AESH absente / présente"`; }
         inner = `
-          <div class="mp-name" style="color:#880e4f">🧑‍🏫<br><strong>${_escAttr(lbl)}</strong></div>
+          <div class="mp-name" style="color:var(--aesh-fg)">🧑‍🏫<br><strong>${_escAttr(lbl)}</strong></div>
           ${isAeshAbsent ? '<div class="mp-abs">🚫</div>' : ''}`;
       } else if (sid && (nomShown || prenomShown) && !wrongGroup) {
         cellClass += ' oc';
         if (isAbsent) cellClass += ' absent';
         else if (lateTime) cellClass += ' late';
         const archMark = !stu ? ' ✕' : '';
+        if (_mpMode === 'edit' && !_confHides(sid)) {
+          cellClass += ' mp-edit';
+          cellAttrs = ` onclick="_mpToggleAbs('${_escJsAttr(sid)}')" oncontextmenu="event.preventDefault();_mpLate('${_escJsAttr(sid)}')" data-mp-sid="${_escAttr(sid)}" title="Clic = absent / présent · clic droit = retard"`;
+        }
         inner = `
           <div class="mp-name">${_escAttr(prenomShown || '')}<br><strong>${_escAttr(nomShown || '')}</strong>${archMark}</div>
           ${lateTime && !isAbsent ? `<div class="mp-time">⏰ ${_escAttr(lateTime)}</div>` : ''}
@@ -29338,7 +29371,7 @@ function renderMattPlan() {
       } else {
         cellClass += ' em';
       }
-      cells += `<div class="${cellClass}">${inner}</div>`;
+      cells += `<div class="${cellClass}"${cellAttrs}>${inner}</div>`;
     }
   }
   // Note discrète si on n'a pas de snapshot fidèle (record ancien créé avant la fonctionnalité)
@@ -29379,6 +29412,14 @@ function renderMattPlan() {
         </div>`;
     }
   }
+  if (!grid.dataset.lpInit) {
+    grid.dataset.lpInit = '1';
+    let t = null;
+    grid.addEventListener('touchstart', e => { const c = e.target.closest('[data-mp-sid]'); if (!c || _mpMode !== 'edit') return; t = setTimeout(() => { t = null; c.dataset.lpDone = '1'; _mpLate(c.dataset.mpSid); }, 550); }, { passive: true });
+    const cancel = () => { if (t) { clearTimeout(t); t = null; } };
+    grid.addEventListener('touchmove', cancel, { passive: true });
+    grid.addEventListener('touchend', e => { cancel(); const c = e.target.closest('[data-mp-sid]'); if (c && c.dataset.lpDone) { delete c.dataset.lpDone; e.preventDefault(); } });
+  }
   grid.innerHTML = `
     <div class="mp-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells}</div>
     <div class="mp-board">🖥 TABLEAU</div>
@@ -29387,14 +29428,76 @@ function renderMattPlan() {
   `;
 }
 
+// ── Modification d'un appel passé sur son plan (v2.108.0) ──
+// _viewingAttRecord porte des COPIES (absentsSet, retardsMap, aeshAbsents) : en mode Modifier on
+// les change en place, « ✓ Enregistrer » les écrit dans le record (une entrée d'annulation).
+var _mpMode = 'view', _mpDirty = false;
+function editAttRecordOnPlan(id, classId) { viewAttRecordOnPlan(id, classId); _mpSetMode('edit'); }
+function _mpSetMode(m) {
+  if (m === 'view' && _mpDirty) {
+    _uiConfirm({ title: '✏️ Modifications en cours', message: 'Enregistrer les modifications de cet appel ?', okLabel: '✓ Enregistrer',
+      onOk: () => { _mpSave(); _mpSetMode('view'); }, onCancel: () => { _mpReload(); _mpMode = 'view'; renderMattPlan(); } });
+    return;
+  }
+  _mpMode = m; renderMattPlan();
+  // Fermeture par Échap ou clic sur le fond avec des modifications : on rouvre et on demande
+  if (m === 'edit') _modalReturnTo['mattPlan'] = () => { if (_mpDirty) { openMod('mattPlan'); _mpClose(); } else _mpMode = 'view'; };
+}
+function _mpReload() {
+  const v = _viewingAttRecord; if (!v) return;
+  const r = S.attendance?.[v.classId]?.[v.recordId]; if (!r) return;
+  v.absentsSet = new Set(r.absents || []); v.retardsMap = new Map(Object.entries(r.retards || {}));
+  v.aeshAbsents = (r.aeshAbsents || []).slice(); _mpDirty = false;
+}
+function _mpToggleAbs(sid) {
+  const v = _viewingAttRecord; if (!v || _mpMode !== 'edit') return;
+  if (v.absentsSet.has(sid)) v.absentsSet.delete(sid); else { v.absentsSet.add(sid); v.retardsMap.delete(sid); }
+  _mpDirty = true; renderMattPlan();
+}
+function _mpToggleAeshAbs(idx) {
+  const v = _viewingAttRecord; if (!v || _mpMode !== 'edit') return;
+  const salleId = S.classes[v.classId]?.activeRoom;
+  const i = v.aeshAbsents.findIndex(a => a && a.salleId === salleId && a.idx === idx);
+  if (i >= 0) v.aeshAbsents.splice(i, 1); else v.aeshAbsents.push({ salleId, idx });
+  _mpDirty = true; renderMattPlan();
+}
+function _mpLate(sid) {
+  const v = _viewingAttRecord; if (!v || _mpMode !== 'edit') return;
+  promptLateForStudent(sid, 'rec');
+}
+function _mpSave() {
+  const v = _viewingAttRecord; if (!v) return;
+  const r = S.attendance?.[v.classId]?.[v.recordId]; if (!r) return;
+  pushUndo();
+  r.absents = [...v.absentsSet];
+  r.retards = Object.fromEntries(v.retardsMap);
+  r.aeshAbsents = v.aeshAbsents.slice();
+  // Identité minimale gardée dans le record (comme à l'enregistrement d'un appel)
+  r.eleves = r.eleves || {};
+  for (const sid of [...r.absents, ...Object.keys(r.retards)]) { const st = S.eleves[sid]; if (st && !r.eleves[sid]) r.eleves[sid] = { nom: st.nom, prenom: st.prenom }; }
+  save(); _mpDirty = false;
+  if (document.getElementById('matt')?.classList.contains('on')) _attRender();
+  toast(`✓ Appel « ${r.label} » modifié.`);
+}
+function _mpClose() {
+  if (_mpMode === 'edit' && _mpDirty) {
+    _uiConfirm({ title: '✏️ Modifications en cours', message: 'Enregistrer les modifications de cet appel avant de fermer ?', okLabel: '✓ Enregistrer',
+      onOk: () => { _mpSave(); _mpMode = 'view'; delete _modalReturnTo['mattPlan']; closeMod2('mattPlan'); },
+      onCancel: () => { _mpReload(); _mpMode = 'view'; delete _modalReturnTo['mattPlan']; closeMod2('mattPlan'); } });
+    return;
+  }
+  _mpMode = 'view'; delete _modalReturnTo['mattPlan']; closeMod2('mattPlan');
+}
 function mattPlanPrev() {
   if (!_viewingAttRecord) return;
+  if (_mpDirty) return toast('✏️ Enregistre ou annule les modifications avant de changer d\'appel.', 'warn');
   const v = _viewingAttRecord;
   const r = _findAttNeighbor(v.classId, v.recordId, -1);
   if (r) viewAttRecordOnPlan(r.id, v.classId);
 }
 function mattPlanNext() {
   if (!_viewingAttRecord) return;
+  if (_mpDirty) return toast('✏️ Enregistre ou annule les modifications avant de changer d\'appel.', 'warn');
   const v = _viewingAttRecord;
   const r = _findAttNeighbor(v.classId, v.recordId, +1);
   if (r) viewAttRecordOnPlan(r.id, v.classId);
