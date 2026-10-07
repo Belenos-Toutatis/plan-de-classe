@@ -1643,6 +1643,7 @@ Le zoom du Plan Prof et de la Vue Élève est **persisté** (`localStorage.planC
 - **Compteurs 📦 / 📝** (`.el-cnt`) : chiffre discret (grisé à 0, rouge à 3 et plus), **− / ＋ au survol** (toujours visibles au tactile), frappe directe conservée. Classe `el-cnt-inp`, pas `counter-input` : ses règles passent par `#stl` + `!important` pour battre la règle globale des inputs. 🚫 / ⏰ : simple chiffre (`.el-att`).
 - **Actions** : ✏️ + **⋯** (même fenêtre flottante) : Fiche, Historique, Remettre les compteurs à zéro, Supprimer.
 - Audit : 0 écart en clair et en sombre (bandeau, tableau en mode Actifs et Tous, fenêtres) ; aucun débordement à 375 px.
+- **Zébrage une ligne sur deux** (v2.94.2) : classe `el-alt` posée dans le gabarit de ligne de `renderStudents`, comptée sur les lignes **visibles** (`_zi`, un filtre masque des lignes). Fond `#eaeef4` en clair (sur le blanc du tableau — `--paper` était trop pâle, `--paper-warm` ferait tomber `--pencil` à 4,26:1), `--paper` en sombre ; laissé de côté sur les lignes sélectionnées et survolées. Audit : 0 écart dans les deux thèmes.
 
 - **Tri par colonne** : Nom, 📦 Matériel oublié, 📝 Travail non fait, 🚫 Absences cumulées, ⏰ Retards cumulés
 - **Colonnes 🚫 / ⏰** : cumuls calculés à la volée par `getStudentAttendanceStats(classId, sid)` qui parcourt `S.attendance[classId]` et compte les apparitions dans `r.absents` / `r.retards`. Badge coloré via `oubliColor()`.

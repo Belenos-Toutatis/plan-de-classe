@@ -1881,6 +1881,10 @@ tr.bf-hide { display:none; }
 .el-att.hi { color:var(--danger-fg); font-weight:700; }
 #stl .stbl td.el-amen:not(.all) { white-space:normal; }
 #stl .stbl td.el-amen.all { white-space:nowrap; }
+/* Zébrage (v2.94.2). Clair : #eaeef4 sur le blanc du tableau (--paper était trop pâle) — porte --pencil à 4,84:1, --pencil-soft 4,72, --danger-fg 5,08 ;
+   pas --paper-warm, où --pencil tombe à 4,26. Sombre : --paper sous le --paper-warm du tableau (--pencil 6,2:1). */
+#stl .stbl tbody tr.el-alt:not(.selected):not(:hover) td { background:#eaeef4; }
+html[data-theme="dark"] #stl .stbl tbody tr.el-alt:not(.selected):not(:hover) td { background:var(--paper) !important; }
 .el-aesh { font-size:.82em; color:var(--pencil); margin:0 6px 0 2px; white-space:nowrap; }
 #el-synth .bsynth-big { font-size:1.65em; }
 #el-synth .bsynth-link.on { background:var(--chip-on-bg); color:#fff; }
@@ -7719,11 +7723,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.94.1';
+const APP_VERSION    = '2.94.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T05:06:17Z';
+const APP_BUILD_DATE = '2026-10-07T05:10:30Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19563,6 +19567,7 @@ function renderStudents() {
   const _amenAll = _elAmenMode() === 'all';
   { const box = document.getElementById('el-synth'); if (box) box.innerHTML = _es.html; }
   { const t = document.getElementById('el-amen-toggle'); if (t) t.innerHTML = _elAmenToggleHTML(); }
+  let _zi = 0;   // zébrage une ligne sur deux, compté sur les lignes VISIBLES (un filtre masque des lignes)
 
   const rows = list.map((s, idx) => {
     const _g = _grp(s), grpBadge = _g
@@ -19668,7 +19673,7 @@ function renderStudents() {
           <button type="button" tabindex="-1" onclick="${setter}('${s.id}', ${(v || 0) + 1})" aria-label="${lbl} : plus un">＋</button></span>`;
     const _att = (n, lbl) => `<span class="el-att${n ? (n >= 3 ? ' hi' : '') : ' zero'}" title="${lbl}">${n || '·'}</span>`;
     return `
-      <tr data-sid="${s.id}" class="${(sel + (_efShow(s) ? '' : ' bf-hide')).trim()}" style="${_rowStyle}"
+      <tr data-sid="${s.id}" class="${(sel + (_efShow(s) ? ((_zi++ % 2) ? ' el-alt' : '') : ' bf-hide')).trim()}" style="${_rowStyle}"
           onmousedown="onEleveRowMouseDown('${s.id}',event)">
         <td onclick="_confNameClick('${s.id}')">${civBtn}<span class="stu-name-link" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();_confOpenFiche('${s.id}')" title="Ouvrir la fiche complète de l'élève"><strong>${_escAttr(s.nom)}</strong> ${_escAttr(s.prenom)}</span>${_delegueBadge(s)}${_lifeBadge}${_remBadgeInline(s)}</td>
         <td class="conf-keep">${posInput}</td>
