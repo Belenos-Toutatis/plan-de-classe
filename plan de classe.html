@@ -7941,11 +7941,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.100.1';
+const APP_VERSION    = '2.100.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T17:26:46Z';
+const APP_BUILD_DATE = '2026-10-07T17:28:15Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -31839,7 +31839,9 @@ function _photoSidFromTarget(t) {
 }
 const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false, plan: false, skipRoom: null };
 // Sur le Plan Prof et la Vue Élève, la salle affichée est déjà sous les yeux : pas de mini-plan pour elle.
-function _photoPopSkipRoom(t) { return t && t.closest && t.closest('#tab-plan, #tab-svue') ? (getCls()?.activeRoom || null) : null; }
+// Survol d'un nom SUR un plan (Plan, Vue Élève, Tablettes, QCMcam) : photo seule, sans mini-plan —
+// on a déjà le plan sous les yeux (v2.100.2, demande de l'utilisateur). '*' = aucune salle.
+function _photoPopSkipRoom(t) { return t && t.closest && t.closest('#tab-plan, #tab-svue, #tab-ipads .ip-plan, #tab-qcmcam .qcm-plan-wrap') ? '*' : null; }
 function _photoPopHide() {
   clearTimeout(_photoPop.timer); _photoPop.timer = null; _photoPop.sid = null; _photoPop.pinned = false;
   if (_photoPop.el) _photoPop.el.style.display = 'none';
@@ -31861,7 +31863,7 @@ async function _photoPopShow(sid) {
   if (_photoPop.sid !== sid) return;
   // Mini-plans sous la photo, un par salle. Dans le tableur d'éval : plan du jour du devoir.
   const ctx = _photoPop.plan ? _mnpCtx() : null;
-  const plans = _mnpAllRooms(sid, ctx, 130, _photoPop.skipRoom);
+  const plans = _photoPop.skipRoom === '*' ? [] : _mnpAllRooms(sid, ctx, 130, _photoPop.skipRoom);
   if (!url && !plans.length) return;
   if (!_photoPop.el) {
     _photoPop.el = document.createElement('div');
