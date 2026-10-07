@@ -1294,10 +1294,6 @@ html[data-theme="dark"] #cfg-contraintes-bar label,
 html[data-theme="dark"] #cfg-contraintes-bar #cfg-contraintes-info { color: var(--warn-fg) !important; }
 html[data-theme="dark"] #cfg-allowed-list-row { border-top-color: var(--warn-bd) !important; }
 html[data-theme="dark"] #cfg-allowed-list-row > span:first-child { color: var(--warn-fg) !important; }
-html[data-theme="dark"] #cfg-aesh-bar      { background: #3a1d2c !important; border-color: #8a2f5a !important; }
-html[data-theme="dark"] #cfg-aesh-bar strong,
-html[data-theme="dark"] #cfg-aesh-count,
-html[data-theme="dark"] #cfg-aesh-active-pick { color: #f0a0c8 !important; }
 html[data-theme="dark"] #cfg-ilots-example { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
 html[data-theme="dark"] #cfg-pairs-section { background: var(--paper-warm) !important; border-color: var(--rule-line) !important; color: var(--ink-deep) !important; }
 html[data-theme="dark"] #cfg-pairs-students { background: var(--paper-deep) !important; border-color: var(--rule-line) !important; }
@@ -1868,6 +1864,18 @@ html[data-theme="dark"] .bilan-rem-count { background: rgba(28,34,41,0.7) !impor
 .bsynth-chip:disabled { opacity:.45; cursor:default; }
 .bsynth-count { color:var(--pencil); font-size:.92em; }
 tr.bf-hide { display:none; }
+/* Fenêtre AESH (v2.93.0) */
+.aesh-row { display:grid; grid-template-columns:170px minmax(0,1fr) auto; gap:6px 10px; align-items:center; padding:9px 0; border-top:1px solid var(--rule-line); }
+.aesh-row:first-child { border-top:none; }
+.aesh-name { width:100%; }
+.aesh-stus { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.aesh-stus select { max-width:220px; padding:2px 6px; font-size:.86em; }
+.aesh-chip { display:inline-flex; align-items:center; gap:3px; padding:1px 4px 1px 9px; border-radius:999px; background:var(--aesh-bg); color:var(--aesh-fg); border:1px solid var(--aesh-bd); font-size:.84em; }
+.aesh-chip button { border:none; background:none; color:inherit; cursor:pointer; padding:0 4px; font-size:.95em; }
+.aesh-places { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:4px 10px; font-size:.8em; color:var(--pencil); }
+.aesh-place.todo { color:var(--warn-fg); font-weight:600; }
+.us.us-aesh { background:var(--aesh-bg) !important; color:var(--aesh-fg) !important; border-color:var(--aesh-bd) !important; font-weight:600; }
+@media (max-width: 760px) { .aesh-row { grid-template-columns:1fr; } }
 /* Tableur de saisie — liseré, bandeau, filtres (v2.90.0) */
 /* v2.92.0 : le liseré (jugé trop discret) est remplacé par une PASTILLE devant la valeur,
    comme dans le Bilan des notes. Même mécanisme : --lis = fond en ligne de la case. */
@@ -3528,7 +3536,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <span class="gchip gc-1"      id="cfg-mode-groupes" onclick="setCfgMode('groupes',this)" data-tip="Affecte des places aux zones G1, G2 ou G3. Sélectionne plusieurs cases puis clic sur G1 / G2 / G3. — Utile uniquement si tes élèves gardent LES MÊMES POSITIONS en classe entière et en demi-groupe (ou tiers-groupe) : la zone G1 indique quelles places sont occupées quand seul le groupe 1 est là. Si tes demi-groupes mélangent des élèves de plusieurs classes ou ont des places totalement différentes, crée plutôt une classe recomposée à part (onglet Classes → Nouvelle classe) avec son propre plan.">Groupes G1/G2/G3</span>
         <span class="gchip gc-3"      id="cfg-mode-tags"     onclick="setCfgMode('tags',this)" data-tip="Affecte un tag (DF, DNL…) à des places. Sélectionne plusieurs cases puis clic sur un bouton de tag.">Tags</span>
         <span class="gchip gc-2"      id="cfg-mode-contraintes" onclick="setCfgMode('contraintes',this)" data-tip="Règles de placement : paires d'élèves à séparer + places autorisées par élève.">⛓ Contraintes</span>
-        <span class="gchip"           id="cfg-mode-aesh" style="background:#fde2f3;color:#880e4f;border:1px solid #c2185b" onclick="setCfgMode('aesh',this)" data-tip="Place une ou plusieurs AESH dans cette salle pour cette classe, et indique quels élèves elles accompagnent.">🧑‍🏫 AESH</span>
+        <span class="gchip" style="display:none"           id="cfg-mode-aesh" style="background:#fde2f3;color:#880e4f;border:1px solid #c2185b" onclick="setCfgMode('aesh',this)" data-tip="Place une ou plusieurs AESH dans cette salle pour cette classe, et indique quels élèves elles accompagnent.">🧑‍🏫 AESH</span>
       </span>
       <button class="btn btn-s btn-sm" id="cfg-auto-grp" style="display:none" onclick="autoGroupConfig()" title="Répartit les places entre G1 et G2 d'après les allées (cases sans table)">⚡ Répartir G1/G2 selon les allées</button>
       <span style="display:flex;gap:8px;align-items:center;font-size:.87em">
@@ -3556,9 +3564,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     </div>
     <div class="al al-i" data-help="cfg" id="cfg-hint-ilots" style="display:none">
       <strong>Îlots</strong> — facilite la configuration des salles avec des <strong>blocs de tables sur plusieurs rangées</strong> (regroupements physiques). Sert aussi à <strong>améliorer la séparation des paires d'élèves à éloigner</strong> (les élèves d'un même îlot sont systématiquement considérés comme proches). <strong>1.</strong> Clique sur un bouton <strong>Î1 / Î2 / …</strong> pour activer un îlot, ou sélectionne des cases puis <strong>+ Nouvel îlot</strong> (rattachement direct). <strong>2.</strong> <strong>✓ Affecter à</strong> ajoute la sélection à l'îlot actif. <em>Inutile si tes tables ne forment que des rangées 1D — utilise plutôt l'onglet Tables seul.</em>
-    </div>
-    <div class="al al-i" data-help="cfg" id="cfg-hint-aesh" style="display:none">
-      <strong>🧑‍🏫 AESH</strong> — Accompagnant·e d'Élève en Situation de Handicap. Définis le <strong>nombre d'AESH</strong> dans cette salle pour cette classe (peut différer d'une salle à l'autre), <strong>place chaque AESH</strong> sur une case (sélection puis bouton <em>Placer ici</em>) et indique les <strong>élèves qu'elle accompagne</strong>. <em>L'AESH apparaît sur le plan (vue prof + vue élève), n'a pas de tablette, peut être pointée absente en mode appel, et le mélange aléatoire la place en priorité avec ses élèves liés (côté → côté → devant).</em>
     </div>
     <!-- Toolbar Îlots : sélection de l'îlot actif + actions -->
     <div id="cfg-ilots-bar" style="display:none;background:#f8f9fa;border:1px solid #d1d5da;border-radius:4px;padding:8px 12px;margin-bottom:6px;flex-wrap:wrap;gap:8px;align-items:center">
@@ -3588,20 +3593,6 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <span style="color:#7d3c00;font-weight:600;flex-shrink:0">⛓ Élèves avec contraintes dans cette salle :</span>
         <span id="cfg-allowed-list" style="display:inline-flex;flex-wrap:wrap;gap:4px;flex:1;min-width:200px"></span>
       </div>
-    </div>
-    <!-- Toolbar AESH : compteur + liste des AESH (placement + élèves aidés) -->
-    <div id="cfg-aesh-bar" style="display:none;background:#fde2f3;border:1px solid #c2185b;border-radius:4px;padding:8px 12px;margin-bottom:6px;flex-direction:column;gap:8px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <strong style="font-size:.92em;color:#880e4f">🧑‍🏫 Nombre d'AESH dans cette salle pour cette classe :</strong>
-        <span style="display:inline-flex;align-items:center;gap:4px">
-          <button class="btn btn-g btn-sm" onclick="cfgAeshSetCount(-1)" title="Une AESH en moins (la dernière)" style="padding:2px 8px;font-weight:700">−</button>
-          <span id="cfg-aesh-count" style="min-width:24px;text-align:center;font-weight:700;font-size:1.1em;color:#880e4f">0</span>
-          <button class="btn btn-g btn-sm" onclick="cfgAeshSetCount(+1)" title="Une AESH en plus" style="padding:2px 8px;font-weight:700">+</button>
-        </span>
-        <span id="cfg-aesh-active-pick" style="margin-left:auto;font-size:.85em;color:#880e4f"></span>
-      </div>
-      <!-- Liste des AESH : pour chaque, lieu de placement + chips d'élèves -->
-      <div id="cfg-aesh-list" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
     <!-- Barre d'actions en lot pour la grille de config (Groupes ou Tags ou Contraintes) -->
     <div id="cfg-bulk-bar" style="display:none;background:#e8f4fd;border:1px solid #3498db;border-radius:4px;padding:6px 10px;margin-bottom:6px;flex-wrap:wrap;gap:6px;align-items:center">
@@ -4100,6 +4091,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
             <label class="me-f"><span>Rôle <span class="rw-muted" title="Délégué·es élu·es — nom souligné sur le plan">ⓘ</span></span>
               <select id="es-delegue"><option value="">— Aucun —</option><option value="T">🗳 Délégué·e (souligné)</option><option value="S">🗳 Suppléant·e (souligné en pointillé)</option></select></label>
           </div>
+          <div class="me-row">
+            <label class="me-f"><span>🤝 Accompagné·e par <span class="rw-muted" title="AESH de la classe — réglage commun à toutes ses salles">ⓘ</span></span>
+              <select id="es-aesh"></select></label>
+          </div>
           <div class="me-f"><span>🏷 Tags <span class="rw-muted" style="font-weight:400;text-transform:none">(cumulables — clic pour cocher ou décocher)</span></span>
             <div id="es-tags" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>
           </div>
@@ -4534,6 +4529,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div style="background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px;padding:8px 10px;margin-bottom:12px">
       <div style="font-weight:600;font-size:.9em;margin-bottom:6px;color:var(--disc-accent)">🎓 Disciplines enseignées</div>
       <div id="mvc-disc-checks"></div>
+    </div>
+    <div id="mvc-aesh-box" style="display:none;background:var(--paper-warm);border:1px solid var(--rule-line);border-radius:4px;padding:8px 10px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-weight:600;font-size:.9em">🧑‍🏫 AESH</span><button class="btn btn-g btn-sm" style="margin-left:auto" onclick="openAeshModal(_mvcEditingId)" title="Les élèves proposés sont les membres ENREGISTRÉS de la classe">✏️ Gérer les AESH…</button></div>
+      <div id="mvc-aesh-summary" style="font-size:.88em"></div>
     </div>
     <!-- Panneau de filtres : toujours visible (outil principal pour composer un groupe).
          Critères cumulés en ET d'une ligne à l'autre, OU à l'intérieur d'une ligne
@@ -7151,9 +7150,28 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       </p>
       <div id="ec-salle-checks" style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.9em"></div>
     </div>
+    <div class="about-section" style="margin-top:14px">
+      <h3>🧑‍🏫 AESH</h3>
+      <p style="font-size:.84em;color:var(--pencil);margin:0 0 8px;line-height:1.4">Un seul réglage pour toutes les salles de la classe. Enregistré tout de suite, indépendamment de ce formulaire.</p>
+      <div id="ec-aesh-summary" style="font-size:.9em;margin-bottom:8px"></div>
+      <button class="btn btn-g btn-sm" onclick="openAeshModal(document.getElementById('ec-id').value)">✏️ Gérer les AESH…</button>
+    </div>
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mce')">Annuler</button>
       <button class="btn btn-p" onclick="saveClassEdit()">✓ Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AESH de la classe (v2.93.0) — après mce pour s'ouvrir PAR-DESSUS ═══ -->
+<div id="maesh" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="width:min(760px, 96vw);max-width:760px">
+    <h2 id="maesh-title">🧑‍🏫 AESH de la classe</h2>
+    <p style="font-size:.86em;color:var(--pencil);margin:0 0 10px;line-height:1.45">Accompagnant·es d'élèves en situation de handicap de cette classe — <strong>un seul réglage pour toutes ses salles</strong>. Le nom est facultatif (sinon « AESH », « AESH1 »…). Un élève n'a qu'une AESH. Une AESH n'apparaît, avec un filtre de groupe, que si l'un de ses élèves en fait partie. <strong>Placement</strong> : sur le Plan, glisse l'AESH depuis la liste des non placés (🔀 Mélanger tout la place aussi à côté de ses élèves). Annulable par Ctrl+Z.</p>
+    <div id="maesh-body"></div>
+    <div class="ma" style="justify-content:space-between">
+      <button class="btn btn-g" onclick="_aeshAddNew()">＋ Ajouter une AESH</button>
+      <button class="btn btn-p" onclick="closeMod2('maesh')">Fermer</button>
     </div>
   </div>
 </div>
@@ -7663,11 +7681,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.92.1';
+const APP_VERSION    = '2.93.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T04:17:37Z';
+const APP_BUILD_DATE = '2026-10-07T04:29:21Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -7774,7 +7792,7 @@ function _tdDrop(desc, x, y) {
   if (!tgt) return;                       // relâché dans le vide → rien
   drag = _tdDescToDrag(desc);
   if (tgt.id === 'unpl') {
-    if (drag && drag.type === 'placed') dropToUnplaced({ preventDefault() {} });
+    if (drag && (drag.type === 'placed' || (drag.type === 'aesh' && drag.fromKey))) dropToUnplaced({ preventDefault() {} });
   } else {
     const key = tgt.dataset.key;
     if (key) dropOnCell(cls, key);
@@ -7878,16 +7896,87 @@ function activeRoomData(cls) {
   if (typeof r.aeshCount !== 'number') r.aeshCount = 0;
   if (!r.aeshSeating) r.aeshSeating = {};
   if (!r.aeshLinks)   r.aeshLinks   = {};
+  if (Array.isArray(cls.aesh) && r.aeshCount !== cls.aesh.length) _aeshSyncRooms(cls);
   return r;
 }
 
-// ─── AESH (Phase 1) ─────────────────────────────────────────────────
-// Le concept "AESH" est anonyme et défini par couple (classe, salle).
-// Stocké dans cls.rooms[salleId] : { aeshCount, aeshSeating: {idx:'r,c'}, aeshLinks: {idx:[sid,...]} }.
-// L'index est 0..N-1 ; le label affiché dépend du nombre total :
-//   N=1 → "AESH"   ; N>=2 → "AESH1", "AESH2"…
-function aeshLabel(idx, total) {
+// ─── AESH ───────────────────────────────────────────────────────────
+// ⚠️ v2.93.0 : la SOURCE DE VÉRITÉ est la classe — cls.aesh = [{ id, nom, sids: [...] }],
+// l'ordre de la liste donnant l'index. Chaque salle ne garde en propre que la POSITION
+// (room.aeshSeating {idx:'r,c'}) ; room.aeshCount et room.aeshLinks sont des COPIES tenues
+// à jour par _aeshSyncRooms(cls), pour tout le code qui raisonne par salle (rendu, appel,
+// mélange, impressions, QCMcam). Ne jamais écrire room.aeshLinks / aeshCount directement :
+// modifier cls.aesh puis appeler _aeshSyncRooms.
+// Libellé : le nom saisi s'il y en a un, sinon « AESH » (une seule) ou « AESH1 », « AESH2 »…
+function aeshLabel(idx, total, cls) {
+  const a = (cls || (typeof getCls === 'function' ? getCls() : null))?.aesh?.[idx];
+  if (a && a.nom && String(a.nom).trim()) return String(a.nom).trim();
   return (total <= 1) ? 'AESH' : `AESH${idx + 1}`;
+}
+function _aeshList(cls) { if (!Array.isArray(cls.aesh)) cls.aesh = []; return cls.aesh; }
+// Nom saisi : sans caractère qui casserait du HTML ou un attribut (le libellé est injecté
+// à de nombreux endroits historiques qui ne l'échappaient pas — il était constant).
+function _aeshSafeName(v) { return String(v || '').replace(/[<>&"`\\]/g, '').replace(/'/g, '’').replace(/\s+/g, ' ').trim().slice(0, 30); }
+function _aeshSyncRooms(cls) {
+  if (!cls) return;
+  const list = _aeshList(cls), n = list.length;
+  for (const room of Object.values(cls.rooms || {})) {
+    if (!room || typeof room !== 'object') continue;
+    room.aeshCount = n;
+    room.aeshLinks = {};
+    list.forEach((a, i) => { room.aeshLinks[i] = (a.sids || []).slice(); });
+    if (!room.aeshSeating || typeof room.aeshSeating !== 'object') room.aeshSeating = {};
+    for (const k of Object.keys(room.aeshSeating)) if (!(+k < n)) delete room.aeshSeating[k];
+  }
+}
+// Conversion des fichiers antérieurs (réglage par salle) : autant d'AESH que dans la salle
+// qui en avait le plus ; élèves accompagnés = union des salles (un élève n'a qu'une AESH :
+// la première rencontrée l'emporte). Les positions restent propres à chaque salle.
+function _aeshMigrateClass(cls) {
+  if (!cls || typeof cls !== 'object') return;
+  const members = new Set(cls.eleves || []);
+  if (Array.isArray(cls.aesh)) {
+    const seen = new Set();
+    cls.aesh = cls.aesh.filter(a => a && typeof a === 'object').map(a => ({
+      id: a.id || uid(), nom: _aeshSafeName(a.nom),
+      sids: (Array.isArray(a.sids) ? a.sids : []).filter(sid => members.has(sid) && !seen.has(sid) && seen.add(sid)),
+    }));
+  } else {
+    const rooms = Object.values(cls.rooms || {}).filter(r => r && typeof r === 'object');
+    const n = Math.max(0, ...rooms.map(r => +r.aeshCount || 0));
+    const seen = new Set(), list = [];
+    for (let i = 0; i < n; i++) {
+      const sids = [];
+      for (const r of rooms) for (const sid of ((r.aeshLinks || {})[i] || [])) {
+        if (members.has(sid) && !seen.has(sid)) { seen.add(sid); sids.push(sid); }
+      }
+      list.push({ id: uid(), nom: '', sids });
+    }
+    cls.aesh = list;
+  }
+  _aeshSyncRooms(cls);
+}
+// Index de l'AESH (au niveau de la classe) qui accompagne sid, ou -1.
+function _aeshOf(cls, sid) { return _aeshList(cls).findIndex(a => (a.sids || []).includes(sid)); }
+// Lie sid à l'AESH idx (−1 = à aucune). Un élève n'a qu'une AESH. Sans undo ni save.
+function _aeshSetLink(cls, sid, idx) {
+  const list = _aeshList(cls);
+  for (const a of list) a.sids = (a.sids || []).filter(x => x !== sid);
+  if (idx >= 0 && list[idx]) list[idx].sids.push(sid);
+  _aeshSyncRooms(cls);
+}
+// Supprime l'AESH i : les positions des suivantes sont décalées dans chaque salle.
+function _aeshRemoveAt(cls, i) {
+  const list = _aeshList(cls);
+  if (!list[i]) return;
+  list.splice(i, 1);
+  for (const room of Object.values(cls.rooms || {})) {
+    if (!room?.aeshSeating) continue;
+    const ns = {};
+    for (const [k, v] of Object.entries(room.aeshSeating)) { const n = +k; if (n < i) ns[n] = v; else if (n > i) ns[n - 1] = v; }
+    room.aeshSeating = ns;
+  }
+  _aeshSyncRooms(cls);
 }
 
 // Renvoie l'index de l'AESH placée à la key 'r,c' dans la salle active de cls, ou -1 si aucune.
@@ -8552,6 +8641,8 @@ function postLoadHook() {
   // Filet de sécurité : détecte et répare les références orphelines (élèves fantômes,
   // pointeurs de salle/pool/classe invalides) issues d'anciens bugs, d'imports partiels
   // ou de fichiers de sync abîmés. Conservateur (ne supprime que ce qui est mort).
+  // AESH par classe (v2.93.0) — après la migration des salles, avant l'audit.
+  for (const c of Object.values(S.classes || {})) { try { _aeshMigrateClass(c); } catch (e) { console.warn('AESH : migration ignorée', e); } }
   try { _auditState({ repair: true }); } catch (e) { console.warn('Audit intégrité ignoré :', e); }
   // GC du pool S.seatingSnapshots : les hashes ne sont jamais retirés à la
   // suppression d'un appel / d'une éval / d'une classe — on ne garde que ceux
@@ -10313,6 +10404,7 @@ const _MODAL_RERENDER = {
   'mtags':             () => renderTagsModal(),
   'mtagbulk':          () => renderTagBulkModal(),
   'mlinks':            () => renderUserLinks(),
+  'maesh':             () => renderAeshModal(),
   'moverview':         () => renderOverview(),
   'mattStats':         () => renderAttStats(),
   'matt':              () => renderAttendanceList(),
@@ -10816,20 +10908,16 @@ function ctxSetAesh(idx) {
   if (idx >= 0 && !aeshIndices(room).includes(idx)) return;   // AESH inexistante dans cette salle
   if (aeshHelpingSid(cls, sid) === idx) return;
   pushUndo();
-  room.aeshLinks = room.aeshLinks || {};
-  for (const k of Object.keys(room.aeshLinks)) room.aeshLinks[k] = (room.aeshLinks[k] || []).filter(x => x !== sid);
-  if (idx >= 0) { if (!Array.isArray(room.aeshLinks[idx])) room.aeshLinks[idx] = []; room.aeshLinks[idx].push(sid); }
+  _aeshSetLink(cls, sid, idx);
   save();
   renderTeacherGrid();
   const st = S.eleves[sid];
-  toast(idx >= 0 ? `🤝 ${st?.prenom} accompagné·e par ${aeshLabel(idx, aeshIndices(room).length)}` : `🤝 ${st?.prenom} n'est plus lié·e à une AESH`);
+  toast(idx >= 0 ? `🤝 ${st?.prenom} accompagné·e par ${aeshLabel(idx, aeshIndices(room).length, cls)}` : `🤝 ${st?.prenom} n'est plus lié·e à une AESH`);
 }
 function ctxAeshConfig() {
   const cls = ctxTarget?.cls;
   closeCtxMenu();
-  switchTab('config');
-  if (cls?.activeRoom) cfgSelectSalle(cls.activeRoom);
-  setCfgMode('aesh');
+  openAeshModal(cls);
 }
 function ctxOpenEdit() { if (!ctxTarget) return; const sid = ctxTarget.sid; closeCtxMenu(); openEdit(sid); }
 function ctxToggleAgrandissement() { _ctxToggleStatus('agrandissement', 'Agrandissement', '📄'); }
@@ -11212,6 +11300,8 @@ function _ficheIpad(key) {
 function _ficheConfig(mode, salleId) {
   const sid = _ficheSid, s = S.eleves[sid], cls = s ? S.classes[s.classe_id] : null;
   if (mode === 'contraintes') { _ficheCstrPlan(salleId); return; }
+  // AESH : réglage de la CLASSE (v2.93.0) — fenêtre AESH en parenthèse de la fiche.
+  if (mode === 'aesh') { const c = (_rw && S.classes[_rw.classId]) || cls; if (c) _rwParenthesis('maesh', () => openAeshModal(c)); return; }
   closeMod2('mrw');
   if (cls && S.cur !== cls.id) switchClass(cls.id);
   if (cls && salleId && cls.rooms?.[salleId] && cls.activeRoom !== salleId) setActiveRoom(salleId);
@@ -12215,6 +12305,7 @@ function openVirtualClassModal(id, opts) {
     return toast('⚠️ Crée au moins une classe réelle avant de créer une classe recomposée.', 'warn');
   }
   _mvcEditingId = id || null;
+  { const b = document.getElementById('mvc-aesh-box'); if (b) b.style.display = 'none'; }   // affichée en modification seulement
   _mvcSelected = new Set();
   _mvcBulkSel = new Set();
   // Membership : copie depuis cls.membership si édition (deep clone simple), sinon vide
@@ -12257,6 +12348,7 @@ function openVirtualClassModal(id, opts) {
     idInputEl.value= id;
     fromTagInp.value = cls.fromTag || '';
     _mvcRenderDisciplineChecks(cls);
+    { const b = document.getElementById('mvc-aesh-box'); if (b) { b.style.display = ''; document.getElementById('mvc-aesh-summary').innerHTML = _aeshSummaryHTML(cls); } }
     for (const sid of (cls.eleves || [])) _mvcSelected.add(sid);
   } else {
     titleEl.textContent = '🧬 Nouvelle classe recomposée';
@@ -12840,6 +12932,9 @@ function mvcSave() {
       }
     }
     cls.eleves = sids;
+    // AESH : seuls les membres restants peuvent rester accompagnés
+    for (const a of _aeshList(cls)) a.sids = (a.sids || []).filter(x => newSet.has(x));
+    _aeshSyncRooms(cls);
     // Appartenance per-période : ne garder que les entrées des sids encore présents
     cls.membership = {};
     for (const sid of sids) {
@@ -16199,6 +16294,7 @@ function editClass(id) {
   document.getElementById('ec-niveau').innerHTML = _levelSelectHTML(LEVEL_CODES.includes(cls.niveau) ? cls.niveau : null, cls.nom);
   _ecRenderSalleChecks(cls);
   _ecRenderDisciplineChecks(cls);
+  _ecRenderAeshSummary(cls);
   openMod('mce');   // jamais classList.add : openMod pose role/aria-modal, le piège de focus et l'autofocus
 }
 
@@ -17323,6 +17419,7 @@ function _purgeStudentRefs(id) {
       });
     }
     if (c.membership) delete c.membership[id];
+    if (Array.isArray(c.aesh)) { for (const a of c.aesh) if (a && Array.isArray(a.sids)) a.sids = a.sids.filter(x => x !== id); _aeshSyncRooms(c); }
     if (c.stuGroups) delete c.stuGroups[id];
   }
   // Évaluations : notes, remarques élève, niveaux de passation
@@ -17477,6 +17574,9 @@ function _moveStudentToClass(stu, newClsId) {
     }
   }
 
+  // 1 bis) Retire l'élève des AESH de l'ancienne classe
+  if (oldCls && Array.isArray(oldCls.aesh)) _aeshSetLink(oldCls, stu.id, -1);
+
   // 2) Retire de cls.eleves de l'ancienne classe
   if (oldCls && Array.isArray(oldCls.eleves)) {
     oldCls.eleves = oldCls.eleves.filter(eid => eid !== stu.id);
@@ -17523,6 +17623,17 @@ function openEdit(id) {
       : '';
   }
   document.getElementById('es-delegue').value        = s.delegue || '';
+  { // AESH de la classe de l'élève (v2.93.0)
+    const ac = S.classes[s.classe_id], sel = document.getElementById('es-aesh');
+    if (sel) {
+      const list = ac ? _aeshList(ac) : [];
+      sel.innerHTML = '<option value="-1">— Aucune —</option>'
+        + list.map((a, i) => `<option value="${i}">🧑‍🏫 ${_esc(aeshLabel(i, list.length, ac))}</option>`).join('')
+        + '<option value="new">＋ Nouvelle AESH</option>';
+      sel.value = String(ac ? _aeshOf(ac, s.id) : -1);
+      sel.dataset.cls = ac ? ac.id : '';
+    }
+  }
   _renderEditTags(s);
   // Peuple le sélecteur de classe (uniquement les classes réelles, jamais les recomposées)
   const clsSel = document.getElementById('es-cls');
@@ -17589,8 +17700,17 @@ function saveEdit() {
   s.arrivalDate   = _arr || null;
   s.departureDate = _dep || null;
 
+  // AESH (v2.93.0) : appliquée à la classe où le menu a été rempli, si l'élève y est toujours.
+  const _aeshSel = document.getElementById('es-aesh');
+  const _aeshVal = _aeshSel?.value, _aeshClsId = _aeshSel?.dataset.cls;
   // Suite du save (commune au cas « changement de classe » et au cas normal)
   const _finish = () => {
+    { const ac = S.classes[_aeshClsId];
+      if (ac && s.classe_id === ac.id && _aeshVal != null) {
+        let idx = _aeshVal === 'new' ? -2 : parseInt(_aeshVal, 10);
+        if (idx === -2) { _aeshList(ac).push({ id: uid(), nom: '', sids: [] }); idx = _aeshList(ac).length - 1; }
+        if (Number.isFinite(idx) && idx !== _aeshOf(ac, s.id)) _aeshSetLink(ac, s.id, idx);
+      } }
     // Départ effectif → libère la place de l'élève sur le plan (sa chaise redevient
     // libre). Sans effet si le départ est dans le futur : il garde sa place jusqu'à
     // son dernier jour de présence.
@@ -21726,8 +21846,16 @@ function renderUnplaced() {
 
   if (search) search.style.display = allUnplaced.length ? '' : 'none';
 
+  // AESH de la classe pas encore placées dans la salle affichée (v2.93.0) : on les glisse
+  // sur une table comme un élève. Hors filtre de groupe, comme sur le plan.
+  const _aRoom = activeRoomData(cls), _aList = _aeshList(cls);
+  const aeshHTML = _aList.map((a, i) => i).filter(i => !(_aRoom?.aeshSeating || {})[i] && _aeshPresentForFilter(cls, i, groupFilter))
+    .map(i => `<div class="us us-aesh" draggable="true" data-aesh-idx="${i}" ondragstart="startDragAeshUnplaced(event, ${i})" ondragend="this.classList.remove('dragging')" title="Glisse cette AESH sur une table du plan">🧑‍🏫 ${_esc(aeshLabel(i, _aList.length, cls))} <span class="rw-muted" style="font-size:.85em">— à placer</span></div>`).join('');
+  const _attachAesh = () => el.querySelectorAll('.us-aesh').forEach(u => _tdAttach(u, () => ({ srcType: 'aesh', aeshIdx: +u.dataset.aeshIdx, fromKey: null }), {}));
+
   if (!allUnplaced.length) {
-    el.innerHTML = '<p style="color:var(--pencil);font-size:.85em">Tous placés ✓</p>';
+    el.innerHTML = aeshHTML + '<p style="color:var(--pencil);font-size:.85em">Tous placés ✓</p>';
+    _attachAesh();
     return;
   }
 
@@ -21741,7 +21869,7 @@ function renderUnplaced() {
     return;
   }
 
-  el.innerHTML = list.map(s => {
+  el.innerHTML = aeshHTML + list.map(s => {
     // En classe recomposée, montre la classe d'origine si différente
     const otherClass = (isVirtual && s.classe_id !== cls.id) ? S.classes[s.classe_id] : null;
     const otherClsBdg = otherClass
@@ -21779,9 +21907,10 @@ function renderUnplaced() {
   // Glisser tactile (Touch Events) sur chaque élève non placé : appui maintenu →
   // glisser vers une case du plan pour le placer (ou re-déposer dans la liste).
   // Un tap simple reste géré par onclick=unplToggleSelect (sélection multi).
-  el.querySelectorAll('.us').forEach(usEl => {
+  el.querySelectorAll('.us:not(.us-aesh)').forEach(usEl => {
     _tdAttach(usEl, () => ({ srcType: 'unplaced', sid: usEl.dataset.sid }), {});
   });
+  _attachAesh();
   // Purge les sids sélectionnés qui ne sont plus non-placés (= ils viennent
   // d'être placés ailleurs entre 2 renders) puis ré-applique le visuel.
   const stillUnplaced = new Set(list.map(s => s.id));
@@ -21852,6 +21981,123 @@ function renderAttendanceSide() {
   html += `</div>`;
 
   el.innerHTML = html;
+}
+
+// ═══ Fenêtre AESH de la classe (v2.93.0) ═══
+var _aeshModalCls = null;
+function openAeshModal(clsOrId) {
+  const cls = (typeof clsOrId === 'string' ? S.classes[clsOrId] : clsOrId) || getCls();
+  if (!cls) { toast('⚠️ Choisis d\'abord une classe.', 'warn'); return; }
+  _aeshModalCls = cls.id;
+  renderAeshModal();
+  openMod('maesh');
+}
+function _aeshModalClass() { return S.classes[_aeshModalCls] || null; }
+function renderAeshModal() {
+  const cls = _aeshModalClass();
+  const body = document.getElementById('maesh-body');
+  if (!body) return;
+  if (!cls) { body.innerHTML = ''; return; }
+  const t = document.getElementById('maesh-title');
+  if (t) t.textContent = '🧑‍🏫 AESH — ' + cls.nom;
+  const list = _aeshList(cls), n = list.length;
+  const studs = (cls.eleves || []).filter(sid => S.eleves[sid] && _stuActiveOn(S.eleves[sid])).sort(_rwByName);
+  const nm = sid => { const s = S.eleves[sid]; return s ? `${(s.nom || '').toUpperCase()} ${s.prenom || ''}`.trim() : '?'; };
+  const rooms = Object.keys(cls.rooms || {}).filter(rid => S.salles?.[rid]);
+  if (!n) {
+    body.innerHTML = _emptyStateHTML('🧑‍🏫', 'Aucune AESH dans cette classe', 'Clique sur <strong>＋ Ajouter une AESH</strong>, puis indique les élèves qu\'elle accompagne.');
+    return;
+  }
+  body.innerHTML = list.map((a, i) => {
+    const chips = (a.sids || []).map(sid => `<span class="aesh-chip">${_esc(nm(sid))}<button type="button" onclick="_aeshUnlink('${_escJsAttr(sid)}')" title="Retirer cet élève" aria-label="Retirer ${_escAttr(nm(sid))}">✕</button></span>`).join('');
+    const opts = studs.filter(sid => !(a.sids || []).includes(sid)).map(sid => {
+      const other = _aeshOf(cls, sid);
+      return `<option value="${_escAttr(sid)}">${_esc(nm(sid))}${other >= 0 ? ' — avec ' + _esc(aeshLabel(other, n, cls)) : ''}</option>`;
+    }).join('');
+    const place = rooms.map(rid => {
+      const k = (cls.rooms[rid].aeshSeating || {})[i];
+      return `<span class="aesh-place${k ? '' : ' todo'}" title="${k ? 'Placée' : 'À placer depuis la liste des non placés du Plan'}">${_esc(S.salles[rid].nom)} : ${k ? 'placée' : 'à placer'}</span>`;
+    }).join('');
+    return `<div class="aesh-row">
+      <input type="text" class="aesh-name" maxlength="30" value="${_escAttr(a.nom || '')}" placeholder="${_escAttr(n <= 1 ? 'AESH' : 'AESH' + (i + 1))}" oninput="_aeshSetName(${i}, this.value)" aria-label="Nom de l'AESH (facultatif)" title="Nom (facultatif) — affiché sur le plan">
+      <div class="aesh-stus">${chips || '<span class="rw-muted" style="font-size:.85em">aucun élève</span>'}
+        ${opts ? `<select onchange="_aeshLinkFromSelect(${i}, this)" aria-label="Ajouter un élève accompagné"><option value="">＋ élève…</option>${opts}</select>` : ''}</div>
+      <button type="button" class="btn btn-g btn-sm" onclick="_aeshDelete(${i})" title="Supprimer cette AESH" aria-label="Supprimer cette AESH">🗑</button>
+      <div class="aesh-places">${place}</div>
+    </div>`;
+  }).join('');
+}
+// Surfaces qui affichent les AESH, rafraîchies après chaque changement (la fenêtre, elle,
+// est re-rendue par l'appelant — sauf pour le nom, re-rendre détruirait le champ saisi).
+function _aeshRefreshSurfaces() {
+  try { if (document.getElementById('tab-plan')?.classList.contains('on')) renderTeacherGrid(); } catch (e) {}
+  try { if (document.getElementById('tab-config')?.classList.contains('on')) renderConfigGrid(); } catch (e) {}
+  try { const cls = _aeshModalClass(); if (cls) { _ecRenderAeshSummary(cls); _mvcRenderAeshSummary(cls); } } catch (e) {}
+}
+var _aeshNameTimer = null;
+function _aeshSetName(i, v) {
+  const cls = _aeshModalClass(); const a = cls && _aeshList(cls)[i];
+  if (!a) return;
+  _evalArmUndo();
+  a.nom = _aeshSafeName(v);
+  clearTimeout(_aeshNameTimer);
+  _aeshNameTimer = setTimeout(() => { save(); _aeshRefreshSurfaces(); }, 400);
+}
+function _aeshLinkFromSelect(i, sel) {
+  const cls = _aeshModalClass(), sid = sel.value;
+  if (!cls || !sid) return;
+  pushUndo();
+  _aeshSetLink(cls, sid, i);
+  save(); renderAeshModal(); _aeshRefreshSurfaces();
+}
+function _aeshUnlink(sid) {
+  const cls = _aeshModalClass(); if (!cls) return;
+  pushUndo();
+  _aeshSetLink(cls, sid, -1);
+  save(); renderAeshModal(); _aeshRefreshSurfaces();
+}
+function _aeshAddNew() {
+  const cls = _aeshModalClass(); if (!cls) return;
+  pushUndo();
+  _aeshList(cls).push({ id: uid(), nom: '', sids: [] });
+  _aeshSyncRooms(cls);
+  save(); renderAeshModal(); _aeshRefreshSurfaces();
+  const inputs = document.querySelectorAll('#maesh-body .aesh-name');
+  inputs[inputs.length - 1]?.focus();
+}
+function _aeshDelete(i) {
+  const cls = _aeshModalClass(); const a = cls && _aeshList(cls)[i];
+  if (!a) return;
+  const placed = Object.values(cls.rooms || {}).some(r => r?.aeshSeating?.[i]);
+  const go = () => { pushUndo(); _aeshRemoveAt(cls, i); save(); renderAeshModal(); _aeshRefreshSurfaces(); };
+  if (!(a.sids || []).length && !placed) return go();
+  _uiConfirm({ title: '🗑 Supprimer cette AESH', okLabel: 'Supprimer', okClass: 'btn-d',
+    message: `Supprimer ${aeshLabel(i, _aeshList(cls).length, cls)} ?${(a.sids || []).length ? `\nElle accompagne ${a.sids.length} élève(s).` : ''}${placed ? '\nSa place sur le plan sera libérée.' : ''}\n\nAnnulable par Ctrl+Z.`,
+    onOk: go });
+}
+// Résumés dans Modifier la classe et Classe recomposée (le réglage se fait dans la fenêtre AESH).
+function _aeshSummaryHTML(cls) {
+  const list = _aeshList(cls), n = list.length;
+  if (!n) return '<span class="rw-muted">Aucune AESH.</span>';
+  return list.map((a, i) => `<div>🧑‍🏫 <strong>${_esc(aeshLabel(i, n, cls))}</strong> <span class="rw-muted">— ${(a.sids || []).length ? (a.sids || []).map(sid => _esc(S.eleves[sid]?.prenom || '?')).join(', ') : 'aucun élève'}</span></div>`).join('');
+}
+function _ecRenderAeshSummary(cls) {
+  const el = document.getElementById('ec-aesh-summary');
+  if (el && document.getElementById('ec-id')?.value === cls.id) el.innerHTML = _aeshSummaryHTML(cls);
+}
+function _mvcRenderAeshSummary(cls) {
+  const box = document.getElementById('mvc-aesh-box'), el = document.getElementById('mvc-aesh-summary');
+  if (!box || !el) return;
+  const editing = cls && _mvcEditingId === cls.id;
+  if (cls && !editing) return;
+  box.style.display = editing ? '' : 'none';
+  if (editing) el.innerHTML = _aeshSummaryHTML(cls);
+}
+// Glisser une AESH non placée depuis la liste des non placés (Plan).
+function startDragAeshUnplaced(e, idx) {
+  if (_tdState) { e.preventDefault(); return; }
+  drag = { type: 'aesh', aeshIdx: idx, fromKey: null };
+  e.currentTarget?.classList?.add('dragging');
 }
 
 function startDragUnplaced(e, sid) {
@@ -21955,12 +22201,12 @@ function dropAeshOnCell(cls, toKey) {
     if (room.aeshSeating[k] === toKey && parseInt(k, 10) !== idx) { otherIdxAtTarget = parseInt(k, 10); break; }
   }
   if (otherIdxAtTarget >= 0) {
-    room.aeshSeating[otherIdxAtTarget] = fromKey;
+    if (fromKey) room.aeshSeating[otherIdxAtTarget] = fromKey;
+    else delete room.aeshSeating[otherIdxAtTarget];   // venue des non placés : l'autre y retourne
   }
   room.aeshSeating[idx] = toKey;
   save();
   renderTeacherGrid();
-  if (cfgMode === 'aesh') { renderAeshConfigBar(); renderConfigGrid(); }
 }
 
 // Cascade : place les sids du lot sur des cellules libres successives à partir
@@ -21990,6 +22236,13 @@ function _placeBatchCascade(cls, sids, anchorKey) {
 function dropToUnplaced(e) {
   e.preventDefault();
   document.getElementById('unpl').classList.remove('drop-zone');
+  if (drag && drag.type === 'aesh' && drag.fromKey) {
+    const cls = getCls(), room = cls && activeRoomData(cls);
+    if (room?.aeshSeating && room.aeshSeating[drag.aeshIdx] != null) {
+      pushUndo(); delete room.aeshSeating[drag.aeshIdx]; save(); renderTeacherGrid();
+    }
+    drag = null; return;
+  }
   if (!drag || drag.type !== 'placed') { drag = null; return; }
   const cls = getCls();
   if (!cls) return;
@@ -22152,6 +22405,8 @@ function renderStudentView() {
 // CONFIG GRID
 // ═══════════════════════════════════════════════════════════
 function setCfgMode(mode, chip) {
+  // v2.93.0 : les AESH se règlent par classe (fenêtre AESH) et se placent sur le Plan.
+  if (mode === 'aesh') { openAeshModal(getCls()); return; }
   cfgMode = mode;
   document.querySelectorAll('#tab-config .gchip').forEach(c => c.classList.remove('on'));
   if (chip) {
@@ -22169,12 +22424,6 @@ function setCfgMode(mode, chip) {
   document.getElementById('cfg-hint-contraintes').style.display = mode==='contraintes' ? '' : 'none';
   const hintIlots = document.getElementById('cfg-hint-ilots');
   if (hintIlots) hintIlots.style.display = mode==='ilots' ? '' : 'none';
-  const hintAesh = document.getElementById('cfg-hint-aesh');
-  if (hintAesh) hintAesh.style.display = mode==='aesh' ? '' : 'none';
-  // Toolbar AESH
-  const aBar = document.getElementById('cfg-aesh-bar');
-  if (aBar) aBar.style.display = mode==='aesh' ? 'flex' : 'none';
-  if (mode === 'aesh') { _cfgEnsureAeshActive(); renderAeshConfigBar(); }
   // Affiche la barre de sélection d'élève + section paires uniquement en mode Contraintes
   const cBar = document.getElementById('cfg-contraintes-bar');
   const pSec = document.getElementById('cfg-pairs-section');
@@ -22292,27 +22541,6 @@ function _renderCfgBulkBar() {
     acts.innerHTML = `
       <button class="btn btn-d btn-sm" onclick="cfgIlotApplyToSelection('add')" title="Ajoute ces cases à l'îlot ${lbl} (les retire d'un éventuel autre îlot)" style="background:#c0392b;color:#fff">✓ Affecter à ${lbl}</button>
       <button class="btn btn-g btn-sm" onclick="cfgIlotApplyToSelection('remove')" title="Retire ces cases de tout îlot">✗ Retirer de l'îlot</button>`;
-  } else if (cfgMode === 'aesh') {
-    const cls = getCls();
-    const room = cls ? selectedRoomFor(cls) : null;
-    const count = (room && room.aeshCount) || 0;
-    if (count === 0) {
-      acts.innerHTML = '<span style="color:#c0392b;font-size:.85em">⚠️ Définis d\'abord le nombre d\'AESH (bouton + ci-dessus).</span>';
-      return;
-    }
-    if (_cfgSelected.size > 1) {
-      acts.innerHTML = '<span style="color:#c0392b;font-size:.85em">⚠️ Sélectionne UNE seule case pour y placer une AESH.</span>';
-      return;
-    }
-    const total = count;
-    let html = '';
-    for (let i = 0; i < total; i++) {
-      const lbl = aeshLabel(i, total);
-      const placed = (room.aeshSeating || {})[i];
-      const titleSuffix = placed ? ` (actuellement à ${placed})` : ' (non placée)';
-      html += `<button class="btn btn-sm" style="background:#c2185b;color:#fff" onclick="cfgAeshPlaceSelection(${i})" title="Placer ${lbl} sur la case sélectionnée${titleSuffix}">📍 Placer ${lbl}</button> `;
-    }
-    acts.innerHTML = html;
   }
 }
 function cfgApplyToSelection(kind, value) {
@@ -22345,176 +22573,8 @@ function cfgApplyToSelection(kind, value) {
 // ─── Mode AESH dans Config Salle (Phase 1) ────────────────────────────
 // État UI : index AESH actif (sert à indiquer dans la barre de sélection
 // laquelle on s'apprête à placer si plusieurs AESH).
-let _cfgAeshActiveIdx = 0;
-
-// Garantit que _cfgAeshActiveIdx pointe sur une AESH valide (0 si aucune).
-function _cfgEnsureAeshActive() {
-  const cls = getCls();
-  const room = cls ? selectedRoomFor(cls) : null;
-  const n = (room && room.aeshCount) || 0;
-  if (_cfgAeshActiveIdx >= n) _cfgAeshActiveIdx = 0;
-}
-
-// + ou − sur le compteur d'AESH (delta ±1). Min 0, max 6 (limite arbitraire).
-function cfgAeshSetCount(delta) {
-  const cls = getCls();
-  if (!cls) return;
-  const room = selectedRoomFor(cls);
-  if (!room) { toast('⚠️ Cette salle n\'est pas une salle de la classe — rattache-la d\'abord (bouton ➕ Rattacher).', 'warn'); return; }
-  const cur = room.aeshCount || 0;
-  const next = Math.max(0, Math.min(6, cur + (delta > 0 ? 1 : -1)));
-  if (next === cur) return;
-  pushUndo();
-  // Si on retire des AESH, nettoyer leur placement et leurs liaisons (les indices >= next)
-  if (next < cur) {
-    for (let i = next; i < cur; i++) {
-      delete (room.aeshSeating || {})[i];
-      delete (room.aeshLinks   || {})[i];
-    }
-  }
-  room.aeshCount = next;
-  if (_cfgAeshActiveIdx >= next) _cfgAeshActiveIdx = Math.max(0, next - 1);
-  save();
-  renderAeshConfigBar();
-  renderConfigGrid();
-  if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
-  toast(next === 0 ? '🧑‍🏫 Aucune AESH dans cette salle' : `🧑‍🏫 ${next} AESH configurée${next>1?'s':''}`);
-}
-
-// Retire l'AESH d'index idx de sa place actuelle (sans la supprimer du compteur).
-// Pratique pour faire le ménage avant un mélange aléatoire qui replacera tout.
-function cfgAeshUnplace(idx) {
-  const cls = getCls();
-  if (!cls) return;
-  const room = selectedRoomFor(cls);
-  if (!room || !room.aeshSeating) return;
-  if (!room.aeshSeating[idx]) return; // déjà non placée
-  pushUndo();
-  delete room.aeshSeating[idx];
-  save();
-  renderAeshConfigBar();
-  renderConfigGrid();
-  if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
-  const total = room.aeshCount || 0;
-  toast(`✕ ${aeshLabel(idx, total)} retirée de sa place`);
-}
-
-// Place l'AESH d'index idx sur la case actuellement sélectionnée (sélection unique).
-function cfgAeshPlaceSelection(idx) {
-  const cls = getCls();
-  if (!cls) return;
-  const room = selectedRoomFor(cls);
-  if (!room) return;
-  if (_cfgSelected.size !== 1) {
-    toast('⚠️ Sélectionne UNE seule case pour y placer l\'AESH.', 'warn');
-    return;
-  }
-  const key = [..._cfgSelected][0];
-  const salle = selectedSalle();
-  if (salle && (salle.positions_vides || []).includes(key)) {
-    toast('⚠️ Une AESH doit être placée sur une case avec table.', 'warn');
-    return;
-  }
-  pushUndo();
-  if (!room.aeshSeating) room.aeshSeating = {};
-  // Si une autre AESH était déjà là, on l'écarte (= la déplace, on perd son placement)
-  for (const otherIdx of Object.keys(room.aeshSeating)) {
-    if (room.aeshSeating[otherIdx] === key && parseInt(otherIdx, 10) !== idx) {
-      delete room.aeshSeating[otherIdx];
-    }
-  }
-  room.aeshSeating[idx] = key;
-  // Si un élève occupe cette case, on le retire (il retournera dans non-placés)
-  if (cls.seating && cls.seating[key]) delete cls.seating[key];
-  save();
-  _cfgAeshActiveIdx = idx;
-  cfgClearSelection();
-  renderAeshConfigBar();
-  renderConfigGrid();
-  if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
-  const total = room.aeshCount || 0;
-  toast(`📍 ${aeshLabel(idx, total)} placée à ${key}`);
-}
-
-// Toggle de la liaison élève↔AESH (chip cliquable dans la liste de la barre AESH).
-function cfgAeshToggleLink(idx, sid) {
-  const cls = getCls();
-  if (!cls) return;
-  const room = selectedRoomFor(cls);
-  if (!room) return;
-  if (!room.aeshLinks) room.aeshLinks = {};
-  if (!Array.isArray(room.aeshLinks[idx])) room.aeshLinks[idx] = [];
-  pushUndo();
-  const arr = room.aeshLinks[idx];
-  const has = arr.includes(sid);
-  if (has) {
-    room.aeshLinks[idx] = arr.filter(s => s !== sid);
-  } else {
-    // Un élève ne peut être aidé que par UNE AESH à la fois → retirer des autres listes
-    for (const otherIdx of Object.keys(room.aeshLinks)) {
-      if (parseInt(otherIdx, 10) !== idx) {
-        room.aeshLinks[otherIdx] = (room.aeshLinks[otherIdx] || []).filter(s => s !== sid);
-      }
-    }
-    room.aeshLinks[idx].push(sid);
-  }
-  save();
-  renderAeshConfigBar();
-  renderConfigGrid();
-  if (typeof renderTeacherGrid === 'function') renderTeacherGrid();
-}
-
-// Render de la barre AESH (compteur + liste détaillée par AESH avec liaisons élèves)
-function renderAeshConfigBar() {
-  const bar = document.getElementById('cfg-aesh-bar');
-  if (!bar || cfgMode !== 'aesh') return;
-  const cls = getCls();
-  const room = cls ? selectedRoomFor(cls) : null;
-  const cntEl = document.getElementById('cfg-aesh-count');
-  const listEl = document.getElementById('cfg-aesh-list');
-  const pickEl = document.getElementById('cfg-aesh-active-pick');
-  if (!cls || !room) {
-    if (cntEl) cntEl.textContent = '0';
-    if (listEl) listEl.innerHTML = '<span style="color:var(--pencil);font-size:.85em;font-style:italic">Cette salle n\'est pas une salle de cette classe — utilise le bouton « ➕ Rattacher » au-dessus.</span>';
-    if (pickEl) pickEl.textContent = '';
-    return;
-  }
-  const total = room.aeshCount || 0;
-  if (cntEl) cntEl.textContent = String(total);
-  if (pickEl) pickEl.textContent = total > 0 ? `(les AESH sont placées via la grille : sélectionne une case puis clique « 📍 Placer ${aeshLabel(0, total)} »)` : '';
-  if (!listEl) return;
-  if (total === 0) {
-    listEl.innerHTML = '<span style="color:var(--danger-fg);font-size:.85em;font-style:italic">Aucune AESH dans cette salle. Clique sur <strong>+</strong> pour en ajouter une.</span>';
-    return;
-  }
-  // Liste des élèves de la classe (triés)
-  const eleves = (cls.eleves || []).map(id => S.eleves[id]).filter(Boolean)
-    .sort((a,b) => a.nom.localeCompare(b.nom, 'fr') || a.prenom.localeCompare(b.prenom, 'fr'));
-  let html = '';
-  for (let i = 0; i < total; i++) {
-    const lbl = aeshLabel(i, total);
-    const placed = (room.aeshSeating || {})[i];
-    const links = (room.aeshLinks || {})[i] || [];
-    const placedLbl = placed
-      ? `<span style="background:#fff;border:1px solid #c2185b;color:#880e4f;padding:1px 6px;border-radius:9px;font-size:.82em;font-weight:600">📍 ${placed}</span>
-         <button class="btn btn-g btn-sm" onclick="cfgAeshUnplace(${i})" title="Retirer ${_escAttr(lbl)} de sa place (l'AESH reste configurée mais sans position)" style="padding:1px 6px;font-size:.78em">✕ Retirer</button>`
-      : `<span style="color:#c0392b;font-size:.82em">⚠️ non placée</span>`;
-    const chips = eleves.map(s => {
-      const on = links.includes(s.id);
-      const cls = on ? 'aesh-link-chip on' : 'aesh-link-chip';
-      return `<button type="button" class="btn btn-sm ${cls}" onclick="cfgAeshToggleLink(${i}, '${s.id}')" style="padding:1px 7px;font-size:.78em;border-radius:10px">${_escAttr(s.nom)} ${_escAttr(s.prenom)}</button>`;
-    }).join(' ');
-    html += `<div class="aesh-link-block" style="border-radius:4px;padding:6px 9px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <strong style="color:#880e4f;font-size:.95em">🧑‍🏫 ${lbl}</strong>
-        ${placedLbl}
-        <span style="margin-left:auto;font-size:.78em;color:var(--pencil)">${links.length} élève${links.length>1?'s':''} aidé${links.length>1?'s':''}</span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:3px">${chips || '<span style="font-size:.8em;color:var(--pencil);font-style:italic">Aucun élève — clique sur les noms ci-dessus pour lier.</span>'}</div>
-    </div>`;
-  }
-  listEl.innerHTML = html;
-}
+// (v2.93.0) Les fonctions de réglage des AESH par salle (cfgAesh*, renderAeshConfigBar) ont
+// été retirées : les AESH se règlent par classe dans la fenêtre AESH (openAeshModal).
 
 // Applique une affectation "place autorisée" ou "place interdite" pour l'élève
 // actuellement sélectionné en mode Contraintes.
@@ -23437,6 +23497,7 @@ function _attachSalleToClass(cls, salleId, makeActive) {
   if (!cls.rooms) cls.rooms = {};
   if (cls.rooms[salleId]) return false;
   cls.rooms[salleId] = _newRoomTemplate();
+  _aeshSyncRooms(cls);
   if (makeActive || !cls.activeRoom || !cls.rooms[cls.activeRoom]) cls.activeRoom = salleId;
   return true;
 }
@@ -23661,7 +23722,7 @@ function deleteSelectedSalle() {
 
 // Modes de Config Salle propres à UNE classe (les autres — Tables, Îlots — valent pour
 // toutes les classes qui utilisent la salle). Audit 2026-10-03, § 3.1.
-var _CFG_CLASS_MODES = ['groupes', 'tags', 'contraintes', 'aesh'];
+var _CFG_CLASS_MODES = ['groupes', 'tags', 'contraintes'];
 function _renderCfgClsName(cls) {
   const el = document.getElementById('cfg-cls-name');
   if (el) el.textContent = cls ? cls.nom : '(aucune classe)';
@@ -23680,7 +23741,6 @@ function _cfgAttachToCurrent() {
   if (!_attachSalleToClass(cls, cfgSelectedSalle, false)) return;
   save();
   renderConfigGrid();
-  if (cfgMode === 'aesh') renderAeshConfigBar();
   toast(`➕ « ${salle.nom} » rattachée à ${cls.nom}.`);
 }
 
@@ -25381,7 +25441,7 @@ function _allQcmLines() {
         const [r, c] = k.split(',').map(Number);
         aeshLines.push({
           orderKey: seatOrder(r, c, cc),
-          line: `${num}\t${aeshLabel(i, aeshTotal)}\t${ident}`,
+          line: `${num}\t${aeshLabel(i, aeshTotal, cls)}\t${ident}`,
         });
       }
       // Fusion des lignes élèves + AESH par ordre de seat
@@ -28954,7 +29014,7 @@ function viewAttendance(id, classId) {
       const total = (room && room.aeshCount) || 0;
       const salleNom = S.salles?.[a.salleId]?.nom || a.salleId;
       // Si l'AESH existe encore dans la salle → label normal ; sinon → libellé "depuis configuré"
-      if (a.idx < total) return `${aeshLabel(a.idx, total)} <span style="color:var(--pencil);font-size:.85em">(${_escAttr(salleNom)})</span>`;
+      if (a.idx < total) return `${_escAttr(aeshLabel(a.idx, total, S.classes[cid]))} <span style="color:var(--pencil);font-size:.85em">(${_escAttr(salleNom)})</span>`;
       return `AESH#${a.idx + 1} <em style="color:var(--pencil);font-size:.85em">(${_escAttr(salleNom)} — config modifiée depuis)</em>`;
     });
     html += `<ul style="padding-left:22px;margin:4px 0">${aeshLabels.map(l => `<li style="padding:3px 0">${l}</li>`).join('')}</ul>`;
@@ -29299,19 +29359,16 @@ function snapshotRestore(id) {
     if (S.eleves[sid] && elevesSet.has(sid)) newSeating[seatKey] = sid;
   }
   cls.seating = newSeating;
-  // AESH (Phase 2) : restaure l'état AESH si présent dans le snapshot.
-  // - aeshCount/aeshSeating/aeshLinks remplacés tels quels
-  // - les liaisons sont filtrées pour ne garder que les sids encore dans la classe
-  if (typeof k.data.aeshCount === 'number') {
+  // AESH : seules les POSITIONS sont restaurées (v2.93.0). Le nombre d'AESH et les élèves
+  // accompagnés sont des réglages de la CLASSE, pas un état du plan : un instantané ne les
+  // remplace pas. Les positions d'AESH qui n'existent plus sont ignorées.
+  if (k.data.aeshSeating && typeof k.data.aeshSeating === 'object') {
     const room = activeRoomData(cls);
     if (room) {
-      room.aeshCount   = k.data.aeshCount || 0;
-      room.aeshSeating = JSON.parse(JSON.stringify(k.data.aeshSeating || {}));
-      const linksFiltered = {};
-      for (const [idxStr, sids] of Object.entries(k.data.aeshLinks || {})) {
-        linksFiltered[idxStr] = (sids || []).filter(s => S.eleves[s] && elevesSet.has(s));
-      }
-      room.aeshLinks = linksFiltered;
+      const n = _aeshList(cls).length;
+      room.aeshSeating = {};
+      for (const [idx, key] of Object.entries(k.data.aeshSeating)) if (+idx < n) room.aeshSeating[idx] = key;
+      _aeshSyncRooms(cls);
     }
   }
   _recordMovesFromDiff(cls, beforeSeat);
@@ -30193,7 +30250,7 @@ function buildTeacherPageHTML(cls) {
       if (nt) { cl += ' nt'; }
       else if (typeof aeshIdxHere === 'number') {
         cl += ' aesh';
-        inner = `<div style="font-size:1.4em">🧑‍🏫</div><div style="font-weight:700;color:#880e4f">${_escAttr(aeshLabel(aeshIdxHere, _aeshTotal))}</div>`;
+        inner = `<div style="font-size:1.4em">🧑‍🏫</div><div style="font-weight:700;color:#880e4f">${_escAttr(aeshLabel(aeshIdxHere, _aeshTotal, cls))}</div>`;
       }
       else if (stu) {
         cl += ' oc';
@@ -30203,7 +30260,7 @@ function buildTeacherPageHTML(cls) {
         const stuG = _grp(stu, cls);
         const aeshIdxLink = _sidToAeshIdx[stu.id];
         const aeshBadge = (typeof aeshIdxLink === 'number')
-          ? `<span class="pinc" style="background:#c2185b;color:#fff;border-radius:3px;padding:0 4px;font-size:.7em;font-weight:700">🤝 ${_escAttr(aeshLabel(aeshIdxLink, _aeshTotal))}</span>`
+          ? `<span class="pinc" style="background:#c2185b;color:#fff;border-radius:3px;padding:0 4px;font-size:.7em;font-weight:700">🤝 ${_escAttr(aeshLabel(aeshIdxLink, _aeshTotal, cls))}</span>`
           : '';
         inner = `${stuG ? `<span class="pgb g${stuG}">G${stuG}</span>` : ''}
                  ${aeshBadge}
@@ -51345,7 +51402,7 @@ function _fichePlaceHTML(s, cls) {
       if (parts.length) ipLbl = parts.join('<br>');
     }
     const aesh = Object.entries(room.aeshLinks || {}).filter(([, l]) => Array.isArray(l) && l.includes(s.id))
-      .map(([idx]) => '🤝 ' + aeshLabel(parseInt(idx, 10), room.aeshCount || 1));
+      .map(([idx]) => '🤝 ' + aeshLabel(parseInt(idx, 10), room.aeshCount || 1, cls));
     const allowedN = (room.allowedFor?.[s.id] || []).length;
     return { rid, salle, sname: salle.nom || rid, key, posLbl, ipLbl, aesh: aesh.join(', ') || dash, allowed: allowedN ? `${allowedN} place(s)` : dash };
   });
@@ -51358,7 +51415,7 @@ function _fichePlaceHTML(s, cls) {
       <tr><th class="rw-kv-k">Salle</th>${head}</tr>
       ${rowOf('Place', c => cell(c.posLbl, isCur ? `_ficheSeatIn('${_escJsAttr(c.rid)}')` : '', `Choisir sa place dans ${c.sname}`))}
       ${_featureEnabled('tablettes') ? rowOf(`Tablette${pool ? ` <span class="rw-muted" style="font-weight:400">(${_escName(pool.nom)})</span>` : ''}`, c => cell(c.ipLbl, isCur && c.key ? `_ficheIpadIn('${_escJsAttr(c.rid)}','${_escJsAttr(c.key)}')` : '', `Changer sa tablette dans ${c.sname}`)) : ''}
-      ${rowOf('AESH', c => cell(c.aesh, `_ficheConfig('aesh','${_escJsAttr(c.rid)}')`, `Régler les AESH de ${c.sname} (Config Salle)`))}
+      ${rowOf('AESH', c => cell(c.aesh, `_ficheConfig('aesh','${_escJsAttr(c.rid)}')`, `Régler les AESH de la classe`))}
       ${rowOf('Places autorisées', c => cell(c.allowed, `_ficheCstrPlan('${_escJsAttr(c.rid)}')`, `Régler ses places autorisées dans ${c.sname} (Plan, mode Contraintes)`))}
     </table></div>
     <div class="fiche-click rw-pairs" onclick="_ficheCstrPlan()" title="Paires d'élèves à séparer (Plan, mode Contraintes)">⛓ À séparer de : ${pairs.length ? pairs.join(', ') : '<span class="rw-muted">personne</span>'} <span class="fiche-click-hint">✎</span></div>`;
@@ -51427,14 +51484,9 @@ function renderRemarkWriter(focusText) {
   // Autres classes (recomposées) où figure l'élève.
   const otherCls = Object.values(S.classes || {}).filter(c => c.id !== cls.id && Array.isArray(c.eleves) && c.eleves.includes(sid));
   if (otherCls.length) meta.push(`<span class="rw-muted" title="Classes où figure aussi l'élève">🧬 ${otherCls.map(c => _esc(c.nom)).join(', ')}</span>`);
-  // AESH liée, dans n'importe quelle salle de la classe.
-  const _aesh = [];
-  for (const [rid, room] of Object.entries(cls.rooms || {})) {
-    for (const [idx, l] of Object.entries(room?.aeshLinks || {})) {
-      if (Array.isArray(l) && l.includes(sid)) _aesh.push(`${aeshLabel(parseInt(idx, 10), room.aeshCount || 1)}${Object.keys(cls.rooms).length > 1 ? ' — ' + (S.salles?.[rid]?.nom || rid) : ''}`);
-    }
-  }
-  if (_aesh.length) meta.push(`<span class="rw-flag rw-flag-aesh" title="${_escAttr(_aesh.join(' · '))}">🤝 accompagné·e par une AESH</span>`);
+  // AESH liée (réglage de la classe, v2.93.0) — cliquable : ouvre la liste des AESH.
+  { const _ai = _aeshOf(cls, sid);
+    if (_ai >= 0) meta.push(`<span class="rw-flag rw-flag-aesh fiche-click" onclick="_ficheConfig('aesh')" title="Régler les AESH de la classe">🤝 accompagné·e par ${_esc(aeshLabel(_ai, _aeshList(cls).length, cls))}</span>`); }
   const tags = (stu.tags || []).map(t => S.tags?.[t]).filter(Boolean)
     .map(t => { const c = _safeColor(t.color); return `<span class="spec-badge" style="background:${c};color:${_contrastTextColor(c)}" title="${_escAttr(t.name || '')}">${_esc(t.abbr)}</span>`; }).join(' ');
   const badges = _ficheSpecBadges(stu);

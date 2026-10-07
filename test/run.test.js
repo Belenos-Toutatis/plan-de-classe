@@ -2820,3 +2820,36 @@ test('jeux de couleurs : chaque couleur porte l\'encre sombre ou le blanc à 4,5
   })()`);
   assert.deepEqual(bad, []);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AESH par classe (v2.93.0)
+// ─────────────────────────────────────────────────────────────────────────────
+test('AESH : conversion d\'un fichier antérieur (réglage par salle) vers la classe', () => {
+  setState({ classes: { C: { id: 'C', nom: 'C', eleves: ['a', 'b', 'c'], activeRoom: 'R1', rooms: {
+      R1: { seating: {}, aeshCount: 1, aeshSeating: { 0: '0,1' }, aeshLinks: { 0: ['a'] } },
+      R2: { seating: {}, aeshCount: 2, aeshSeating: { 1: '2,2' }, aeshLinks: { 0: ['a', 'b'], 1: ['c', 'zz'] } } } } },
+    eleves: { a: { id: 'a' }, b: { id: 'b' }, c: { id: 'c' } }, salles: {} });
+  ev(`_aeshMigrateClass(S.classes.C)`);
+  const c = get('S.classes.C');
+  assert.equal(c.aesh.length, 2);
+  assert.deepEqual(c.aesh.map(a => a.sids), [['a', 'b'], ['c']]);          // union, sid inconnu écarté
+  assert.deepEqual(c.rooms.R1.aeshSeating, { 0: '0,1' });                  // positions conservées par salle
+  assert.deepEqual(c.rooms.R2.aeshSeating, { 1: '2,2' });
+  assert.equal(c.rooms.R1.aeshCount, 2);                                   // copies alignées
+  assert.deepEqual(c.rooms.R1.aeshLinks, { 0: ['a', 'b'], 1: ['c'] });
+});
+test('AESH : un élève n\'a qu\'une AESH ; suppression = positions décalées ; purge élève', () => {
+  setState({ classes: { C: { id: 'C', nom: 'C', eleves: ['a', 'b'], activeRoom: 'R', rooms: { R: { seating: {}, aeshSeating: { 0: '0,0', 1: '0,1', 2: '0,2' } } },
+      aesh: [{ id: 'x', nom: 'Mme <b>X\'Y</b>', sids: ['a'] }, { id: 'y', nom: '', sids: [] }, { id: 'z', nom: '', sids: ['b'] }] } },
+    eleves: { a: { id: 'a' }, b: { id: 'b' } }, salles: {} });
+  ev(`_aeshMigrateClass(S.classes.C)`);
+  assert.equal(get('S.classes.C.aesh[0].nom'), 'Mme bX’Y/b');              // nom assaini
+  ev(`_aeshSetLink(S.classes.C, 'a', 2)`);
+  assert.deepEqual(get('S.classes.C.aesh.map(a => a.sids)'), [[], [], ['b', 'a']]);
+  ev(`_aeshRemoveAt(S.classes.C, 1)`);
+  assert.deepEqual(get('S.classes.C.rooms.R.aeshSeating'), { 0: '0,0', 1: '0,2' });
+  assert.deepEqual(get('S.classes.C.rooms.R.aeshLinks'), { 0: [], 1: ['b', 'a'] });
+  ev(`_purgeStudentRefs('a')`);
+  assert.deepEqual(get('S.classes.C.aesh[1].sids'), ['b']);
+  assert.equal(get(`aeshLabel(1, 2, S.classes.C)`), 'AESH2');
+});
