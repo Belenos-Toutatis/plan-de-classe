@@ -2294,6 +2294,9 @@ html[data-theme="dark"] #stl .stbl tbody tr.el-alt:not(.selected):not(:hover) td
 .el-aesh { font-size:.82em; color:var(--pencil); margin:0 6px 0 2px; white-space:nowrap; }
 #el-synth .bsynth-big { font-size:1.65em; }
 #el-synth .bsynth-link.on { background:var(--chip-on-bg); color:#fff; }
+#el-synth .el-amen-f { border:1px solid var(--rule-line); background:var(--paper); color:var(--ink-deep); border-radius:999px; padding:0 7px; margin:2px 2px 0 0; font:500 .95em var(--font-sans); cursor:pointer; line-height:1.5; }
+#el-synth .el-amen-f:hover { background:var(--paper-warm); }
+#el-synth .el-amen-f.on { background:var(--chip-on-bg); border-color:var(--chip-on-bg); color:#fff; }
 #el-synth .bsynth-link.on .bsynth-num, #el-synth .bsynth-link.on .bsynth-big, #el-synth .bsynth-link.on .bsynth-down, #el-synth .bsynth-link.on b { color:#fff; }
 #el-synth .el-card-filt { border-color:var(--chip-on-bg); }
 .el-filt-on { color:var(--ink-blue); font-weight:600; margin-top:3px; }
@@ -7892,11 +7895,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.117.3';
+const APP_VERSION    = '2.117.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T21:40:09Z';
+const APP_BUILD_DATE = '2026-10-07T21:44:06Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19517,6 +19520,7 @@ function _elSetFilter(f) {
 }
 function _elAmenMode() { try { return localStorage.getItem('planClasse_elevesAmenMode') === 'all' ? 'all' : 'active'; } catch (e) { return 'active'; } }
 function _elSetAmenMode(m) { try { localStorage.setItem('planClasse_elevesAmenMode', m); } catch (e) {} _elPopClose(); renderStudents(); }
+var EL_AMEN_KEYS = [['ppre', 'PPRE'], ['pap', 'PAP'], ['gevasco', 'PPS'], ['ulis', 'ULIS'], ['ulis_incl', 'ULIS+'], ['upe2a', 'UPE2A'], ['upe2a_incl', 'UPE2A+'], ['pai', 'PAI'], ['agrandissement', '-A'], ['tiers_temps', '+⅓']];
 function _elHasAmen(s) { return !!(s.ppre || s.pap || s.gevasco || s.ulis || s.ulis_incl || s.upe2a || s.upe2a_incl || s.pai || s.agrandissement || s.tiers_temps); }
 // Données du bandeau + drapeaux par élève (amen | rem | inc | abs | unpl).
 function _elSynth(cls, list, attStats, cur) {
@@ -19526,7 +19530,8 @@ function _elSynth(cls, list, attStats, cur) {
   const flags = new Map();
   for (const s of list) {
     const f = new Set();
-    if (_elHasAmen(s)) f.add('amen');
+    if (_elHasAmen(s)) f.add('amen'); else f.add('noamen');
+    for (const [k] of EL_AMEN_KEYS) if (s[k]) f.add('a_' + k);
     if ((s.reminders || []).length) f.add('rem');
     if ((s.oublis || 0) + (s.non_travail || 0) > 0) f.add('inc');
     if ((attStats[s.id]?.abs || 0) >= 3) f.add('abs');
@@ -19536,8 +19541,7 @@ function _elSynth(cls, list, attStats, cur) {
   const cnt = k => [...flags.values()].filter(f => f.has(k)).length;
   const nF = act.filter(s => s.civilite === 'F').length, nM = act.filter(s => s.civilite === 'M').length;
   const grp = [1, 2, 3].map(g => [g, act.filter(s => _grp(s, cls) === g).length]).filter(x => x[1]);
-  const lab = [['ppre', 'PPRE'], ['pap', 'PAP'], ['gevasco', 'PPS'], ['ulis', 'ULIS'], ['ulis_incl', 'ULIS+'], ['upe2a', 'UPE2A'], ['upe2a_incl', 'UPE2A+'], ['pai', 'PAI'], ['agrandissement', '-A'], ['tiers_temps', '+⅓']]
-    .map(([k, l]) => [l, act.filter(s => s[k]).length]).filter(x => x[1]);
+  const lab = EL_AMEN_KEYS.map(([k, l]) => [k, l, act.filter(s => s[k]).length]).filter(x => x[2]);
   const totO = act.reduce((a, s) => a + (s.oublis || 0), 0), totN = act.reduce((a, s) => a + (s.non_travail || 0), 0);
   const heavy = act.filter(s => (s.oublis || 0) + (s.non_travail || 0) >= 4).length;
   const nRem = act.reduce((a, s) => a + (s.reminders || []).length, 0);
@@ -19556,7 +19560,15 @@ function _elSynth(cls, list, attStats, cur) {
   h += _bsynthCard('Effectif', L('all', `<span class="bsynth-big">${act.length}</span>`, effTip)
     + `<div class="bsynth-sub">${[nF ? nF + ' F' : '', nM ? nM + ' M' : ''].filter(Boolean).join(' · ')}${grp.length ? ' · ' + grp.map(([g, n]) => `G${g} ${n}`).join(' · ') : ''}${nArr ? ` · ${nArr} à venir` : ''}</div>`
     + (cur !== 'all' ? `<div class="bsynth-sub el-filt-on">Filtre : ${shown} élève${shown > 1 ? 's' : ''} affiché${shown > 1 ? 's' : ''} — clic sur l'effectif pour tout voir</div>` : ''), cur === 'all' ? '' : '', cur !== 'all' ? 'el-card-filt' : '');
-  h += _bsynthCard('Aménagements', L('amen', `<span class="bsynth-num">${cnt('amen')}</span> élève${cnt('amen') > 1 ? 's' : ''}`, '', cnt('amen')) + `<div class="bsynth-sub">${lab.map(([l, n]) => `${_esc(l)} ${n}`).join(' · ') || 'aucun'}</div>`);
+  // Chaque dispositif est aussi un filtre (puce `.el-amen-f`), et « sans aménagement » une ligne (v2.117.4).
+  const mini = (k, l, n) => {
+    const f = 'a_' + k, on = cur === f;
+    if (_conf?.on) return `${_esc(l)} ${n}`;
+    return `<button type="button" class="el-amen-f${on ? ' on' : ''}" aria-pressed="${on}" onclick="_elSetFilter('${on ? 'all' : f}')" title="${on ? 'Filtre actif — clic pour tout réafficher' : "Clic = n'afficher que les élèves " + _escAttr(l)}">${_esc(l)} ${n}</button>`;
+  };
+  h += _bsynthCard('Aménagements', L('amen', `<span class="bsynth-num">${cnt('amen')}</span> élève${cnt('amen') > 1 ? 's' : ''} avec aménagement`, '', cnt('amen'))
+    + L('noamen', `<span class="bsynth-num">${cnt('noamen')}</span> sans aménagement`, "Clic = n'afficher que les élèves sans aucun aménagement", cnt('noamen'))
+    + `<div class="bsynth-sub">${lab.map(([k, l, n]) => mini(k, l, n)).join(' ') || 'aucun'}</div>`);
   h += _bsynthCard('Vie de classe', L('inc', `<span class="bsynth-num">${totO}</span> oubli${totO > 1 ? 's' : ''} · <b>${totN}</b> non fait${totN > 1 ? 's' : ''}`, "Clic = n'afficher que les élèves avec au moins un oubli ou un travail non fait", cnt('inc'))
     + L('abs', `<span class="bsynth-num${cnt('abs') ? ' bsynth-down' : ''}">${cnt('abs')}</span> élève${cnt('abs') > 1 ? 's' : ''} à 3 absences ou plus`, '', cnt('abs'))
     + `<div class="bsynth-sub">${heavy ? `<span class="bsynth-down">⚠ ${heavy} élève${heavy > 1 ? 's' : ''} à 4 oublis / non faits ou plus</span>` : 'aucun élève à 4 oublis / non faits ou plus'}</div>`);
