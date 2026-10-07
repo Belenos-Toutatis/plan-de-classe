@@ -695,6 +695,8 @@ html[data-theme="dark"] .qcm-info-banner a{color:#7fb4d8 !important}
 .ip-seat.ip-aisle{border:1.5px dashed var(--pencil-soft);background:repeating-linear-gradient(135deg,transparent 0 8px,var(--rule-line) 8px 10px)}
 .ip-seat.ip-aesh{background:var(--aesh-bg);border-color:var(--aesh-bd);color:var(--aesh-fg);font-size:.78em}
 .ip-seat.ip-out{opacity:.35}
+.ip-seat.ip-click{cursor:pointer}
+.ip-seat.ip-click:hover{border-color:var(--ink-blue)}
 .ip-seat.ip-missing{border-color:var(--warn-fg);box-shadow:inset 0 0 0 1px var(--warn-fg)}
 .ip-tabs{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
 .ip-tab{font:600 .82em var(--font-mono);border:1px solid var(--rule-line);border-radius:4px;padding:1px 6px;background:var(--paper-warm);color:var(--ink-deep);cursor:pointer;white-space:nowrap}
@@ -7941,11 +7943,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.100.2';
+const APP_VERSION    = '2.100.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-07T17:28:15Z';
+const APP_BUILD_DATE = '2026-10-07T17:34:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -26795,18 +26797,65 @@ function renderIpads() {
   <div class="ip-viewbar"><span class="ip-seg" role="group" aria-label="Affichage">
     <button type="button" class="${_ipadView === 'plan' ? 'on' : ''}" onclick="_ipadSetView('plan')" title="Le plan de la salle, avec la tablette de chaque place">🗺 Plan</button>
     <button type="button" class="${_ipadView === 'list' ? 'on' : ''}" onclick="_ipadSetView('list')" title="La liste des élèves et de leur tablette (tri, copie de colonne)">☰ Liste</button>
-  </span><span>Clic sur une tablette = la changer (échange automatique si elle est déjà prise)</span></div>
+  </span>${_ipadLotBarHTML(cls, activePool, modes)}</div>
   ${_ipadView === 'list' ? _ipadListHTML(cls, modes, seated, unavailableSet) : _ipadPlanHTML(cls, salle, modes, seated, unavailableSet)}`;
+}
+
+// Affectation manuelle au clic (v2.100.3) : clic gauche sur une place sans tablette = la tablette
+// suivante du lot choisi (plus petit numéro disponible, hors service exclus, pas déjà prise dans ce
+// mode) ; clic gauche sur une place équipée = la retirer ; clic droit = liste complète (picker).
+function _ipadLotSel(pool) {
+  try { const o = JSON.parse(localStorage.getItem('planClasse_ipadLot') || '{}'); const v = o[pool?.id];
+    return (v != null && (pool?.lots || [])[v]) ? v : 'all'; } catch (e) { return 'all'; }
+}
+function _ipadSetLot(v) {
+  const cls = getCls(); const pool = S.tabletPools?.[cls?.activePool]; if (!pool) return;
+  try { const o = JSON.parse(localStorage.getItem('planClasse_ipadLot') || '{}'); o[pool.id] = v === 'all' ? null : +v; localStorage.setItem('planClasse_ipadLot', JSON.stringify(o)); } catch (e) {}
+  renderIpads();
+}
+function _ipadNextNum(cls, gf) {
+  const pool = S.tabletPools?.[cls.activePool]; if (!pool) return 0;
+  const lot = _ipadLotSel(pool); const L = lot === 'all' ? null : pool.lots[lot];
+  const used = new Set(Object.values(ipadGetMap(cls, gf)).filter(Boolean).map(Number));
+  return poolAvailableNumbers(pool).find(n => (!L || (n >= L.from && n <= L.to)) && !used.has(n)) || 0;
+}
+function _ipadLotBarHTML(cls, pool, modes) {
+  if (!pool) return '';
+  const lot = _ipadLotSel(pool);
+  const lots = pool.lots || [];
+  const seg = lots.length ? `<span class="ip-seg" role="group" aria-label="Lot distribué au clic">
+    <button type="button" class="${lot === 'all' ? 'on' : ''}" onclick="_ipadSetLot('all')" title="Toutes les tablettes de ${_escAttr(pool.nom)}">Tout</button>${lots.map((l, i) =>
+    `<button type="button" class="${lot === i ? 'on' : ''}" onclick="_ipadSetLot(${i})" title="Lot ${_escAttr(l.nom || '?')} : n° ${l.from} à ${l.to}">Lot ${_escName(l.nom || '?')}</button>`).join('')}</span>` : '';
+  const nexts = modes.map(m => { const n = _ipadNextNum(cls, m.gf); return (modes.length > 1 ? m.short + ' ' : '') + (n ? 'n° ' + n : 'plus aucune'); }).join(' · ');
+  return `<span>Clic = tablette suivante${lots.length ? ' du lot' : ''}</span>${seg}<span>prochaine : <strong>${nexts}</strong></span><span>· clic sur une tablette = la retirer · clic droit = choisir dans la liste</span>`;
+}
+function _ipadClickAssign(key, gf) {
+  const cls = getCls(); if (!cls) return;
+  gf = parseInt(gf, 10) || 0;
+  const sid = cls.seating?.[key];
+  if (!sid || !S.eleves[sid]) return;
+  const map = ipadGetMap(cls, gf);
+  const cur = map[key] || 0;
+  if (cur) {
+    pushUndo(); delete map[key]; save();
+    toast(`↩ Tablette n° ${cur} retirée à ${S.eleves[sid].prenom} (Ctrl+Z pour annuler)`);
+  } else {
+    const n = _ipadNextNum(cls, gf);
+    if (!n) { toast('⚠️ Plus aucune tablette disponible dans ce lot — choisis un autre lot ou fais un clic droit.', 'warn'); return; }
+    pushUndo(); map[key] = n; save();
+  }
+  renderIpads();
 }
 
 function _ipadTabChip(m, key, n, unavailableSet, withMode) {
   const lbl = withMode ? `<span class="ip-m">${m.short}</span>` : '';
   const bad = n && (unavailableSet.has(n) || m.dupes.has(n));
   const cls_ = !n ? ' ip-none' : bad ? ' ip-bad' : '';
-  const tip = !n ? 'Aucune tablette — clic pour en affecter une'
-    : unavailableSet.has(n) ? 'Tablette hors service — clic pour en choisir une autre'
-    : m.dupes.has(n) ? 'Tablette en doublon — clic pour changer' : 'Clic pour changer la tablette';
-  return `<button type="button" class="ip-tab${cls_}" onclick="openIpadPicker('${key}', ${m.gf})" title="${m.label} : ${tip}">${lbl}${n ? n + (unavailableSet.has(n) ? ' HS' : '') : '—'}</button>`;
+  const tip = !n ? 'Aucune tablette'
+    : unavailableSet.has(n) ? `Tablette n° ${n} hors service`
+    : m.dupes.has(n) ? `Tablette n° ${n} en doublon` : `Tablette n° ${n}`;
+  const how = n ? 'clic = la retirer · clic droit = choisir dans la liste' : 'clic = tablette suivante du lot · clic droit = choisir dans la liste';
+  return `<button type="button" class="ip-tab${cls_}" onclick="event.stopPropagation();_ipadClickAssign('${key}', ${m.gf})" oncontextmenu="event.preventDefault();event.stopPropagation();openIpadPicker('${key}', ${m.gf})" title="${m.label} : ${tip} — ${how}">${lbl}${n ? n + (unavailableSet.has(n) ? ' HS' : '') : '—'}</button>`;
 }
 
 function _ipadPlanHTML(cls, salle, modes, seated, unavailableSet) {
@@ -26836,7 +26885,8 @@ function _ipadPlanHTML(cls, salle, modes, seated, unavailableSet) {
       if (!stu) { html += `<div class="ip-seat ip-empty${_ipadOnlyMissing ? ' ip-out' : ''}"></div>`; continue; }
       const out = (stu && !concerned) || (_ipadOnlyMissing && !missing);
       const nm = `<div class="ip-name" data-photo-sid="${_escAttr(stu.id)}" title="${_escAttr(stu.prenom + ' ' + stu.nom)}">${_escName(stu.prenom)}</div>`;
-      html += `<div class="ip-seat${out ? ' ip-out' : ''}${missing ? ' ip-missing' : ''}">${nm}<div class="ip-tabs">${chips.join('')}</div></div>`;
+      const one = !withMode && modes[0].concerned(stu);
+      html += `<div class="ip-seat${out ? ' ip-out' : ''}${missing ? ' ip-missing' : ''}${one ? ' ip-click' : ''}"${one ? ` onclick="_ipadClickAssign('${k}', ${modes[0].gf})" oncontextmenu="event.preventDefault();openIpadPicker('${k}', ${modes[0].gf})"` : ''}>${nm}<div class="ip-tabs">${chips.join('')}</div></div>`;
     }
   }
   return `<div class="ip-plan-wrap"><div class="ip-plan" style="grid-template-columns:repeat(${cols},minmax(76px,1fr))">${html}</div>
