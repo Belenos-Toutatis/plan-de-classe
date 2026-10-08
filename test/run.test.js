@@ -2946,3 +2946,21 @@ test('Réunions parents-profs : toute fonction appelée depuis les gestionnaires
   const missing = [...names].filter(n => ev(`typeof ${n}`) !== 'function');
   assert.deepEqual(missing, [], 'fonctions appelées mais non définies : ' + missing.join(', '));
 });
+
+test('Fichier pour un collègue : code autonome valide, sans </script>, et données réduites à nom / prénom / classe', () => {
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html);
+  const css = /<script type="text\/plain" id="rdv-standalone-css">([\s\S]*?)<\/script>/.exec(html);
+  assert.ok(js && css, 'les deux modèles du fichier autonome doivent être présents');
+  new vm.Script(js[1]);   // lève si le code ne se compile pas
+  assert.ok(!/<\/script/i.test(js[1]) && !/<!--/.test(js[1]), 'le code embarqué ne doit contenir ni </script ni <!--');
+  ev(`S.classes = { c1: { id: 'c1', nom: '6A', eleves: ['e1', 'e2'], rooms: {} }, c2: { id: 'c2', nom: '6B', eleves: ['e3'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1', ppre: true, notes: 'santé', oublis: 4 },
+                   e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1', departureDate: '2000-01-01' },
+                   e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c2' } };
+      _rex = { cls: new Set(['c1']), photos: false, reu: '' };`);
+  const st = JSON.parse(ev('JSON.stringify(_rexStudents())'));
+  assert.deepEqual(Object.keys(st), ['e1'], 'seulement les élèves présents des classes cochées');
+  assert.deepEqual(Object.keys(st.e1).sort(), ['cls', 'nom', 'prenom'], 'rien d\'autre que nom, prénom, classe');
+});
