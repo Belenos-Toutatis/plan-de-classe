@@ -2937,3 +2937,12 @@ test('Réunions parents-profs : créneaux, purge d\'un élève et d\'une classe,
   ev(`_purgeClassRefs('c2')`);
   assert.deepEqual(JSON.parse(ev(`JSON.stringify(S.reunions.r1.classIds)`)), ['c1']);
 });
+
+test('Réunions parents-profs : toute fonction appelée depuis les gestionnaires du module existe', () => {
+  // Régression v2.135.2 : un bloc retiré trop largement avait emporté _reuTogglePause,
+  // appelée par le clic droit (pause) — ReferenceError au clic, rien ne le signalait avant.
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const names = new Set([...src.matchAll(/\b(_reu[A-Za-z0-9_]*)\s*\(/g)].map(m => m[1]));
+  const missing = [...names].filter(n => ev(`typeof ${n}`) !== 'function');
+  assert.deepEqual(missing, [], 'fonctions appelées mais non définies : ' + missing.join(', '));
+});
