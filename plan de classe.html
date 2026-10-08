@@ -7982,6 +7982,11 @@ textarea{width:100%;resize:vertical}
 #pp{position:fixed;z-index:450;pointer-events:none;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.25);text-align:center;font-size:.85em;color:var(--ink)}
 #pp img{display:block;width:220px;height:220px;object-fit:cover;border-radius:7px;margin-bottom:4px}
 #pp .ptip{max-width:220px;margin-top:4px;color:var(--pencil);font-size:.92em;line-height:1.3}
+#app,.mo>.mb{zoom:var(--z,1)}
+.zb{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.zb button{border:none;border-radius:0;padding:4px 10px;min-width:34px}
+.zb button+button{border-left:1px solid var(--rule)}
+.zb .zp{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em;min-width:58px}
 #tip{position:fixed;z-index:470;pointer-events:none;max-width:300px;background:var(--ink-blue);color:var(--paper);padding:6px 10px;border-radius:7px;font-size:.85em;line-height:1.35;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:pre-line}
 button:disabled{opacity:.45;cursor:default}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink-blue);color:var(--paper);padding:8px 14px;border-radius:8px;z-index:600;font-size:.9em;max-width:90vw}
@@ -7999,6 +8004,16 @@ if (!D.prefs) D.prefs = { prof: '', discipline: '' };
 var V = { id: null, view: 'list', f: 'all', none: false, q: '', edit: null, cur: null, acIdx: 0 };
 var undo = [], redo = [], dirty = false, savedAt = D.savedAt || 0, fileHandle = null, drag = null, noteTimer = null, bilTimer = null;
 var BK = 'rdv_backup_' + D.fileId;
+// Zoom de l'affichage (v2.136.6) : retenu sur cet ordinateur, pour tous les fichiers de rendez-vous.
+var ZOOMS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8], zoom = 1;
+try { var z0 = +localStorage.getItem('rdv_zoom'); if (ZOOMS.indexOf(z0) >= 0) zoom = z0; } catch (e) {}
+function applyZoom() { document.documentElement.style.setProperty('--z', zoom); }
+function setZoom(d) {
+  var i = ZOOMS.indexOf(zoom); zoom = d === 0 ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + d))];
+  try { localStorage.setItem('rdv_zoom', String(zoom)); } catch (e) {}
+  applyZoom(); renderTop();
+}
+applyZoom();
 var app = document.getElementById('app');
 
 function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -8080,7 +8095,9 @@ function renderTop(how) {
   var st = dirty ? '<span class="st dirty">● Modifications non enregistrées</span>'
     : savedAt ? '<span class="st ok">✓ ' + (lastHow === 'copy' ? 'Copie téléchargée' : 'Enregistré dans le fichier') + ' à ' + _esc(fmt(hhmm(new Date(savedAt)))) + '</span>' : '';
   el.innerHTML = '<h1>🤝 Réunions parents-professeurs</h1><span class="mt">fichier préparé' + (D.by ? ' par ' + _esc(D.by) : '') + ' le ' + _esc(fmtDate(D.createdAt)) + ' · ' + D.classes.map(function (c) { return _esc(c.nom); }).join(', ') + '</span>'
-    + '<span style="margin-left:auto"></span>' + st + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"' + (undo.length ? '' : ' disabled') + '>↩ Annuler</button><button data-a="redo" title="Rétablir ce qui vient d\'être annulé (Ctrl+Y)" aria-label="Rétablir"' + (redo.length ? '' : ' disabled') + '>↪ Rétablir</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
+    + '<span style="margin-left:auto"></span>' + st
+    + '<span class="zb" role="group" aria-label="Taille de l\'affichage"><button data-a="zoom" data-v="-1" title="Rapetisser l\'affichage" aria-label="Rapetisser"' + (zoom <= ZOOMS[0] ? ' disabled' : '') + '>−</button><button class="zp" data-a="zoom" data-v="0" title="Revenir à la taille normale (100 %)">' + Math.round(zoom * 100) + ' %</button><button data-a="zoom" data-v="1" title="Agrandir l\'affichage" aria-label="Agrandir"' + (zoom >= ZOOMS[ZOOMS.length - 1] ? ' disabled' : '') + '>+</button></span>'
+    + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"' + (undo.length ? '' : ' disabled') + '>↩ Annuler</button><button data-a="redo" title="Rétablir ce qui vient d\'être annulé (Ctrl+Y)" aria-label="Rétablir"' + (redo.length ? '' : ' disabled') + '>↪ Rétablir</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
 }
 function render() {
   closeMenu();
@@ -8434,6 +8451,7 @@ document.addEventListener('click', function (e) {
   if (k === 'save') return save();
   if (k === 'undo') return doUndo();
   if (k === 'redo') return doRedo();
+  if (k === 'zoom') return setZoom(+a.getAttribute('data-v'));
   if (k === 'bilall') return bilanBox(null);
   if (k === 'none') { V.none = !V.none; return renderSide(); }
   if (k === 'restore') { try { var bk = JSON.parse(localStorage.getItem(BK)); change(); D.reunions = bk.reunions; D.prefs = bk.prefs || D.prefs; dirty = true; render(); toast('Version du navigateur reprise — pense à enregistrer.'); } catch (x) {} return; }
@@ -8727,11 +8745,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.5';
+const APP_VERSION    = '2.136.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T22:09:54Z';
+const APP_BUILD_DATE = '2026-10-08T22:16:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -16242,7 +16260,8 @@ function _ddPlace(dd, btn) {
   for (let el = dd.parentElement; el && el !== document.body; el = el.parentElement) {
     const o = getComputedStyle(el); if (/(auto|scroll|hidden)/.test(o.overflowY + o.overflowX)) { clipped = true; break; }
   }
-  if (!clipped) return;
+  // v2.136.6 : un menu qui déborde de l'ÉCRAN (bouton près du bord droit) est aussi ramené dedans.
+  if (!clipped) { const r0 = menu.getBoundingClientRect(); if (r0.right <= window.innerWidth - 4 && r0.left >= 4) return; }
   const b = btn.getBoundingClientRect();
   menu.style.position = 'fixed'; menu.style.right = 'auto'; menu.style.bottom = 'auto';
   menu.style.left = '0px'; menu.style.top = '0px'; menu.style.zIndex = '10050';
@@ -28034,7 +28053,7 @@ function _reuPrepHTML(r) {
       <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-g btn-sm" onclick="_reuPrepAll()" title="Ouvre la fiche complète du premier élève sans mini bilan ; ◀ ▶ passent d'un rendez-vous à l'autre">✍ Préparer les entretiens</button>
         <button class="btn btn-g btn-sm" onclick="openReunionModal('${_escJsAttr(r.id)}')" title="Date, horaires, durée des rendez-vous, classes, en-tête de la feuille">⚙ Réglages</button>
-        <span class="dd"><button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Imprimer la feuille de rendez-vous (Ctrl+P)">🖨 Feuille ▾</button>
+        <span class="dd dd-right"><button class="btn btn-g btn-sm" onclick="toggleDd(this)" title="Imprimer la feuille de rendez-vous (Ctrl+P)">🖨 Feuille ▾</button>
           <div class="dd-menu">
             <button onclick="closeAllDd();printReunion('filled')">🖨 Feuille remplie <span style="color:var(--pencil-soft);font-size:.85em">(Ctrl+P)</span></button>
             <button onclick="closeAllDd();printReunion('alpha')">🖨 Feuille remplie + liste alphabétique</button>
