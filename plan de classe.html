@@ -1675,6 +1675,13 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ev-types .eval-type-badge{flex:0 0 auto;font-size:.9em}
 .ev-types b{display:block;font-weight:600;font-size:.92em}
 .ev-tsub{display:block;font-size:.8em;color:var(--pencil);line-height:1.3}
+/* Fiche de prêt (v2.127.0) — fenêtre seulement, la fiche imprimée est inchangée */
+.ipr-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:14px;align-items:start}
+.ipr-lbl{font-size:.8em;color:var(--pencil);margin:10px 0 4px}
+.ipr-set select{width:100%}
+.ipr-page{background:#fff;border:1px solid var(--rule-line);border-radius:4px;padding:14px;aspect-ratio:210/297;overflow:hidden;box-shadow:var(--shadow-card)}
+.ipr-sheet{transform:scale(.62);transform-origin:top left;width:161%;color:#000}
+@media (max-width:820px){ .ipr-cols{grid-template-columns:minmax(0,1fr)} }
 /* Menu du clic droit (v2.126.0) */
 #ctx{width:340px;max-width:calc(100vw - 12px);padding:0 !important;overflow:hidden;font-size:.86em}
 #ctx .ctx-hd{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--rule-line)}
@@ -7171,66 +7178,37 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Fiche de prêt tablettes -->
 <div id="mipad-print" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:500px;width:100%">
-    <h2>🖨 Fiche de prêt tablettes</h2>
-
-    <div class="fg" id="iprint-pool-row">
-      <label>Classe mobile</label>
-      <div id="iprint-pool-buttons" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      <select id="iprint-pool-select" onchange="setIprintType(this.value)" style="display:none;width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em"></select>
-    </div>
-
-    <div class="fg">
-      <label>Date</label>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn btn-g btn-sm" onclick="iprintDateAdj(-1)">−</button>
-        <input type="date" id="iprint-date" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em">
-        <button class="btn btn-g btn-sm" onclick="iprintDateAdj(+1)">+</button>
-        <button class="btn btn-d btn-sm" onclick="document.getElementById('iprint-date').value=''" title="Vider la date">✕</button>
+  <!-- Fiche de prêt — refonte de la FENÊTRE v2.127.0 (maquette validée le 2026-10-08) : pastilles,
+       créneaux tirés de l'emploi du temps de la salle, aperçu de la vraie fiche. ⚠️ La fiche IMPRIMÉE
+       ne change pas (arbitrage : elle doit avoir la forme de la fiche vierge rangée avec les tablettes). -->
+  <div class="mb" style="width:min(1000px,97vw);max-width:1000px">
+    <h2 style="margin-top:0">🖨 Fiche de prêt des tablettes</h2>
+    <div class="ipr-cols">
+      <div class="ipr-set">
+        <div class="ipr-lbl">Classe mobile</div><div id="iprint-pool-buttons" class="mvc-fp-chips"></div>
+        <select id="iprint-pool-select" onchange="setIprintType(this.value)" style="display:none"></select>
+        <div class="ipr-lbl">Date</div>
+        <div class="mvc-fp-chips"><input type="date" id="iprint-date" onchange="_iprintRender()">
+          <button type="button" class="btn btn-sm mvc-chip" onclick="document.getElementById('iprint-date').value=todayKey();_iprintAutoSlot();_iprintRender()">Aujourd'hui</button>
+          <button type="button" class="btn btn-sm mvc-chip" onclick="iprintDateAdj(-1)">−1 j</button>
+          <button type="button" class="btn btn-sm mvc-chip" onclick="iprintDateAdj(+1)">+1 j</button>
+          <button type="button" class="btn btn-sm mvc-chip" onclick="document.getElementById('iprint-date').value='';_iprintRender()" title="Laisser la date vide (à remplir à la main)">vide</button></div>
+        <div class="ipr-lbl" id="iprint-slots-lbl">Créneau</div><div id="iprint-slots" class="mvc-fp-chips"></div>
+        <div class="ipr-lbl">Classe</div>
+        <select id="iprint-class" onchange="updateIprintGroupe()"></select>
+        <div class="ipr-lbl">Salle</div><div id="iprint-salles" class="mvc-fp-chips"></div>
+        <select id="iprint-salle" style="display:none"></select>
+        <div id="iprint-grp-row"><div class="ipr-lbl">Groupe</div><div id="iprint-grps" class="mvc-fp-chips"></div></div>
+        <div class="ipr-lbl">Professeur</div>
+        <input type="text" id="iprint-prof" placeholder="Nom du professeur" oninput="_iprintRender()" style="width:100%">
       </div>
+      <div><div class="ipr-lbl" style="margin-top:0">Aperçu de la fiche (A4 portrait)</div>
+        <div class="ipr-page"><div id="iprint-preview" class="ipr-sheet"></div></div>
+        <div id="iprint-stats" class="clf-note"></div></div>
     </div>
-
-    <div class="fg">
-      <label>Horaire</label>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
-        <button id="iprint-h-M1" class="btn btn-g btn-sm" onclick="setIprintHoraire('M1')">M1</button>
-        <button id="iprint-h-M2" class="btn btn-g btn-sm" onclick="setIprintHoraire('M2')">M2</button>
-        <button id="iprint-h-M3" class="btn btn-g btn-sm" onclick="setIprintHoraire('M3')">M3</button>
-        <button id="iprint-h-M4" class="btn btn-g btn-sm" onclick="setIprintHoraire('M4')">M4</button>
-        <button id="iprint-h-S1" class="btn btn-g btn-sm" onclick="setIprintHoraire('S1')">S1</button>
-        <button id="iprint-h-S2" class="btn btn-g btn-sm" onclick="setIprintHoraire('S2')">S2</button>
-        <button id="iprint-h-S3" class="btn btn-g btn-sm" onclick="setIprintHoraire('S3')">S3</button>
-      </div>
-    </div>
-
-    <div class="fg">
-      <label>Salle</label>
-      <select id="iprint-salle" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em"></select>
-    </div>
-
-    <div class="fg">
-      <label>Classe</label>
-      <select id="iprint-class" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em" onchange="updateIprintGroupe()"></select>
-    </div>
-
-    <div class="fg" id="iprint-grp-row" style="display:none">
-      <label>Groupe</label>
-      <div style="display:flex;gap:5px">
-        <button id="iprint-grp-0" class="btn btn-p btn-sm" onclick="setIprintGroupe(0)">Tous</button>
-        <button id="iprint-grp-1" class="btn btn-g btn-sm" onclick="setIprintGroupe(1)">🔵 G1</button>
-        <button id="iprint-grp-2" class="btn btn-g btn-sm" onclick="setIprintGroupe(2)">🟠 G2</button>
-        <button id="iprint-grp-3" class="btn btn-g btn-sm" onclick="setIprintGroupe(3)">🟣 G3</button>
-      </div>
-    </div>
-
-    <div class="fg">
-      <label>Professeur</label>
-      <input type="text" id="iprint-prof" placeholder="Nom du professeur" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:1em;box-sizing:border-box">
-    </div>
-
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mipad-print')">Annuler</button>
-      <button class="btn btn-p" onclick="printSuiviPret()">🖨 Générer PDF</button>
+      <button class="btn btn-p" onclick="printSuiviPret()">🖨 Imprimer la fiche</button>
     </div>
   </div>
 </div>
@@ -7985,11 +7963,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.126.0';
+const APP_VERSION    = '2.127.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T03:50:03Z';
+const APP_BUILD_DATE = '2026-10-08T03:58:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27373,150 +27351,113 @@ function updateIprintGroupe() {
   const clsId = document.getElementById('iprint-class').value;
   const cls = clsId ? S.classes[clsId] : null;
   const hasGroups = cls && (cls.eleves || []).some(sid => _grp(S.eleves[sid], cls));
-  document.getElementById('iprint-grp-row').style.display = hasGroups ? '' : 'none';
-  if (!hasGroups) { iprintState.groupe = 0; setIprintGroupe(0); }
-
-  // Refait la liste des salles pour la classe choisie
+  if (!hasGroups) iprintState.groupe = 0;
   refreshIprintSalle();
+  _iprintAutoSlot();
+  _iprintRender();
 }
-
-function setIprintGroupe(g) {
-  iprintState.groupe = g;
-  [0, 1, 2, 3].forEach(v => {
-    const btn = document.getElementById(`iprint-grp-${v}`);
-    if (!btn) return;
-    btn.style.background = '';
-    btn.style.color = '';
-    if (v === g) {
-      if (v === 1) btn.className = 'btn btn-sm btn-p';
-      else if (v === 2) btn.className = 'btn btn-sm btn-w';
-      else if (v === 3) {
-        btn.className = 'btn btn-sm';
-        btn.style.background = '#8e44ad';
-        btn.style.color = '#fff';
-      }
-      else btn.className = 'btn btn-sm btn-p';
-    } else {
-      btn.className = 'btn btn-sm btn-g';
-    }
-  });
-}
+function setIprintGroupe(g) { iprintState.groupe = g; _iprintRender(); }
 
 function openIpadPrint() {
   if (!Object.keys(S.classes).length) return toast('⚠️ Aucune classe définie.', 'warn');
   if (!Object.keys(S.tabletPools || {}).length) {
     return toast('⚠️ Aucune classe mobile configurée — crée-en une dans l\'onglet Tablettes.', 'warn');
   }
-  document.getElementById('iprint-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('iprint-date').value = todayKey();
   document.getElementById('iprint-prof').value  = localStorage.getItem('iprint-prof') || '';
-
-  // Peuple le select des classes
   const sel = document.getElementById('iprint-class');
   sel.innerHTML = '<option value="">— aucune —</option>' +
-    Object.values(S.classes).map(c => `<option value="${_escAttr(c.id)}">${_escAttr(c.nom)}</option>`).join('');
-
+    Object.values(S.classes).sort((a, b) => clsLevel(a) - clsLevel(b) || String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }))
+      .map(c => `<option value="${_escAttr(c.id)}">${_escAttr(c.nom)}</option>`).join('');
   const currentCls = getCls();
   if (currentCls?.id) sel.value = currentCls.id;
-
-  // Peuple le select des salles selon la classe choisie
   refreshIprintSalle();
-
-  // Peuple le sélecteur de pool (boutons ou dropdown)
-  renderIprintPoolPicker();
-  // Sélection : priorité au pool actif de la classe, puis le pool mémorisé, sinon le 1er
+  // Classe mobile : priorité au pool actif de la classe, puis le pool mémorisé, sinon le 1er
   const pools = Object.keys(S.tabletPools);
-  let poolId = null;
-  if (currentCls && currentCls.activePool && S.tabletPools[currentCls.activePool]) {
-    poolId = currentCls.activePool;
-  } else if (pools.includes(iprintState.type)) {
-    poolId = iprintState.type;
-  } else {
-    poolId = pools[0];
-  }
-  setIprintType(poolId);
-
-  setIprintHoraire(iprintState.horaire || '');
+  iprintState.type = (currentCls && currentCls.activePool && S.tabletPools[currentCls.activePool]) ? currentCls.activePool
+    : pools.includes(iprintState.type) ? iprintState.type : pools[0];
   iprintState.groupe = 0;
-  updateIprintGroupe();
+  iprintState.horaire = '';
+  _iprintAutoSlot();
+  _iprintRender();
   openMod('mipad-print');
 }
-
-// Rend le sélecteur de classes mobiles : boutons si <= seuil, sinon dropdown
-function renderIprintPoolPicker() {
-  const pools = Object.values(S.tabletPools || {});
-  const btnWrap = document.getElementById('iprint-pool-buttons');
-  const sel     = document.getElementById('iprint-pool-select');
-  if (!btnWrap || !sel) return;
-  if (pools.length <= IPRINT_POOL_BUTTONS_THRESHOLD) {
-    btnWrap.style.display = 'flex';
-    sel.style.display = 'none';
-    btnWrap.innerHTML = pools.map(p => {
-      const lots = poolLotsSummary(p);
-      const sub = lots ? ` — Lots ${lots}` : '';
-      return `<button id="iprint-pool-${_escAttr(p.id)}" class="btn btn-g" style="flex:1;min-width:140px;font-size:1em" onclick="setIprintType('${_escAttr(p.id)}')">${_escAttr(p.nom)}${_escAttr(sub)}</button>`;
-    }).join('');
-  } else {
-    btnWrap.style.display = 'none';
-    sel.style.display = '';
-    sel.innerHTML = pools.map(p => {
-      const lots = poolLotsSummary(p);
-      const sub = lots ? ` — Lots ${lots}` : '';
-      return `<option value="${_escAttr(p.id)}">${_escAttr(p.nom)}${_escAttr(sub)}</option>`;
-    }).join('');
-  }
-}
-
-// Peuple le sélecteur de salle d'après les salles utilisées par la classe choisie
+// Classes mobiles en pastilles (liste déroulante au-delà du seuil) — rendu par _iprintRender.
+function renderIprintPoolPicker() { _iprintRender(); }
+// Salles de la classe choisie (pastilles ; le <select> caché porte la valeur)
 function refreshIprintSalle() {
   const clsId = document.getElementById('iprint-class').value;
   const cls = clsId ? S.classes[clsId] : null;
   const salSel = document.getElementById('iprint-salle');
   if (!salSel) return;
-  if (!cls || !cls.rooms) {
-    salSel.innerHTML = '<option value="">— aucune salle —</option>';
-    return;
-  }
-  const opts = ['<option value="">— vide —</option>'];
-  for (const salleId of Object.keys(cls.rooms)) {
-    const s = S.salles?.[salleId];
-    if (s) opts.push(`<option value="${_escAttr(salleId)}">${_escName(s.nom)}</option>`);
-  }
-  salSel.innerHTML = opts.join('');
-  if (cls.activeRoom && cls.rooms[cls.activeRoom]) salSel.value = cls.activeRoom;
+  const ids = cls?.rooms ? Object.keys(cls.rooms).filter(id => S.salles?.[id]) : [];
+  salSel.innerHTML = '<option value="">— vide —</option>' + ids.map(id => `<option value="${_escAttr(id)}">${_escName(S.salles[id].nom)}</option>`).join('');
+  salSel.value = (cls && cls.activeRoom && ids.includes(cls.activeRoom)) ? cls.activeRoom : (ids[0] || '');
 }
-
-// Sélectionne une classe mobile (par son ID de pool) et met à jour le visuel
+function _iprintSetSalle(id) { document.getElementById('iprint-salle').value = id; _iprintAutoSlot(); _iprintRender(); }
 function setIprintType(poolId) {
   if (!poolId || !S.tabletPools?.[poolId]) return;
   iprintState.type = poolId;
-  // Mode boutons : marquer le bouton actif
-  document.querySelectorAll('#iprint-pool-buttons button').forEach(b => {
-    b.className = 'btn ' + (b.id === `iprint-pool-${poolId}` ? 'btn-p' : 'btn-g');
-  });
-  // Mode dropdown : synchroniser la valeur
-  const sel = document.getElementById('iprint-pool-select');
-  if (sel && sel.style.display !== 'none') sel.value = poolId;
+  _iprintRender();
 }
-
 function iprintDateAdj(delta) {
   const inp = document.getElementById('iprint-date');
-  const d = new Date(inp.value + 'T12:00:00');
+  const d = new Date((inp.value || todayKey()) + 'T12:00:00');
   d.setDate(d.getDate() + delta);
-  inp.value = d.toISOString().slice(0, 10);
+  inp.value = _ymd(d);
+  _iprintAutoSlot();
+  _iprintRender();
 }
-
-function setIprintHoraire(h) {
-  iprintState.horaire = (iprintState.horaire === h) ? '' : h;
-  ['M1','M2','M3','M4','S1','S2','S3'].forEach(slot => {
-    const btn = document.getElementById(`iprint-h-${slot}`);
-    if (btn) btn.className = 'btn btn-sm ' + (iprintState.horaire === slot ? 'btn-p' : 'btn-g');
-  });
+function setIprintHoraire(h) { iprintState.horaire = (iprintState.horaire === h) ? '' : h; _iprintRender(); }
+// Créneaux de la salle choisie pour le jour de la date (emploi du temps de Config Salle)
+function _iprintSlots() {
+  const salleId = document.getElementById('iprint-salle')?.value || '';
+  const dv = document.getElementById('iprint-date')?.value || todayKey();
+  const day = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date(dv + 'T12:00:00').getDay()];
+  const sid = salleId || Object.keys(S.salles || {})[0];
+  return { slots: sid ? getSalleSchedule(sid, day) : [], day, dv };
 }
-
-function printSuiviPret() {
-  const poolId = iprintState.type;
-  const pool = S.tabletPools?.[poolId];
-  if (!pool) return toast('⚠️ Aucune classe mobile sélectionnée.', 'warn');
+// Présélectionne le créneau en cours si la date est aujourd'hui (sinon garde le choix, s'il existe ce jour-là).
+function _iprintAutoSlot() {
+  const { slots, dv } = _iprintSlots();
+  if (dv === todayKey()) { const now = new Date(); const cur = findCurrentSlot(slots, `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`); if (cur) { iprintState.horaire = cur.id; return; } }
+  if (iprintState.horaire && !slots.some(x => x.id === iprintState.horaire)) iprintState.horaire = '';
+}
+function _iprintRender() {
+  const pill = (on, oc, lbl, tip) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}" onclick="${oc}"${tip ? ` title="${_escAttr(tip)}"` : ''}>${lbl}</button>`;
+  const pools = Object.values(S.tabletPools || {});
+  const pb = document.getElementById('iprint-pool-buttons'), ps = document.getElementById('iprint-pool-select');
+  if (pools.length <= IPRINT_POOL_BUTTONS_THRESHOLD) {
+    pb.style.display = ''; ps.style.display = 'none';
+    pb.innerHTML = pools.map(p => pill(p.id === iprintState.type, `setIprintType('${_escJsAttr(p.id)}')`, `${_esc(p.nom)} · ${p.count || 0}`, poolLotsSummary(p) ? 'Lots ' + poolLotsSummary(p) : '')).join('');
+  } else {
+    pb.style.display = 'none'; ps.style.display = '';
+    ps.innerHTML = pools.map(p => `<option value="${_escAttr(p.id)}"${p.id === iprintState.type ? ' selected' : ''}>${_esc(p.nom)} · ${p.count || 0}</option>`).join('');
+  }
+  const { slots, day } = _iprintSlots();
+  const dayFr = { mon: 'lundi', tue: 'mardi', wed: 'mercredi', thu: 'jeudi', fri: 'vendredi', sat: 'samedi', sun: 'dimanche' }[day];
+  document.getElementById('iprint-slots-lbl').textContent = `Créneau (emploi du temps de la salle, ${dayFr})`;
+  document.getElementById('iprint-slots').innerHTML = (slots.length ? slots.map(x => pill(iprintState.horaire === x.id, `setIprintHoraire('${_escJsAttr(x.id)}')`, `${_esc(x.id)} <small>${_esc(x.start || '')}</small>`, `${x.label || x.id} · ${x.start}–${x.end}`)).join('') : '<span class="clf-note" style="margin:0">aucun créneau ce jour-là</span>')
+    + pill(!iprintState.horaire, "iprintState.horaire='';_iprintRender()", 'vide', 'Laisser l\'horaire vide (à remplir à la main)');
+  const clsId = document.getElementById('iprint-class').value, cls = clsId ? S.classes[clsId] : null;
+  const salSel = document.getElementById('iprint-salle');
+  const ids = [...salSel.options].map(o => o.value).filter(Boolean);
+  document.getElementById('iprint-salles').innerHTML = ids.map(id => pill(salSel.value === id, `_iprintSetSalle('${_escJsAttr(id)}')`, _esc(S.salles[id].nom))).join('') + pill(!salSel.value, "_iprintSetSalle('')", 'vide');
+  const grps = cls ? [1, 2, 3].filter(g => (cls.eleves || []).some(sid => _grp(S.eleves[sid], cls) === g)) : [];
+  document.getElementById('iprint-grp-row').style.display = grps.length ? '' : 'none';
+  document.getElementById('iprint-grps').innerHTML = pill(iprintState.groupe === 0, 'setIprintGroupe(0)', 'Classe entière') + grps.map(g => pill(iprintState.groupe === g, `setIprintGroupe(${g})`, 'G' + g)).join('');
+  // Aperçu : la vraie fiche, réduite
+  const r = _iprintBuildHTML();
+  const pv = document.getElementById('iprint-preview');
+  if (pv) pv.innerHTML = r ? r.html : '';
+  const st = document.getElementById('iprint-stats');
+  if (st && r) st.textContent = `${r.lent} tablette${r.lent > 1 ? 's' : ''} affectée${r.lent > 1 ? 's' : ''} · ${r.free} libre${r.free > 1 ? 's' : ''} · ${r.hs} indisponible${r.hs > 1 ? 's' : ''} — la fiche imprimée garde sa forme habituelle.`;
+}
+// Construit le HTML de la fiche (identique à l'impression) SANS rien modifier : la salle et la
+// classe mobile choisies sont lues directement dans cls.rooms[salle].ipadsByPool[pool].
+function _iprintBuildHTML() {
+  const poolId = iprintState.type, pool = S.tabletPools?.[poolId];
+  if (!pool) return null;
   const dateVal = document.getElementById('iprint-date').value;
   const horaire = iprintState.horaire;
   const salleId = document.getElementById('iprint-salle').value.trim();
@@ -27524,37 +27465,23 @@ function printSuiviPret() {
   const clsId   = document.getElementById('iprint-class').value;
   const cls     = clsId ? S.classes[clsId] : null;
   const groupe  = iprintState.groupe;
-
-  localStorage.setItem('iprint-prof', prof);
-
-  // Bascule activeRoom de la classe vers la salle choisie (si elle l'utilise),
-  // pour que les accesseurs renvoient bien les tablettes de cette salle.
-  if (cls && salleId && cls.rooms && cls.rooms[salleId]) cls.activeRoom = salleId;
-  // Bascule aussi la classe mobile active sur le pool choisi : ainsi l'assignation utilisée
-  // pour la fiche de prêt est bien celle de ce pool (pas celle d'un autre pool).
-  if (cls && cls.activePool !== poolId) cls.activePool = poolId;
-
-  const salleNom = salleId ? (S.salles?.[salleId]?.nom || '') : '';
-  const salle = salleNom; // étiquette affichée dans le PDF
-
-  const [y, m, d] = dateVal.split('-');
+  const salle = salleId ? (S.salles?.[salleId]?.nom || '') : '';
+  const [y, m, d] = (dateVal || '').split('-');
   const dateFr = (y && m && d) ? `${d}/${m}/${y}` : '';
-
-  // n° de tablette → "Nom Prénom" — utilise la map du mode correspondant au groupe sélectionné
+  // n° de tablette → "Nom Prénom" — map du mode correspondant au groupe sélectionné
   const ipadMap = {};
-  if (cls) {
-    const srcMap = ipadGetMap(cls, groupe);
+  const room = cls && salleId ? cls.rooms?.[salleId] : (cls ? cls.rooms?.[cls.activeRoom] : null);
+  if (cls && room) {
+    const srcMap = room.ipadsByPool?.[poolId]?.[['ce', 'g1', 'g2', 'g3'][groupe] || 'ce'] || {};
     for (const [key, ipadN] of Object.entries(srcMap)) {
-      const sid = cls.seating[key];
+      const sid = room.seating?.[key];
       const stu = sid ? S.eleves[sid] : null;
       if (stu) ipadMap[ipadN] = `${stu.nom} ${stu.prenom}`;
     }
   }
-
   const grpSuffix = groupe === 1 ? ' G1' : groupe === 2 ? ' G2' : groupe === 3 ? ' G3' : '';
   const clsLabel = (cls?.nom || '') + grpSuffix;
   const count = Math.max(1, pool.count || 1);
-
   const BDR  = '1px solid #666';
   const TH   = `border:${BDR};padding:3px 6px;background:#d9d9d9;font-weight:bold;text-align:center;font-size:9pt;white-space:nowrap`;
   const TD   = `border:${BDR};padding:3px 6px;text-align:center;font-size:9pt`;
@@ -27618,6 +27545,20 @@ function printSuiviPret() {
       </table>
     </div>`;
 
+  let lent = 0, hs = 0;
+  for (let n = 1; n <= count; n++) { if (unavailableSet.has(n)) hs++; else if (ipadMap[n]) lent++; }
+  return { html, pool, clsLabel, dateVal, horaire, prof, lent, hs, free: count - lent - hs };
+}
+function printSuiviPret() {
+  const r = _iprintBuildHTML();
+  if (!r) return toast('⚠️ Aucune classe mobile sélectionnée.', 'warn');
+  const { html, pool, clsLabel, dateVal, horaire, prof } = r;
+  localStorage.setItem('iprint-prof', prof);
+  // Comme avant : la classe affiche ensuite la salle et la classe mobile de la fiche.
+  const cls = S.classes[document.getElementById('iprint-class').value];
+  const salleId = document.getElementById('iprint-salle').value.trim();
+  if (cls && salleId && cls.rooms && cls.rooms[salleId]) cls.activeRoom = salleId;
+  if (cls && cls.activePool !== iprintState.type) cls.activePool = iprintState.type;
   const pa = document.getElementById('pa');
   pa.innerHTML = html;
   pa.style.display = 'block';
