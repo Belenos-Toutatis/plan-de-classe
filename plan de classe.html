@@ -6812,6 +6812,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <h2 id="meval-plan-overlay-title" style="margin:0">🪑 Saisie sur le plan</h2>
       <select id="meval-plan-overlay-pass" class="sel-pills-src" onchange="_evalPlanOverlayChangePass(this.value)" aria-label="Passation"></select>
       <span id="meval-plan-overlay-grp"></span>
+      <label class="hm-sw" id="meval-plan-overlay-narrow-wrap" style="display:none;margin:0" title="Les colonnes où aucun élève n'est assis deviennent très étroites : le plan gagne de la place"><input type="checkbox" class="sw-chk" id="meval-plan-overlay-narrow" onchange="_evpSetNarrow(this.checked)"> Colonnes vides étroites</label>
       <button class="btn btn-p btn-sm" onclick="closeMod2('meval-plan-overlay')" style="margin-left:auto">✓ Fermer</button>
     </div>
     <div id="meval-plan-overlay-brush" class="evp-brush"></div>
@@ -8031,11 +8032,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.130.1';
+const APP_VERSION    = '2.130.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T17:39:46Z';
+const APP_BUILD_DATE = '2026-10-08T17:42:16Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -46631,7 +46632,18 @@ function _evalPlanOverlayRender() {
   const _gPlan = _evalTableurGroup(cls);
   // Taille de cellule adaptative selon le total de compétences à afficher
   const cellMinH = Math.max(120, 70 + pairs.length * 36);
-  let html = `<div id="evp-plan" style="display:grid;grid-template-columns:repeat(${cols}, minmax(150px, 1fr));gap:6px;width:max-content;margin:0 auto">`;
+  // Colonnes sans aucun élève (allée, tables vides) : très étroites si l'option est cochée.
+  // Ordre d'affichage = vue prof, colonne cols-1 à gauche.
+  const _colHasStu = c => { for (let r = 0; r < rows; r++) { if (cls.seating?.[`${r},${c}`] && S.eleves[cls.seating[`${r},${c}`]]) return true; if (aeshAtKey(cls, `${r},${c}`) >= 0) return true; } return false; };
+  const _emptyCols = new Set();
+  for (let c = 0; c < cols; c++) if (!_colHasStu(c)) _emptyCols.add(c);
+  const _narrow = _evpNarrow() && _emptyCols.size > 0;
+  { const nw = document.getElementById('meval-plan-overlay-narrow-wrap');
+    if (nw) nw.style.display = _emptyCols.size ? '' : 'none';
+    const nc = document.getElementById('meval-plan-overlay-narrow'); if (nc) nc.checked = _evpNarrow(); }
+  const _tpl = [];
+  for (let c = cols - 1; c >= 0; c--) _tpl.push(_narrow && _emptyCols.has(c) ? '22px' : 'minmax(150px, 1fr)');
+  let html = `<div id="evp-plan" style="display:grid;grid-template-columns:${_tpl.join(' ')};gap:6px;width:max-content;margin:0 auto">`;
   // Vue prof : r=rows-1 en haut, col 0 à droite
   for (let r = rows - 1; r >= 0; r--) {
     for (let c = cols - 1; c >= 0; c--) {
@@ -46709,6 +46721,13 @@ function _evalPlanOverlayRender() {
 // Le plan tient dans la LARGEUR de l'écran : rendu à sa taille naturelle, puis réduit
 // (propriété CSS `zoom`, qui réduit aussi la zone cliquable — pas un `transform`) juste
 // assez pour ne plus défiler en largeur. Recalculé au redimensionnement de la fenêtre.
+// « Colonnes vides étroites » : réglage mémorisé sur la machine (désactivé par défaut).
+function _evpNarrow() { try { return localStorage.getItem('planClasse_evpNarrowEmpty') === '1'; } catch (e) { return false; } }
+function _evpSetNarrow(on) {
+  try { localStorage.setItem('planClasse_evpNarrowEmpty', on ? '1' : '0'); } catch (e) {}
+  _evalPlanOverlayRender();
+}
+
 // Prénom et nom remplissent la largeur de leur case (demande de l'utilisateur) : chaque
 // ligne reçoit sa taille, mesurée à partir d'une taille de référence. Plafonnée pour qu'un
 // prénom court (« Léo ») ne devienne pas démesuré. Mesuré SANS zoom, avant l'ajustement
