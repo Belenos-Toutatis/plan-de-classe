@@ -1811,6 +1811,8 @@ body.rendu-projecting #mrendu-body .mres-tbl{font-size:1em}
 .xc-med{position:absolute;top:2px;width:2px;height:20px;margin-left:-1px;background:var(--ink-deep)}
 .xc-f,.xc-m{position:absolute;top:6px;width:12px;height:12px;margin-left:-6px;background:var(--paper);border:2px solid var(--civ-f);border-radius:50%;box-sizing:border-box}
 .xc-m{border-color:var(--civ-m);border-radius:2px}
+.xc-avg{position:absolute;top:7px;width:10px;height:10px;margin-left:-5px;background:var(--ink-deep);transform:rotate(45deg);border:1px solid var(--paper);box-sizing:border-box;z-index:1}
+.xc-key-avg{color:var(--ink-deep);font-weight:700}
 .xc-key-f{color:var(--civ-f)}.xc-key-m{color:var(--civ-m)}
 .xc-warn{color:var(--warn-fg);cursor:help}
 .xc-tbl{width:100%;border-collapse:collapse;font-size:.88em}
@@ -8052,11 +8054,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.131.0';
+const APP_VERSION    = '2.131.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T18:18:53Z';
+const APP_BUILD_DATE = '2026-10-08T18:31:23Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19126,10 +19128,114 @@ function _renduRender() {
     foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Clic sur un élève = détail de sa note et sa remarque.</span>
       <span>${multi ? `<button class="btn btn-g" onclick="_evalOpenCrossTabForEval('${_esc(st.evalId)}')">🆚 Comparer les classes</button>` : ''}<button class="btn btn-p" onclick="_resCopy()">⧉ Copier</button></span>`;
   } else {
-    foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Vue sans rang ni couleurs de note, à montrer aux élèves. En plein écran : Échap pour sortir, Ctrl + / Ctrl − pour la taille.</span>
-      <span><button class="btn btn-g" onclick="_renduPrint()">🖨 Imprimer</button><button class="btn btn-p" onclick="_renduStartProject()">📽 Plein écran</button></span>`;
+    const _pw = _resProjWin && !_resProjWin.closed;
+    foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">${_pw
+        ? 'La fenêtre de projection suit ce que tu règles ici. Dans la fenêtre : ⛶ plein écran, Ctrl + / Ctrl − pour la taille.'
+        : 'Vue sans rang ni couleurs de note, à montrer aux élèves. La fenêtre s\'ouvre à part : glisse-la sur l\'écran de projection, puis ⛶ plein écran.'}</span>
+      <span><button class="btn btn-g" onclick="_renduPrint()">🖨 Imprimer</button>${_pw
+        ? `<button class="btn btn-g" onclick="_resProjClose()">✕ Fermer la fenêtre</button><button class="btn btn-p" onclick="_resProjOpen()">🖥 Afficher la fenêtre</button>`
+        : `<button class="btn btn-p" onclick="_resProjOpen()" title="Ouvre ce tableau dans une nouvelle fenêtre, à glisser sur le second écran (bureau étendu) puis à mettre en plein écran">🖥 Ouvrir dans une fenêtre</button>`}</span>`;
+    _resProjPush();
   }
 }
+
+// Fenêtre de projection des notes (v2.131.1) : une fenêtre à part, à glisser sur
+// le second écran d'un bureau étendu ; elle a son propre bouton plein écran et
+// suit en direct les réglages de la fenêtre Résultats (mode Projeter).
+var _resProjWin = null;
+var _resProjZoom = 1;
+function _resProjOpen() {
+  if (_resProjWin && !_resProjWin.closed) { _resProjPush(); try { _resProjWin.focus(); } catch (e) {} return; }
+  let w = null;
+  try { w = window.open('', 'planClasse_projNotes', 'popup,width=1280,height=800'); } catch (e) {}
+  if (!w) {
+    toast('⚠️ Le navigateur a bloqué la fenêtre — projection affichée ici. Autorise les fenêtres pour ce site.', 'warn');
+    _renduStartProject();
+    return;
+  }
+  _resProjWin = w;
+  _resProjZoom = 1;
+  _resProjFill(w);
+  _renduRender();   // pousse le contenu et met à jour les boutons du pied
+}
+function _resProjClose() {
+  try { if (_resProjWin && !_resProjWin.closed) _resProjWin.close(); } catch (e) {}
+  _resProjWin = null;
+  if (_renduState.mode === 'proj') _renduRender();
+}
+function _resProjFill(w) {
+  const d = w.document;
+  const styles = [...document.querySelectorAll('style')].map(x => x.outerHTML).join('\n');
+  const theme = document.documentElement.getAttribute('data-theme') || '';
+  d.open();
+  d.write(`<!doctype html><html lang="fr"${theme ? ` data-theme="${_escAttr(theme)}"` : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Notes — projection</title>${styles}
+<style>
+body.rpw{margin:0;padding:18px 32px;background:var(--paper) !important;background-image:none !important;color:var(--ink-deep);font-family:var(--font-sans);box-sizing:border-box;min-height:100vh}
+body.rpw::before{display:none !important}
+#rpw-ctrl{position:fixed;top:8px;right:8px;z-index:50;display:flex;gap:4px;padding:4px;background:var(--paper);border:1px solid var(--rule-line);border-radius:8px;box-shadow:var(--shadow-pop);opacity:.35;transition:opacity .2s}
+#rpw-ctrl:hover,#rpw-ctrl:focus-within{opacity:1}
+#rpw-ctrl button{appearance:none;border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-blue);border-radius:6px;cursor:pointer;font:600 14px/1 var(--font-sans);padding:6px 10px}
+#rpw-ctrl button:hover{background:var(--paper-warm)}
+#rpw-pct{min-width:58px;font-family:var(--font-mono) !important}
+</style></head>
+<body class="rendu-projecting rpw"><div id="rpw-ctrl">
+<button id="rpw-minus" title="Plus petit (Ctrl −)">🔍−</button><button id="rpw-pct" title="Taille normale (Ctrl 0)">100%</button><button id="rpw-plus" title="Plus grand (Ctrl +)">🔍+</button>
+<button id="rpw-fs" title="Plein écran (Échap pour sortir)">⛶ Plein écran</button><button id="rpw-close" title="Fermer la fenêtre">✕</button>
+</div><div id="mrendu-body"></div></body></html>`);
+  d.close();
+  const on = (id, fn) => d.getElementById(id)?.addEventListener('click', fn);
+  on('rpw-minus', () => _resProjSetZoom(-1));
+  on('rpw-plus', () => _resProjSetZoom(1));
+  on('rpw-pct', () => _resProjSetZoom(0));
+  on('rpw-fs', () => {
+    try {
+      if (d.fullscreenElement) d.exitFullscreen();
+      else d.documentElement.requestFullscreen();
+    } catch (e) {}
+  });
+  on('rpw-close', () => { try { w.close(); } catch (e) {} });
+  d.addEventListener('fullscreenchange', () => {
+    const b = d.getElementById('rpw-fs');
+    if (b) b.textContent = d.fullscreenElement ? '⛶ Quitter le plein écran' : '⛶ Plein écran';
+  });
+  d.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); _resProjSetZoom(1); }
+    else if (e.key === '-') { e.preventDefault(); _resProjSetZoom(-1); }
+    else if (e.key === '0') { e.preventDefault(); _resProjSetZoom(0); }
+  });
+  w.addEventListener('pagehide', () => {
+    setTimeout(() => {
+      if (_resProjWin === w && w.closed) { _resProjWin = null; if (_renduState.mode === 'proj' && document.getElementById('mrendu')?.classList.contains('on')) _renduRender(); }
+    }, 50);
+  });
+}
+function _resProjSetZoom(delta) {
+  if (delta === 0) _resProjZoom = 1;
+  else if (delta > 0) _resProjZoom = Math.min(_RENDU_ZOOM_MAX, _resProjZoom * _RENDU_ZOOM_STEP);
+  else _resProjZoom = Math.max(_RENDU_ZOOM_MIN, _resProjZoom / _RENDU_ZOOM_STEP);
+  _resProjPush();
+}
+// Recopie le tableau de projection dans la fenêtre (sans les clics, qui n'y existent pas).
+function _resProjPush() {
+  const w = _resProjWin;
+  if (!w) return;
+  if (w.closed) { _resProjWin = null; return; }
+  if (_renduState.mode !== 'proj') return;
+  const src = document.getElementById('mrendu-body');
+  const d = w.document, dst = d.getElementById('mrendu-body');
+  if (!src || !dst) return;
+  dst.innerHTML = src.innerHTML;
+  dst.querySelectorAll('[onclick],[onmouseover],[onmouseout]').forEach(el => { el.removeAttribute('onclick'); el.removeAttribute('onmouseover'); el.removeAttribute('onmouseout'); });
+  dst.style.fontSize = (2.2 * _resProjZoom) + 'em';
+  const pct = d.getElementById('rpw-pct');
+  if (pct) pct.textContent = Math.round(_resProjZoom * 100) + '%';
+  const theme = document.documentElement.getAttribute('data-theme');
+  if (theme) d.documentElement.setAttribute('data-theme', theme); else d.documentElement.removeAttribute('data-theme');
+  const t = dst.querySelector('h2.rendu-project-title');
+  d.title = (t ? t.textContent + ' — ' : '') + 'projection';
+}
+window.addEventListener('beforeunload', () => { try { if (_resProjWin && !_resProjWin.closed) _resProjWin.close(); } catch (e) {} });
 function _resCopy() {
   const t = _renduState.lastTsv;
   if (!t) return;
@@ -46220,6 +46326,7 @@ function _bilanRenderCrossTab() {
     }
     if (r.F) track += `<div class="xc-f" style="left:${pc(r.F.avg)}" title="Filles : ${_fmtNote(r.F.avg)} (${r.F.count})"></div>`;
     if (r.M) track += `<div class="xc-m" style="left:${pc(r.M.avg)}" title="Garçons : ${_fmtNote(r.M.avg)} (${r.M.count})"></div>`;
+    if (t) track += `<div class="xc-avg" style="left:${pc(t.avg)}" title="Moyenne de tous les élèves : ${_fmtNote(t.avg)} (${t.count})"></div>`;
     return `<div class="xc-row${isGrand ? ' xc-grand' : ''}"><span><b>${_esc(r.classNom)}</b><br><span class="nd-dim">${t ? t.count : 0} élève${t && t.count > 1 ? 's' : ''}</span></span>
       <div class="xc-track">${track}</div>
       <span class="xc-num">${t ? `<b>${_fmtNote(t.avg)}</b> · ${_fmtNote(t.median)} · ${_fmtNote(t.std)}` : '—'}</span></div>`;
@@ -46227,7 +46334,7 @@ function _bilanRenderCrossTab() {
   let html = `<div class="xc-row xc-head"><span class="nd-dim">Classe</span><div class="xc-scale">${[0, 5, 10, 15, 20].map(v => `<span style="left:${v * 5}%">${v}</span>`).join('')}</div><span class="nd-dim xc-num">moyenne · médiane · σ</span></div>`;
   for (const r of rows) html += line(r, false);
   if (rows.length > 1) html += line(grand, true);
-  html += `<p class="nd-calc" style="margin:4px 0 12px">Trait gris : de la note la plus basse à la plus haute · bande : la moitié centrale des notes · barre : médiane · <span class="xc-key-f">○ filles</span> · <span class="xc-key-m">□ garçons</span> (moyennes). Notes ramenées sur 20.</p>`;
+  html += `<p class="nd-calc" style="margin:4px 0 12px">Trait gris : de la note la plus basse à la plus haute · bande : la moitié centrale des notes · barre : médiane · <span class="xc-key-avg">◆ tous</span> · <span class="xc-key-f">○ filles</span> · <span class="xc-key-m">□ garçons</span> (moyennes). Notes ramenées sur 20.</p>`;
   const cell = stt => stt ? `<b>${_fmtNote(stt.avg)}</b> <span class="nd-dim">(${stt.count})</span>${small(stt)}<br><span class="nd-dim">σ ${_fmtNote(stt.std)} · méd. ${_fmtNote(stt.median)}</span>` : '<span class="nd-dim">—</span>';
   html += '<table class="xc-tbl"><thead><tr><th>Classe</th><th>Filles</th><th>Garçons</th><th>Total</th></tr></thead><tbody>';
   for (const r of rows) html += `<tr><td>${_esc(r.classNom)}</td><td>${cell(r.F)}</td><td>${cell(r.M)}</td><td>${cell(r.total)}</td></tr>`;
