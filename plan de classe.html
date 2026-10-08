@@ -1772,6 +1772,7 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .mres-ctl{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:4px 0 6px;font-size:.9em}
 .mres-lbl{color:var(--pencil);font-size:.88em}
 .mres-pills{display:inline-flex;flex-wrap:wrap;gap:4px}
+.mres-pills .slot-pill.on .nd-dim{color:inherit}
 .mres-note{color:var(--pencil);font-size:.86em}
 .bsynth.mres-synth{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:2px 0 8px}
 .mres-synth .bsynth-big{font-size:1.35em}
@@ -8054,11 +8055,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.131.1';
+const APP_VERSION    = '2.131.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T18:31:23Z';
+const APP_BUILD_DATE = '2026-10-08T18:35:52Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -18791,7 +18792,7 @@ function renderHist() {
 // ═══════════════ « Projeter les notes » — vue épurée projetable / imprimable ═══════════════
 // État de sélection des colonnes (clé éval → Set de keys cochées) — éphémère en mémoire,
 // reset à chaque ouverture pour repartir d'une valeur par défaut sensée.
-var _renduState = { evalId: null, classId: null, mode: 'bilan', sort: 'nom', names: 'full', groups: {} };
+var _renduState = { evalId: null, classId: null, mode: 'bilan', sort: 'nom', names: 'full', groups: {}, passOff: new Set() };
 
 // Enumère les colonnes disponibles pour une éval donnée. Renvoie [{ key, label, kind, ... }]
 // classId (optionnel, défaut : la classe projetée) : les passations / questions « non
@@ -18879,7 +18880,7 @@ function _evalOpenRendu(evalId, mode) {
   const cid = (tableurCid && _evalIncludesClass(ev, tableurCid)) ? tableurCid
             : (S.cur && _evalIncludesClass(ev, S.cur)) ? S.cur
             : _evalPrimaryAliveClassId(ev);
-  if (_renduState.evalId !== evalId) { _renduState.groups = {}; _renduState.sort = 'nom'; }
+  if (_renduState.evalId !== evalId) { _renduState.groups = {}; _renduState.sort = 'nom'; _renduState.passOff = new Set(); }
   _renduState.evalId  = evalId;
   _renduState.classId = cid;
   _renduState.mode = mode || 'bilan';
@@ -18894,6 +18895,17 @@ function _resSetMode(m) {
 function _resSetClass(cid) { _renduState.classId = cid; _renduRender(); }
 function _resSetSort(v) { _renduState.sort = v; _renduRender(); }
 function _resSetNames(v) { _renduState.names = v; _renduRender(); }
+// Type B : passations affichées (une pastille par passation, toutes par défaut).
+function _resTogglePass(pid) {
+  const off = _renduState.passOff || (_renduState.passOff = new Set());
+  if (off.has(pid)) off.delete(pid); else off.add(pid);
+  _renduRender();
+}
+function _resAllPass(on, ids) {
+  const off = _renduState.passOff || (_renduState.passOff = new Set());
+  (ids || []).forEach(id => on ? off.delete(id) : off.add(id));
+  _renduRender();
+}
 function _resToggleGroup(k) {
   const ev = S.evaluations?.[_renduState.evalId];
   const m = _renduState.mode;
@@ -18954,7 +18966,7 @@ function _renduRender() {
     if (mode === 'proj') {
       ctl += '<span class="mres-lbl">Noms</span><span class="ip-seg">'
         + `<button class="${st.names !== 'init' ? 'on' : ''}" onclick="_resSetNames('full')">Nom et prénom</button>`
-        + `<button class="${st.names === 'init' ? 'on' : ''}" onclick="_resSetNames('init')" title="Seules les initiales sont projetées">Initiales</button></span>`;
+        + `<button class="${st.names === 'init' ? 'on' : ''}" onclick="_resSetNames('init')" title="Prénom et initiale du nom ; plusieurs lettres du nom quand deux élèves de la classe ont le même prénom">Prénom et initiale</button></span>`;
     }
   }
   document.getElementById('mres-ctl').innerHTML = ctl;
@@ -18985,9 +18997,27 @@ function _renduRender() {
     const lbl = (g.key === 'q' ? qLabel : g.label) + ((g.key === 'q' || g.key === 'comp' || g.key === 'exo') ? ` (${n})` : '');
     return `<button class="slot-pill${groups.has(g.key) ? ' on' : ''}" onclick="_resToggleGroup('${g.key}')">${_esc(lbl)}</button>`;
   }).join('');
-  document.getElementById('mrendu-cols').innerHTML = gHtml;
+  // Type B : choix des passations affichées, sous les familles.
+  let pHtml = '';
+  const passOff = st.passOff || (st.passOff = new Set());
+  if (ev.type === 'B' && groups.has('q')) {
+    const plist = (ev.passations || []).filter(p => !_subSkippedFor(p, cls.id) && allCols.some(c => c.kind === 'pass-comp' && c.passId === p.id))
+      .sort((a, b) => (_passDateFor(a, cls.id) || '').localeCompare(_passDateFor(b, cls.id) || ''));
+    if (plist.length > 1) {
+      const ids = plist.map(p => p.id);
+      const nOn = ids.filter(id => !passOff.has(id)).length;
+      pHtml = `<span style="flex-basis:100%;height:0"></span><span class="mres-lbl">Passations</span>`
+        + plist.map(p => {
+          const d = _passDateFor(p, cls.id);
+          const tip = [p.name, d ? _fmtDateFr(d) : '', _passComps(p, cls.id).map(cid => S.competences?.[cid]?.code || cid).join(', ')].filter(Boolean).join(' · ');
+          return `<button class="slot-pill${passOff.has(p.id) ? '' : ' on'}" onclick="_resTogglePass('${_esc(p.id)}')" title="${_escAttr(tip)}">${_esc(p.code || '?')}${d ? ` <span class="nd-dim">${_esc(d.slice(8, 10) + '/' + d.slice(5, 7))}</span>` : ''}</button>`;
+        }).join('')
+        + (nOn < ids.length ? `<button class="slot-pill" onclick="_resAllPass(true, ${_escAttr(JSON.stringify(ids))})">toutes</button>` : '');
+    }
+  }
+  document.getElementById('mrendu-cols').innerHTML = gHtml + pHtml;
   const groupOf = c => (_RES_GROUPS.find(g => g.kinds.includes(c.kind)) || {}).key;
-  const selCols = allCols.filter(c => groups.has(groupOf(c)));
+  const selCols = allCols.filter(c => groups.has(groupOf(c)) && !(c.kind === 'pass-comp' && passOff.has(c.passId)));
 
   const sids = _resSids(ev, cls, st.sort);
   const nb = _nbLevels();
@@ -19030,8 +19060,15 @@ function _renduRender() {
     }
     return '<span class="mres-dash">—</span>';
   };
+  // « Prénom et initiale » : autant de lettres du nom qu'il en faut pour distinguer
+  // deux élèves de la classe qui ont le même prénom (au moins une).
+  const _abbr = (mode === 'proj' && st.names === 'init') ? _buildAbbrMap(sids.map(x => S.eleves[x]).filter(Boolean)) : null;
   const stuName = (stu) => {
-    if (mode === 'proj' && st.names === 'init') return `${_esc((stu.prenom || '?').charAt(0).toUpperCase())}. ${_esc((stu.nom || '?').charAt(0).toUpperCase())}.`;
+    if (_abbr) {
+      const k = Math.max(1, _abbr.get(stu.id) || 0);
+      const nom = (stu.nom || '').trim();
+      return `${_esc(stu.prenom || '?')} <strong>${_esc(nom.slice(0, k).toUpperCase())}${nom.length > k ? '.' : ''}</strong>`;
+    }
     return `<strong>${_esc((stu.nom || '').toUpperCase())}</strong> ${_esc(stu.prenom || '')}`;
   };
   const tipOf = (c) => {
