@@ -7891,11 +7891,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.128.1';
+const APP_VERSION    = '2.128.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T04:23:36Z';
+const APP_BUILD_DATE = '2026-10-08T04:24:34Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -25973,7 +25973,7 @@ function _amSet(k, v) {
   _amRender();
 }
 function _amTogglePick(n) { _am.picked.has(n) ? _am.picked.delete(n) : _am.picked.add(n); _am.mode = _am.picked.size ? 'plan' : 'all'; _amRender(); }
-function _amTogglePlan(id) { _am.plans.has(id) ? _am.plans.delete(id) : _am.plans.add(id); _amRender(); }
+function _amTogglePlan(id) { if (!S.salles?.[id]) return; _am.plans.has(id) ? _am.plans.delete(id) : _am.plans.add(id); _amRender(); }
 // Numéros à imprimer selon le mode choisi (null = toute la salle)
 function _amNums() {
   if (_am.mode === 'plan') return [..._am.picked].sort((a, b) => a - b);
@@ -25995,7 +25995,7 @@ function _amRender() {
   const go = document.getElementById('am-go');
   if (go) { go.disabled = !n; go.textContent = n ? `🖨 Imprimer ${n} marqueur${n > 1 ? 's' : ''} (${Math.ceil(n / _am.per)} feuille${Math.ceil(n / _am.per) > 1 ? 's' : ''} recto-verso)` : '🖨 Imprimer'; }
   // Plans à coller au bureau : toutes les salles du catalogue
-  const salles = Object.values(S.salles || {}).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+  const salles = Object.entries(S.salles || {}).map(([id, sa]) => ({ id, nom: sa.nom || id, rows: sa.rows, cols: sa.cols })).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
   document.getElementById('am-plans').innerHTML = salles.map(sa => pill(_am.plans.has(sa.id), `_amTogglePlan('${_escJsAttr(sa.id)}')`, _esc(sa.nom), `${sa.rows} × ${sa.cols}`)).join('') || '<span class="clf-note">Aucune salle</span>';
   const pg = document.getElementById('am-plans-go'); if (pg) { pg.disabled = !_am.plans.size; pg.textContent = `🖨 Imprimer ${_am.plans.size || ''} plan${_am.plans.size > 1 ? 's' : ''}`; }
   // Mini-plan cliquable (vue prof, tableau en bas)
@@ -26018,7 +26018,7 @@ function _amPrint() {
   if (nums && !nums.length) { toast(_am.mode === 'list' ? `Aucun numéro valide (plage acceptée : 1-${ARUCO_MAX}).` : 'Coche des places sur le plan.', 'warn'); return; }
   printSalleArucoMarkers(_am.per, nums ? { customNums: nums } : undefined);
 }
-function _amPrintPlans() { if (_am.plans.size) { closeMod2('mqcmmarkers'); printQcmPlans([..._am.plans]); } }
+function _amPrintPlans() { _am.plans = new Set([..._am.plans].filter(id => S.salles?.[id])); if (_am.plans.size) { closeMod2('mqcmmarkers'); printQcmPlans([..._am.plans]); } }
 // Ancien bouton « Réimprimer des n° précis » (gardé pour les appels existants)
 // ─── Générateur ArUco intégré (dictionnaire QCMcam 4×4) ──────────────────
 // Dictionnaire `QCMCAM_4X4_157h3` de QCMcam v2 (src/lib/js/aruco.js, 2026-07) :
