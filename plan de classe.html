@@ -4459,7 +4459,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button class="btn btn-g btn-sm" id="btn-cstr-mode" onclick="togglePlanConstraintMode()" title="Mode contraintes : clique un élève pour ses places autorisées · glisse un élève sur un autre pour les séparer">⛓<span class="pl-txt"> Contraintes</span></button>
       <button class="btn btn-g btn-sm" onclick="openSnapshotsModal('positions')" title="Instantanés : sauvegarder ou consulter des dispositions de classe" aria-label="Instantanés">🔖</button>
       <button class="btn btn-g btn-sm" id="btn-undo-tb" onclick="undoLast()" disabled title="Annuler (Ctrl+Z)">↩</button>
-      <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Refaire (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
+      <button class="btn btn-g btn-sm" id="btn-redo-tb" onclick="redoLast()" disabled title="Rétablir (Ctrl+Y / Ctrl+Maj+Z)">↪</button>
       </span>
       <span class="pl-right">
       <span class="dd dd-right">
@@ -8674,11 +8674,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.1';
+const APP_VERSION    = '2.136.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T21:46:24Z';
+const APP_BUILD_DATE = '2026-10-08T21:51:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -11415,7 +11415,12 @@ function updateUndoRedoUI() {
   const r = document.getElementById('btn-redo-tb');
   if (r) r.disabled = !redoStack.length;
   const c = document.getElementById('ctx-undo');
-  if (c) c.className = 'ctx-item' + (undoStack.length ? '' : ' disabled');
+  if (c) c.disabled = !undoStack.length;
+  const cr = document.getElementById('ctx-redo');
+  if (cr) cr.disabled = !redoStack.length;
+  // Onglet Réunions (v2.136.2) : mêmes boutons que le fichier des collègues.
+  document.querySelectorAll('.reu-undo').forEach(b => { b.disabled = !undoStack.length; });
+  document.querySelectorAll('.reu-redo').forEach(b => { b.disabled = !redoStack.length; });
 }
 
 function pushUndo() {
@@ -11707,7 +11712,7 @@ function _ctxRender() {
       <button type="button" onclick="ctxEditNotes()"><b>📋</b>Infos${s.notes ? ' ●' : ''}</button>
       <button type="button" onclick="ctxOpenReminders()"><b>🔔</b>Rappels${remN ? ' ' + remN : ''}</button>
     </div>
-    <div class="ctx-foot"><button type="button" id="ctx-undo" onclick="closeCtxMenu();undoLast()"${undoStack.length ? '' : ' disabled'}>↩ Annuler le dernier changement</button>
+    <div class="ctx-foot"><span><button type="button" id="ctx-undo" onclick="closeCtxMenu();undoLast()"${undoStack.length ? '' : ' disabled'} title="Annuler le dernier changement (Ctrl+Z)">↩ Annuler</button><button type="button" id="ctx-redo" onclick="closeCtxMenu();redoLast()"${redoStack.length ? '' : ' disabled'} title="Rétablir ce qui vient d'être annulé (Ctrl+Y)">↪ Rétablir</button></span>
       <button type="button" class="danger" onclick="ctxRemove()">Retirer de sa place</button></div>`;
   if (_photos?.ready && _photoHas(sid)) _photoUrl(sid).then(u => { const av = document.getElementById('ctx-av'); if (u && av && ctxTarget?.sid === sid) av.innerHTML = `<img src="${u}" alt="">`; });
 }
@@ -27893,10 +27898,10 @@ function renderReunions() {
   if (!r) { _reu.id = null; _reu.view = 'list'; }
   const right = document.getElementById('reu-sh-right');
   if (_reu.view === 'list' || !r) {
-    if (right) right.innerHTML = `<button class="btn btn-g btn-sm" onclick="openReuExport()" title="Créer un fichier autonome (élèves, classes, photos) pour qu'un collègue prépare ses propres rendez-vous">📤 Fichier pour un collègue</button><button class="btn btn-p btn-sm" onclick="openReunionModal()" title="Créer une réunion parents-professeurs">＋ Nouvelle réunion</button>`;
+    if (right) right.innerHTML = `<button class="btn btn-g btn-sm reu-undo" onclick="undoLast()"${undoStack.length ? '' : ' disabled'} title="Annuler la dernière modification (Ctrl+Z)">↩ Annuler</button><button class="btn btn-g btn-sm reu-redo" onclick="redoLast()"${redoStack.length ? '' : ' disabled'} title="Rétablir ce qui vient d'être annulé (Ctrl+Y)">↪ Rétablir</button><button class="btn btn-g btn-sm" onclick="openReuExport()" title="Créer un fichier autonome (élèves, classes, photos) pour qu'un collègue prépare ses propres rendez-vous">📤 Fichier pour un collègue</button><button class="btn btn-p btn-sm" onclick="openReunionModal()" title="Créer une réunion parents-professeurs">＋ Nouvelle réunion</button>`;
     wrap.innerHTML = _reuListHTML();
   } else {
-    if (right) right.innerHTML = `<button class="btn btn-g btn-sm" onclick="openReuExport()" title="Créer un fichier autonome (élèves, classes, photos) pour qu'un collègue prépare ses propres rendez-vous">📤 Fichier pour un collègue</button><button class="btn btn-g btn-sm" onclick="_reuOpen(null)" title="Toutes les réunions">↩ Réunions</button>`;
+    if (right) right.innerHTML = `<button class="btn btn-g btn-sm reu-undo" onclick="undoLast()"${undoStack.length ? '' : ' disabled'} title="Annuler la dernière modification (Ctrl+Z)">↩ Annuler</button><button class="btn btn-g btn-sm reu-redo" onclick="redoLast()"${redoStack.length ? '' : ' disabled'} title="Rétablir ce qui vient d'être annulé (Ctrl+Y)">↪ Rétablir</button><button class="btn btn-g btn-sm" onclick="openReuExport()" title="Créer un fichier autonome (élèves, classes, photos) pour qu'un collègue prépare ses propres rendez-vous">📤 Fichier pour un collègue</button><button class="btn btn-g btn-sm" onclick="_reuOpen(null)" title="Toutes les réunions">↩ Réunions</button>`;
     if (_reu.view === 'soir') { wrap.innerHTML = _reuSoirHTML(r); _reuSoirAfter(r); }
     else { _reuInvMap = _reuInvite(r); wrap.innerHTML = _reuPrepHTML(r); _reuRenderSide(); _reuAfterPrep(); }
   }
