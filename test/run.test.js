@@ -2890,3 +2890,26 @@ test('AESH : un élève n\'a qu\'une AESH ; suppression = positions décalées ;
   assert.deepEqual(get('S.classes.C.aesh[1].sids'), ['b']);
   assert.equal(get(`aeshLabel(1, 2, S.classes.C)`), 'AESH2');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export ENT (fenêtre « Résultats du devoir », v2.131.0) : une compétence sans niveau
+// part VIDE, plus « 0 » (l'ENT y lisait un niveau zéro).
+// ─────────────────────────────────────────────────────────────────────────────
+test('Export ENT : compétence sans niveau = case vide, élève absent = A', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1', 's2'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'Beta', prenom: 'b', classe_id: 'c1' } },
+    salles: {}, competences: { k1: { id: 'k1', code: 'K1' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
+    evaluations: { e1: { id: 'e1', type: 'B', nomCourt: 'E', classIds: ['c1'], noteMax: 20, weighting: 'equal',
+      passations: [{ id: 'p1', code: 'P1', date: '2026-01-05', competenceIds: ['k1'], niveaux: { s1: { k1: 3 }, s2: { k1: 'A' } } }] } },
+  });
+  ev(`_renduState.evalId = 'e1'; _renduState.classId = 'c1'; _evalExportColsState = { note: true, comps: true, remarque: false };`);
+  const lines = get(`_evalExportToTSV(S.evaluations.e1).split('\\n')`);
+  assert.equal(lines.length, 3);
+  assert.equal(lines[1].split('\t')[2], '3', 'niveau saisi');
+  const beta = lines[2].split('\t');
+  assert.equal(beta[0], 'BETA b');
+  assert.equal(beta[2], '', 'pas de niveau → case vide, pas 0');
+});
