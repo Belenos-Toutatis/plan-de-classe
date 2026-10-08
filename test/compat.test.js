@@ -86,7 +86,7 @@ for (const file of fixtures) {
     assert.equal(r.idempotent, true, 'postLoadHook doit être idempotent');
     assert.equal(r.invalidAfter, null, 'l\'état migré doit repasser _validateImport');
     assert.ok(r.hasDisciplines, 'catalogue de disciplines créé');
-    assert.deepEqual(r.featureFlags, { tablettes: true, qcmcam: true, appel: true, evaluation: true });
+    assert.deepEqual(r.featureFlags, { tablettes: true, qcmcam: true, appel: true, evaluation: true, reunions: true });
     // Comptes conservés (les salles peuvent AUGMENTER en legacy : une salle créée par classe)
     assert.equal(r.counts.classes, Object.keys(before.classes || {}).length);
     assert.equal(r.counts.eleves, Object.keys(before.eleves || {}).length);

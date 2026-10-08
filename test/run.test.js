@@ -1204,12 +1204,13 @@ test('Fin d\'année : les données de l\'année partent, les réglages restent',
       S.evalPrefs.adjustPresets = [{ id: 'p1', op: 'add', v: -2, label: 'Rendu en retard' }];
       S.evalCommentLibrary = { positive: ['A aidé au rangement'], negative: ['Blouse non fermée'] };
       S.memoProgress = { e1: { b: 3, ok: 4, ko: 1, t: '2026-10-01' } };
+      S.reunions = { r1: { id: 'r1', date: '2026-11-03', first: '16:35', last: '19:30', step: 5, classIds: ['c1'], slots: { '16:35': { sid: 'e1' } } } };
       globalThis.__undoSpy = 0; pushUndo = function () { globalThis.__undoSpy++; };
       _doResetEndOfYear(false);`);
   // — Camp « données de l'année » : tout doit être vide —
   for (const k of ['classes', 'eleves', 'evaluations', 'snapshots', 'attendance', 'seatingSnapshots',
                    'movedHighlights', 'bulletinRemarques', 'bulletinClassRemarques',
-                   'bulletinWorkedItems', 'conseilClasse', 'memoProgress']) {
+                   'bulletinWorkedItems', 'conseilClasse', 'memoProgress', 'reunions']) {
     assert.equal(ev(`Object.keys(S.${k} || {}).length`), 0, `S.${k} doit être vidé en fin d'année`);
   }
   assert.equal(ev('S.cur'), null);
@@ -2912,4 +2913,25 @@ test('Export ENT : compétence sans niveau = case vide, élève absent = A', () 
   const beta = lines[2].split('\t');
   assert.equal(beta[0], 'BETA b');
   assert.equal(beta[2], '', 'pas de niveau → case vide, pas 0');
+});
+
+test('Réunions parents-profs : créneaux, purge d\'un élève et d\'une classe, nettoyage au chargement', () => {
+  // Le modèle de l'établissement : 16h35 → 19h30, de 5 en 5 = 36 créneaux sur deux colonnes de 18.
+  const times = JSON.parse(ev(`JSON.stringify(_reuTimes({ first: '16:35', last: '19:30', step: 5 }))`));
+  assert.equal(times.length, 36);
+  assert.equal(times[0], '16:35'); assert.equal(times[17], '18:00'); assert.equal(times[35], '19:30');
+  assert.equal(ev(`_reuTimes({ first: '17:00', last: '18:00', step: 10 }).length`), 7);
+  assert.equal(ev(`_reuTimes({ first: '18:00', last: '17:00', step: 5 }).length`), 0);
+  // Dernier rendez-vous qui ne tombe pas sur la grille : on s'arrête avant.
+  assert.equal(ev(`_reuTimes({ first: '16:30', last: '16:52', step: 10 }).slice(-1)[0]`), '16:50');
+  ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2'], rooms: {} }, c2: { id: 'c2', nom: '3B', eleves: ['e3'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' }, e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c2' } };
+      S.reunions = { r1: { id: 'r1', date: '2026-11-03', first: '16:35', last: '19:30', step: 5, classIds: ['c1', 'c2'],
+        slots: { '16:35': { sid: 'e1' }, '16:40': { sid: 'e1' }, '16:45': { sid: 'e2', note: 'venue de la mère' } } } };`);
+  assert.equal(ev(`_reuAutoTitle(['c1','c2'])`), 'Niveau 3ème');
+  assert.deepEqual(JSON.parse(ev(`JSON.stringify([..._reuBooked(S.reunions.r1).get('e1')])`)), ['16:35', '16:40']);
+  ev(`_purgeStudentRefs('e1')`);
+  assert.deepEqual(JSON.parse(ev(`JSON.stringify(Object.keys(S.reunions.r1.slots))`)), ['16:45']);
+  ev(`_purgeClassRefs('c2')`);
+  assert.deepEqual(JSON.parse(ev(`JSON.stringify(S.reunions.r1.classIds)`)), ['c1']);
 });
