@@ -3109,6 +3109,14 @@ Texte libre attaché à l'élève (santé, famille, points d'attention…). **Re
 - Pastille du plan : fond `#95a5a6` (et non `#7f8c8d`, qui plafonne à 4,47:1 avec les deux encres), encre par `_contrastTextColor`. Le texte est en infobulle, suivi de « (Clic = ouvrir les informations) ».
 - Import : colonne reconnue sous `notes`, `remarques`, `observations`, `informations`, `infos`… ; en-tête « Infos » dans l'aperçu.
 
+## Menu du clic droit — refonte v2.126.0 (maquette validée le 2026-10-08) — remplace la description ci-dessous là où elle diffère
+`#ctx` est **une petite fiche de l'élève**, construite à chaque ouverture par **`_ctxRender()`** (le HTML statique et les sous-menus ont disparu) : en-tête (photo ou initiales, prénom NOM, classe, n° de place QCMcam, pastilles d'aménagement) · **alerte rouge** si l'élève enfreint une contrainte (`getPlacementViolations`, clic = `ctxShowViolations`) · **compteurs − / ＋** oublis et non faits (`setOubli` / `setNT`) · **pastilles** Groupe (`_setGroupe`), Rôle (`_setDelegue`), Tags (`ctxToggleTag`, ⚙ = gérer), Aménagements (les 10, `_ctxToggleStatus` — exclusivité par famille inchangée), AESH (`ctxSetAesh`, ⚙ = régler) · **actions en icônes** Fiche, Modifier, Infos (● s'il y en a), Rappels (nombre) · pied « ↩ Annuler le dernier changement » (`#ctx-undo`, toujours mis à jour par `updateUndoRedoUI`) et « Retirer de sa place ».
+- **Une pastille agit sans fermer le menu** : `_ctxKeep(fn)` joue l'action (les fonctions `ctx*` historiques ferment le menu), puis rouvre la fiche au même endroit (`_ctxPos`), à jour. ⚠️ Le gestionnaire « clic ailleurs = fermer » teste `e.composedPath()` et non `menu.contains(e.target)` : la pastille cliquée a été remplacée par le re-rendu et n'est plus dans le DOM au moment du clic global.
+- Contraste : initiales en `--ink-deep` (le `--pencil` sur `--paper-deep` tombait à 4,12:1). 0 écart en clair et en sombre ; tient dans 375 px.
+
+## Mode appel — colonne de droite dépliée (v2.126.0)
+À l'activation du mode appel, la colonne de droite (non placés, **absents et retards par ordre alphabétique**) est **dépliée** (`planClasse_attSideCollapsed = '0'` dans `toggleAppelMode`) : c'est la liste à reporter. On peut toujours la replier ensuite par sa barre.
+
 ## Menu contextuel cellule (clic droit)
 
 `showCtxMenu(e, cls, key, sid)` populate les libellés dynamiques + positionne le menu pour ne pas déborder.
