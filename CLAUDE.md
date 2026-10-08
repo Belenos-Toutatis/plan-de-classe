@@ -1753,6 +1753,14 @@ XLSX testé avec openpyxl + LibreOffice headless conversion PDF — aucune erreu
 ### Noms de fichiers
 `<nomClasse-sanitized>-notes-YYYYMMDD.<xlsx|ods>` via `safeFilename()` qui retire `[\\/:*?"<>|]` et remplace les espaces par `_`.
 
+## Quatre fenêtres d'outils — refonte v2.128.0 (maquettes validées le 2026-10-08)
+
+- **🎯 Marqueurs ArUco (`mqcmmarkers`)** : état `_am = {per, mode:'all'|'plan'|'list', picked, plans}` ; taille par page mémorisée (`planClasse_arucoPerPage`). Mode **Plan** = mini-plan de la salle (`_qcmNumbering(...).keyToNum`), un clic coche le marqueur à réimprimer (`_amTogglePick`) ; mode Liste garde le champ `#qcm-aruco-lost-nums`. `_amPrint` → `printSalleArucoMarkers(per, {customNums})` (inchangé, orientations toujours calculées sur la salle entière) ; plans des salles par `_amPrintPlans` → `printQcmPlans`. Liens QCMcam 2 en `var(--link-fg)` (1,71:1 en sombre sinon).
+- **📱 Affecter automatiquement (`mip`)** : tous les `id` d'origine gardés (`ipm-pool` caché, `.ipm-mode-cb`, `.ipm-lot-cb`, `ipm-all-pools`, `ipm-all-rooms`, `#ipm-excl` devenu caché). Chariots en pastilles `#ipm-pools`. **Aperçu sur le plan de la salle active** (`_ipmPreview`, appelé par `_updateIpmModeInfo` / `_updateIpmLotInfo`) : même calcul que l'affectation (`_ceTargets` + rang positionnel en classe entière, `_groupTargets` en groupe) ; **clic sur une table = l'exclure / la réintégrer** (`_ipmToggleExcl`, écrit dans `#ipm-excl`), annonce le débordement.
+- **📤 Exporter les notes (`mexport-notes`)** : classes en pastilles groupées par niveau (`_exnSel`, `_exnToggle`, `_exnToggleGroup`), format en `.seg-radio` (radios `exnotes-fmt` gardées), destination en deux boutons, **liste des feuilles et des fichiers qui seront créés** (`_NotesExport.fileName(cls, fmt)`, même nom que l'export réel).
+- **📂 Versions et historique (`mfiles`)** : `listAndShowFiles` ne fait plus que lire le dossier ; rendu par `_vfRender` — filtres Toutes / Repères / Synchro / Sauvegardes / Conflits / Exports (`_vfCat` d'après `_fileKind`, filtres vides masqués, `_vfFilter` gardé pour la session), « 📌 Marquer la version actuelle » en tête, lignes `.vf-row` avec **Comparer** (ex-ℹ️, `_toggleVersionInfo`) et **Ouvrir** (`loadFromHandle`), écarts en `--ok-fg` / `--danger-fg` (étaient des littéraux), « 📁 Changer de dossier » en pied.
+- Audit : 0 écart en clair et en sombre sur les quatre fenêtres ; 360–363 px à 375. Versions vérifiée sur une liste de fichiers fictifs (jamais le vrai dossier de données).
+
 ## Raccourcis clavier
 | Raccourci | Action |
 |---|---|

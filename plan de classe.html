@@ -1675,6 +1675,24 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ev-types .eval-type-badge{flex:0 0 auto;font-size:.9em}
 .ev-types b{display:block;font-weight:600;font-size:.92em}
 .ev-tsub{display:block;font-size:.8em;color:var(--pencil);line-height:1.3}
+/* Marqueurs QCMcam (v2.128.0) */
+.am-plan i{min-height:26px;font-family:var(--font-mono);font-size:.78em}
+.vf-list{max-height:56vh;overflow-y:auto;border:1px solid var(--rule-line);border-radius:5px;background:var(--paper)}
+.vf-item{border-bottom:1px solid var(--rule-line-soft)}
+.vf-row{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:.9em}
+.vf-ic{width:22px;text-align:center}
+.vf-name{flex:1;font-weight:600;color:var(--ink-deep);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vf-date{font-size:.82em;color:var(--pencil);white-space:nowrap}
+@media (max-width:620px){ .vf-row{flex-wrap:wrap} .vf-date{flex-basis:100%;order:3;padding-left:30px} }
+
+.exn-sheets{display:flex;flex-wrap:wrap;gap:5px}
+.exn-sheets span{font-size:.82em;padding:1px 8px;border-radius:4px;background:var(--paper);border:1px solid var(--rule-line);color:var(--ink-deep)}
+.exn-files{max-height:280px;overflow-y:auto}
+.exn-file{font:.84em var(--font-mono);color:var(--ink-deep);padding:3px 2px;border-bottom:1px solid var(--rule-line-soft)}
+
+.am-plan .ipm-n{background:var(--info-bg);color:var(--ink-deep);font-weight:600}
+.am-plan .ipm-ex{background:var(--caution-bg);color:var(--caution-fg);border:1px dashed var(--caution-bd);cursor:pointer}
+
 /* Fiche de prêt (v2.127.0) — fenêtre seulement, la fiche imprimée est inchangée */
 .ipr-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:14px;align-items:start}
 .ipr-lbl{font-size:.8em;color:var(--pencil);margin:10px 0 4px}
@@ -4839,18 +4857,17 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- File picker -->
 <div id="mfiles" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="min-width:360px;max-width:560px">
-    <h2>📂 Versions & historique</h2>
-    <div id="mfl-dir" style="font-size:.8em;color:var(--pencil);margin-bottom:8px"></div>
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;padding:8px;background:var(--paper-warm);border-radius:6px;flex-wrap:wrap">
-      <span style="font-size:.85em;color:var(--pencil);white-space:nowrap">📌 Marquer la version actuelle :</span>
-      <input id="mfl-cp-label" type="text" maxlength="40" placeholder="ex. avant conseil T2" style="flex:1;min-width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:.9em" onkeydown="if(event.key==='Enter'){event.preventDefault();_makeNamedCheckpointFromInput()}">
-      <button class="btn btn-s btn-sm" onclick="_makeNamedCheckpointFromInput()">Enregistrer</button>
-    </div>
-    <div id="mfl-list" style="max-height:340px;overflow-y:auto;border:1px solid #ddd;border-radius:6px"></div>
-    <div class="ma" style="margin-top:12px">
-      <button class="btn btn-s btn-sm" onclick="changeDirAndList()">📁 Changer de dossier</button>
-      <button class="btn btn-g" onclick="closeMod2('mfiles')">Annuler</button>
+  <!-- Versions et historique — refonte v2.128.0 (maquette validée le 2026-10-08) : filtres par type,
+       « Comparer » (écart avec l'état actuel) et « Ouvrir » sur chaque ligne. -->
+  <div class="mb" style="width:min(820px,96vw);max-width:820px">
+    <div class="lst-head"><h2 style="flex:1;margin:0">📂 Versions et historique</h2><span id="mfl-dir" class="clf-hint"></span></div>
+    <div class="snap-new" style="margin-top:8px"><input id="mfl-cp-label" type="text" maxlength="40" placeholder="Nom du repère, ex. avant conseil T2" onkeydown="if(event.key==='Enter'){event.preventDefault();_makeNamedCheckpointFromInput()}">
+      <button class="btn btn-p" onclick="_makeNamedCheckpointFromInput()">📌 Marquer la version actuelle</button></div>
+    <div id="mfl-filters" class="mvc-fp-chips" style="margin:10px 0 6px"></div>
+    <div id="mfl-list" class="vf-list"></div>
+    <div class="ma">
+      <button class="btn btn-g" onclick="changeDirAndList()">📁 Changer de dossier</button>
+      <button class="btn btn-g" onclick="closeMod2('mfiles')">Fermer</button>
     </div>
   </div>
 </div>
@@ -5011,40 +5028,35 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- Auto tablettes -->
 <div id="mip" class="mo" onclick="closeMod(this,event)">
-  <div class="mb">
-    <h2>Placement automatique des tablettes</h2>
-    <div class="fg" style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:4px;padding:8px 12px">
-      <label style="font-weight:600;margin-bottom:4px">Modes à affecter</label>
-      <div id="ipm-modes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-      <p id="ipm-mode-info" style="font-size:.82em;color:var(--pencil);margin:6px 0 0"></p>
+  <!-- Affecter automatiquement — refonte v2.128.0 (maquette validée le 2026-10-08) : réglages en
+       pastilles (mêmes cases à cocher et mêmes id, habillées), APERÇU sur le plan de la salle active,
+       clic sur une table = « pas de tablette ici » (remplace la saisie d'étiquettes). -->
+  <div class="mb" style="width:min(1000px,97vw);max-width:1000px">
+    <h2 id="ipm-title" style="margin-top:0">📱 Affecter automatiquement les tablettes</h2>
+    <div class="ipr-cols">
+      <div>
+        <div class="ipr-lbl">Classe mobile</div><div id="ipm-pools" class="mvc-fp-chips"></div>
+        <select id="ipm-pool" onchange="updateIpmPoolInfo()" style="display:none"></select>
+        <span id="ipm-pool-info" class="clf-note" style="display:block"></span>
+        <div id="ipm-lot-row"><div class="ipr-lbl">Lots <small class="clf-hint">(aucun = toute la classe mobile)</small></div>
+          <div id="ipm-lots" class="mvc-fp-chips"></div><span id="ipm-lot-info" class="clf-note" style="display:block"></span></div>
+        <div class="ipr-lbl">Pour</div><div id="ipm-modes" class="mvc-fp-chips"></div>
+        <p id="ipm-mode-info" class="clf-note"></p>
+        <div class="ipr-lbl">Étendre aussi à</div>
+        <div class="mvc-fp-chips">
+          <label class="clf-pill"><input type="checkbox" id="ipm-all-pools" onchange="_ipmPreview()">les autres classes mobiles</label>
+          <label class="clf-pill"><input type="checkbox" id="ipm-all-rooms" onchange="_ipmPreview()">les autres salles de la classe</label>
+        </div>
+        <p class="clf-note">Étendu à d'autres salles ou classes mobiles : pas de plan de choix des tables en cas de manque, l'affectation s'arrête au dernier numéro.</p>
+        <input id="ipm-excl" type="hidden">
+      </div>
+      <div>
+        <div class="ipr-lbl" style="margin-top:0" id="ipm-prev-lbl">Aperçu</div>
+        <div id="ipm-preview"></div>
+        <div id="ipm-prev-res" class="shf-res"></div>
+      </div>
     </div>
-    <div class="fg">
-      <label>Classe mobile</label>
-      <select id="ipm-pool" onchange="updateIpmPoolInfo()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:1em"></select>
-      <span id="ipm-pool-info" style="font-size:.82em;color:var(--pencil)"></span>
-    </div>
-    <div id="ipm-lot-row" class="fg" style="display:none">
-      <label>Lots à utiliser <span style="font-weight:400;font-size:.82em;color:var(--pencil)">— aucun coché = toute la classe mobile</span></label>
-      <div id="ipm-lots" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-      <span id="ipm-lot-info" style="font-size:.82em;color:var(--pencil)"></span>
-    </div>
-    <div id="ipm-excl-row" class="fg">
-      <label>Tables sans tablette — classe entière uniquement (étiquettes séparées par virgule)</label>
-      <input id="ipm-excl" placeholder="ex : 4, 7, A, 1B">
-    </div>
-    <div class="fg" style="background:#fafafa;border:1px solid #e0e0e0;border-radius:4px;padding:8px 12px">
-      <label style="font-weight:600;margin-bottom:4px">Étendue de l'affectation</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.92em;cursor:pointer;padding:3px 0">
-        <input type="checkbox" id="ipm-all-pools" style="width:16px;height:16px;cursor:pointer">
-        <span>Affecter aussi <strong>aux autres classes mobiles</strong> (sinon : seulement la classe mobile choisie ci-dessus)</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.92em;cursor:pointer;padding:3px 0">
-        <input type="checkbox" id="ipm-all-rooms" style="width:16px;height:16px;cursor:pointer">
-        <span>Affecter aussi <strong>aux autres salles de cette classe</strong> (sinon : seulement la salle active)</span>
-      </label>
-      <p style="font-size:.78em;color:var(--pencil);margin:4px 0 0">Si une option étendue est cochée, la modale de débordement (trop de tables) est désactivée — l'affectation est tronquée silencieusement aux tablettes disponibles dans chaque combinaison.</p>
-    </div>
-    <div class="ma" style="flex-wrap:wrap;gap:6px">
+    <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mip')">Annuler</button>
       <button class="btn btn-p" id="ipm-btn-go" onclick="autoIpads()">📱 Affecter</button>
     </div>
@@ -5310,74 +5322,33 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ── MODAL Marqueurs ArUco QCMcam — propose 2 sources d'impression ── -->
 <div id="mqcmmarkers" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:600px;width:100%">
-    <h2>🎯 Marqueurs ArUco pour QCMcam</h2>
-    <p style="font-size:.92em;color:var(--pencil);line-height:1.5;margin-bottom:14px">
-      Pour utiliser <strong>QCMcam</strong>, chaque élève a besoin d'un marqueur papier qu'il lève pour répondre aux questions. Tu le distribues en fonction de son numéro de position (cf. l'export). Deux sources possibles :
-    </p>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
-      <a href="https://q2.qcmcam.net/?view=marker&amp;action=download" target="_blank" rel="noopener"
-         style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#eaf4fb;border:1px solid #aed6f1;border-radius:6px;text-decoration:none;color:inherit">
-        <span style="font-size:1.8em">📥</span>
-        <div style="flex:1">
-          <div style="font-weight:600;color:var(--link-fg);margin-bottom:2px">Planches officielles (QCMcam 2)</div>
-          <div style="font-size:.85em;color:var(--pencil)">PDF prêts à imprimer, en A5 ou A4, par tranches de 30 marqueurs (1-30, 31-60, 61-90) — dictionnaire <code>4x4_157h3</code>, celui de QCMcam 2.</div>
+  <!-- Marqueurs QCMcam — refonte v2.128.0 (maquette validée le 2026-10-08) : impression des marqueurs
+       de la salle en tête (par page, numéros : toute la salle / places cochées sur le plan / liste),
+       mini-plan cliquable, plans à coller au bureau, liens QCMcam 2 en pied. -->
+  <div class="mb" style="width:min(1000px,97vw);max-width:1000px">
+    <h2 id="am-title" style="margin-top:0">🎯 Marqueurs QCMcam</h2>
+    <div class="ipr-cols">
+      <div>
+        <div class="about-section clf-sec" style="margin:0 0 10px"><h3>🎯 Imprimer les marqueurs de la salle</h3>
+          <div class="ipr-lbl">Marqueurs par page</div><div id="am-per" class="mvc-fp-chips"></div>
+          <div class="ipr-lbl">Numéros</div><div id="am-mode" class="mvc-fp-chips"></div>
+          <input type="text" id="qcm-aruco-lost-nums" placeholder="ex. 5, 12-15, 23" oninput="_amSet('mode','list')" style="width:100%;margin-top:4px;font-family:var(--font-mono)">
+          <div style="margin-top:10px"><button class="btn btn-p" id="am-go" onclick="_amPrint()">🖨 Imprimer</button></div>
+          <div class="clf-note">Recto-verso bord long ; « Marges : Aucune » dans la fenêtre d'impression. Un jeu par salle, pour toutes les classes qui l'utilisent.</div>
         </div>
-        <span style="color:var(--link-fg);font-size:.85em;white-space:nowrap">Ouvrir ↗</span>
-      </a>
-      <a href="https://q2.qcmcam.net/?view=marker&amp;action=generate" target="_blank" rel="noopener"
-         style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#f4ecf7;border:1px solid #d2b4de;border-radius:6px;text-decoration:none;color:inherit">
-        <span style="font-size:1.8em">🛠</span>
-        <div style="flex:1">
-          <div style="font-weight:600;color:var(--disc-accent);margin-bottom:2px">Générateur en ligne (personnalisé)</div>
-          <div style="font-size:.85em;color:var(--pencil)">Numéros au choix entre <strong>1 et 157</strong>, un seul marqueur ou un intervalle (un par page). Couleur des lettres réglable. Optionnel : importer un fichier <code>.txt</code>/<code>.csv</code> de la classe pour des marqueurs nominatifs (le prénom apparaît sur la carte).</div>
+        <div class="about-section clf-sec" style="margin:0 0 10px"><h3>🗺 Plans QCMcam à coller au bureau <small class="clf-hint">(sans prénoms)</small></h3>
+          <div id="am-plans" class="mvc-fp-chips"></div>
+          <div style="margin-top:8px"><button class="btn btn-g btn-sm" id="am-plans-go" onclick="_amPrintPlans()">🖨 Imprimer les plans</button></div>
         </div>
-        <span style="color:var(--disc-accent);font-size:.85em;white-space:nowrap">Ouvrir ↗</span>
-      </a>
-      <!-- Carte 4 (en premier visuellement — usage principal au quotidien) : impression du plan QCMcam (vue prof) -->
-      <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:#fff5e6;border:1px solid #f5cba7;border-radius:6px">
-        <span style="font-size:1.8em">🗺</span>
-        <div style="flex:1">
-          <div style="font-weight:600;color:var(--notice-fg);margin-bottom:2px">Imprimer le plan QCMcam (vue prof)</div>
-          <div style="font-size:.85em;color:var(--pencil);margin-bottom:8px">Une page A4 par salle cochée, avec la grille des places et le <strong>numéro QCMcam</strong> affiché sur chacune (sans nom d'élève — le plan reste valable pour toutes les classes qui utilisent cette salle). Pratique à afficher au tableau ou à coller sur le bureau du prof.</div>
-          <button class="btn btn-w btn-sm" onclick="openQcmPlanPrintSelector()" title="Choisir les salles dont imprimer le plan QCMcam">🗺 Imprimer les plans… (choisir les salles)</button>
-        </div>
+        <div class="clf-note">QCMcam 2 : <a href="https://q2.qcmcam.net/?view=marker&amp;action=download" target="_blank" rel="noopener" style="color:var(--link-fg)">planches officielles ↗</a> · <a href="https://q2.qcmcam.net/?view=marker&amp;action=generate" target="_blank" rel="noopener" style="color:var(--link-fg)">générateur en ligne ↗</a> · numéros 1 à 157 (dictionnaire <code>4x4_157h3</code>).</div>
       </div>
-      <!-- Carte 3 : Générateur intégré pour LA salle active uniquement (un jeu par salle, réutilisable entre classes) -->
-      <div id="qcm-aruco-local-card" style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:#e8f8f0;border:1px solid #a5d6a7;border-radius:6px">
-        <span style="font-size:1.8em">🎯</span>
-        <div style="flex:1">
-          <div style="font-weight:600;color:var(--ok-fg);margin-bottom:2px">Imprimer les marqueurs de cette salle</div>
-          <div id="qcm-aruco-local-desc" style="font-size:.85em;color:var(--pencil);margin-bottom:8px">Génère <strong>localement</strong> uniquement les marqueurs correspondant aux places utiles de la salle active. <em>Un jeu par salle, réutilisable entre toutes les classes qui l'utilisent</em> — pas besoin d'imprimer la planche complète de 157 marqueurs.</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-            <span style="font-size:.82em;color:var(--pencil);margin-right:2px">Marqueurs par page :</span>
-            <button class="btn btn-s btn-sm" onclick="printSalleArucoMarkers(1)" title="Un marqueur par page A4 (grand format, max visibilité)">1</button>
-            <button class="btn btn-s btn-sm" onclick="printSalleArucoMarkers(2)" title="Deux marqueurs par page A4">2</button>
-            <button class="btn btn-s btn-sm" onclick="printSalleArucoMarkers(4)" title="Quatre marqueurs par page A4 (recommandé pour économiser le papier)">4</button>
-          </div>
-          <!-- Réimpression de numéros spécifiques (cartes perdues / abîmées) -->
-          <div style="border-top:1px dashed #c8e6c9;padding-top:8px;margin-top:4px">
-            <div style="font-size:.82em;color:var(--ok-fg);font-weight:600;margin-bottom:4px">🔁 Réimprimer des n° précis (cartes perdues)</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-              <input type="text" id="qcm-aruco-lost-nums" placeholder="ex. 5, 12-15, 23"
-                     style="flex:1;min-width:140px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:.88em;font-family:monospace"
-                     title="Numéros séparés par virgule. Plages avec tiret. Plage autorisée : 1-157.">
-              <span style="font-size:.78em;color:var(--pencil)">Par page :</span>
-              <button class="btn btn-g btn-sm" onclick="printArucoMarkersByList(1)" title="Imprimer seulement les n° saisis, 1 par page">1</button>
-              <button class="btn btn-g btn-sm" onclick="printArucoMarkersByList(2)" title="Imprimer seulement les n° saisis, 2 par page">2</button>
-              <button class="btn btn-g btn-sm" onclick="printArucoMarkersByList(4)" title="Imprimer seulement les n° saisis, 4 par page">4</button>
-            </div>
-          </div>
-        </div>
+      <div>
+        <div class="ipr-lbl" style="margin-top:0">Places de la salle — clic = choisir les marqueurs à réimprimer</div>
+        <div id="am-plan"></div>
+        <div id="am-plan-note" class="clf-note"></div>
       </div>
     </div>
-    <p style="font-size:.82em;color:var(--pencil);line-height:1.5;border-top:1px dashed #ddd;padding-top:10px;margin-bottom:0">
-      💡 Après impression, place chaque marqueur sur la table portant le même numéro de position (colonne <em>Position</em> du tableau de l'onglet QCMcam) : le marqueur n° N va sur la place n° N. Tu conserves ainsi <strong>un jeu de marqueurs par salle</strong>, distribué seulement quand tu en as besoin — plus de marqueurs perdus ou oubliés par les élèves. Si tu les plastifies, privilégie une <strong>finition mate</strong> (le plastique brillant crée des reflets qui gênent la détection).<br><br>
-      <strong style="color:var(--pencil)">⚠️ Limite QCMcam :</strong> le dictionnaire ArUco 4×4 ne supporte que les numéros <strong>1 à 157</strong>. Si une salle a plus de 157 places utiles, l'app bascule automatiquement sur une numérotation séquentielle 1, 2, 3… (cf. note sous le tableau dans l'onglet QCMcam).
-    </p>
-    <div class="ma">
-      <button class="btn btn-g" onclick="closeMod2('mqcmmarkers')">Fermer</button>
-    </div>
+    <div class="ma"><button class="btn btn-g" onclick="closeMod2('mqcmmarkers')">Fermer</button></div>
   </div>
 </div>
 
@@ -7033,54 +7004,31 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
 <!-- ── MODAL Export des notes (XLSX / ODS, un fichier par classe) ── -->
 <div id="mexport-notes" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:680px;width:100%">
-    <h2>📤 Exporter les notes (sauvegarde tableur)</h2>
-    <p style="font-size:.85em;color:var(--pencil);margin-bottom:10px;line-height:1.4">
-      Génère <strong>un classeur par classe</strong> au format tableur, mis en forme avec couleurs (notes /20, niveaux de compétence).
-      Chaque classeur contient une feuille Synthèse, une feuille par période (Bilan), une feuille Compétences, et une feuille par évaluation.
-      <br><em style="color:var(--pencil)">Sauvegarde lisible hors-app — utile pour archiver en fin d'année.</em>
-    </p>
-
-    <div class="about-section" style="margin-bottom:10px">
-      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span>📁 Dossier de destination</span>
-        <span id="exnotes-dir-name" style="font-family:var(--font-mono);font-size:.78em;color:var(--ink-blue);font-weight:normal"></span>
-      </h3>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-w" style="padding:3px 10px;font-size:.85em" onclick="_exnotesPickDir()">📂 Choisir un dossier…</button>
-        <button class="btn btn-w" style="padding:3px 10px;font-size:.85em" onclick="_exnotesResetDir()" title="Repasser au dossier de téléchargement du navigateur">↻ Téléchargement</button>
+  <!-- Export des notes — refonte v2.128.0 (maquette validée le 2026-10-08) : classes, format et
+       destination en pastilles ; à droite, le contenu des classeurs et la liste des fichiers créés. -->
+  <div class="mb" style="width:min(940px,97vw);max-width:940px">
+    <h2 style="margin-top:0">📤 Exporter les notes (classeurs)</h2>
+    <div class="ipr-cols">
+      <div>
+        <div class="ipr-lbl" style="margin-top:0">Classes</div><div id="exnotes-classes-list" class="mvc-fp-chips"></div>
+        <div class="ipr-lbl">Format</div>
+        <div class="seg-radio"><label><input type="radio" name="exnotes-fmt" value="xlsx" checked>XLSX <small>Excel, LibreOffice…</small></label><label><input type="radio" name="exnotes-fmt" value="ods">ODS <small>OpenDocument</small></label></div>
+        <div class="ipr-lbl">Destination</div>
+        <div class="mvc-fp-chips"><button type="button" class="btn btn-sm mvc-chip" id="exnotes-dir-btn" onclick="_exnotesPickDir()">📂 Choisir un dossier…</button>
+          <button type="button" class="btn btn-sm mvc-chip" id="exnotes-dl-btn" onclick="_exnotesResetDir()">⬇ Téléchargements</button></div>
+        <span id="exnotes-dir-name" style="display:none"></span>
+        <p id="exnotes-dir-hint" class="clf-note"></p>
+        <p class="clf-note">Sauvegarde lisible hors de l'application, mise en forme avec les couleurs des notes et des niveaux — utile pour archiver en fin d'année.</p>
       </div>
-      <p id="exnotes-dir-hint" style="font-size:.78em;color:var(--pencil);margin:6px 0 0;line-height:1.4"></p>
+      <div>
+        <div class="ipr-lbl" style="margin-top:0">Chaque classeur contiendra</div>
+        <div id="exnotes-content" class="about-section clf-sec" style="margin:0 0 8px"></div>
+        <div id="exnotes-summary" class="exn-files"></div>
+      </div>
     </div>
-
-    <div class="about-section" style="margin-bottom:10px">
-      <h3 style="margin-top:0">📐 Format</h3>
-      <label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;cursor:pointer">
-        <input type="radio" name="exnotes-fmt" value="xlsx" checked> <strong>XLSX</strong>
-        <span style="font-size:.78em;color:var(--pencil)">(Excel, LibreOffice, Numbers, Google Sheets)</span>
-      </label>
-      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="radio" name="exnotes-fmt" value="ods"> <strong>ODS</strong>
-        <span style="font-size:.78em;color:var(--pencil)">(OpenDocument — LibreOffice, Excel récent)</span>
-      </label>
-    </div>
-
-    <div class="about-section" style="margin-bottom:10px">
-      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;justify-content:space-between">
-        <span>🏫 Classes à exporter</span>
-        <span style="display:inline-flex;gap:6px">
-          <button class="btn btn-w" style="padding:2px 8px;font-size:.78em" onclick="_exnotesCheckAll(true)">☑ Tout</button>
-          <button class="btn btn-w" style="padding:2px 8px;font-size:.78em" onclick="_exnotesCheckAll(false)">☐ Aucune</button>
-        </span>
-      </h3>
-      <div id="exnotes-classes-list" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding:4px"></div>
-    </div>
-
-    <p id="exnotes-summary" style="font-size:.84em;color:var(--pencil);margin:8px 0">—</p>
-
     <div class="ma">
       <button class="btn btn-g" onclick="closeMod2('mexport-notes')">Annuler</button>
-      <button id="exnotes-go" class="btn btn-b" onclick="_exnotesRun()">✓ Exporter</button>
+      <button id="exnotes-go" class="btn btn-p" onclick="_exnotesRun()">📤 Exporter</button>
     </div>
   </div>
 </div>
@@ -7963,11 +7911,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.127.0';
+const APP_VERSION    = '2.128.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T03:58:11Z';
+const APP_BUILD_DATE = '2026-10-08T04:14:17Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -25059,6 +25007,7 @@ function openAutoIpads() {
   _ensureActivePool(cls);
   const preferredId = (cls.activePool && S.tabletPools[cls.activePool]) ? cls.activePool : pools[0].id;
   sel.value = preferredId;
+  document.getElementById('ipm-excl').value = '';
   updateIpmPoolInfo();
 
   openMod('mip');
@@ -25087,10 +25036,8 @@ function _renderIpmModes(cls) {
       on: groupFilter === g, dis: counts[g] === 0,
     })),
   ];
-  wrap.innerHTML = modes.map(m => `<label title="${m.dis ? 'Aucun élève dans ce groupe' : ''}" style="display:flex;align-items:center;gap:5px;font-size:.9em;padding:3px 8px;border:1px solid var(--rule-line);border-radius:4px;background:var(--paper);${m.dis ? 'opacity:.45;cursor:not-allowed' : 'cursor:pointer'}">
-    <input type="checkbox" class="ipm-mode-cb" value="${m.v}" ${m.on && !m.dis ? 'checked' : ''} ${m.dis ? 'disabled' : ''} onchange="_updateIpmModeInfo()" style="width:15px;height:15px">
-    <span><strong>${m.lab}</strong> <span style="color:var(--pencil)">(${m.hint})</span></span>
-  </label>`).join('');
+  wrap.innerHTML = modes.map(m => `<label class="clf-pill" title="${m.dis ? 'Aucun élève dans ce groupe' : m.hint}"${m.dis ? ' style="opacity:.45;cursor:not-allowed"' : ''}>
+    <input type="checkbox" class="ipm-mode-cb" value="${m.v}" ${m.on && !m.dis ? 'checked' : ''} ${m.dis ? 'disabled' : ''} onchange="_updateIpmModeInfo()">${m.v === 0 ? 'Classe entière' : 'G' + m.v}</label>`).join('');
   _updateIpmModeInfo();
 }
 
@@ -25105,10 +25052,11 @@ function _updateIpmModeInfo() {
   if (!el) return;
   const m = _ipmSelectedModes();
   if (btn) btn.disabled = (m.length === 0);
-  if (!m.length) { el.textContent = '⚠️ Coche au moins un mode.'; return; }
+  if (!m.length) { el.textContent = '⚠️ Coche au moins un mode.'; _ipmPreview(); return; }
   const noms = m.map(v => v === 0 ? 'Classe entière' : `Groupe ${v}`).join(' · ');
   el.textContent = `${noms} — chaque mode a ses propres numéros de tablette.`
-    + (m.includes(0) ? ' Le champ d\'exclusion ci-dessous ne s\'applique qu\'à la classe entière.' : '');
+    + (m.includes(0) ? ' Les tables « sans tablette » (clic sur le plan) ne concernent que la classe entière.' : '');
+  _ipmPreview();
 }
 
 function updateIpmPoolInfo() {
@@ -25116,6 +25064,8 @@ function updateIpmPoolInfo() {
   const info = document.getElementById('ipm-pool-info');
   if (!sel || !info) return;
   const p = S.tabletPools?.[sel.value];
+  const pw = document.getElementById('ipm-pools');
+  if (pw) pw.innerHTML = Object.values(S.tabletPools || {}).map(x => `<button type="button" class="btn btn-sm mvc-chip${x.id === sel.value ? ' on' : ''}" onclick="document.getElementById('ipm-pool').value='${_escJsAttr(x.id)}';updateIpmPoolInfo()">${_esc(x.nom)} · ${poolAvailableNumbers(x).length}</button>`).join('');
   if (!p) { info.textContent = ''; return; }
   const avail = poolAvailableNumbers(p);
   const u = (p.unavailable || []);
@@ -25138,10 +25088,8 @@ function _renderIpmLots(pool) {
   wrap.innerHTML = lots.map((l, i) => {
     let n = 0;
     for (let k = +l.from; k <= +l.to; k++) if (!u.has(k)) n++;
-    return `<label style="display:flex;align-items:center;gap:5px;font-size:.9em;cursor:pointer;border:1px solid var(--rule-line);border-radius:4px;padding:3px 8px;background:var(--paper)">
-      <input type="checkbox" class="ipm-lot-cb" data-from="${+l.from}" data-to="${+l.to}" onchange="_updateIpmLotInfo()" style="width:15px;height:15px;cursor:pointer">
-      <span>Lot <strong>${_escName(l.nom || String(i + 1))}</strong> <span style="color:var(--pencil)">(n° ${+l.from}–${+l.to} · ${n} dispo)</span></span>
-    </label>`;
+    return `<label class="clf-pill" title="n° ${+l.from}–${+l.to} · ${n} disponible(s)">
+      <input type="checkbox" class="ipm-lot-cb" data-from="${+l.from}" data-to="${+l.to}" onchange="_updateIpmLotInfo()">Lot <strong>${_escName(l.nom || String(i + 1))}</strong> <span class="n">${+l.from}–${+l.to}</span></label>`;
   }).join('');
   _updateIpmLotInfo();
 }
@@ -25173,8 +25121,64 @@ function _updateIpmLotInfo() {
   el.textContent = lab
     ? `→ ${n} tablette(s) utilisable(s) (lot ${lab}). S'il n'y en a pas assez, un plan s'ouvrira pour choisir les tables à équiper.`
     : `→ ${n} tablette(s) utilisable(s) (toute la classe mobile).`;
+  _ipmPreview();
 }
 
+// Aperçu sur le plan de la salle active : numéro que recevra chaque table (classe entière si
+// cochée, sinon le premier groupe coché), sans rien affecter. Clic sur une table = « pas de
+// tablette ici » (classe entière) — l'étiquette va dans le champ caché #ipm-excl lu par autoIpads.
+function _ipmToggleExcl(label) {
+  const inp = document.getElementById('ipm-excl');
+  const set = new Set(inp.value.split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean));
+  const L = String(label).toUpperCase();
+  set.has(L) ? set.delete(L) : set.add(L);
+  inp.value = [...set].join(', ');
+  _ipmPreview();
+}
+function _ipmPreview() {
+  const box = document.getElementById('ipm-preview'); if (!box) return;
+  const cls = getCls(), salle = cls ? activeSalle(cls) : null;
+  const pool = S.tabletPools?.[document.getElementById('ipm-pool')?.value];
+  const res = document.getElementById('ipm-prev-res'), lbl = document.getElementById('ipm-prev-lbl');
+  const modes = _ipmSelectedModes();
+  if (!cls || !salle || !pool) { box.innerHTML = ''; res.textContent = ''; return; }
+  const mode = modes.includes(0) ? 0 : (modes[0] ?? 0);
+  document.getElementById('ipm-title').textContent = `📱 Affecter automatiquement les tablettes — ${cls.nom}`;
+  lbl.textContent = `Aperçu — ${salle.nom} · ${mode === 0 ? 'classe entière' : 'G' + mode}${mode === 0 ? ' (clic sur une table = pas de tablette ici)' : ''}`;
+  const exclSet = new Set((document.getElementById('ipm-excl').value || '').split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean));
+  const avail = _ipmSelectedNumbers(pool);
+  const allSeats = _collectSeats(cls);
+  const numAt = {}; let need = 0, served = 0;
+  if (mode === 0) {
+    const t = _ceTargets(cls, allSeats, exclSet);
+    need = t.length ? t[t.length - 1].rank + 1 : 0;
+    for (const x of t) { const n = avail[x.rank]; if (n !== undefined) { numAt[x.key] = n; served++; } }
+  } else {
+    const t = _groupTargets(cls, allSeats, mode);
+    need = t.length;
+    t.forEach((x, i) => { if (i < avail.length) { numAt[x.key] = avail[i]; served++; } });
+  }
+  const labelOf = {}; for (const x of allSeats) labelOf[x.key] = x.label;
+  const aesh = new Set(allSeats.filter(x => x.isAesh).map(x => x.key));
+  const vides = new Set(salle.positions_vides || []);
+  let h = `<div class="shf-plan am-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
+  for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
+    const key = `${r},${c}`;
+    if (vides.has(key)) { h += '<i class="nt"></i>'; continue; }
+    if (aesh.has(key)) { h += '<i class="ae">AESH</i>'; continue; }
+    const L = labelOf[key], ex = mode === 0 && exclSet.has(String(L).toUpperCase());
+    const n = numAt[key];
+    const click = mode === 0 ? ` onclick="_ipmToggleExcl('${_escJsAttr(L)}')"` : '';
+    h += ex ? `<i class="ipm-ex"${click} title="Table ${_escAttr(L)} : pas de tablette (clic pour annuler)">—</i>`
+      : n ? `<i class="st ipm-n"${click} title="Table ${_escAttr(L)} : tablette n° ${n}">${n}</i>`
+      : `<i${click} title="Table ${_escAttr(L)}${mode === 0 ? ' : pas assez de tablettes' : ''}"></i>`;
+  }
+  box.innerHTML = h + '</div><div class="shf-board">🖥 tableau</div>';
+  const nEx = mode === 0 ? exclSet.size : 0, hs = (pool.unavailable || []).length;
+  res.innerHTML = `${served} tablette${served > 1 ? 's' : ''} pour ${mode === 0 ? `${need} table${need > 1 ? 's' : ''}` : `${need} élève${need > 1 ? 's' : ''}`}`
+    + (nEx ? ` · ${nEx} table${nEx > 1 ? 's' : ''} sans tablette` : '') + (hs ? ` · ${hs} HS sautée${hs > 1 ? 's' : ''}` : '')
+    + (need > avail.length ? ` · <span class="bad">${need - avail.length} de trop : un plan s'ouvrira pour choisir les tables</span>` : '');
+}
 function _collectSeats(cls) {
   const _rows = cls.configuration.rows || 4;
   const _cols = cls.configuration.cols || 10;
@@ -26010,28 +26014,69 @@ function copyQcmAll() {
 // Ouvre la modale "🎯 Marqueurs ArUco" — propose deux sources d'impression :
 // planches officielles de QCMcam 2, ou générateur en ligne personnalisable.
 // Accessible via le bouton "🎯 Marqueurs ArUco" ou par Ctrl+P dans l'onglet QCMcam.
+var _am = { per: 4, mode: 'all', picked: new Set(), plans: new Set() };
+try { const v = +localStorage.getItem('planClasse_arucoPerPage'); if ([1, 2, 4].includes(v)) _am.per = v; } catch (e) {}
 function openQcmMarkersDialog() {
-  // Désactive la 3e carte "Imprimer marqueurs de cette salle" si pas de salle active
   const cls = getCls();
-  const card = document.getElementById('qcm-aruco-local-card');
-  const desc = document.getElementById('qcm-aruco-local-desc');
-  if (card && desc) {
-    if (!cls || !cls.activeRoom || !S.salles?.[cls.activeRoom]) {
-      card.style.opacity = '.5';
-      card.querySelectorAll('button').forEach(b => b.disabled = true);
-      desc.innerHTML = '<em style="color:var(--pencil)">Aucune salle active. Sélectionne une classe avec salle pour activer cette option.</em>';
-    } else {
-      card.style.opacity = '';
-      card.querySelectorAll('button').forEach(b => b.disabled = false);
-      const salleNom = S.salles[cls.activeRoom]?.nom || '?';
-      const qcm = _qcmNumbering(cls, cls.activeRoom);
-      const nMarkers = qcm ? qcm.keyToNum.size : 0;
-      desc.innerHTML = `Génère <strong>localement</strong> les marqueurs des <strong>${nMarkers} place${nMarkers>1?'s':''} utile${nMarkers>1?'s':''}</strong> de la salle <strong>${_escAttr(salleNom)}</strong>. <em>Un jeu par salle, réutilisable entre toutes les classes qui l'utilisent</em> — pas besoin d'imprimer ${ARUCO_MAX} marqueurs.`;
-    }
-  }
+  _am.mode = 'all'; _am.picked = new Set();
+  _am.plans = new Set(cls?.activeRoom && S.salles?.[cls.activeRoom] ? [cls.activeRoom] : []);
+  const inp = document.getElementById('qcm-aruco-lost-nums'); if (inp) inp.value = '';
+  _amRender();
   openMod('mqcmmarkers');
 }
-
+function _amSet(k, v) {
+  _am[k] = v;
+  if (k === 'per') try { localStorage.setItem('planClasse_arucoPerPage', String(v)); } catch (e) {}
+  _amRender();
+}
+function _amTogglePick(n) { _am.picked.has(n) ? _am.picked.delete(n) : _am.picked.add(n); _am.mode = _am.picked.size ? 'plan' : 'all'; _amRender(); }
+function _amTogglePlan(id) { _am.plans.has(id) ? _am.plans.delete(id) : _am.plans.add(id); _amRender(); }
+// Numéros à imprimer selon le mode choisi (null = toute la salle)
+function _amNums() {
+  if (_am.mode === 'plan') return [..._am.picked].sort((a, b) => a - b);
+  if (_am.mode === 'list') return _parseArucoNumberList(document.getElementById('qcm-aruco-lost-nums')?.value || '', ARUCO_MAX);
+  return null;
+}
+function _amRender() {
+  const cls = getCls(), salleId = cls?.activeRoom, salle = S.salles?.[salleId];
+  const pill = (on, oc, lbl, tip, dis) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}" onclick="${oc}"${tip ? ` title="${_escAttr(tip)}"` : ''}${dis ? ' disabled' : ''}>${lbl}</button>`;
+  document.getElementById('am-title').textContent = '🎯 Marqueurs QCMcam' + (salle ? ' — ' + salle.nom : '');
+  const qcm = salle ? _qcmNumbering(cls, salleId) : null;
+  const nAll = qcm ? qcm.keyToNum.size : 0;
+  document.getElementById('am-per').innerHTML = [1, 2, 4].map(v => pill(_am.per === v, `_amSet('per',${v})`, String(v), v === 4 ? 'Recommandé : économise le papier' : v === 1 ? 'Grand format, visibilité maximale' : '')).join('');
+  document.getElementById('am-mode').innerHTML = pill(_am.mode === 'all', "_amSet('mode','all')", `Toute la salle (${nAll})`, '', !nAll)
+    + pill(_am.mode === 'plan', "_amSet('mode','plan')", `Places cochées sur le plan (${_am.picked.size})`, 'Coche les places dans le plan à droite')
+    + pill(_am.mode === 'list', "_amSet('mode','list');document.getElementById('qcm-aruco-lost-nums').focus()", 'Liste de numéros', 'ex. 5, 12-15, 23');
+  const inp = document.getElementById('qcm-aruco-lost-nums'); if (inp) inp.style.display = _am.mode === 'list' ? '' : 'none';
+  const nums = _amNums(); const n = nums ? nums.length : nAll;
+  const go = document.getElementById('am-go');
+  if (go) { go.disabled = !n; go.textContent = n ? `🖨 Imprimer ${n} marqueur${n > 1 ? 's' : ''} (${Math.ceil(n / _am.per)} feuille${Math.ceil(n / _am.per) > 1 ? 's' : ''} recto-verso)` : '🖨 Imprimer'; }
+  // Plans à coller au bureau : toutes les salles du catalogue
+  const salles = Object.values(S.salles || {}).sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+  document.getElementById('am-plans').innerHTML = salles.map(sa => pill(_am.plans.has(sa.id), `_amTogglePlan('${_escJsAttr(sa.id)}')`, _esc(sa.nom), `${sa.rows} × ${sa.cols}`)).join('') || '<span class="clf-note">Aucune salle</span>';
+  const pg = document.getElementById('am-plans-go'); if (pg) { pg.disabled = !_am.plans.size; pg.textContent = `🖨 Imprimer ${_am.plans.size || ''} plan${_am.plans.size > 1 ? 's' : ''}`; }
+  // Mini-plan cliquable (vue prof, tableau en bas)
+  const box = document.getElementById('am-plan'), note = document.getElementById('am-plan-note');
+  if (!salle || !qcm) { box.innerHTML = _emptyStateHTML('🏫', 'Aucune salle active', 'Choisis une classe avec une salle.'); note.textContent = ''; return; }
+  const vides = new Set(salle.positions_vides || []);
+  let h = `<div class="shf-plan am-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
+  for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
+    const key = `${r},${c}`;
+    if (vides.has(key)) { h += '<i class="nt"></i>'; continue; }
+    const num = qcm.keyToNum.get(key);
+    if (!num) { h += '<i title="Pas de numéro QCMcam">🚫</i>'; continue; }
+    h += `<i class="st${_am.picked.has(num) ? ' pin' : ''}" onclick="_amTogglePick(${num})" title="Marqueur n° ${num}">${num}</i>`;
+  }
+  box.innerHTML = h + '</div><div class="shf-board">🖥 tableau</div>';
+  note.textContent = _am.picked.size ? `Cochées : n° ${[..._am.picked].sort((a, b) => a - b).join(', ')}` : 'Aucune place cochée : on imprime toute la salle.';
+}
+function _amPrint() {
+  const nums = _amNums();
+  if (nums && !nums.length) { toast(_am.mode === 'list' ? `Aucun numéro valide (plage acceptée : 1-${ARUCO_MAX}).` : 'Coche des places sur le plan.', 'warn'); return; }
+  printSalleArucoMarkers(_am.per, nums ? { customNums: nums } : undefined);
+}
+function _amPrintPlans() { if (_am.plans.size) { closeMod2('mqcmmarkers'); printQcmPlans([..._am.plans]); } }
+// Ancien bouton « Réimprimer des n° précis » (gardé pour les appels existants)
 // ─── Générateur ArUco intégré (dictionnaire QCMcam 4×4) ──────────────────
 // Dictionnaire `QCMCAM_4X4_157h3` de QCMcam v2 (src/lib/js/aruco.js, 2026-07) :
 // 157 codes de 16 bits, distance de Hamming minimale 3.
@@ -33898,7 +33943,7 @@ function _versionInfoHTML(data, f) {
   const delta = (v, c) => {
     const dd = v - c;
     if (dd === 0) return '<span style="color:var(--pencil-soft)">=</span>';
-    const col = dd > 0 ? '#2e7d32' : '#b03d2e';
+    const col = dd > 0 ? 'var(--ok-fg)' : 'var(--danger-fg)';
     return `<span style="color:${col};font-weight:600">${dd > 0 ? '+' : ''}${dd}</span>`;
   };
   const rows = [
@@ -33928,9 +33973,9 @@ async function _toggleVersionInfo(idx) {
   holder.innerHTML = '<div style="padding:6px 12px;color:var(--pencil);font-size:.82em">Lecture…</div>';
   let data;
   try { data = JSON.parse(await (await f.handle.getFile()).text()); }
-  catch (_) { holder.innerHTML = '<div style="padding:6px 12px;color:#b03d2e;font-size:.82em">Lecture impossible.</div>'; return; }
+  catch (_) { holder.innerHTML = '<div style="padding:6px 12px;color:var(--danger-fg);font-size:.82em">Lecture impossible.</div>'; return; }
   if (!data || typeof data !== 'object' || _validateImport(data)) {
-    holder.innerHTML = '<div style="padding:6px 12px;color:#b03d2e;font-size:.82em">Fichier non lisible comme une sauvegarde valide.</div>';
+    holder.innerHTML = '<div style="padding:6px 12px;color:var(--danger-fg);font-size:.82em">Fichier non lisible comme une sauvegarde valide.</div>';
     return;
   }
   holder.innerHTML = _versionInfoHTML(data, f);
@@ -33961,6 +34006,30 @@ async function _passiveNcConflictCheck() {
   } catch (_) {}
 }
 
+// Catégorie d'un fichier (filtres de la fenêtre Versions)
+function _vfCat(name) {
+  const l = _fileKind(name).label;
+  return l === 'Sync auto' ? 'sync' : l === 'Backup' ? 'bk' : l.startsWith('Point') ? 'cp' : /onflit/.test(l) ? 'cf' : 'ex';
+}
+var _vfFilter = 'all';
+function _vfRender() {
+  const listEl = document.getElementById('mfl-list'); const files = listEl?._files || [];
+  const cats = [['all', 'Toutes'], ['cp', '📌 Repères'], ['sync', '🔄 Synchro'], ['bk', '💾 Sauvegardes'], ['cf', '⚠️ Conflits'], ['ex', '📄 Exports']];
+  const n = c => c === 'all' ? files.length : files.filter(f => _vfCat(f.name) === c).length;
+  document.getElementById('mfl-filters').innerHTML = cats.filter(([c]) => c === 'all' || n(c))
+    .map(([c, l]) => `<button type="button" class="btn btn-sm mvc-chip${_vfFilter === c ? ' on' : ''}" onclick="_vfFilter='${c}';_vfRender()">${l} <small>${n(c)}</small></button>`).join('');
+  if (!files.length) { listEl.innerHTML = _emptyStateHTML('📂', 'Aucun fichier .json dans ce dossier', 'Active la synchronisation, ou marque la version actuelle ci-dessus.'); return; }
+  const rel = d => { const days = Math.round((new Date(todayKey() + 'T12:00:00') - new Date(_ymd(d) + 'T12:00:00')) / 864e5); return days === 0 ? "aujourd'hui" : days === 1 ? 'hier' : d.toLocaleDateString('fr-FR'); };
+  listEl.innerHTML = files.map((f, i) => [f, i]).filter(([f]) => _vfFilter === 'all' || _vfCat(f.name) === _vfFilter).map(([f, i]) => {
+    const kind = _fileKind(f.name);
+    return `<div class="vf-item"><div class="vf-row" title="${_escAttr(f.name)}">
+      <span class="vf-ic">${kind.icon}</span><span class="vf-name">${_esc(kind.label)}</span>
+      <span class="vf-date">${_esc(rel(f.date))} ${_esc(f.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))} · ${_esc(_fmtBytes(f.size))}</span>
+      <button type="button" class="btn btn-g btn-sm" onclick="_toggleVersionInfo(${i})" title="Écart avec l'état actuel (classes, élèves, évaluations, salles, appels)">Comparer</button>
+      <button type="button" class="btn btn-g btn-sm" onclick="loadFromHandle(${i})" title="Charger cette version (une confirmation suit)">Ouvrir</button>
+    </div><div id="fli-info-${i}"></div></div>`;
+  }).join('') || '<div class="clf-note" style="padding:10px">Aucun fichier de ce type.</div>';
+}
 async function listAndShowFiles() {
   if (!dirHandle) return;
   const files = [];
@@ -34000,31 +34069,10 @@ async function listAndShowFiles() {
 
   files.sort((a, b) => b.date - a.date); // Plus récent en premier
 
-  const dirEl = document.getElementById('mfl-dir');
-  dirEl.textContent = `Dossier : ${dirHandle.name}`;
-
+  document.getElementById('mfl-dir').textContent = `dossier « ${dirHandle.name} »`;
   const listEl = document.getElementById('mfl-list');
-  if (!files.length) {
-    listEl.innerHTML = '<p style="padding:12px;color:var(--pencil);text-align:center">Aucun fichier .json trouvé.</p>';
-  } else {
-    listEl.innerHTML = files.map((f, i) => {
-      const fmt = f.date.toLocaleDateString('fr-FR') + ' ' +
-                  f.date.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
-      const kind = _fileKind(f.name);
-      return `<div>
-        <div class="fli" onclick="loadFromHandle(${i})" title="${_escAttr(f.name + ' — cliquer pour charger cette version')}">
-          <span>${kind.icon}</span>
-          <span class="fli-name">${_escAttr(kind.label)}</span>
-          <span class="fli-date">${_escAttr(fmt)} · ${_escAttr(_fmtBytes(f.size))}</span>
-          <button onclick="event.stopPropagation();_toggleVersionInfo(${i})" title="Résumé du contenu de cette version (compteurs + écart avec l'état actuel)" style="margin-left:6px;background:none;border:none;cursor:pointer;font-size:.95em;padding:2px 6px;line-height:1">ℹ️</button>
-        </div>
-        <div id="fli-info-${i}"></div>
-      </div>`;
-    }).join('');
-  }
-
-  // Stocker les handles pour y accéder depuis le click
   listEl._files = files;
+  _vfRender();
   openMod('mfiles');   // idem : passer par openMod pour l'accessibilité de la modale
 }
 
@@ -34485,7 +34533,7 @@ async function openExportNotes() {
     toast('Aucune classe à exporter');
     return;
   }
-  _exnotesRenderClasses();
+  _exnotesRenderClasses(true);
   _exnotesUpdateSummary();
   openMod('mexport-notes');
   // Charge le handle persisté + affiche le nom
@@ -34511,6 +34559,9 @@ function _exnotesUpdateDirUI() {
     if (hintEl) hintEl.textContent = 'Sélection de dossier non supportée par ce navigateur — les fichiers iront dans ton dossier de téléchargement habituel.';
     return;
   }
+  const db = document.getElementById('exnotes-dir-btn'), dl = document.getElementById('exnotes-dl-btn');
+  if (db) { db.classList.toggle('on', !!_exnotesDirHandle); db.textContent = _exnotesDirHandle ? '📂 Dossier : ' + (_exnotesDirHandle.name || '(dossier)') : '📂 Choisir un dossier…'; }
+  if (dl) dl.classList.toggle('on', !_exnotesDirHandle);
   if (_exnotesDirHandle) {
     if (nameEl) nameEl.textContent = '📂 ' + (_exnotesDirHandle.name || '(dossier)');
     if (hintEl) hintEl.textContent = 'Les fichiers seront écrits directement dans ce dossier.';
@@ -34535,39 +34586,46 @@ async function _exnotesResetDir() {
   try { await idbSaveHandleKey(null, EXNOTES_DIR_KEY); } catch (e) {}
   _exnotesUpdateDirUI();
 }
-function _exnotesRenderClasses() {
+var _exnSel = new Set();
+function _exnotesRenderClasses(init) {
   const host = document.getElementById('exnotes-classes-list');
   if (!host) return;
-  const curId = S.cur || '';
-  const items = Object.values(S.classes || {})
-    .slice()
-    .sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr', { numeric: true }));
-  const lines = items.map(c => {
-    const nbEv = Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, c.id)).length;
-    const nbEl = (c.eleves || []).length;
-    const checked = (c.id === curId) ? 'checked' : '';
-    return `<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid var(--rule-line-soft)">
-      <input type="checkbox" class="exnotes-cls-cb" data-cid="${c.id}" ${checked} onchange="_exnotesUpdateSummary()">
-      <strong style="flex:1">${_esc(c.nom)}</strong>
-      <span style="font-size:.78em;color:var(--pencil)">${nbEl} élève(s) · ${nbEv} éval(s)</span>
-    </label>`;
-  });
-  host.innerHTML = lines.join('') || '<em>Aucune classe.</em>';
+  if (init) _exnSel = new Set(S.cur && S.classes[S.cur] ? [S.cur] : []);
+  const items = Object.values(S.classes || {}).sort((a, b) => clsLevel(a) - clsLevel(b) || String(a.nom).localeCompare(String(b.nom), 'fr', { numeric: true }));
+  const pill = (on, oc, lbl, tip, x) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${x || ''}" onclick="${oc}"${tip ? ` title="${_escAttr(tip)}"` : ''}>${lbl}</button>`;
+  const nEv = c => Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, c.id)).length;
+  const lvls = [...new Set(items.map(c => c.virtual ? 'v' : clsLevel(c)))];
+  host.innerHTML = lvls.map(L => {
+    const cs = items.filter(c => (c.virtual ? 'v' : clsLevel(c)) === L);
+    const all = cs.every(c => _exnSel.has(c.id)), some = cs.some(c => _exnSel.has(c.id));
+    return `<span class="mvc-lvl-group">${pill(all, `_exnToggleGroup('${L}')`, L === 'v' ? '🧬' : _esc(_levelLabel(L)), 'Tout le niveau', ' mvc-lvl' + (some && !all ? ' part' : ''))}`
+      + cs.map(c => pill(_exnSel.has(c.id), `_exnToggle('${_escJsAttr(c.id)}')`, `${_esc(c.nom)} <small>${nEv(c)}</small>`, `${(c.eleves || []).length} élèves · ${nEv(c)} évaluation(s)`)).join('') + '</span>';
+  }).join('') + pill(_exnSel.size === items.length, '_exnotesCheckAll(' + (_exnSel.size !== items.length) + ')', _exnSel.size === items.length ? 'Aucune' : 'Toutes');
+}
+function _exnToggle(id) { _exnSel.has(id) ? _exnSel.delete(id) : _exnSel.add(id); _exnotesRenderClasses(); _exnotesUpdateSummary(); }
+function _exnToggleGroup(L) {
+  const cs = Object.values(S.classes || {}).filter(c => (c.virtual ? 'v' : String(clsLevel(c))) === String(L));
+  const all = cs.every(c => _exnSel.has(c.id));
+  cs.forEach(c => all ? _exnSel.delete(c.id) : _exnSel.add(c.id));
+  _exnotesRenderClasses(); _exnotesUpdateSummary();
 }
 function _exnotesCheckAll(on) {
-  document.querySelectorAll('.exnotes-cls-cb').forEach(cb => { cb.checked = !!on; });
-  _exnotesUpdateSummary();
+  _exnSel = new Set(on ? Object.keys(S.classes || {}) : []);
+  _exnotesRenderClasses(); _exnotesUpdateSummary();
 }
-function _exnotesSelectedIds() {
-  return Array.from(document.querySelectorAll('.exnotes-cls-cb:checked')).map(cb => cb.dataset.cid);
-}
+function _exnotesSelectedIds() { return [..._exnSel].filter(id => S.classes[id]); }
 function _exnotesUpdateSummary() {
-  const n = _exnotesSelectedIds().length;
-  const fmt = (document.querySelector('input[name="exnotes-fmt"]:checked')?.value || 'xlsx').toUpperCase();
-  const el = document.getElementById('exnotes-summary');
-  const btn = document.getElementById('exnotes-go');
-  if (el) el.textContent = n ? `→ ${n} fichier(s) ${fmt} à générer` : '— Coche au moins une classe —';
-  if (btn) btn.disabled = (n === 0);
+  const ids = _exnotesSelectedIds();
+  const fmt = (document.querySelector('input[name="exnotes-fmt"]:checked')?.value || 'xlsx');
+  const el = document.getElementById('exnotes-summary'), btn = document.getElementById('exnotes-go');
+  const pers = (typeof _periodeOptions === 'function' ? _periodeOptions() : []).map(p => p.code);
+  const nEv = id => Object.values(S.evaluations || {}).filter(e => _evalIncludesClass(e, id)).length;
+  const ce = document.getElementById('exnotes-content');
+  if (ce) ce.innerHTML = `<div class="exn-sheets"><span>📊 Synthèse</span>${pers.map(p => `<span>📜 Bilan ${_esc(p)}</span>`).join('')}<span>🎯 Compétences</span><span>📝 une feuille par évaluation${ids.length === 1 ? ` (${nEv(ids[0])})` : ''}</span></div>`;
+  if (el) el.innerHTML = ids.length
+    ? `<div class="ipr-lbl" style="margin-top:0">${ids.length} fichier${ids.length > 1 ? 's' : ''} ${fmt.toUpperCase()}</div>` + ids.map(id => `<div class="exn-file">📄 ${_esc(_NotesExport.fileName(S.classes[id], fmt))}</div>`).join('')
+    : '<div class="clf-note">Choisis au moins une classe.</div>';
+  if (btn) { btn.disabled = !ids.length; btn.textContent = ids.length ? `📤 Exporter ${ids.length} classeur${ids.length > 1 ? 's' : ''}` : '📤 Exporter'; }
 }
 // Met à jour l'aperçu quand le format change
 document.addEventListener('change', e => {
@@ -35750,7 +35808,7 @@ const _NotesExport = (function () {
     }
   }
 
-  return { run };
+  return { run, fileName: (cls, fmt) => safeFilename(cls.nom) + '-notes-' + todayYMD() + '.' + ((fmt === 'ods') ? 'ods' : 'xlsx') };
 })();
 
 // Démo : AESH de la 6A (une, nommée, avec les deux élèves PPS) et de la 5B (une nommée, une
