@@ -8058,11 +8058,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.131.5';
+const APP_VERSION    = '2.131.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T18:43:59Z';
+const APP_BUILD_DATE = '2026-10-08T18:46:18Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19108,8 +19108,19 @@ function _renduRender() {
     }
     return `<strong>${_esc((stu.nom || '').toUpperCase())}</strong> ${_esc(stu.prenom || '')}`;
   };
+  // Types C et D : numéro de l'exercice devant la question (« 2·Q1 »), sinon deux
+  // exercices aux questions de même nom donnent des en-têtes identiques.
+  const _exoNum = mnId => {
+    if (ev.type !== 'C' && ev.type !== 'D') return '';
+    const mn = (ev.miniNotes || []).find(m => m.id === mnId);
+    const i = (ev.exercices || []).findIndex(e => e.id === mn?.exerciceId);
+    if (i < 0) return '';
+    const m = String(ev.exercices[i].label || '').match(/\d+/);
+    return m ? m[0] : String(i + 1);
+  };
+  const _exoOf = mnId => { const mn = (ev.miniNotes || []).find(m => m.id === mnId); return (ev.exercices || []).find(e => e.id === mn?.exerciceId); };
   const tipOf = (c) => {
-    if (c.kind === 'mn') return `Question ${c.label}, sur ${c.max}`;
+    if (c.kind === 'mn') { const e = _exoOf(c.mnId); return `${e ? 'Exercice ' + (e.label || '') + ', q' : 'Q'}uestion ${c.label}, sur ${c.max}`; }
     if (c.kind === 'd-cell' || c.kind === 'pass-comp' || c.kind === 'comp') {
       const comp = S.competences?.[c.cid];
       if (c.kind === 'pass-comp') { const p = ev.passations?.find(x => x.id === c.passId); return `Passation ${p?.code || '?'} — ${comp?.code || c.cid}${comp?.name ? ' (' + comp.name + ')' : ''}`; }
@@ -19122,7 +19133,12 @@ function _renduRender() {
     if (c.kind === 'remarque') return 'Remarque sur ce devoir';
     return c.label;
   };
-  const headLbl = (c) => c.kind === 'comp' ? (S.competences?.[c.cid]?.code || c.label) : c.kind === 'remarque' ? 'Remarque' : c.label;
+  const headLbl = (c) => {
+    if (c.kind === 'comp') return S.competences?.[c.cid]?.code || c.label;
+    if (c.kind === 'remarque') return 'Remarque';
+    if (c.kind === 'mn' || c.kind === 'd-cell') { const n = _exoNum(c.mnId); return n ? n + '·' + c.label : c.label; }
+    return c.label;
+  };
   const _longName = ev.nomLong ? `${ev.nomCourt || '?'} — ${ev.nomLong}` : (ev.nomCourt || '?');
   let html = `<h2 class="rendu-project-title" style="display:none;margin:0 0 14px;text-align:center;font-family:var(--font-serif);color:var(--ink-blue);font-size:1.05em">${_esc(_longName + (_d ? ' · ' + _fmtDateFr(_d) : '') + ' · ' + (cls.nom || ''))}</h2>`;
   html += `<table class="rendu-tbl mres-tbl${mode === 'bilan' ? ' mres-bilan' : ''}"><thead><tr><th class="rendu-eleve-col">Élève</th>`;
