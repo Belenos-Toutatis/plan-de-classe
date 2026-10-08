@@ -1773,6 +1773,9 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .mres-lbl{color:var(--pencil);font-size:.88em}
 .mres-pills{display:inline-flex;flex-wrap:wrap;gap:4px}
 .mres-pills .slot-pill.on .nd-dim{color:inherit}
+.mres-exo{display:inline-flex;gap:3px;padding:2px 6px 2px 2px;border:1px solid var(--rule-line);border-radius:999px}
+.mres-exo-btn{font-weight:700}
+.mres-exo-btn.part{border-style:dashed}
 .mres-note{color:var(--pencil);font-size:.86em}
 .bsynth.mres-synth{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:2px 0 8px}
 .mres-synth .bsynth-big{font-size:1.35em}
@@ -8055,11 +8058,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.131.4';
+const APP_VERSION    = '2.131.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T18:40:53Z';
+const APP_BUILD_DATE = '2026-10-08T18:43:59Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19023,9 +19026,35 @@ function _renduRender() {
         + (nOn > 0 ? `<button class="slot-pill" onclick="_resAllPass(false, ${_escAttr(JSON.stringify(ids))})" title="Les masquer toutes, pour n'en rallumer qu'une ou deux">aucune</button>` : '');
     }
   }
+  // Types C et D : questions groupées par exercice ; la pastille de l'exercice
+  // allume ou éteint toutes ses questions (même état, clés = id des questions).
+  if ((ev.type === 'C' || ev.type === 'D') && groups.has('q')) {
+    const qKind = ev.type === 'D' ? 'd-cell' : 'mn';
+    const qs = (ev.miniNotes || []).filter(m => allCols.some(c => c.kind === qKind && c.mnId === m.id));
+    if (qs.length > 1) {
+      const ids = qs.map(m => m.id);
+      const nOn = ids.filter(id => !passOff.has(id)).length;
+      const exos = (ev.exercices || []).map(e => ({ e, qs: qs.filter(m => m.exerciceId === e.id) })).filter(x => x.qs.length);
+      const loose = qs.filter(m => !exos.some(x => x.qs.includes(m)));
+      if (loose.length) exos.push({ e: null, qs: loose });
+      const qPill = m => {
+        const tip = [m.name, ev.type === 'C' && m.max != null ? 'sur ' + _fmtNote(m.max) : '', ev.type === 'D' ? (m.competenceIds || []).map(cid => S.competences?.[cid]?.code || cid).join(', ') : ''].filter(Boolean).join(' · ');
+        return `<button class="slot-pill${passOff.has(m.id) ? '' : ' on'}" onclick="_resTogglePass('${_esc(m.id)}')"${tip ? ` title="${_escAttr(tip)}"` : ''}>${_esc(m.label || '?')}</button>`;
+      };
+      pHtml = `<span style="flex-basis:100%;height:0"></span><span class="mres-lbl">Questions</span>`
+        + exos.map(({ e, qs: eq }) => {
+          if (!e) return eq.map(qPill).join('');
+          const eIds = eq.map(m => m.id);
+          const allOn = eIds.every(id => !passOff.has(id)), someOn = eIds.some(id => !passOff.has(id));
+          return `<span class="mres-exo"><button class="slot-pill mres-exo-btn${allOn ? ' on' : someOn ? ' part' : ''}" onclick="_resAllPass(${allOn ? 'false' : 'true'}, ${_escAttr(JSON.stringify(eIds))})" title="${_escAttr((e.name ? e.label + ' — ' + e.name : (e.label || 'Exercice')) + (allOn ? ' : masquer ses questions' : ' : afficher toutes ses questions'))}">${_esc(e.label || 'Ex.')}</button>${eq.map(qPill).join('')}</span>`;
+        }).join('')
+        + (nOn < ids.length ? `<button class="slot-pill" onclick="_resAllPass(true, ${_escAttr(JSON.stringify(ids))})" title="Les afficher toutes">toutes</button>` : '')
+        + (nOn > 0 ? `<button class="slot-pill" onclick="_resAllPass(false, ${_escAttr(JSON.stringify(ids))})" title="Les masquer toutes, pour n'en rallumer qu'une ou deux">aucune</button>` : '');
+    }
+  }
   document.getElementById('mrendu-cols').innerHTML = gHtml + pHtml;
   const groupOf = c => (_RES_GROUPS.find(g => g.kinds.includes(c.kind)) || {}).key;
-  const selCols = allCols.filter(c => groups.has(groupOf(c)) && !(c.kind === 'pass-comp' && passOff.has(c.passId)) && !(c.kind === 'mn' && passOff.has(c.mnId)));
+  const selCols = allCols.filter(c => groups.has(groupOf(c)) && !(c.kind === 'pass-comp' && passOff.has(c.passId)) && !((c.kind === 'mn' || c.kind === 'd-cell') && passOff.has(c.mnId)));
 
   const sids = _resSids(ev, cls, st.sort);
   const nb = _nbLevels();
