@@ -1675,6 +1675,13 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .ev-types .eval-type-badge{flex:0 0 auto;font-size:.9em}
 .ev-types b{display:block;font-weight:600;font-size:.92em}
 .ev-tsub{display:block;font-size:.8em;color:var(--pencil);line-height:1.3}
+/* Contraintes non respectées (v2.125.0) — réutilise l'aperçu .shf-* de Mélanger tout */
+.viol-list{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.viol-item{padding:5px 8px;border:1px solid var(--alert-bd);background:var(--alert-bg);color:var(--alert-fg);border-radius:4px;font-size:.88em;line-height:1.35}
+.viol-item strong{color:inherit}
+.viol-seg{margin-bottom:2px}
+.shf-plan i.st.mv{background:var(--info-bg);border:2px solid var(--link-fg);font-weight:600}
+.shf-plan i.st.bad{box-shadow:inset 0 0 0 2px var(--danger-fg)}
 /* Mélanger tout (v2.124.0) */
 .shf-chips{display:flex;gap:4px;flex-wrap:wrap}
 .shf-chips span{font-size:.78em;padding:1px 8px;border-radius:999px;background:var(--paper-warm);color:var(--pencil);border:1px solid var(--rule-line)}
@@ -5118,15 +5125,31 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 </div>
 
 <div id="mviolations" class="mo" onclick="closeMod(this,event)">
-  <div class="mb" style="max-width:600px;width:100%">
-    <h2 id="mviolations-title">⚠️ Contraintes non respectées</h2>
-    <p style="font-size:.88em;color:var(--pencil);margin-bottom:10px">Le placement actuel viole certaines contraintes définies. Plusieurs options pour résoudre :</p>
-    <div id="mviolations-list" style="max-height:340px;overflow-y:auto;background:#fdedec;border:1px solid #f5b7b1;border-radius:4px;padding:8px;margin-bottom:10px;font-size:.9em"></div>
-    <div class="ma" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-g" onclick="closeMod2('mviolations')" title="Fermer la modale et résoudre manuellement (drag&drop, saisie de positions). Les alertes visuelles restent affichées.">✋ Résoudre manuellement</button>
-      <button class="btn btn-p" onclick="resolveMinimalConflicts()" title="Cherche une solution en déplaçant le minimum d'élèves possible (algorithme greedy de swaps successifs).">🔁 Solution minimale</button>
-      <button class="btn btn-w" onclick="closeMod2('mviolations');randomPlacement(true)" title="Réessayer un nouveau placement aléatoire de TOUS les élèves (plus radical, mais souvent plus efficace si beaucoup de violations)">🔀 Replacer tout aléatoirement</button>
-      <button class="btn btn-s" onclick="dismissViolations()" style="margin-left:auto" title="J'ai vu, je garde cette solution telle qu'elle est — supprime les alertes visuelles sur les cases jusqu'au prochain changement">✓ Garder & supprimer les alertes</button>
+  <!-- Contraintes non respectées — refonte v2.125.0 : comme « Mélanger tout », la solution est
+       CALCULÉE puis montrée sur un aperçu avec prénoms ; rien ne bouge avant « Appliquer ». -->
+  <div class="mb" style="width:min(1040px,97vw);max-width:1040px">
+    <div class="lst-head"><h2 id="mviolations-title" style="flex:1;margin:0">⚠️ Contraintes non respectées</h2><span id="mviolations-chips" class="shf-chips"></span></div>
+    <div class="shf-cols">
+      <div class="about-section clf-sec" style="margin:0"><h3>Ce qui ne va pas</h3>
+        <div id="mviolations-list" class="viol-list"></div>
+        <div class="clf-note">Les contraintes se règlent avec ⛓ Contraintes (Plan) ou dans Config Salle.</div>
+      </div>
+      <div class="about-section clf-sec shf-prev-box"><h3>Solution proposée <small class="clf-hint">(déplacer le moins d'élèves possible)</small></h3>
+        <div class="viol-seg ip-seg" id="mviolations-seg"></div>
+        <div class="clf-note" style="margin:4px 0 6px">En bleu : élèves déplacés · cadre rouge : contrainte encore enfreinte · clic sur un élève : 📌 ne pas le déplacer.</div>
+        <div id="mviolations-preview"></div>
+        <div id="mviolations-res" class="shf-res"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-g" onclick="_violDraw()">🎲 Autre solution</button>
+          <button class="btn btn-g btn-sm" id="mviolations-unpin" onclick="_violPins=new Set();_violDraw()" style="display:none">📌 Retirer les épingles</button>
+        </div>
+      </div>
+    </div>
+    <div class="ma" style="flex-wrap:wrap">
+      <button class="btn btn-g" onclick="closeMod2('mviolations')" title="Fermer et déplacer les élèves à la main ; les alertes restent sur les cases">✋ Je m'en occupe</button>
+      <button class="btn btn-g" onclick="dismissViolations()" title="Garder le plan tel quel et faire disparaître les alertes jusqu'au prochain changement">Garder tel quel</button>
+      <button class="btn btn-g" onclick="closeMod2('mviolations');openShuffleDialog()" title="Ouvrir « Mélanger tout » (avec aperçu)">🔀 Mélanger tout…</button>
+      <button class="btn btn-p" id="mviolations-go" onclick="resolveMinimalConflicts()" style="margin-left:auto">✓ Appliquer la solution</button>
     </div>
   </div>
 </div>
@@ -7980,11 +8003,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.124.1';
+const APP_VERSION    = '2.125.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T03:24:12Z';
+const APP_BUILD_DATE = '2026-10-08T03:36:25Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10055,80 +10078,102 @@ function _violationsHashStr(cls) {
 // possible. Algorithme : pour chaque sid en violation, on tente de le placer
 // ailleurs (libre ou en swap avec un autre) tant que ça réduit le nombre total
 // de violations. S'arrête quand plus aucun swap ne diminue le score.
+// Calcule la « solution minimale » (échanges successifs qui réduisent les violations) SANS
+// l'appliquer : le plan de la classe est remis tel quel. `pins` = élèves à ne pas déplacer.
+function _computeMinimalFix(cls, pins) {
+  const seat0 = { ...(cls.seating || {}) };
+  const before = collectAllViolations(cls).length;
+  const MAX_ITER = 200; // garde-fou
+  let iter = 0, progress = true;
+  const swaps = [];
+  while (progress && iter < MAX_ITER) {
+    progress = false; iter++;
+    const v = collectAllViolations(cls);
+    if (!v.length) break;
+    // Sids en violation, dédupliqués ; ordre mélangé pour varier les solutions
+    const seen = new Set();
+    const vs = shuffle(v.filter(it => !seen.has(it.sid) && seen.add(it.sid)));
+    for (const item of vs) {
+      const fixed = _tryFixOneViolation(cls, item.sid, item.key, { simulate: true, pins });
+      if (fixed) { progress = true; swaps.push(fixed); break; }
+    }
+  }
+  const res = { seating: { ...cls.seating }, swaps, before, after: collectAllViolations(cls).length, iter };
+  cls.seating = seat0;
+  return res;
+}
+var _violPins = new Set();   // élèves à ne pas déplacer (épinglés dans l'aperçu)
+var _violPreview = null;     // dernière solution calculée (appliquée telle quelle)
+var _violShow = 'sol';       // 'sol' = solution proposée | 'cur' = plan actuel
+function _violDraw() {
+  const cls = getCls(); if (!cls) return;
+  _violPreview = _computeMinimalFix(cls, _violPins);
+  _violRenderPreview();
+}
+function _violTogglePin(sid) { _violPins.has(sid) ? _violPins.delete(sid) : _violPins.add(sid); _violDraw(); }
+function _violRenderPreview() {
+  const box = document.getElementById('mviolations-preview'); if (!box || !_violPreview) return;
+  const cls = getCls(), salle = activeSalle(cls), room = activeRoomData(cls); if (!salle) return;
+  const seg = document.getElementById('mviolations-seg');
+  if (seg) seg.innerHTML = `<button type="button" class="${_violShow === 'sol' ? 'on' : ''}" onclick="_violShow='sol';_violRenderPreview()">Solution proposée</button><button type="button" class="${_violShow === 'cur' ? 'on' : ''}" onclick="_violShow='cur';_violRenderPreview()">Plan actuel</button>`;
+  const cur = cls.seating || {}, sol = _violPreview.seating;
+  const seat = _violShow === 'sol' ? sol : cur;
+  // Élèves encore en faute dans le plan montré
+  const saved = { ...cur }; cls.seating = { ...seat };
+  const bad = new Set(collectAllViolations(cls).flatMap(it => [it.sid, it.sid2].filter(Boolean)));
+  cls.seating = saved;
+  const where = m => { const o = {}; for (const [k, v] of Object.entries(m)) o[v] = k; return o; };
+  const wc = where(cur), ws = where(sol);
+  const moved = new Set(Object.keys(ws).filter(sid => wc[sid] !== ws[sid]));
+  const aeshAt = {}; for (const [i, k] of Object.entries(room?.aeshSeating || {})) aeshAt[k] = +i;
+  const nA = _aeshList(cls).length, vides = new Set(salle.positions_vides || []);
+  let h = `<div class="shf-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
+  for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
+    const key = `${r},${c}`;
+    if (vides.has(key)) { h += '<i class="nt"></i>'; continue; }
+    if (key in aeshAt) { h += `<i class="ae">${_esc(aeshLabel(aeshAt[key], nA, cls))}</i>`; continue; }
+    const sid = seat[key], st = sid && S.eleves[sid];
+    if (!st) { h += '<i></i>'; continue; }
+    const pin = _violPins.has(sid), mv = _violShow === 'sol' && moved.has(sid);
+    h += `<i class="st${pin ? ' pin' : ''}${mv ? ' mv' : ''}${bad.has(sid) ? ' bad' : ''}" onclick="_violTogglePin('${_escJsAttr(sid)}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${mv ? ' — déplacé·e' : ''}${bad.has(sid) ? ' — contrainte enfreinte' : ''}${pin ? ' — épinglé·e : ne sera pas déplacé·e' : ' — clic : ne pas déplacer'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
+  }
+  box.innerHTML = h + '</div><div class="shf-board">🖥 tableau</div>';
+  const p = _violPreview, np = _violPins.size;
+  document.getElementById('mviolations-res').innerHTML = (p.after ? `<span class="bad">⚠ ${p.after} contrainte${p.after > 1 ? 's' : ''} encore enfreinte${p.after > 1 ? 's' : ''}</span> sur ${p.before}` : '<span class="good">✓ toutes les contraintes respectées</span>')
+    + ` · ${moved.size} élève${moved.size > 1 ? 's' : ''} déplacé${moved.size > 1 ? 's' : ''}${np ? ` · 📌 ${np} épinglé${np > 1 ? 's' : ''}` : ''}`;
+  const ub = document.getElementById('mviolations-unpin'); if (ub) ub.style.display = np ? '' : 'none';
+  const go = document.getElementById('mviolations-go');
+  if (go) { go.disabled = !p.swaps.length; go.title = p.swaps.length ? 'Appliquer exactement la solution affichée (annulable par Ctrl+Z)' : 'Aucune amélioration trouvée — essaie « Autre solution », retire des épingles, ou « Mélanger tout »'; }
+}
 function resolveMinimalConflicts() {
   const cls = getCls();
   if (!cls) return;
+  const sol = _violPreview || _computeMinimalFix(cls, _violPins);
+  if (!sol.before) { closeMod2('mviolations'); return toast('✅ Aucune violation à résoudre.'); }
+  if (!sol.swaps.length) return toast('⚠️ Aucune amélioration trouvée — essaie « Autre solution » ou « Mélanger tout ».', 'warn');
   pushUndo();
-  const before = collectAllViolations(cls).length;
-  if (!before) {
-    undoStack.pop();
-    updateUndoRedoUI();
-    closeMod2('mviolations');
-    return toast('✅ Aucune violation à résoudre.');
-  }
-
-  // Snapshot du seating AVANT la résolution — sert d'origine au bucket de
-  // surlignage pour que toute mutation ultérieure (swap manuel, etc.) soit
-  // évaluée par rapport à ce même point de référence (pas par rapport à
-  // l'état post-Solution-minimale, sinon les highlights posés ici seraient
-  // écrasés au 1er swap manuel suivant).
+  // Surlignage : référence = le plan d'AVANT la résolution (les mutations manuelles suivantes s'y empilent).
   const beforeSeat = _snapSeating(cls);
-
-  const MAX_ITER = 200; // garde-fou
-  let iter = 0;
-  let progress = true;
-  const movedKeys = new Set();
-  while (progress && iter < MAX_ITER) {
-    progress = false;
-    iter++;
-    const v = collectAllViolations(cls);
-    if (!v.length) break;
-    // Sids en violation, dédupliqués (un sid peut apparaître deux fois pour deux raisons)
-    const seenSids = new Set();
-    const violatingSids = v.filter(it => {
-      if (seenSids.has(it.sid)) return false;
-      seenSids.add(it.sid);
-      return true;
-    });
-    // Mélange l'ordre pour éviter les boucles déterministes (les essais sont alors variés)
-    shuffle(violatingSids);
-    for (const item of violatingSids) {
-      const fixed = _tryFixOneViolation(cls, item.sid, item.key);
-      if (fixed) {
-        progress = true;
-        // Enregistre les cellules touchées (départ + arrivée du swap) pour l'highlight
-        for (const k of fixed) movedKeys.add(k);
-        break; // recommence la boucle while avec l'état mis à jour
-      }
+  // Les tablettes suivent les élèves : on rejoue les échanges dans les maps du pool actif.
+  for (const [fromKey, toKey] of sol.swaps) {
+    for (const map of [cls.ipads, cls.ipads_g1 || {}, cls.ipads_g2 || {}, cls.ipads_g3 || {}]) {
+      if (!map) continue;
+      const v1 = map[fromKey], v2 = map[toKey];
+      if (v2 !== undefined) map[fromKey] = v2; else delete map[fromKey];
+      if (v1 !== undefined) map[toKey] = v1; else delete map[toKey];
     }
   }
-
-  const after = collectAllViolations(cls).length;
-  // Reset les flags de signalement : nouvel état → la modale peut s'afficher si il reste des problèmes
+  cls.seating = { ...sol.seating };
   _violationsAcceptedFor.delete(cls.id);
   _violationsModalShown.delete(cls.id);
-
-  // Surlignage : on passe par _recordMovesFromDiff avec comme référence le
-  // seating d'AVANT la résolution. Ainsi le bucket.origin reflète ce point
-  // de départ et les mutations manuelles ultérieures s'y empilent (au lieu
-  // de réinitialiser l'origine au post-Sol-min et d'effacer ces highlights).
-  if (movedKeys.size) {
-    _recordMovesFromDiff(cls, beforeSeat);
-  }
-
+  _recordMovesFromDiff(cls, beforeSeat);
+  _violPreview = null; _violPins = new Set();
   save();
   closeMod2('mviolations');
   renderTeacherGrid();
-
-  if (after === 0) {
-    toast(`✓ Toutes les contraintes respectées — ${before} violation(s) résolue(s) en ${iter} itération(s). Cases roses = élèves déplacés (💡 pour masquer · clic droit = effacer).`);
-  } else if (after < before) {
-    toast(`✓ ${before - after} violation(s) résolue(s) sur ${before} — ${after} restante(s). Cases roses = élèves déplacés (💡 pour masquer · clic droit = effacer).`);
-    _maybeShowViolationsModal(cls);
-  } else {
-    toast(`⚠️ Aucune amélioration trouvée — ${after} violation(s) persistante(s). Essaie "Réessayer le placement" ou résous manuellement.`);
-    _maybeShowViolationsModal(cls);
-  }
+  const { before, after } = sol;
+  if (after === 0) toast(`✓ Toutes les contraintes respectées — ${before} violation(s) résolue(s). Cases roses = élèves déplacés (💡 pour masquer · clic droit = effacer).`);
+  else { toast(`✓ ${before - after} violation(s) résolue(s) sur ${before} — ${after} restante(s). Cases roses = élèves déplacés.`); _maybeShowViolationsModal(cls); }
 }
 
 // Capture l'état actuel du seating d'une classe (snapshot léger pour diff).
@@ -10304,7 +10349,9 @@ function _updateMovedHighlightBtnUI() {
 // Tente de résoudre la violation impliquant sid actuellement à fromKey, en
 // le déplaçant vers une autre position (libre ou en swap). Renvoie un array
 // [fromKey, toKey] des keys impliquées si améliorisation, sinon null.
-function _tryFixOneViolation(cls, sid, fromKey) {
+function _tryFixOneViolation(cls, sid, fromKey, o) {
+  const pins = o?.pins;
+  if (pins && pins.has(sid)) return null;
   const room = cls.rooms?.[cls.activeRoom];
   if (!room) return null;
   const order = getPlacementOrder(cls);
@@ -10316,6 +10363,7 @@ function _tryFixOneViolation(cls, sid, fromKey) {
     if (toKey === fromKey) continue;
     if (!isPlaceAllowedForStudent(room, sid, toKey)) continue;
     const occupant = cls.seating[toKey];
+    if (occupant && pins && pins.has(occupant)) continue;
     if (occupant && !isPlaceAllowedForStudent(room, occupant, fromKey)) continue;
 
     // Simule le swap (ou simple move si toKey libre)
@@ -10328,6 +10376,7 @@ function _tryFixOneViolation(cls, sid, fromKey) {
     if (afterViolations < beforeViolations) {
       // Amélioration → on commit. Déplace aussi les éventuelles tablettes attribuées
       // aux positions, pour ne pas créer d'orphelines. (Comme dropOnCell)
+      if (o?.simulate) return [fromKey, toKey];   // aperçu : les tablettes suivront à l'application
       for (const map of [cls.ipads, cls.ipads_g1 || {}, cls.ipads_g2 || {}, cls.ipads_g3 || {}]) {
         const v1 = map[fromKey], v2 = map[toKey];
         // Echange les valeurs entre fromKey et toKey
@@ -10383,15 +10432,19 @@ function showViolationsModal(cls) {
   const items = collectAllViolations(cls);
   if (!items.length) { toast('✅ Aucune violation détectée.'); return; }
   const title = document.getElementById('mviolations-title');
+  if (title) title.textContent = `⚠️ ${items.length} contrainte${items.length > 1 ? 's' : ''} non respectée${items.length > 1 ? 's' : ''} — ${cls.nom} · ${activeSalle(cls)?.nom || ''}`;
+  const nPairs = (cls.noNeighbors || []).length, room = activeRoomData(cls);
+  const nAllow = Object.values(room?.allowedFor || {}).filter(a => Array.isArray(a) && a.length).length;
+  const chips = document.getElementById('mviolations-chips');
+  if (chips) chips.innerHTML = [nPairs ? `<span>${nPairs} paire${nPairs > 1 ? 's' : ''} à séparer</span>` : '', nAllow ? `<span>places autorisées : ${nAllow} élève${nAllow > 1 ? 's' : ''}</span>` : ''].join('');
   const list = document.getElementById('mviolations-list');
-  if (title) title.textContent = `⚠️ ${items.length} contrainte${items.length>1?'s':''} non respectée${items.length>1?'s':''}`;
-  if (list) {
-    list.innerHTML = items.map(it => {
-      const stuName = it.sid ? `<strong>${_escAttr(S.eleves[it.sid]?.prenom || '?')} ${_escAttr(S.eleves[it.sid]?.nom || '?')}</strong>` : '';
-      return `<div style="padding:5px 8px;border-bottom:1px solid #f5b7b1">${it.icon} ${stuName} ${it.text}</div>`;
-    }).join('');
-  }
+  if (list) list.innerHTML = items.map(it => {
+    const st = S.eleves[it.sid];
+    return `<div class="viol-item">${it.icon} <strong>${_esc(st?.prenom || '?')} ${_esc(st?.nom || '?')}</strong> ${it.text}</div>`;
+  }).join('');
+  _violPins = new Set(); _violShow = 'sol';
   openMod('mviolations');
+  _violDraw();
 }
 
 // Collecte la liste complète des violations dans le placement courant
@@ -10416,7 +10469,7 @@ function collectAllViolations(cls) {
           seenPairs.add(pk);
           const stu2 = S.eleves[sid2];
           const nm2 = stu2 ? `${stu2.prenom} ${stu2.nom}` : '?';
-          items.push({ sid, key, icon: '🚫', text: `est côte à côte avec <strong>${_escAttr(nm2)}</strong> (paire à séparer)` });
+          items.push({ sid, sid2, key, icon: '🚫', text: `est côte à côte avec <strong>${_escAttr(nm2)}</strong> (paire à séparer)` });
         }
       }
     }

@@ -1995,6 +1995,12 @@ Plus de sélecteur 1..4 — règle unique pour toute classe. Un candidat à `(r2
 - `_pairAdjacentKeys(cls, salle, key)` → keys "adjacentes" au sens des paires (jeu de règles unique).
 - `getPlacementViolations(cls, sid, key)` / `collectAllViolations(cls)` — utilisés par les alertes UI et la modale `mviolations`.
 
+### Fenêtre `mviolations` — refonte v2.125.0 (même logique que Mélanger tout) — remplace la description ci-dessous là où elle diffère
+- **La solution minimale est calculée sans être appliquée** : **`_computeMinimalFix(cls, pins)`** rejoue la boucle d'échanges (`_tryFixOneViolation(cls, sid, key, { simulate: true, pins })` — en simulation les tablettes ne bougent pas, et un élève épinglé n'est ni déplacé ni pris en échange), remet le plan tel quel et renvoie `{ seating, swaps, before, after, iter }`.
+- Fenêtre en deux colonnes : **Ce qui ne va pas** (une carte par violation, tokens `--alert-*`) | **Solution proposée** : aperçu avec prénoms (classes `.shf-plan` de Mélanger tout), élèves **déplacés en bleu** (`.mv`), **cadre rouge** sur les élèves encore en faute (`.bad`, les DEUX élèves d'une paire — `collectAllViolations` renvoie désormais `sid2`), bascule **Solution proposée | Plan actuel** (`_violShow`), **🎲 Autre solution** (`_violDraw`), **épingles** (`_violPins`, clic = ne pas déplacer cet élève).
+- **« ✓ Appliquer la solution »** (`resolveMinimalConflicts`) applique **exactement** l'aperçu (`_violPreview`) : `pushUndo`, les tablettes suivent les élèves en rejouant `swaps`, surlignage rose par `_recordMovesFromDiff`. Désactivé si aucune amélioration n'a été trouvée. Autres boutons : « ✋ Je m'en occupe », « Garder tel quel » (`dismissViolations`), « 🔀 Mélanger tout… » (ouvre la fenêtre avec aperçu, au lieu de mélanger directement).
+- Audit : 0 écart en clair et en sombre ; 363 px à 375. Testé : plan inchangé à l'ouverture, épingle respectée, plan appliqué = aperçu, 0 violation ensuite.
+
 ### Modale d'alerte (`mviolations`)
 Apparaît automatiquement après tout placement créant des violations (drag, paste position, mélange, restauration snapshot…). Helper `_maybeShowViolationsModal(cls)` avec dédoublonnage par hash (`_violationsHashStr`). 4 options :
 - **✋ Résoudre manuellement** — ferme la modale, l'utilisateur drag&drop
