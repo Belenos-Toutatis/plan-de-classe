@@ -1860,6 +1860,12 @@ body.ff-no-reunions #nb-reunions, body.ff-no-reunions .reu-plan-hint { display:n
 .reu-mt{font-size:.84em;color:var(--pencil)}
 .reu-help{font-size:.8em;color:var(--pencil);margin:6px 0 0}
 .reu-help a{color:var(--link-fg)}
+#reu-side-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.reu-togs{display:inline-flex;flex-wrap:wrap;gap:4px}
+.reu-tog{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:999px;padding:2px 10px;font:500 .82em var(--font-sans);cursor:pointer;line-height:1.5}
+.reu-tog:hover{border-color:var(--ink-blue-soft)}
+.reu-tog.on{background:var(--chip-on-bg);border-color:var(--chip-on-bg);color:#fff}
+.reu-tog.on::before{content:'✓ '}
 .reu-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:6px 0 14px}
 .reu-card{border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);background:var(--paper);padding:10px 12px;cursor:pointer;text-align:left;font:inherit;color:var(--ink-deep)}
 .reu-card:hover{border-color:var(--ink-blue-soft)}
@@ -7554,7 +7560,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <p class="clf-note">Nom, prénom et classe de chaque élève. Rien d'autre : ni notes, ni aménagements, ni informations, ni absences.</p>
         <div class="ev-h">Réunion déjà préparée (facultatif)</div>
         <div id="rex-reu"></div>
-        <p class="clf-note">Il retrouve tes date, horaires, durée et pauses ; il met son nom et sa discipline. Tes rendez-vous, notes et mini bilans ne partent pas.</p>
+        <p class="clf-note">Il retrouve tes date, horaires et durée des rendez-vous, avec une grille entièrement vide (ni rendez-vous, ni pauses, ni notes, ni mini bilans) ; il met son nom et sa discipline.</p>
       </div>
       <div>
         <div id="rex-sum" class="rex-sum"></div>
@@ -7965,9 +7971,20 @@ textarea{width:100%;resize:vertical}
 .foot{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:14px}
 .chip{border:1px solid var(--rule);border-radius:999px;padding:2px 10px;margin:0 4px 4px 0;font-size:.85em}
 .chip.on{background:var(--ink-blue);color:var(--paper);border-color:var(--ink-blue)}
+.chip.lv{font-weight:700}
+.chip.part{border-style:dashed;border-color:var(--ink-blue)}
+.lvrow{display:flex;flex-wrap:wrap;align-items:center;margin:2px 0}
+.tog{border-radius:999px;padding:2px 10px;font-size:.85em}
+.tog.on{background:var(--ink-blue);color:var(--paper);border-color:var(--ink-blue)}
+.tog.on::before{content:'✓ '}
+.sf{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pm{font-size:.85em;margin-left:4px}
+#pp{position:fixed;z-index:450;pointer-events:none;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.25);text-align:center;font-size:.85em;color:var(--ink)}
+#pp img{display:block;width:220px;height:220px;object-fit:cover;border-radius:7px;margin-bottom:4px}
+button:disabled{opacity:.45;cursor:default}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink-blue);color:var(--paper);padding:8px 14px;border-radius:8px;z-index:600;font-size:.9em;max-width:90vw}
 #pa{display:none}
-@media print{body{background:#fff}#app,.mo,.menu,.toast{display:none!important}#pa{display:block!important}}
+@media print{body{background:#fff}#app,.mo,.menu,.toast,#pp{display:none!important}#pa{display:block!important}}
 </script>
 <script type="text/plain" id="rdv-standalone-js">// Fichier de prise de rendez-vous parents-professeurs — généré par « Plan de classe ».
 // Autonome : élèves (nom, prénom, classe, photo), réunions, feuille imprimée. L'enregistrement
@@ -7977,8 +7994,8 @@ textarea{width:100%;resize:vertical}
 var D = JSON.parse(document.getElementById('rdv-data').textContent);
 if (!D.reunions || typeof D.reunions !== 'object') D.reunions = {};
 if (!D.prefs) D.prefs = { prof: '', discipline: '' };
-var V = { id: null, view: 'list', f: 'all', q: '', edit: null, cur: null, acIdx: 0 };
-var undo = [], dirty = false, savedAt = D.savedAt || 0, fileHandle = null, drag = null, noteTimer = null;
+var V = { id: null, view: 'list', f: 'all', none: false, q: '', edit: null, cur: null, acIdx: 0 };
+var undo = [], redo = [], dirty = false, savedAt = D.savedAt || 0, fileHandle = null, drag = null, noteTimer = null, bilTimer = null;
 var BK = 'rdv_backup_' + D.fileId;
 var app = document.getElementById('app');
 
@@ -8002,20 +8019,26 @@ function avatar(sid, big) { var s = stu(sid) || {}, ph = D.photos && D.photos[si
 function cur() { return V.id ? D.reunions[V.id] : null; }
 function sids(r) { return Object.keys(D.eleves).filter(function (sid) { return (r.classIds || []).indexOf(D.eleves[sid].cls) >= 0 || Object.values(r.slots || {}).some(function (s) { return s.sid === sid; }); }); }
 function booked(r) { var m = new Map(); Object.keys(r.slots || {}).sort().forEach(function (t) { var sid = r.slots[t].sid; if (sid && stu(sid)) { if (!m.has(sid)) m.set(sid, []); m.get(sid).push(t); } }); return m; }
+function bil(r, sid) { return ((r.bilans || {})[sid] || '').trim(); }
 function slotState(r, t, ts) { if ((r.pauses || []).indexOf(t) >= 0) return 'pause'; var s = r.slots[t]; if (!s || !stu(s.sid)) return 'free'; var i = ts.indexOf(t); return (i > 0 && r.slots[ts[i - 1]] && r.slots[ts[i - 1]].sid === s.sid) ? 'suite' : 'booked'; }
 function nextFree(r, after) { var ts = times(r), i = after ? ts.indexOf(after) : -1; for (var k = i + 1; k < ts.length; k++) if (slotState(r, ts[k], ts) === 'free') return ts[k]; return null; }
+var LVL = { 10: 'CP', 20: 'CE1', 30: 'CE2', 40: 'CM1', 50: 'CM2', 60: '6ème', 70: '5ème', 80: '4ème', 90: '3ème', 100: '2nde', 110: '1ère', 120: 'Terminale' };
+function lvlName(n) { return LVL[n] || 'Autres'; }
+function levels() { return D.classes.map(function (c) { return c.lvl; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; }); }
 function autoTitle(ids) { var cs = D.classes.filter(function (c) { return ids.indexOf(c.id) >= 0; }); if (!cs.length) return 'Réunion'; var lv = cs.map(function (c) { return c.lvl; }).filter(function (v, i, a) { return a.indexOf(v) === i; }); var W = { 10: 'CP', 20: 'CE1', 30: 'CE2', 40: 'CM1', 50: 'CM2', 60: '6ème', 70: '5ème', 80: '4ème', 90: '3ème', 100: '2nde', 110: '1ère', 120: 'Terminale' }; if (lv.length === 1 && W[lv[0]]) return 'Niveau ' + W[lv[0]]; return 'Classes ' + cs.map(function (c) { return c.nom; }).join(', '); }
 function toast(msg) { var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 3200); }
 
 // ── Modifications, annulation, copie de secours
 function snap() { return JSON.stringify({ reunions: D.reunions, prefs: D.prefs }); }
-function change() { undo.push(snap()); if (undo.length > 60) undo.shift(); }
+function change() { undo.push(snap()); if (undo.length > 60) undo.shift(); redo = []; }
 function touched() {
   dirty = true;
   try { localStorage.setItem(BK, JSON.stringify({ ts: Date.now(), reunions: D.reunions, prefs: D.prefs })); } catch (e) {}
   renderTop();
 }
-function doUndo() { if (!undo.length) return toast('Rien à annuler.'); var s = JSON.parse(undo.pop()); D.reunions = s.reunions; D.prefs = s.prefs; touched(); render(); toast('↩ Annulé.'); }
+function restoreSnap(x) { var s = JSON.parse(x); D.reunions = s.reunions; D.prefs = s.prefs; }
+function doUndo() { if (!undo.length) return toast('Rien à annuler.'); redo.push(snap()); restoreSnap(undo.pop()); touched(); render(); refreshBil(); toast('↩ Annulé — Ctrl+Y pour rétablir.'); }
+function doRedo() { if (!redo.length) return toast('Rien à rétablir.'); undo.push(snap()); restoreSnap(redo.pop()); touched(); render(); refreshBil(); toast('↪ Rétabli.'); }
 
 // ── Enregistrement dans le fichier
 function buildHTML() {
@@ -8055,7 +8078,7 @@ function renderTop(how) {
   var st = dirty ? '<span class="st dirty">● Modifications non enregistrées</span>'
     : savedAt ? '<span class="st ok">✓ ' + (lastHow === 'copy' ? 'Copie téléchargée' : 'Enregistré dans le fichier') + ' à ' + _esc(fmt(hhmm(new Date(savedAt)))) + '</span>' : '';
   el.innerHTML = '<h1>🤝 Réunions parents-professeurs</h1><span class="mt">fichier préparé' + (D.by ? ' par ' + _esc(D.by) : '') + ' le ' + _esc(fmtDate(D.createdAt)) + ' · ' + D.classes.map(function (c) { return _esc(c.nom); }).join(', ') + '</span>'
-    + '<span style="margin-left:auto"></span>' + st + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)">↩</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
+    + '<span style="margin-left:auto"></span>' + st + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"' + (undo.length ? '' : ' disabled') + '>↩ Annuler</button><button data-a="redo" title="Rétablir ce qui vient d\'être annulé (Ctrl+Y)" aria-label="Rétablir"' + (redo.length ? '' : ' disabled') + '>↪ Rétablir</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
 }
 function render() {
   closeMenu();
@@ -8088,37 +8111,42 @@ function slotHTML(r, t, ts) {
   var st = slotState(r, t, ts), s = r.slots[t];
   if (V.edit === t) return '<div class="sl edit" data-t="' + t + '"><span class="t">' + fmt(t) + '</span><span class="sp"><input id="ed" type="text" autocomplete="off" placeholder="2 ou 3 lettres du nom ou du prénom, puis Entrée"><div id="ac" class="ac" hidden></div></span><span></span></div>';
   var inner = st === 'pause' ? 'pause' : st === 'free' ? 'libre'
-    : (st === 'suite' ? '↳ ' : '') + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + '</span>' + (st === 'suite' ? ' <span class="cls">(suite)</span>' : '') + (s.note ? ' 📝' : '');
+    : (st === 'suite' ? '↳ ' : '') + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + '</span>' + (st === 'suite' ? ' <span class="cls">(suite)</span>' : '') + (st === 'booked' && bil(r, s.sid) ? ' <span class="pm" title="Mini bilan préparé">✍</span>' : '') + (s.note ? ' 📝' : '');
   var x = (st === 'booked' || st === 'suite') ? '<button class="x" data-a="free" data-t="' + t + '" title="Libérer ce créneau" aria-label="Libérer ce créneau">✕</button>' : '';
   var dr = (st === 'booked' || st === 'suite') ? ' draggable="true"' : '';
-  return '<div class="sl ' + st + '" data-a="slot" data-t="' + t + '"' + dr + ' title="' + (st === 'free' ? 'Clic : réserver · glisser un élève ici · clic droit : pause' : st === 'pause' ? 'Pause — clic droit pour la retirer' : 'Glisser vers un autre créneau pour déplacer · clic droit : autres actions') + '"><span class="t">' + fmt(t) + '</span><span class="sp">' + inner + '</span>' + x + '</div>';
+  return '<div class="sl ' + st + '" data-a="slot" data-t="' + t + '"' + dr + (s && stu(s.sid) && st !== 'pause' ? ' data-psid="' + _escAttr(s.sid) + '"' : '') + ' title="' + (st === 'free' ? 'Clic : réserver · glisser un élève ici · clic droit : pause' : st === 'pause' ? 'Pause — clic droit pour la retirer' : 'Clic : ce que je veux dire · glisser vers un autre créneau pour déplacer · clic droit : autres actions') + '"><span class="t">' + fmt(t) + '</span><span class="sp">' + inner + '</span>' + x + '</div>';
 }
 function prepHTML(r) {
   var ts = times(r), half = Math.ceil(ts.length / 2), nb = Object.keys(r.slots || {}).length;
   var free = ts.filter(function (t) { return slotState(r, t, ts) === 'free'; }).length;
   var col = function (a) { return '<div>' + a.map(function (t) { return slotHTML(r, t, ts); }).join('') + '</div>'; };
   return '<div class="hd" style="margin-bottom:4px"><h2>' + _esc(r.titre) + '</h2><span class="mt">' + _esc(dateLong(r.date)) + ' · ' + _esc(fmt(r.first)) + ' – ' + _esc(fmt(r.last)) + ' · rendez-vous de ' + r.step + ' min</span>'
-    + '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button data-a="list">↩ Réunions</button><button data-a="settings">⚙ Réglages</button>'
+    + '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button data-a="list">↩ Réunions</button><button data-a="settings">⚙ Réglages</button><button data-a="bilall" title="Écrire, élève par élève dans l\'ordre des rendez-vous, ce que je veux dire aux parents">✍ Préparer les entretiens</button>'
     + '<button data-a="print" data-m="filled" title="Feuille remplie (Ctrl+P)">🖨 Feuille</button><button data-a="print" data-m="alpha">🖨 + liste alphabétique</button><button data-a="print" data-m="blank">🖨 Vierge</button>'
     + '<button class="' + (r.date === today() ? 'p' : '') + '" data-a="view" data-v="soir">▶ Ce soir</button></span></div>'
     + '<div class="mt" style="margin-bottom:8px">' + (r.prof ? 'Professeur : ' + _esc(r.prof) + ' · ' : '') + (r.discipline ? _esc(r.discipline) + ' · ' : '') + nb + ' rendez-vous · ' + free + ' créneau' + (free > 1 ? 'x' : '') + ' libre' + (free > 1 ? 's' : '') + '</div>'
     + '<div class="prep"><div><div class="grid">' + col(ts.slice(0, half)) + col(ts.slice(half)) + '</div>'
-    + '<p class="help">Clic sur un créneau libre : tape 2 ou 3 lettres puis Entrée — le créneau libre suivant s\'ouvre aussitôt (Entrée sur un champ vide = le laisser libre, Échap = arrêter). On peut aussi glisser un élève, ou cliquer sur son nom à droite pour le premier créneau libre. Clic droit sur un créneau : pause, libérer. Fratrie ou entretien long : l\'élève sur deux créneaux qui se suivent.</p></div>'
+    + '<p class="help">Clic sur un créneau libre : tape 2 ou 3 lettres puis Entrée — le créneau libre suivant s\'ouvre aussitôt (Entrée sur un champ vide = le laisser libre, Échap = arrêter). On peut aussi glisser un élève, ou cliquer sur son nom à droite pour le premier créneau libre. Clic sur un rendez-vous : noter ce que je veux dire aux parents (✍). Clic droit sur un créneau : pause, libérer. Fratrie ou entretien long : l\'élève sur deux créneaux qui se suivent.</p></div>'
     + '<div class="side"><input id="q" type="search" placeholder="Chercher un élève" value="' + _escAttr(V.q) + '"><div id="sf" style="margin:6px 0"></div><div id="slist"></div></div></div>';
 }
 function renderSide() {
   var r = cur(), fEl = document.getElementById('sf'), lEl = document.getElementById('slist'); if (!r || !fEl || !lEl) return;
   var b = booked(r), all = sids(r), cs = D.classes.filter(function (c) { return (r.classIds || []).indexOf(c.id) >= 0; });
+  if (V.f !== 'all' && !cs.some(function (c) { return c.id === V.f; })) V.f = 'all';
+  var inCls = function (s) { return V.f === 'all' || stu(s).cls === V.f; };
   var btn = function (v, l) { return '<button class="' + (V.f === v ? 'on' : '') + '" data-a="f" data-v="' + _escAttr(v) + '">' + l + '</button>'; };
-  fEl.innerHTML = '<span class="seg">' + btn('all', 'Toutes') + (cs.length > 1 ? cs.map(function (c) { return btn(c.id, _esc(c.nom)); }).join('') : '') + btn('none', 'Sans rendez-vous ' + all.filter(function (s) { return !b.has(s); }).length) + '</span>';
+  fEl.className = 'sf';
+  fEl.innerHTML = (cs.length > 1 ? '<span class="seg">' + btn('all', 'Toutes') + cs.map(function (c) { return btn(c.id, _esc(c.nom)); }).join('') + '</span>' : '')
+    + '<button class="tog' + (V.none ? ' on' : '') + '" data-a="none" aria-pressed="' + (V.none ? 'true' : 'false') + '" title="Ne montrer que les élèves sans rendez-vous — se cumule avec la classe choisie">Sans rendez-vous ' + all.filter(function (s) { return inCls(s) && !b.has(s); }).length + '</button>';
   var q = norm(V.q).split(/[\s\-']+/).filter(Boolean);
   var match = function (sid) { if (!q.length) return true; var s = stu(sid), hay = (norm(s.nom) + ' ' + norm(s.prenom)).split(/[\s\-']+/); return q.every(function (w) { return hay.some(function (h) { return h.indexOf(w) === 0; }); }); };
   var byName = function (a, c) { return (stu(a).nom || '').localeCompare(stu(c).nom || '', 'fr') || (stu(a).prenom || '').localeCompare(stu(c).prenom || '', 'fr'); };
-  var row = function (sid) { var ts = b.get(sid); return '<div class="stu" draggable="true" data-a="stu" data-sid="' + _escAttr(sid) + '">' + avatar(sid) + '<span>' + nameHTML(sid) + ' <span class="cls">' + _esc(stuCls(sid)) + '</span></span>' + (ts ? '<span class="ok">✓ ' + ts.map(fmt).join(', ') + '</span>' : '') + '</div>'; };
-  var list = all.filter(match), h = '';
-  if (V.f === 'none') h = list.filter(function (s) { return !b.has(s); }).sort(byName).map(row).join('') || '<p class="help">Tous les élèves ont un rendez-vous.</p>';
-  else cs.filter(function (c) { return V.f === 'all' || V.f === c.id; }).forEach(function (c) { var l = list.filter(function (s) { return stu(s).cls === c.id; }).sort(byName); if (l.length) h += '<div class="gh">' + _esc(c.nom) + '</div>' + l.map(row).join(''); });
-  lEl.innerHTML = h || '<p class="help">Aucun élève ne correspond.</p>';
+  var row = function (sid) { var ts = b.get(sid); return '<div class="stu" draggable="true" data-a="stu" data-sid="' + _escAttr(sid) + '" data-psid="' + _escAttr(sid) + '" title="' + (ts ? 'Déjà un rendez-vous — clic : ce que je veux dire · pour un 2e créneau, glisse-le sur la grille' : 'Clic : premier créneau libre · ou glisse-le sur un créneau') + '">' + avatar(sid) + '<span>' + nameHTML(sid) + ' <span class="cls">' + _esc(stuCls(sid)) + '</span>' + (ts && bil(r, sid) ? ' <span class="pm" title="Mini bilan préparé">✍</span>' : '') + '</span>' + (ts ? '<span class="ok">✓ ' + ts.map(fmt).join(', ') + '</span>' : '') + '</div>'; };
+  var list = all.filter(function (s) { return match(s) && inCls(s) && (!V.none || !b.has(s)); }), h = '';
+  cs.forEach(function (c) { var l = list.filter(function (s) { return stu(s).cls === c.id; }).sort(byName); if (l.length) h += '<div class="gh">' + _esc(c.nom) + '</div>' + l.map(row).join(''); });
+  var rest = list.filter(function (s) { return !cs.some(function (c) { return c.id === stu(s).cls; }); }).sort(byName);
+  if (rest.length) h += '<div class="gh">Autres élèves</div>' + rest.map(row).join('');
+  lEl.innerHTML = h || '<p class="help">' + (V.none && !V.q.trim() ? 'Tous les élèves ' + (V.f === 'all' ? '' : 'de ' + _esc(clsName(V.f)) + ' ') + 'ont un rendez-vous.' : 'Aucun élève ne correspond.') + '</p>';
 }
 function matches(r, q) {
   var w = norm(q).split(/[\s\-']+/).filter(Boolean); if (!w.length) return [];
@@ -8132,7 +8160,7 @@ function acRender() {
   var m = matches(r, inp.value), b = booked(r);
   V.acIdx = Math.max(0, Math.min(V.acIdx, m.length - 1));
   ac.hidden = false;
-  ac.innerHTML = m.length ? m.map(function (sid, i) { return '<div class="' + (i === V.acIdx ? 'on' : '') + '" data-pick="' + _escAttr(sid) + '">' + avatar(sid) + '<span>' + nameHTML(sid) + ' <span class="cls">' + _esc(stuCls(sid)) + (b.has(sid) ? ' · déjà ' + b.get(sid).map(fmt).join(', ') : '') + '</span></span></div>'; }).join('') : '<div class="mt">Aucun élève ne correspond</div>';
+  ac.innerHTML = m.length ? m.map(function (sid, i) { return '<div class="' + (i === V.acIdx ? 'on' : '') + '" data-pick="' + _escAttr(sid) + '" data-psid="' + _escAttr(sid) + '">' + avatar(sid) + '<span>' + nameHTML(sid) + ' <span class="cls">' + _esc(stuCls(sid)) + (b.has(sid) ? ' · déjà ' + b.get(sid).map(fmt).join(', ') : '') + '</span></span></div>'; }).join('') : '<div class="mt">Aucun élève ne correspond</div>';
 }
 
 // ── Réserver (avec avertissement pour un deuxième rendez-vous)
@@ -8156,12 +8184,72 @@ function confirmBox(title, msg, ok, onOk, onCancel) {
 }
 function pickFromEdit(sid) { var r = cur(), t = V.edit; book(r, t, sid, function () { V.edit = nextFree(r, t); render(); }, function () { V.edit = t; render(); }); }
 function stuClick(sid) {
+  if (booked(cur()).has(sid)) return bilanBox(sid);
   var r = cur(), t = (V.edit && slotState(r, V.edit, times(r)) === 'free') ? V.edit : nextFree(r, null);
   if (!t) return toast('Plus aucun créneau libre.');
   book(r, t, sid, function () { V.edit = null; render(); toast(nameTxt(sid) + ' → ' + fmt(t) + ' (Ctrl+Z pour annuler)'); });
 }
 function freeSlot(t) { var r = cur(); if (!r.slots[t]) return; var go = function () { change(); delete r.slots[t]; touched(); render(); }; if (r.slots[t].note) confirmBox('Libérer ce créneau ?', 'La note d\'entretien de ' + nameTxt(r.slots[t].sid) + ' sera effacée.', 'Libérer', go); else go(); }
 function togglePause(t) { var r = cur(); if (r.slots[t]) return; change(); var p = r.pauses || []; r.pauses = p.indexOf(t) >= 0 ? p.filter(function (x) { return x !== t; }) : p.concat([t]).sort(); touched(); render(); }
+
+// ── Ce que je veux dire (mini bilan préparé avant la réunion)
+var bilOpen = null;
+function bilOrder(r) { var ts = times(r), seen = [], out = []; ts.forEach(function (t) { var x = r.slots[t]; if (x && stu(x.sid) && seen.indexOf(x.sid) < 0) { seen.push(x.sid); out.push(x.sid); } }); return out; }
+function bilanBox(sid) {
+  var r = cur(); if (!r) return;
+  var ord = bilOrder(r); if (!ord.length) return toast('Aucun rendez-vous pour l\'instant.');
+  if (!sid || ord.indexOf(sid) < 0) sid = ord.find(function (x) { return !bil(r, x); }) || ord[0];
+  if (bilOpen) bilOpen.remove();
+  var m = document.createElement('div'); m.className = 'mo'; bilOpen = m; m._sid = sid;
+  var draw = function () {
+    var cs = m._sid, ts = booked(r).get(cs) || [], i = ord.indexOf(cs);
+    m.innerHTML = '<div class="mb" style="max-width:620px" role="dialog" aria-modal="true" aria-label="Ce que je veux dire"><div class="hd"><span data-psid="' + _escAttr(cs) + '">' + avatar(cs, true) + '</span><div style="flex:1;min-width:0"><div class="dname">' + nameHTML(cs) + '</div><div class="mt">' + _esc(stuCls(cs)) + ' · rendez-vous ' + ts.map(fmt).join(' et ') + ' · ' + (i + 1) + ' / ' + ord.length + '</div></div><button data-k="close" aria-label="Fermer">✕</button></div>'
+      + '<div class="gh">Ce que je veux dire aux parents</div><textarea id="bilm" rows="8" maxlength="2000" placeholder="Points forts, difficultés, conseils, ce que j\'attends…">' + _esc((r.bilans || {})[cs] || '') + '</textarea>'
+      + '<p class="help">Enregistré au fil de la frappe (pense à 💾 Enregistrer le fichier). Relu et modifiable dans « Ce soir ». <span id="bilc">' + bilCount() + '</span></p>'
+      + '<div class="foot"><span><button data-k="prev"' + (i > 0 ? '' : ' disabled') + '>◀ Précédent</button> <button data-k="next"' + (i < ord.length - 1 ? '' : ' disabled') + '>Suivant ▶</button></span><span><button data-k="empty" title="Élève suivant dont le mini bilan est vide">Suivant sans mini bilan ⏭</button> <button class="p" data-k="close">✓ Terminé</button></span></div></div>';
+    var ta = m.querySelector('#bilm'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  };
+  var bilCount = function () { var n = ord.filter(function (x) { return bil(r, x); }).length; return n + ' élève' + (n > 1 ? 's' : '') + ' préparé' + (n > 1 ? 's' : '') + ' sur ' + ord.length + '.'; };
+  var go = function (sid2) { flush(); m._sid = sid2; draw(); };
+  var flush = function () { if (bilTimer) { clearTimeout(bilTimer); bilTimer = null; } };
+  var close = function () { flush(); m.remove(); bilOpen = null; document.removeEventListener('keydown', key, true); render(); };
+  var key = function (e) { if (e.key === 'Escape' && !document.querySelectorAll('.mo')[1]) { e.preventDefault(); e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', key, true);
+  m.addEventListener('input', function (e) { if (e.target.id !== 'bilm') return; setBil(r, m._sid, e.target.value); var c = m.querySelector('#bilc'); if (c) c.textContent = bilCount(); });
+  m.addEventListener('click', function (e) {
+    if (e.target === m) return close();
+    var k = e.target.closest('[data-k]'); if (!k || k.disabled) return; k = k.getAttribute('data-k');
+    var i = ord.indexOf(m._sid);
+    if (k === 'close') return close();
+    if (k === 'prev' && i > 0) return go(ord[i - 1]);
+    if (k === 'next' && i < ord.length - 1) return go(ord[i + 1]);
+    if (k === 'empty') { for (var j = 1; j <= ord.length; j++) { var x = ord[(i + j) % ord.length]; if (!bil(r, x) && x !== m._sid) return go(x); } return toast('Tous les autres élèves ont leur mini bilan.'); }
+  });
+  draw(); document.body.appendChild(m); m.querySelector('#bilm').focus();
+}
+function setBil(r, sid, v) {
+  if (!bilTimer) change(); clearTimeout(bilTimer); bilTimer = setTimeout(function () { bilTimer = null; }, 1500);
+  if (!r.bilans || typeof r.bilans !== 'object') r.bilans = {};
+  if (v.trim()) r.bilans[sid] = v; else delete r.bilans[sid];
+  touched();
+}
+function refreshBil() { if (!bilOpen) return; var r = cur(), ta = bilOpen.querySelector('#bilm'); if (r && ta) ta.value = (r.bilans || {})[bilOpen._sid] || ''; }
+
+// ── Photo en grand au survol d'un élève
+function photoPop(e) {
+  var el = e.target.closest && e.target.closest('[data-psid]'), pp = document.getElementById('pp');
+  var sid = el && el.getAttribute('data-psid'), ph = sid && D.photos && D.photos[sid];
+  if (!ph || drag) { if (pp) pp.remove(); return; }
+  if (!pp) { pp = document.createElement('div'); pp.id = 'pp'; document.body.appendChild(pp); }
+  if (pp._sid !== sid) { pp._sid = sid; pp.innerHTML = '<img src="' + _escAttr(ph) + '" alt=""><div>' + nameHTML(sid) + '</div><div class="mt">' + _esc(stuCls(sid)) + '</div>'; }
+  var w = pp.offsetWidth, h = pp.offsetHeight, x = e.clientX + 18, y = e.clientY + 14;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 18;
+  if (y + h > innerHeight - 8) y = innerHeight - h - 8;
+  pp.style.left = Math.max(8, x) + 'px'; pp.style.top = Math.max(8, y) + 'px';
+}
+document.addEventListener('mousemove', photoPop);
+document.documentElement.addEventListener('mouseleave', function () { var pp = document.getElementById('pp'); if (pp) pp.remove(); });
+document.addEventListener('mousedown', function () { var pp = document.getElementById('pp'); if (pp) pp.remove(); }, true);
 
 // ── Menu du clic droit
 function closeMenu() { var m = document.getElementById('menu'); if (m) m.remove(); }
@@ -8170,13 +8258,13 @@ function slotMenu(e, t) {
   var r = cur(), st = slotState(r, t, times(r)), items = [];
   if (st === 'free') items.push(['edit', '✍ Réserver…'], ['pause', '☕ En faire une pause']);
   else if (st === 'pause') items.push(['pause', '↺ Retirer la pause']);
-  else items.push(['soir', '▶ Ouvrir dans « Ce soir »'], ['free', '✕ Libérer le créneau']);
+  else items.push(['bil', '✍ Ce que je veux dire'], ['soir', '▶ Ouvrir dans « Ce soir »'], ['free', '✕ Libérer le créneau']);
   var m = document.createElement('div'); m.id = 'menu'; m.className = 'menu';
   m.innerHTML = '<div class="mt" style="padding:2px 10px">' + fmt(t) + '</div>' + items.map(function (x) { return '<button data-m="' + x[0] + '">' + x[1] + '</button>'; }).join('');
   document.body.appendChild(m);
   m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + 'px';
   m.addEventListener('click', function (ev) { var b = ev.target.closest('[data-m]'); if (!b) return; var k = b.getAttribute('data-m'); closeMenu();
-    if (k === 'edit') { V.edit = t; V.acIdx = 0; render(); } else if (k === 'pause') togglePause(t); else if (k === 'free') freeSlot(t); else if (k === 'soir') { V.view = 'soir'; V.cur = t; render(); } });
+    if (k === 'edit') { V.edit = t; V.acIdx = 0; render(); } else if (k === 'pause') togglePause(t); else if (k === 'free') freeSlot(t); else if (k === 'soir') { V.view = 'soir'; V.cur = t; render(); } else if (k === 'bil') bilanBox(r.slots[t] && r.slots[t].sid); });
 }
 
 // ── Ce soir
@@ -8191,15 +8279,16 @@ function soirHTML(r) {
     if (!s || !stu(s.sid)) return '<div class="row mini' + (isNow ? ' now' : '') + '"><span class="t">' + fmt(t) + '</span><span>' + ((r.pauses || []).indexOf(t) >= 0 ? 'pause' : 'libre') + '</span></div>';
     var suite = i > 0 && r.slots[ts[i - 1]] && r.slots[ts[i - 1]].sid === s.sid;
     var ic = s.st === 'vu' ? '<span class="ok-t">✓</span>' : s.st === 'absent' ? '<span class="ab-t">✗</span>' : s.note ? '📝' : '';
-    return '<div class="row' + (t === V.cur ? ' sel' : '') + (isNow ? ' now' : '') + '" data-a="sel" data-t="' + t + '"><span class="t">' + fmt(t) + '</span>' + (suite ? '<span class="t">↳</span>' : avatar(s.sid)) + '<span>' + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + (suite ? ' (suite)' : '') + '</span></span>' + ic + '</div>';
+    return '<div class="row' + (t === V.cur ? ' sel' : '') + (isNow ? ' now' : '') + '" data-a="sel" data-t="' + t + '" data-psid="' + _escAttr(s.sid) + '"><span class="t">' + fmt(t) + '</span>' + (suite ? '<span class="t">↳</span>' : avatar(s.sid)) + '<span>' + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + (suite ? ' (suite)' : '') + '</span></span>' + ic + '</div>';
   }).join('');
   var det = '<p class="mt">Aucun rendez-vous pour l\'instant.</p>';
   var s = V.cur && r.slots[V.cur];
   if (s) {
     var mine = Object.keys(r.slots).filter(function (k) { return r.slots[k].sid === s.sid; }).sort();
     var stb = function (v, l) { return '<button class="' + ((s.st || '') === v ? 'on' : '') + '" data-a="st" data-v="' + v + '">' + l + '</button>'; };
-    det = '<div class="hd">' + avatar(s.sid, true) + '<div style="flex:1;min-width:0"><div class="dname">' + nameHTML(s.sid) + '</div><div class="mt">' + _esc(stuCls(s.sid)) + ' · rendez-vous ' + mine.map(fmt).join(' et ') + '</div></div>'
+    det = '<div class="hd"><span data-psid="' + _escAttr(s.sid) + '">' + avatar(s.sid, true) + '</span><div style="flex:1;min-width:0"><div class="dname">' + nameHTML(s.sid) + '</div><div class="mt">' + _esc(stuCls(s.sid)) + ' · rendez-vous ' + mine.map(fmt).join(' et ') + '</div></div>'
       + '<span><button data-a="nav" data-v="-1" aria-label="Rendez-vous précédent">◀</button> <button data-a="nav" data-v="1" aria-label="Rendez-vous suivant">▶</button></span></div>'
+      + '<div class="gh">Ce que je veux dire</div><textarea id="bil" data-sid="' + _escAttr(s.sid) + '" rows="3" maxlength="2000" placeholder="Préparé avant la réunion (clic sur un rendez-vous de la grille)">' + _esc((r.bilans || {})[s.sid] || '') + '</textarea>'
       + '<div class="gh">Note d\'entretien</div><textarea id="note" rows="6" maxlength="2000" placeholder="Qui est venu, ce qui a été dit, ce qui est convenu…">' + _esc(s.note || '') + '</textarea>'
       + '<div class="acts"><span class="seg">' + stb('', 'À venir') + stb('vu', '✓ Vu') + stb('absent', 'Absent') + '</span></div>';
   }
@@ -8220,7 +8309,10 @@ function settings(id) {
       + '<div style="display:flex;gap:10px"><label class="lbl" style="flex:1">Premier rendez-vous <input type="time" data-f="first" value="' + _escAttr(F.first) + '"></label><label class="lbl" style="flex:1">Dernier rendez-vous <input type="time" data-f="last" value="' + _escAttr(F.last) + '"></label></div>'
       + '<span class="lbl">Durée d\'un rendez-vous</span>' + [5, 10, 15].map(function (n) { return '<button class="chip' + (F.step === n ? ' on' : '') + '" data-step="' + n + '">' + n + ' min</button>'; }).join('') + ' <input type="number" min="2" max="60" data-f="step" value="' + F.step + '" style="width:70px"> min'
       + '<p class="mt">' + (ts.length ? ts.length + ' créneaux de ' + F.step + ' min, de ' + fmt(ts[0]) + ' à ' + fmt(ts[ts.length - 1]) + ' — la feuille aura ' + Math.ceil(ts.length / 2) + ' lignes sur deux colonnes.' : '⚠ Le dernier rendez-vous doit commencer après le premier.') + '</p></div>'
-      + '<div><span class="lbl">Classes concernées</span>' + D.classes.map(function (c) { return '<button class="chip' + (F.cls.indexOf(c.id) >= 0 ? ' on' : '') + '" data-cls="' + _escAttr(c.id) + '">' + _esc(c.nom) + '</button>'; }).join('')
+      + '<div><span class="lbl">Classes concernées <span class="mt">— clic sur un niveau : toutes ses classes</span></span>' + levels().map(function (n) {
+          var cs = D.classes.filter(function (c) { return c.lvl === n; }), k = cs.filter(function (c) { return F.cls.indexOf(c.id) >= 0; }).length;
+          return '<div class="lvrow"><button class="chip lv' + (k === cs.length ? ' on' : k ? ' part' : '') + '" data-lvl="' + n + '" title="Cocher ou décocher toutes les classes de ce niveau">' + _esc(lvlName(n)) + '</button>' + cs.map(function (c) { return '<button class="chip' + (F.cls.indexOf(c.id) >= 0 ? ' on' : '') + '" data-cls="' + _escAttr(c.id) + '">' + _esc(c.nom) + '</button>'; }).join('') + '</div>';
+        }).join('')
       + '<label class="lbl">Titre de la feuille <input type="text" data-f="titre" maxlength="80" placeholder="' + _escAttr(autoTitle(F.cls)) + ' (automatique)" value="' + _escAttr(F.titre) + '"></label>'
       + '<label class="lbl">Professeur <input type="text" data-f="prof" maxlength="80" placeholder="ton nom, tel qu\'il doit apparaître sur la feuille" value="' + _escAttr(F.prof) + '"></label>'
       + '<label class="lbl">Discipline <input type="text" data-f="disc" maxlength="80" value="' + _escAttr(F.disc) + '"></label></div></div>'
@@ -8232,6 +8324,7 @@ function settings(id) {
   m.addEventListener('click', function (e) {
     if (e.target === m) return close();
     var s = e.target.closest('[data-step]'); if (s) { F.step = +s.getAttribute('data-step'); return draw(); }
+    var lv = e.target.closest('[data-lvl]'); if (lv) { var n = +lv.getAttribute('data-lvl'), ids = D.classes.filter(function (x) { return x.lvl === n; }).map(function (x) { return x.id; }), allOn = ids.every(function (x) { return F.cls.indexOf(x) >= 0; }); F.cls = allOn ? F.cls.filter(function (x) { return ids.indexOf(x) < 0; }) : F.cls.concat(ids.filter(function (x) { return F.cls.indexOf(x) < 0; })); return draw(); }
     var c = e.target.closest('[data-cls]'); if (c) { var id2 = c.getAttribute('data-cls'), i = F.cls.indexOf(id2); if (i >= 0) F.cls.splice(i, 1); else F.cls.push(id2); return draw(); }
     var k = e.target.closest('[data-k]'); if (!k) return; k = k.getAttribute('data-k');
     if (k === 'cancel') return close();
@@ -8288,9 +8381,12 @@ document.addEventListener('click', function (e) {
   var k = a.getAttribute('data-a'), t = a.getAttribute('data-t'), r = cur();
   if (k === 'save') return save();
   if (k === 'undo') return doUndo();
+  if (k === 'redo') return doRedo();
+  if (k === 'bilall') return bilanBox(null);
+  if (k === 'none') { V.none = !V.none; return renderSide(); }
   if (k === 'restore') { try { var bk = JSON.parse(localStorage.getItem(BK)); change(); D.reunions = bk.reunions; D.prefs = bk.prefs || D.prefs; dirty = true; render(); toast('Version du navigateur reprise — pense à enregistrer.'); } catch (x) {} return; }
   if (k === 'dropbk') { try { localStorage.removeItem(BK); } catch (x) {} return render(); }
-  if (k === 'open') { V.id = a.getAttribute('data-id'); V.view = 'prep'; V.edit = null; V.cur = null; V.f = 'all'; V.q = ''; return render(); }
+  if (k === 'open') { V.id = a.getAttribute('data-id'); V.view = 'prep'; V.edit = null; V.cur = null; V.f = 'all'; V.none = false; V.q = ''; return render(); }
   if (k === 'new') return settings(null);
   if (k === 'list') { V.id = null; V.view = 'list'; return render(); }
   if (k === 'settings') return settings(V.id);
@@ -8298,7 +8394,7 @@ document.addEventListener('click', function (e) {
   if (k === 'print') return printSheet(a.getAttribute('data-m'));
   if (k === 'f') { V.f = a.getAttribute('data-v'); return renderSide(); }
   if (k === 'free') { e.stopPropagation(); return freeSlot(t); }
-  if (k === 'slot') { if (slotState(r, t, times(r)) === 'free' && V.edit !== t) { V.edit = t; V.acIdx = 0; render(); } return; }
+  if (k === 'slot') { var ss = slotState(r, t, times(r)); if (ss === 'free' && V.edit !== t) { V.edit = t; V.acIdx = 0; render(); } else if ((ss === 'booked' || ss === 'suite') && r.slots[t]) bilanBox(r.slots[t].sid); return; }
   if (k === 'stu') return stuClick(a.getAttribute('data-sid'));
   if (k === 'sel') { V.cur = t; return render(); }
   if (k === 'nav') { var bk2 = times(r).filter(function (x) { return r.slots[x]; }), i = bk2.indexOf(V.cur), n = bk2[i + (+a.getAttribute('data-v'))]; if (n) { V.cur = n; render(); } return; }
@@ -8309,13 +8405,16 @@ document.addEventListener('contextmenu', function (e) { var s = e.target.closest
 document.addEventListener('input', function (e) {
   if (e.target.id === 'q') { V.q = e.target.value; renderSide(); }
   else if (e.target.id === 'ed') { V.acIdx = 0; acRender(); }
+  else if (e.target.id === 'bil') { var rb = cur(); if (rb) setBil(rb, e.target.getAttribute('data-sid'), e.target.value); }
   else if (e.target.id === 'note') { var r = cur(), s = r && r.slots[V.cur]; if (!s) return; if (!noteTimer) change(); clearTimeout(noteTimer); s.note = e.target.value; noteTimer = setTimeout(function () { noteTimer = null; }, 1500); touched(); }
 });
 document.addEventListener('focusout', function (e) { if (e.target.id !== 'ed') return; setTimeout(function () { if (document.querySelector('.mo')) return; if (V.edit && (!document.activeElement || document.activeElement.id !== 'ed')) { V.edit = null; render(); } }, 180); });
 document.addEventListener('keydown', function (e) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); return save(); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p' && V.view !== 'list' && cur()) { e.preventDefault(); return printSheet('filled'); }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !/^(INPUT|TEXTAREA)$/.test((e.target || {}).tagName || '')) { e.preventDefault(); return doUndo(); }
+  var txt = /^(INPUT|TEXTAREA)$/.test((e.target || {}).tagName || '');
+  if ((e.ctrlKey || e.metaKey) && !txt && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); return doRedo(); }
+  if ((e.ctrlKey || e.metaKey) && !txt && e.key.toLowerCase() === 'z') { e.preventDefault(); return doUndo(); }
   if (e.target.id !== 'ed') return;
   var r = cur(), t = V.edit;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); V.acIdx = Math.max(0, V.acIdx + (e.key === 'ArrowDown' ? 1 : -1)); acRender(); }
@@ -8575,11 +8674,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.0';
+const APP_VERSION    = '2.136.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T21:26:43Z';
+const APP_BUILD_DATE = '2026-10-08T21:46:24Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -27652,7 +27751,7 @@ function _amenagementsLabel(stu) {
 // prof, discipline, pauses: ['HH:MM'], slots: { 'HH:MM': { sid, note, st: ''|'vu'|'absent' } } }.
 // Trois vues : liste des réunions · préparer (grille à gauche = la feuille, élèves à droite)
 // · ce soir (rendez-vous dans l'ordre, l'essentiel de l'élève, note d'entretien).
-var _reu = { id: null, view: 'list', f: 'all', q: '', edit: null, cur: null, parent: false, acIdx: 0 };
+var _reu = { id: null, view: 'list', f: 'all', none: false, inv: false, q: '', edit: null, cur: null, parent: false, acIdx: 0 };
 var _reuPrepTimer = null;
 var _reuNoteTimer = null;
 var _reuForm = null;
@@ -27804,7 +27903,7 @@ function renderReunions() {
   _navBadgeRender();
 }
 function _reuOpen(id, view) {
-  _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.parent = false; _reu.f = 'all'; _reu.q = '';
+  _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.parent = false; _reu.f = 'all'; _reu.none = false; _reu.inv = false; _reu.q = '';
   renderReunions();
 }
 function _reuSetView(v) { _reu.view = v; _reu.edit = null; if (v !== 'soir') _reu.parent = false; renderReunions(); }
@@ -27860,7 +27959,7 @@ function _reuSlotHTML(r, t, times) {
   }
   const drag = (st === 'booked' || st === 'suite') ? ` draggable="true" ondragstart="_reuDragStart(event,'slot','${jt}')"` : '';
   const tip = st === 'free' ? 'Clic : réserver (taper le nom) · glisser un élève ici · clic droit : pause' : st === 'pause' ? 'Pause — clic droit pour la retirer' : 'Clic : fiche complète de l\'élève, avec l\'encart « Ce que je veux dire » (mini bilan) · glisser vers un autre créneau pour déplacer · clic droit : autres actions';
-  return `<div class="reu-sl ${st}" data-t="${_escAttr(t)}"${s?.sid ? ` data-sid="${_escAttr(s.sid)}"` : ''} title="${_escAttr(tip)}" onclick="_reuSlotClick('${jt}')" oncontextmenu="_reuSlotMenu(event,'${jt}')" ondragover="_reuDragOver(event)" ondragleave="this.classList.remove('drop-on')" ondrop="_reuDrop(event,'${jt}')"${drag}><span class="reu-t">${_esc(_reuFmtT(t))}</span><span class="reu-p">${inner}</span>${x}</div>`;
+  return `<div class="reu-sl ${st}" data-t="${_escAttr(t)}"${s?.sid ? ` data-sid="${_escAttr(s.sid)}" data-photo-sid="${_escAttr(s.sid)}"` : ''} title="${_escAttr(tip)}" onclick="_reuSlotClick('${jt}')" oncontextmenu="_reuSlotMenu(event,'${jt}')" ondragover="_reuDragOver(event)" ondragleave="this.classList.remove('drop-on')" ondrop="_reuDrop(event,'${jt}')"${drag}><span class="reu-t">${_esc(_reuFmtT(t))}</span><span class="reu-p">${inner}</span>${x}</div>`;
 }
 function _reuPrepHTML(r) {
   const times = _reuTimes(r);
@@ -27908,10 +28007,15 @@ function _reuRenderSide() {
   const sids = _reuSids(r);
   const inv = _reuInvMap;
   const cls = (r.classIds || []).map(id => S.classes?.[id]).filter(Boolean);
-  if (_reu.f !== 'all' && _reu.f !== 'none' && _reu.f !== 'inv' && !cls.some(c => c.id === _reu.f)) _reu.f = 'all';
-  const nNone = sids.filter(s => !booked.has(s)).length;
-  const btn = (v, l, tip) => `<button class="${_reu.f === v ? 'on' : ''}" onclick="_reu.f='${_escJsAttr(v)}';_reuRenderSide()"${tip ? ` title="${_escAttr(tip)}"` : ''}>${l}</button>`;
-  fEl.innerHTML = `<span class="ip-seg">${btn('all', 'Toutes')}${cls.length > 1 ? cls.map(c => btn(c.id, _esc(c.nom))).join('') : ''}${btn('none', `Sans rendez-vous ${nNone}`)}${btn('inv', `À inviter ${inv.size}`, REU_INVITE_TIP)}</span>`;
+  // Filtres cumulables (v2.136.1) : une classe (ou Toutes) ET, au choix, « Sans rendez-vous » ET « À inviter ».
+  if (_reu.f !== 'all' && !cls.some(c => c.id === _reu.f)) _reu.f = 'all';
+  const inCls = s => _reu.f === 'all' || _reuClsOf(r, s) === _reu.f;
+  const nNone = sids.filter(s => inCls(s) && !booked.has(s)).length;
+  const nInv = sids.filter(s => inCls(s) && inv.has(s) && (!_reu.none || !booked.has(s))).length;
+  const btn = (v, l) => `<button class="${_reu.f === v ? 'on' : ''}" onclick="_reu.f='${_escJsAttr(v)}';_reuRenderSide()">${l}</button>`;
+  const tog = (k, l, tip) => `<button class="reu-tog${_reu[k] ? ' on' : ''}" aria-pressed="${_reu[k] ? 'true' : 'false'}" onclick="_reu.${k}=!_reu.${k};_reuRenderSide()" title="${_escAttr(tip)}">${l}</button>`;
+  fEl.innerHTML = `${cls.length > 1 ? `<span class="ip-seg">${btn('all', 'Toutes')}${cls.map(c => btn(c.id, _esc(c.nom))).join('')}</span>` : ''}`
+    + `<span class="reu-togs">${tog('none', `Sans rendez-vous ${nNone}`, 'Ne montrer que les élèves sans rendez-vous — se cumule avec la classe et « À inviter »')}${tog('inv', `À inviter ${nInv}`, REU_INVITE_TIP + ' — se cumule avec la classe et « Sans rendez-vous »')}</span>`;
   const q = _reuNorm(_reu.q).split(/[\s\-']+/).filter(Boolean);
   const match = sid => { if (!q.length) return true; const s = S.eleves[sid]; const hay = (_reuNorm(s.nom) + ' ' + _reuNorm(s.prenom)).split(/[\s\-']+/); return q.every(w => hay.some(h => h.startsWith(w))); };
   const sortN = (a, b) => (S.eleves[a].nom || '').localeCompare(S.eleves[b].nom || '', 'fr') || (S.eleves[a].prenom || '').localeCompare(S.eleves[b].prenom || '', 'fr');
@@ -27922,31 +28026,25 @@ function _reuRenderSide() {
     return `<div class="reu-st${ts ? ' has' : ''}" draggable="true" data-photo-sid="${_escAttr(sid)}" ondragstart="_reuDragStart(event,'stu','${_escJsAttr(sid)}')" onclick="_reuStuClick('${_escJsAttr(sid)}')" title="${ts ? 'Déjà un rendez-vous — clic : fiche complète avec le mini bilan · pour un 2e créneau, glisse-le sur la grille' : 'Clic : premier créneau libre · ou glisse sur un créneau'}"><span>${_reuNameHTML(sid)} <span class="reu-cls">${_esc(_reuClsName(r, sid))}</span> ${_ficheSpecBadges(s)}</span>${right}</div>`;
   };
   let h = '';
-  const list = sids.filter(match);
-  if (_reu.f === 'inv') {
-    const l = list.filter(s => inv.has(s)).sort(sortN);
-    h = `<p class="reu-help" style="margin-top:0">${_esc(REU_INVITE_TIP)}</p>` + (l.map(s => row(s, inv.get(s))).join('') || '<p class="reu-help">Aucun élève ne remplit ces critères.</p>');
-  } else if (_reu.f === 'none') {
-    const l = list.filter(s => !booked.has(s)).sort(sortN);
-    h = l.map(s => row(s, inv.get(s))).join('') || '<p class="reu-help">Tous les élèves ont un rendez-vous.</p>';
-  } else {
-    if (_reu.f === 'all' && !q.length) {
-      const top = [...inv.keys()].filter(s => !booked.has(s)).sort(sortN);
-      if (top.length) h += `<div class="ev-h" title="${_escAttr(REU_INVITE_TIP)}">À inviter — d'après tes données</div>` + top.slice(0, 6).map(s => row(s, inv.get(s))).join('') + (top.length > 6 ? `<p class="reu-help"><a href="#" onclick="event.preventDefault();_reu.f='inv';_reuRenderSide()">et ${top.length - 6} autre${top.length - 6 > 1 ? 's' : ''}…</a></p>` : '');
-    }
-    const groups = (_reu.f === 'all' ? cls : cls.filter(c => c.id === _reu.f));
-    const seen = new Set();
-    for (const c of groups) {
-      const l = list.filter(s => !seen.has(s) && _reuClsOf(r, s) === c.id).sort(sortN);
-      l.forEach(s => seen.add(s));
-      if (l.length) h += `<div class="ev-h">Élèves de ${_esc(c.nom)}</div>` + l.map(s => row(s, inv.get(s))).join('');
-    }
-    if (_reu.f === 'all') {
-      const rest = list.filter(s => !seen.has(s)).sort(sortN);
-      if (rest.length) h += `<div class="ev-h">Autres élèves</div>` + rest.map(s => row(s, inv.get(s))).join('');
-    }
-    if (!h) h = '<p class="reu-help">Aucun élève ne correspond.</p>';
+  const list = sids.filter(s => match(s) && (!_reu.none || !booked.has(s)) && (!_reu.inv || inv.has(s)));
+  if (_reu.inv) h += `<p class="reu-help" style="margin-top:0">${_esc(REU_INVITE_TIP)}</p>`;
+  if (!_reu.none && !_reu.inv && _reu.f === 'all' && !q.length) {
+    const top = [...inv.keys()].filter(s => !booked.has(s)).sort(sortN);
+    if (top.length) h += `<div class="ev-h" title="${_escAttr(REU_INVITE_TIP)}">À inviter — d'après tes données</div>` + top.slice(0, 6).map(s => row(s, inv.get(s))).join('') + (top.length > 6 ? `<p class="reu-help"><a href="#" onclick="event.preventDefault();_reu.inv=true;_reuRenderSide()">et ${top.length - 6} autre${top.length - 6 > 1 ? 's' : ''}…</a></p>` : '');
   }
+  const groups = (_reu.f === 'all' ? cls : cls.filter(c => c.id === _reu.f));
+  const seen = new Set();
+  let nShown = 0;
+  for (const c of groups) {
+    const l = list.filter(s => !seen.has(s) && _reuClsOf(r, s) === c.id).sort(sortN);
+    l.forEach(s => seen.add(s)); nShown += l.length;
+    if (l.length) h += `<div class="ev-h">Élèves de ${_esc(c.nom)}</div>` + l.map(s => row(s, inv.get(s))).join('');
+  }
+  if (_reu.f === 'all') {
+    const rest = list.filter(s => !seen.has(s)).sort(sortN); nShown += rest.length;
+    if (rest.length) h += `<div class="ev-h">Autres élèves</div>` + rest.map(s => row(s, inv.get(s))).join('');
+  }
+  if (!nShown) h += `<p class="reu-help">${_reu.none && !_reu.inv && !q.length ? 'Tous les élèves ont un rendez-vous.' : 'Aucun élève ne correspond.'}</p>`;
   lEl.innerHTML = h;
 }
 function _reuAfterPrep() {
@@ -27970,7 +28068,7 @@ function _reuAcRender() {
   const booked = _reuBooked(r);
   _reu.acIdx = Math.max(0, Math.min(_reu.acIdx, m.length - 1));
   ac.hidden = false;
-  ac.innerHTML = m.length ? m.map((sid, i) => `<div class="${i === _reu.acIdx ? 'on' : ''}" onmousedown="event.preventDefault();_reuBookFromEdit('${_escJsAttr(_reu.edit)}','${_escJsAttr(sid)}')">${_reuNameHTML(sid)} <span class="reu-cls">${_esc(_reuClsName(r, sid))}</span>${booked.has(sid) ? ` <span class="reu-cls">· déjà ${booked.get(sid).map(_reuFmtT).join(', ')}</span>` : ''}</div>`).join('')
+  ac.innerHTML = m.length ? m.map((sid, i) => `<div class="${i === _reu.acIdx ? 'on' : ''}" data-photo-sid="${_escAttr(sid)}" onmousedown="event.preventDefault();_reuBookFromEdit('${_escJsAttr(_reu.edit)}','${_escJsAttr(sid)}')">${_reuNameHTML(sid)} <span class="reu-cls">${_esc(_reuClsName(r, sid))}</span>${booked.has(sid) ? ` <span class="reu-cls">· déjà ${booked.get(sid).map(_reuFmtT).join(', ')}</span>` : ''}</div>`).join('')
     : '<div class="reu-help" style="cursor:default">Aucun élève ne correspond</div>';
 }
 function _reuEdKey(e, t) {
@@ -28572,7 +28670,7 @@ async function _rexBuild() {
     if (r) {
       const ids = (r.classIds || []).filter(id => _rex.cls.has(id));
       reunions.r1 = { id: 'r1', titre: r.titre || _reuAutoTitle(ids), titreAuto: r.titreAuto !== false, date: r.date, first: r.first, last: r.last, step: r.step,
-        classIds: ids.length ? ids : [..._rex.cls], prof: '', discipline: '', pauses: (r.pauses || []).slice(), slots: {} };
+        classIds: ids.length ? ids : [..._rex.cls], prof: '', discipline: '', pauses: [], slots: {}, bilans: {} };
     }
     const by = (r?.prof || _reuList().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]?.prof || '').trim();
     const classes = realClasses().filter(c => _rex.cls.has(c.id)).map(c => ({ id: c.id, nom: c.nom, lvl: clsLevel(c) }));
