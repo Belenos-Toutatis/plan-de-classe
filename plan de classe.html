@@ -7980,11 +7980,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.124.0';
+const APP_VERSION    = '2.124.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T03:12:22Z';
+const APP_BUILD_DATE = '2026-10-08T03:24:12Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15456,12 +15456,39 @@ function _toggleFeature(key, on) {
 function toggleDd(btn) {
   const dd = btn.closest('.dd');
   const wasOpen = dd.classList.contains('open');
-  document.querySelectorAll('.dd.open').forEach(d => d.classList.remove('open'));
-  if (!wasOpen) dd.classList.add('open');
+  closeAllDd();
+  if (!wasOpen) { dd.classList.add('open'); _ddPlace(dd, btn); }
+}
+// Un menu dans une zone qui défile (liste d'une fenêtre, tableau…) y était coupé : on le sort du
+// flux en position fixe, sous le bouton (ou au-dessus s'il manque de place), dans l'écran.
+// La position est corrigée après mesure, au cas où un ancêtre transformé change le repère du fixe.
+function _ddPlace(dd, btn) {
+  const menu = dd.querySelector(':scope > .dd-menu'); if (!menu) return;
+  let clipped = false;
+  for (let el = dd.parentElement; el && el !== document.body; el = el.parentElement) {
+    const o = getComputedStyle(el); if (/(auto|scroll|hidden)/.test(o.overflowY + o.overflowX)) { clipped = true; break; }
+  }
+  if (!clipped) return;
+  const b = btn.getBoundingClientRect();
+  menu.style.position = 'fixed'; menu.style.right = 'auto'; menu.style.bottom = 'auto';
+  menu.style.left = '0px'; menu.style.top = '0px'; menu.style.zIndex = '10050';
+  const m = menu.getBoundingClientRect();
+  let x = dd.classList.contains('dd-right') ? b.right - m.width : b.left;
+  let y = b.bottom + 2;
+  if (y + m.height > window.innerHeight - 6 && b.top - m.height - 2 > 6) y = b.top - m.height - 2;
+  x = Math.max(6, Math.min(x, window.innerWidth - m.width - 6));
+  // m.left / m.top = décalage du repère du fixe par rapport à l'écran
+  menu.style.left = (x - m.left) + 'px'; menu.style.top = (y - m.top) + 'px';
+  dd._ddFixed = true;
 }
 function closeAllDd() {
-  document.querySelectorAll('.dd.open').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.dd.open').forEach(d => {
+    d.classList.remove('open');
+    if (d._ddFixed) { const m = d.querySelector(':scope > .dd-menu'); if (m) ['position', 'left', 'top', 'right', 'bottom', 'zIndex'].forEach(p => m.style[p] = ''); d._ddFixed = false; }
+  });
 }
+// Un menu en position fixe ne suit pas le défilement : on le ferme.
+document.addEventListener('scroll', e => { if (document.querySelector('.dd.open') && !e.target.closest?.('.dd-menu')) { const o = [...document.querySelectorAll('.dd.open')].some(d => d._ddFixed); if (o) closeAllDd(); } }, true);
 document.addEventListener('click', e => {
   if (!e.target.closest('.dd')) closeAllDd();
 });
