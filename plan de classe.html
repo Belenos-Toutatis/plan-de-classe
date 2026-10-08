@@ -1928,6 +1928,12 @@ input.reu-ed{width:100%;height:27px;padding:2px 6px !important}
 .reu-lv{display:inline-block;min-width:18px;text-align:center;border-radius:4px;padding:0 4px;font-weight:600;font-size:.88em}
 .reu-txt{white-space:pre-wrap;max-height:120px;overflow:auto;font-size:.88em;color:var(--ink-deep);border:1px solid var(--rule-line-soft);border-radius:4px;padding:5px 8px}
 .reu-note{width:100%;min-height:76px;resize:vertical}
+.reu-note-sm{min-height:56px}
+.reu-sl.sel{background:var(--info-bg);box-shadow:inset 3px 0 0 var(--ink-blue)}
+.reu-pm{font-size:.9em}
+.reu-prepbox{border:1px solid var(--ink-blue-soft);border-radius:var(--radius-md,5px);padding:8px 10px;margin:0 0 10px;background:var(--paper)}
+.reu-prepbox .reu-av{width:40px;height:40px}
+.reu-prepbox .ev-h{margin:8px 0 3px}
 .reu-acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
 .reu-plan-hint{background:var(--notice-bg);border:1px solid var(--notice-bd);color:var(--notice-fg);border-radius:var(--radius-md,5px);padding:6px 12px;margin:0 0 8px;font-size:.9em}
 .reu-plan-hint .btn{margin-left:8px}
@@ -8081,11 +8087,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.135.0';
+const APP_VERSION    = '2.135.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T20:18:40Z';
+const APP_BUILD_DATE = '2026-10-08T20:44:52Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -8823,6 +8829,8 @@ function postLoadHook() {
       if (typeof sl.note !== 'string') sl.note = '';
       if (!['', 'vu', 'absent'].includes(sl.st || '')) sl.st = '';
     }
+    if (!_isPlainObj(r.bilans)) r.bilans = {};
+    for (const [k, v] of Object.entries(r.bilans)) if (typeof v !== 'string' || !v.trim() || !S.eleves?.[k]) delete r.bilans[k];
     r.step = Math.max(2, Math.min(60, Math.round(+r.step) || 5));
     if (_reuMin(r.first) == null) r.first = '16:30';
     if (_reuMin(r.last) == null) r.last = '19:00';
@@ -17770,6 +17778,7 @@ function _purgeStudentRefs(id) {
   for (const r of Object.values(S.reunions || {})) {
     if (!r || typeof r.slots !== 'object' || !r.slots) continue;
     for (const t of Object.keys(r.slots)) if (r.slots[t]?.sid === id) delete r.slots[t];
+    if (r.bilans && typeof r.bilans === 'object') delete r.bilans[id];
   }
   if (S.memoProgress && typeof S.memoProgress === 'object') delete S.memoProgress[id];
   for (const c of Object.values(S.classes || {})) {
@@ -27155,7 +27164,8 @@ function _amenagementsLabel(stu) {
 // prof, discipline, pauses: ['HH:MM'], slots: { 'HH:MM': { sid, note, st: ''|'vu'|'absent' } } }.
 // Trois vues : liste des réunions · préparer (grille à gauche = la feuille, élèves à droite)
 // · ce soir (rendez-vous dans l'ordre, l'essentiel de l'élève, note d'entretien).
-var _reu = { id: null, view: 'list', f: 'all', q: '', edit: null, cur: null, parent: false, acIdx: 0 };
+var _reu = { id: null, view: 'list', f: 'all', q: '', edit: null, cur: null, parent: false, acIdx: 0, prepSid: null };
+var _reuPrepTimer = null;
 var _reuNoteTimer = null;
 var _reuForm = null;
 var _reuInvMap = new Map();
@@ -27225,6 +27235,31 @@ function _reuNameHTML(sid) { const s = S.eleves?.[sid]; return s ? `<b>${_escNam
 function _reuNameTxt(sid) { const s = S.eleves?.[sid]; return s ? `${(s.nom || '').toUpperCase()} ${s.prenom || ''}`.trim() : ''; }
 function _reuNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
 
+// Les chiffres d'un élève pour préparer l'entretien (période en cours).
+function _reuFacts(r, sid) {
+  const stu = S.eleves?.[sid], cid = _reuClsOf(r, sid), cls = S.classes?.[cid];
+  const per = _currentPeriode(), prev = _prevPeriodeCode(per);
+  const f = { per, prev, m: null, cm: null, d: null, oublis: stu?.oublis || 0, nt: stu?.non_travail || 0, abs: null, ret: null };
+  if (stu && cls && _featureEnabled('evaluation')) {
+    const did = _currentDiscipline(cid);
+    f.m = _computeStudentMeanForPeriod(cid, sid, per, did);
+    const ms = _bilanSidsFor(cls, per).map(x => _computeStudentMeanForPeriod(cid, x, per, did)).filter(v => v != null);
+    f.cm = ms.length ? ms.reduce((a, b) => a + b, 0) / ms.length : null;
+    const pm = prev ? _computeStudentMeanForPeriod(cid, sid, prev, did) : null;
+    if (f.m != null && pm != null) f.d = f.m - pm;
+  }
+  if (stu && cid && _featureEnabled('appel')) { const a = getStudentAttendanceStats(cid, sid); f.abs = a.abs; f.ret = a.ret; }
+  return f;
+}
+function _reuFactsText(f) {
+  const pl = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+  const parts = [];
+  if (f.m != null) parts.push(`Moyenne ${f.per} : ${_fmtNote(f.m)}/20${f.cm != null ? ` (classe ${_fmtNote(f.cm)})` : ''}${f.d != null ? `, ${f.d >= 0 ? '+' : ''}${_fmtNote(f.d)} depuis ${f.prev}` : ''}`);
+  parts.push(`${pl(f.oublis, 'oubli')}, ${f.nt} ${f.nt > 1 ? 'travaux non faits' : 'travail non fait'}`);
+  if (f.abs != null) parts.push(`${pl(f.abs, 'absence')}, ${pl(f.ret, 'retard')}`);
+  return parts.join(' · ');
+}
+
 // Suggestions « À inviter » : ne font que faire penser à un élève (rien n'est envoyé ni réservé).
 function _reuInvite(r) {
   const per = _currentPeriode(), prev = _prevPeriodeCode(per);
@@ -27276,12 +27311,12 @@ function renderReunions() {
   } else {
     if (right) right.innerHTML = `<button class="btn btn-g btn-sm" onclick="_reuOpen(null)" title="Toutes les réunions">↩ Réunions</button>`;
     if (_reu.view === 'soir') { wrap.innerHTML = _reuSoirHTML(r); _reuSoirAfter(r); }
-    else { _reuInvMap = _reuInvite(r); wrap.innerHTML = _reuPrepHTML(r); _reuRenderSide(); _reuAfterPrep(); }
+    else { _reuInvMap = _reuInvite(r); wrap.innerHTML = _reuPrepHTML(r); _reuRenderPrepBox(); _reuRenderSide(); _reuAfterPrep(); }
   }
   _navBadgeRender();
 }
 function _reuOpen(id, view) {
-  _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.parent = false; _reu.f = 'all'; _reu.q = '';
+  _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.parent = false; _reu.f = 'all'; _reu.q = ''; _reu.prepSid = null;
   renderReunions();
 }
 function _reuSetView(v) { _reu.view = v; _reu.edit = null; if (v !== 'soir') _reu.parent = false; renderReunions(); }
@@ -27331,12 +27366,14 @@ function _reuSlotHTML(r, t, times) {
   else if (st === 'free') inner = 'libre';
   else {
     const cn = _reuClsName(r, s.sid);
-    inner = (st === 'suite' ? '↳ ' : '') + _reuNameHTML(s.sid) + (cn ? ` <span class="reu-cls">${_esc(cn)}</span>` : '') + (st === 'suite' ? ' <span class="reu-cls">(suite)</span>' : '') + (s.note ? ' <span title="Note d\'entretien">📝</span>' : '');
+    inner = (st === 'suite' ? '↳ ' : '') + _reuNameHTML(s.sid) + (cn ? ` <span class="reu-cls">${_esc(cn)}</span>` : '') + (st === 'suite' ? ' <span class="reu-cls">(suite)</span>' : '')
+      + ` <span class="reu-pm" title="Mini bilan préparé"${r.bilans?.[s.sid] ? '' : ' hidden'}>✍</span>` + (s.note ? ' <span title="Note d\'entretien">📝</span>' : '');
     x = `<button type="button" class="reu-x" onclick="event.stopPropagation();_reuFree('${jt}')" title="Libérer ce créneau" aria-label="Libérer ce créneau">✕</button>`;
   }
   const drag = (st === 'booked' || st === 'suite') ? ` draggable="true" ondragstart="_reuDragStart(event,'slot','${jt}')"` : '';
-  const tip = st === 'free' ? 'Clic : réserver (taper le nom) · glisser un élève ici · clic droit : pause' : st === 'pause' ? 'Pause — clic droit pour la retirer' : 'Clic : fiche de l\'élève · glisser vers un autre créneau pour déplacer · clic droit : autres actions';
-  return `<div class="reu-sl ${st}" data-t="${_escAttr(t)}" title="${_escAttr(tip)}" onclick="_reuSlotClick('${jt}')" oncontextmenu="_reuSlotMenu(event,'${jt}')" ondragover="_reuDragOver(event)" ondragleave="this.classList.remove('drop-on')" ondrop="_reuDrop(event,'${jt}')"${drag}><span class="reu-t">${_esc(_reuFmtT(t))}</span><span class="reu-p">${inner}</span>${x}</div>`;
+  const tip = st === 'free' ? 'Clic : réserver (taper le nom) · glisser un élève ici · clic droit : pause' : st === 'pause' ? 'Pause — clic droit pour la retirer' : 'Clic : préparer l\'entretien (mini bilan) · glisser vers un autre créneau pour déplacer · clic droit : autres actions';
+  const sel = s?.sid && s.sid === _reu.prepSid && (st === 'booked' || st === 'suite') ? ' sel' : '';
+  return `<div class="reu-sl ${st}${sel}" data-t="${_escAttr(t)}"${s?.sid ? ` data-sid="${_escAttr(s.sid)}"` : ''} title="${_escAttr(tip)}" onclick="_reuSlotClick('${jt}')" oncontextmenu="_reuSlotMenu(event,'${jt}')" ondragover="_reuDragOver(event)" ondragleave="this.classList.remove('drop-on')" ondrop="_reuDrop(event,'${jt}')"${drag}><span class="reu-t">${_esc(_reuFmtT(t))}</span><span class="reu-p">${inner}</span>${x}</div>`;
 }
 function _reuPrepHTML(r) {
   const times = _reuTimes(r);
@@ -27366,9 +27403,10 @@ function _reuPrepHTML(r) {
     <div class="reu-prep">
       <div>
         <div class="reu-grid">${col(times.slice(0, half))}${col(times.slice(half))}</div>
-        <p class="reu-help">Clic sur un créneau libre : tape 2 ou 3 lettres puis <kbd>Entrée</kbd> — le créneau libre suivant s'ouvre aussitôt (<kbd>Entrée</kbd> sur un champ vide = le laisser libre, <kbd>Échap</kbd> = arrêter). On peut aussi glisser un élève, ou cliquer sur son nom à droite pour le mettre au premier créneau libre. Fratrie ou entretien long : mets l'élève sur deux créneaux qui se suivent.</p>
+        <p class="reu-help">Clic sur un créneau libre : tape 2 ou 3 lettres puis <kbd>Entrée</kbd> — le créneau libre suivant s'ouvre aussitôt (<kbd>Entrée</kbd> sur un champ vide = le laisser libre, <kbd>Échap</kbd> = arrêter). On peut aussi glisser un élève, ou cliquer sur son nom à droite pour le mettre au premier créneau libre. Clic sur un rendez-vous : préparer l'entretien (mini bilan, ✍). Fratrie ou entretien long : mets l'élève sur deux créneaux qui se suivent (un avertissement le confirme).</p>
       </div>
       <div class="reu-side">
+        <div id="reu-prep-box"></div>
         <input id="reu-q" type="search" placeholder="Chercher un élève" value="${_escAttr(_reu.q)}" oninput="_reu.q=this.value;_reuRenderSide()" style="width:100%">
         <div id="reu-side-f" style="margin:6px 0"></div>
         <div id="reu-side-list"></div>
@@ -27394,7 +27432,7 @@ function _reuRenderSide() {
     const ts = booked.get(sid);
     const right = ts ? `<span class="reu-ok">✓ ${ts.map(_reuFmtT).join(', ')}</span>` : why ? `<span class="reu-why">${_esc(why.join(' · '))}</span>` : '';
     const s = S.eleves[sid];
-    return `<div class="reu-st${ts ? ' has' : ''}" draggable="true" data-photo-sid="${_escAttr(sid)}" ondragstart="_reuDragStart(event,'stu','${_escJsAttr(sid)}')" onclick="_reuStuClick('${_escJsAttr(sid)}')" title="${ts ? 'Déjà un rendez-vous — clic : un créneau de plus (fratrie, entretien long)' : 'Clic : premier créneau libre · ou glisse sur un créneau'}"><span>${_reuNameHTML(sid)} <span class="reu-cls">${_esc(_reuClsName(r, sid))}</span> ${_ficheSpecBadges(s)}</span>${right}</div>`;
+    return `<div class="reu-st${ts ? ' has' : ''}" draggable="true" data-photo-sid="${_escAttr(sid)}" ondragstart="_reuDragStart(event,'stu','${_escJsAttr(sid)}')" onclick="_reuStuClick('${_escJsAttr(sid)}')" title="${ts ? 'Déjà un rendez-vous — clic : préparer l\'entretien (mini bilan) · pour un 2e créneau, glisse-le sur la grille' : 'Clic : premier créneau libre · ou glisse sur un créneau'}"><span>${_reuNameHTML(sid)} <span class="reu-cls">${_esc(_reuClsName(r, sid))}</span> ${_ficheSpecBadges(s)}</span>${right}</div>`;
   };
   let h = '';
   const list = sids.filter(match);
@@ -27463,6 +27501,7 @@ function _reuEdKey(e, t) {
 }
 function _reuEdBlur() {
   setTimeout(() => {
+    if (document.querySelector('.mo.on')) return;  // fenêtre de confirmation ouverte : on garde le créneau en cours
     if (_reu.edit && document.activeElement?.id !== 'reu-ed' && document.getElementById('tab-reunions')?.classList.contains('on')) { _reu.edit = null; renderReunions(); }
   }, 180);
 }
@@ -27474,9 +27513,26 @@ function _reuNextFree(r, after) {
 }
 function _reuBookFromEdit(t, sid) {
   const r = _reuGet(_reu.id);
-  if (!r || !_reuBook(r, t, sid)) return;
-  _reu.edit = _reuNextFree(r, t);
-  renderReunions();
+  if (!r) return;
+  _reuBookAsk(r, t, sid, () => { _reu.edit = _reuNextFree(r, t); renderReunions(); },
+    () => { _reu.edit = t; renderReunions(); });
+}
+// Réserve, en demandant confirmation si l'élève a déjà un rendez-vous dans cette réunion
+// (fratrie ou entretien long : voulu — sinon, souvent une erreur de recopie).
+function _reuBookAsk(r, t, sid, onDone, onCancel) {
+  const ts = _reuBooked(r).get(sid);
+  if (!ts || !ts.length) { if (_reuBook(r, t, sid)) onDone(); return; }
+  const times = _reuTimes(r), i = times.indexOf(t);
+  const next = ts.some(x => Math.abs(times.indexOf(x) - i) === 1);
+  _uiConfirm({
+    title: '⚠️ Deuxième rendez-vous',
+    message: `${_reuNameTxt(sid)} a déjà un rendez-vous à ${ts.map(_reuFmtT).join(' et ')}.\n`
+      + (next ? `${_reuFmtT(t)} le prolonge : entretien long ou fratrie.` : `${_reuFmtT(t)} n'est pas à la suite : vérifie que ce n'est pas une erreur.`)
+      + `\nLui donner aussi ${_reuFmtT(t)} ?`,
+    okLabel: 'Oui, deuxième rendez-vous', okClass: 'btn-w',
+    onOk: () => { if (_reuBook(r, t, sid)) onDone(); },
+    onCancel: onCancel || (() => {}),
+  });
 }
 function _reuBook(r, t, sid) {
   if (!S.eleves?.[sid] || r.slots?.[t]?.sid) return false;
@@ -27498,13 +27554,57 @@ function _reuSlotClick(t) {
   const r = _reuGet(_reu.id); if (!r) return;
   const st = _reuSlotState(r, t, _reuTimes(r));
   if (st === 'free') { _reu.edit = t; _reu.acIdx = 0; renderReunions(); }
-  else if (st === 'booked' || st === 'suite') openFiche(r.slots[t].sid);
+  else if (st === 'booked' || st === 'suite') _reuPrepOpen(r.slots[t].sid);
 }
 function _reuStuClick(sid) {
   const r = _reuGet(_reu.id); if (!r) return;
+  if (_reuBooked(r).has(sid) && !_reu.edit) return _reuPrepOpen(sid);
   const t = (_reu.edit && _reuSlotState(r, _reu.edit, _reuTimes(r)) === 'free') ? _reu.edit : _reuNextFree(r, null);
   if (!t) return toast('⚠️ Plus aucun créneau libre.', 'warn');
-  if (_reuBook(r, t, sid)) { _reu.edit = null; renderReunions(); toast(`${_reuNameTxt(sid)} → ${_reuFmtT(t)} (Ctrl+Z pour annuler)`); }
+  _reuBookAsk(r, t, sid, () => { _reu.edit = null; renderReunions(); toast(`${_reuNameTxt(sid)} → ${_reuFmtT(t)} (Ctrl+Z pour annuler)`); });
+}
+// ── Mini bilan : ce que le prof veut dire aux parents, préparé à l'avance (r.bilans[sid]).
+function _reuPrepOpen(sid) {
+  _reu.prepSid = sid; _reu.edit = null; renderReunions();
+  const ta = document.getElementById('reu-prep-ta');
+  if (ta) { ta.focus({ preventScroll: true }); ta.selectionStart = ta.selectionEnd = ta.value.length; }
+}
+function _reuPrepClose() { _reu.prepSid = null; renderReunions(); }
+function _reuRenderPrepBox() {
+  const box = document.getElementById('reu-prep-box'); if (!box) return;
+  const r = _reuGet(_reu.id), sid = _reu.prepSid, stu = S.eleves?.[sid];
+  if (!r || !stu) { box.innerHTML = ''; box.className = ''; return; }
+  const ts = _reuBooked(r).get(sid) || [];
+  box.className = 'reu-prepbox';
+  box.innerHTML = `<div class="reu-dhead"><span class="reu-av" id="reu-pav"></span>
+      <div style="flex:1;min-width:0"><div><b>${_escName((stu.nom || '').toUpperCase())}</b> ${_escName(stu.prenom || '')} <span class="reu-cls">${_esc(_reuClsName(r, sid))}</span></div>
+        <div class="reu-mt">${ts.length ? 'rendez-vous ' + ts.map(_reuFmtT).join(' et ') : 'pas de rendez-vous'} · ${_esc(_reuFactsText(_reuFacts(r, sid)))}</div></div>
+      <button type="button" class="btn btn-g btn-sm" onclick="_reuPrepClose()" title="Fermer" aria-label="Fermer la préparation">✕</button></div>
+    <div class="ev-h">✍ Ce que je veux dire — mini bilan</div>
+    <textarea id="reu-prep-ta" class="reu-note" maxlength="2000" placeholder="Points forts, difficultés, conseils, ce que j'attends de l'élève et des parents…" oninput="_reuPrepInput('${_escJsAttr(sid)}',this.value)">${_esc(r.bilans?.[sid] || '')}</textarea>
+    <div class="reu-acts">
+      <button type="button" class="btn btn-g btn-sm" onclick="_reuPrepInsert('${_escJsAttr(sid)}')" title="Ajoute ses chiffres de la période (moyenne, vie de classe, absences) au mini bilan">＋ Insérer ses résultats</button>
+      <button type="button" class="btn btn-g btn-sm" onclick="openFiche('${_escJsAttr(sid)}')" title="Fiche complète de l'élève">🪪 Fiche</button>
+      <span class="reu-mt">enregistré au fil de la frappe · relu le soir de la réunion</span>
+    </div>`;
+  _stuAvatarFill('reu-pav', sid);
+}
+function _reuPrepInput(sid, v) {
+  const r = _reuGet(_reu.id); if (!r) return;
+  _evalArmUndo();
+  if (!r.bilans) r.bilans = {};
+  if (v.trim()) r.bilans[sid] = v; else delete r.bilans[sid];
+  document.querySelectorAll(`.reu-sl[data-sid="${CSS.escape(sid)}"] .reu-pm`).forEach(e => { e.hidden = !v.trim(); });
+  clearTimeout(_reuPrepTimer);
+  _reuPrepTimer = setTimeout(() => save(), 600);
+}
+function _reuPrepInsert(sid) {
+  const r = _reuGet(_reu.id), ta = document.getElementById('reu-prep-ta'); if (!r || !ta) return;
+  const line = _reuFactsText(_reuFacts(r, sid)) + '.';
+  const v = ta.value.replace(/\s+$/, '');
+  ta.value = v ? v + '\n' + line : line;
+  _reuPrepInput(sid, ta.value);
+  ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length;
 }
 function _reuTogglePause(t) {
   const r = _reuGet(_reu.id); if (!r || r.slots?.[t]?.sid) return;
@@ -27525,7 +27625,7 @@ function _reuDrop(e, t) {
   if ((r.pauses || []).includes(t)) return toast('⚠️ Ce créneau est une pause (clic droit pour la retirer).', 'warn');
   if (d.kind === 'stu') {
     if (r.slots?.[t]?.sid) return toast('⚠️ Créneau déjà pris — libère-le d\'abord (✕).', 'warn');
-    if (_reuBook(r, t, d.v)) renderReunions();
+    _reuBookAsk(r, t, d.v, () => renderReunions());
   } else if (d.kind === 'slot' && d.v !== t && r.slots?.[d.v]) {
     pushUndo();
     const a = r.slots[d.v], b = r.slots[t];
@@ -27542,7 +27642,7 @@ function _reuSlotMenu(e, t) {
   const items = [];
   if (st === 'booked' || st === 'suite') {
     const sid = _escJsAttr(r.slots[t].sid);
-    items.push([`openFiche('${sid}')`, '🪪 Fiche de l\'élève'], [`_reuOpen('${_escJsAttr(r.id)}','soir');_reuSel('${jt}')`, '▶ Ouvrir dans « Ce soir »'], [`_reuFree('${jt}')`, '✕ Libérer le créneau']);
+    items.push([`_reuPrepOpen('${sid}')`, '✍ Préparer l\'entretien (mini bilan)'], [`openFiche('${sid}')`, '🪪 Fiche de l\'élève'], [`_reuOpen('${_escJsAttr(r.id)}','soir');_reuSel('${jt}')`, '▶ Ouvrir dans « Ce soir »'], [`_reuFree('${jt}')`, '✕ Libérer le créneau']);
   } else if (st === 'free') {
     items.push([`_reuSlotClick('${jt}')`, '✍ Réserver…'], [`_reuTogglePause('${jt}')`, '☕ En faire une pause']);
   } else items.push([`_reuTogglePause('${jt}')`, '↺ Retirer la pause']);
@@ -27638,7 +27738,7 @@ function _reuDetailHTML(r, t) {
     const evo = (m != null && pm != null) ? ` · ${m - pm >= 0 ? '+' : ''}${_fmtNote(m - pm)} depuis ${prev}` : '';
     cards.push(card(`Moyenne ${per}`, m != null ? `${_fmtNote(m)} <span class="bsynth-of">/20</span>` : '—', `classe ${cm != null ? _fmtNote(cm) : '—'}${evo}`));
   }
-  cards.push(card('Vie de classe', `${stu.oublis || 0} <span class="bsynth-of">oubli${(stu.oublis || 0) > 1 ? 's' : ''}</span>`, `${stu.non_travail || 0} travail${(stu.non_travail || 0) > 1 ? 'x' : ''} non fait${(stu.non_travail || 0) > 1 ? 's' : ''}`));
+  cards.push(card('Vie de classe', `${stu.oublis || 0} <span class="bsynth-of">oubli${(stu.oublis || 0) > 1 ? 's' : ''}</span>`, `${stu.non_travail || 0} ${(stu.non_travail || 0) > 1 ? 'travaux non faits' : 'travail non fait'}`));
   if (_featureEnabled('appel') && cid) { const a = getStudentAttendanceStats(cid, sid); cards.push(card('Absences', `${a.abs}`, `${a.ret} retard${a.ret > 1 ? 's' : ''}`)); }
   let evHTML = '', compHTML = '';
   if (evalOn) {
@@ -27677,6 +27777,10 @@ function _reuDetailHTML(r, t) {
     <div class="reu-priv">
       ${stu.notes ? `<div class="ev-h">📋 Informations</div><div class="reu-txt">${_esc(stu.notes)}</div>` : ''}
       ${rems.length ? `<div class="ev-h">🔔 Rappels</div><div class="reu-txt">${rems.map(_esc).join('\n')}</div>` : ''}
+    </div>
+    <div class="reu-priv">
+      <div class="ev-h">✍ Ce que je voulais dire — mini bilan</div>
+      <textarea id="reu-prep-ta" class="reu-note reu-note-sm" maxlength="2000" placeholder="Rien de préparé — tu peux l'écrire ici, ou depuis « ✍ Préparer »." oninput="_reuPrepInput('${_escJsAttr(sid)}',this.value)">${_esc(r.bilans?.[sid] || '')}</textarea>
     </div>
     <div class="ev-h">Note d'entretien</div>
     <textarea id="reu-note" class="reu-note" maxlength="2000" placeholder="Qui est venu, ce qui a été dit, ce qui est convenu…" oninput="_reuNoteInput('${_escJsAttr(t)}',this.value)">${_esc(s.note || '')}</textarea>

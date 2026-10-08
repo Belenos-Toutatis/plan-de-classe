@@ -144,7 +144,8 @@ function stateMaximal() {
     conseilMentions: { cm_fel: { id: 'cm_fel', abbr: 'F', nom: 'Felicitations', color: '#2563eb', ord: 0 } },
     conseilIncompat: [],
     reunions: { re1: { id: 're1', date: '2026-11-03', first: '16:35', last: '19:30', step: 5, classIds: [CLS, 'cAutre'], pauses: [],
-                       slots: { '16:35': { sid: SID, note: 'n', st: '' }, '16:40': { sid: 'sTemoin', note: '', st: '' } } } },
+                       slots: { '16:35': { sid: SID, note: 'n', st: '' }, '16:40': { sid: 'sTemoin', note: '', st: '' } },
+                       bilans: { [SID]: 'à dire', sTemoin: 'à dire aussi' } } },
   });
 }
 

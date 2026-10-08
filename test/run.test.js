@@ -2927,11 +2927,13 @@ test('Réunions parents-profs : créneaux, purge d\'un élève et d\'une classe,
   ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2'], rooms: {} }, c2: { id: 'c2', nom: '3B', eleves: ['e3'], rooms: {} } };
       S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' }, e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c2' } };
       S.reunions = { r1: { id: 'r1', date: '2026-11-03', first: '16:35', last: '19:30', step: 5, classIds: ['c1', 'c2'],
-        slots: { '16:35': { sid: 'e1' }, '16:40': { sid: 'e1' }, '16:45': { sid: 'e2', note: 'venue de la mère' } } } };`);
+        slots: { '16:35': { sid: 'e1' }, '16:40': { sid: 'e1' }, '16:45': { sid: 'e2', note: 'venue de la mère' } },
+        bilans: { e1: 'à dire', e2: 'à dire aussi' } } };`);
   assert.equal(ev(`_reuAutoTitle(['c1','c2'])`), 'Niveau 3ème');
   assert.deepEqual(JSON.parse(ev(`JSON.stringify([..._reuBooked(S.reunions.r1).get('e1')])`)), ['16:35', '16:40']);
   ev(`_purgeStudentRefs('e1')`);
   assert.deepEqual(JSON.parse(ev(`JSON.stringify(Object.keys(S.reunions.r1.slots))`)), ['16:45']);
+  assert.deepEqual(JSON.parse(ev(`JSON.stringify(Object.keys(S.reunions.r1.bilans))`)), ['e2'], 'le mini bilan de l\'élève supprimé part avec lui');
   ev(`_purgeClassRefs('c2')`);
   assert.deepEqual(JSON.parse(ev(`JSON.stringify(S.reunions.r1.classIds)`)), ['c1']);
 });
