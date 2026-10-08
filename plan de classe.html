@@ -8055,11 +8055,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.131.2';
+const APP_VERSION    = '2.131.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T18:35:52Z';
+const APP_BUILD_DATE = '2026-10-08T18:38:27Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -18991,7 +18991,7 @@ function _renduRender() {
   const iNote = allCols.findIndex(c => c.kind === 'note-20');
   allCols.splice(iNote + 1, 0, { key: 'rang', label: 'Rang', kind: 'rang' });
   const groups = st.groups[mode] || (st.groups[mode] = _resDefaultGroups(mode, ev));
-  const qLabel = ev.type === 'B' ? 'Passations' : 'Questions';
+  const qLabel = ev.type === 'B' ? 'Passations' : ev.type === 'A' ? 'Mini-notes' : 'Questions';
   const gHtml = _RES_GROUPS.filter(g => allCols.some(c => g.kinds.includes(c.kind))).map(g => {
     const n = allCols.filter(c => g.kinds.includes(c.kind)).length;
     const lbl = (g.key === 'q' ? qLabel : g.label) + ((g.key === 'q' || g.key === 'comp' || g.key === 'exo') ? ` (${n})` : '');
@@ -19000,24 +19000,31 @@ function _renduRender() {
   // Type B : choix des passations affichées, sous les familles.
   let pHtml = '';
   const passOff = st.passOff || (st.passOff = new Set());
-  if (ev.type === 'B' && groups.has('q')) {
-    const plist = (ev.passations || []).filter(p => !_subSkippedFor(p, cls.id) && allCols.some(c => c.kind === 'pass-comp' && c.passId === p.id))
-      .sort((a, b) => (_passDateFor(a, cls.id) || '').localeCompare(_passDateFor(b, cls.id) || ''));
+  // Type A : idem pour les mini-notes (même état, clés = id des mini-notes).
+  if ((ev.type === 'B' || ev.type === 'A') && groups.has('q')) {
+    const isB = ev.type === 'B';
+    const dOf = x => isB ? _passDateFor(x, cls.id) : _mnDateFor(x, cls.id);
+    const plist = isB
+      ? (ev.passations || []).filter(p => !_subSkippedFor(p, cls.id) && allCols.some(c => c.kind === 'pass-comp' && c.passId === p.id))
+          .sort((a, b) => (dOf(a) || '').localeCompare(dOf(b) || ''))
+      : (ev.miniNotes || []).filter(m => allCols.some(c => c.kind === 'mn' && c.mnId === m.id));
     if (plist.length > 1) {
       const ids = plist.map(p => p.id);
       const nOn = ids.filter(id => !passOff.has(id)).length;
-      pHtml = `<span style="flex-basis:100%;height:0"></span><span class="mres-lbl">Passations</span>`
+      pHtml = `<span style="flex-basis:100%;height:0"></span><span class="mres-lbl">${isB ? 'Passations' : 'Mini-notes'}</span>`
         + plist.map(p => {
-          const d = _passDateFor(p, cls.id);
-          const tip = [p.name, d ? _fmtDateFr(d) : '', _passComps(p, cls.id).map(cid => S.competences?.[cid]?.code || cid).join(', ')].filter(Boolean).join(' · ');
-          return `<button class="slot-pill${passOff.has(p.id) ? '' : ' on'}" onclick="_resTogglePass('${_esc(p.id)}')" title="${_escAttr(tip)}">${_esc(p.code || '?')}${d ? ` <span class="nd-dim">${_esc(d.slice(8, 10) + '/' + d.slice(5, 7))}</span>` : ''}</button>`;
+          const d = dOf(p);
+          const tip = isB
+            ? [p.name, d ? _fmtDateFr(d) : '', _passComps(p, cls.id).map(cid => S.competences?.[cid]?.code || cid).join(', ')].filter(Boolean).join(' · ')
+            : [p.name, d ? _fmtDateFr(d) : '', p.max != null ? 'sur ' + _fmtNote(p.max) : ''].filter(Boolean).join(' · ');
+          return `<button class="slot-pill${passOff.has(p.id) ? '' : ' on'}" onclick="_resTogglePass('${_esc(p.id)}')" title="${_escAttr(tip)}">${_esc((isB ? p.code : p.label) || '?')}${d ? ` <span class="nd-dim">${_esc(d.slice(8, 10) + '/' + d.slice(5, 7))}</span>` : ''}</button>`;
         }).join('')
         + (nOn < ids.length ? `<button class="slot-pill" onclick="_resAllPass(true, ${_escAttr(JSON.stringify(ids))})">toutes</button>` : '');
     }
   }
   document.getElementById('mrendu-cols').innerHTML = gHtml + pHtml;
   const groupOf = c => (_RES_GROUPS.find(g => g.kinds.includes(c.kind)) || {}).key;
-  const selCols = allCols.filter(c => groups.has(groupOf(c)) && !(c.kind === 'pass-comp' && passOff.has(c.passId)));
+  const selCols = allCols.filter(c => groups.has(groupOf(c)) && !(c.kind === 'pass-comp' && passOff.has(c.passId)) && !(c.kind === 'mn' && passOff.has(c.mnId)));
 
   const sids = _resSids(ev, cls, st.sort);
   const nb = _nbLevels();
