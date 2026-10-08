@@ -2168,6 +2168,9 @@ html[data-theme="dark"] .pair-row { background: #3a1f1f !important; border-color
 .evp-cell-vide { background: var(--paper); border: 1px dashed var(--rule-line-soft); }
 .evp-cell-stu { background: var(--paper); border: 1px solid var(--rule-line); }
 .evp-name { font-family: var(--font-serif); font-size: .92em; line-height: 1.1; text-align: center; color: var(--ink-deep); margin-bottom: 4px; }
+/* Prénom et nom à la largeur de la case : taille calculée par _evpFitNames (une par ligne) */
+.evp-fit { white-space: nowrap; overflow: hidden; line-height: 1.12; width: 0; min-width: 100%; }   /* width:0 + min-width:100% : remplit la case sans peser dans la largeur de la grille */
+.evp-fit > * { display: inline-block; }
 html[data-theme="dark"] .evp-cell-empty { background: repeating-linear-gradient(45deg, var(--paper-deep), var(--paper-deep) 6px, var(--paper-warm) 6px, var(--paper-warm) 12px) !important; border-color: var(--rule-line) !important; }
 html[data-theme="dark"] .evp-cell-aesh { background: #4a2538 !important; border-color: #8a2f5a !important; color: #f0a0c8 !important; }
 html[data-theme="dark"] .evp-cell-vide,
@@ -8028,11 +8031,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.130.0';
+const APP_VERSION    = '2.130.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T17:37:04Z';
+const APP_BUILD_DATE = '2026-10-08T17:39:46Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -46654,7 +46657,7 @@ function _evalPlanOverlayRender() {
       // et sans pastille (on voit qui est là, on ne peut pas saisir pour eux).
       if (_gPlan && _grp(stu, cls) !== _gPlan) {
         html += `<div class="evp-cell evp-cell-stu" style="min-height:${cellMinH}px;opacity:.3;pointer-events:none" title="Hors G${_gPlan} — filtre de groupe du tableur">
-          <div class="evp-name"><strong>${_esc(stu.prenom)}</strong><br>${_esc(stu.nom?.toUpperCase() || '')}</div>
+          <div class="evp-name"><div class="evp-fit"><strong>${_esc(stu.prenom)}</strong></div><div class="evp-fit"><span>${_esc(stu.nom?.toUpperCase() || '')}</span></div></div>
         </div>`;
         continue;
       }
@@ -46691,7 +46694,7 @@ function _evalPlanOverlayRender() {
         </div>`;
       }
       html += `<div class="evp-cell evp-cell-stu${_evpBrushReady() ? ' brushable' : ''}" style="min-height:${cellMinH}px" onclick="_evpCellClick(event,'${_escJsAttr(sid)}')">
-        <div class="evp-name"><strong>${_esc(stu.prenom)}</strong><br>${_esc(stu.nom?.toUpperCase() || '')}</div>
+        <div class="evp-name"><div class="evp-fit"><strong>${_esc(stu.prenom)}</strong></div><div class="evp-fit"><span>${_esc(stu.nom?.toUpperCase() || '')}</span></div></div>
         ${compsHTML}
       </div>`;
     }
@@ -46706,11 +46709,28 @@ function _evalPlanOverlayRender() {
 // Le plan tient dans la LARGEUR de l'écran : rendu à sa taille naturelle, puis réduit
 // (propriété CSS `zoom`, qui réduit aussi la zone cliquable — pas un `transform`) juste
 // assez pour ne plus défiler en largeur. Recalculé au redimensionnement de la fenêtre.
+// Prénom et nom remplissent la largeur de leur case (demande de l'utilisateur) : chaque
+// ligne reçoit sa taille, mesurée à partir d'une taille de référence. Plafonnée pour qu'un
+// prénom court (« Léo ») ne devienne pas démesuré. Mesuré SANS zoom, avant l'ajustement
+// du plan à l'écran.
+function _evpFitNames(g) {
+  const lines = [...g.querySelectorAll('.evp-fit')];
+  const REF = 20;
+  for (const el of lines) el.style.fontSize = REF + 'px';
+  const w = lines.map(el => [el.clientWidth, el.firstElementChild?.offsetWidth || 0]);   // lectures groupées
+  lines.forEach((el, k) => {
+    const [avail, txt] = w[k];
+    if (!avail || !txt) { el.style.fontSize = ''; return; }
+    el.style.fontSize = Math.max(11, Math.min(60, Math.floor(REF * (avail - 2) / txt * 10) / 10)) + 'px';
+  });
+}
+
 function _evpFit() {
   const box = document.getElementById('meval-plan-overlay-grid');
   const g = document.getElementById('evp-plan');
   if (!box || !g) return;
   g.style.zoom = '';
+  _evpFitNames(g);
   const cs = getComputedStyle(box);
   const avail = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 6;   // marge : arrondi du zoom
   const nat = g.offsetWidth;
