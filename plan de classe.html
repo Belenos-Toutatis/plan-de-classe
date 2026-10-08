@@ -8759,11 +8759,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.8';
+const APP_VERSION    = '2.136.9';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T22:40:43Z';
+const APP_BUILD_DATE = '2026-10-08T22:44:20Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -28700,9 +28700,22 @@ function _rexStudents() {
     for (const sid of c.eleves || []) { const s = S.eleves[sid]; if (s && _stuActiveOn(s) && !out[sid]) out[sid] = { nom: s.nom || '', prenom: s.prenom || '', cls: c.id }; }
   return out;
 }
+// Nom du fichier (v2.136.9) d'après les classes cochées : toutes les classes de l'établissement →
+// « Réunion parents-professeurs 2026-2027 » ; un niveau complet → son nom au pluriel (« sixièmes ») ;
+// sinon les classes une à une. « Réunion parents-professeurs – sixièmes et 5e A ».
+const REX_LVL_WORDS = { 10: 'CP', 20: 'CE1', 30: 'CE2', 40: 'CM1', 50: 'CM2', 60: 'sixièmes', 70: 'cinquièmes', 80: 'quatrièmes', 90: 'troisièmes', 100: 'secondes', 110: 'premières', 120: 'terminales' };
 function _rexTitle() {
-  const r = _reuGet(_rex.reu);
-  return r ? (r.titre || 'Réunion') : _reuAutoTitle([..._rex.cls]);
+  const all = realClasses(), sel = all.filter(c => _rex.cls.has(c.id));
+  if (!sel.length) return 'Réunion parents-professeurs';
+  if (sel.length === all.length) { const y = _defaultSchoolYear(); return `Réunion parents-professeurs ${y}-${y + 1}`; }
+  const parts = [];
+  for (const n of [...new Set(all.map(c => clsLevel(c)))].sort((a, b) => a - b)) {
+    const cs = all.filter(c => clsLevel(c) === n), k = cs.filter(c => _rex.cls.has(c.id));
+    if (!k.length) continue;
+    if (k.length === cs.length && REX_LVL_WORDS[n]) parts.push(REX_LVL_WORDS[n]);
+    else k.forEach(c => parts.push(c.nom));
+  }
+  return 'Réunion parents-professeurs – ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' et ' + parts[parts.length - 1] : parts[0]);
 }
 function _rexRender() {
   const pill = (on, oc, lbl, extra) => `<button type="button" class="btn btn-sm mvc-chip${on ? ' on' : ''}${extra || ''}" onclick="${oc}">${lbl}</button>`;
@@ -28716,7 +28729,7 @@ function _rexRender() {
   const st = _rexStudents(), n = Object.keys(st).length;
   const nph = Object.keys(st).filter(sid => _photoHas(sid)).length;
   const kb = 30 + (_rex.photos ? nph * 14 : 0);
-  document.getElementById('rex-sum').innerHTML = `<b>Réunion parents – ${_esc(_rexTitle())}.html</b>
+  document.getElementById('rex-sum').innerHTML = `<b>${_esc(_rexTitle().replace(/[\\/:*?"<>|]/g, ''))}.html</b>
     <div class="reu-mt">${n} élève${n > 1 ? 's' : ''} · ${_rex.cls.size} classe${_rex.cls.size > 1 ? 's' : ''} · ${_rex.photos ? (_photos.ready ? `${nph} photo${nph > 1 ? 's' : ''}` : 'photos lues dans ton dossier de sauvegarde à la création') : 'sans photos'} · ≈ ${kb >= 1000 ? (kb / 1000).toFixed(1).replace('.', ',') + ' Mo' : kb + ' Ko'}</div>`;
   document.getElementById('rex-go').disabled = !n;
 }
@@ -28770,7 +28783,7 @@ async function _rexBuild() {
     const classes = realClasses().filter(c => _rex.cls.has(c.id)).map(c => ({ id: c.id, nom: c.nom, lvl: clsLevel(c) }));
     const data = { v: 1, fileId: 'rdv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), by, createdAt: todayKey(), savedAt: 0,
       classes, eleves: st, photos, reunions, prefs: { prof: '', discipline: '' } };
-    const title = 'Réunion parents – ' + _rexTitle();
+    const title = _rexTitle();
     const html = _rexHTML(data, title);
     const name = title.replace(/[\\/:*?"<>|]/g, '') + '.html';
     _rexLastHTML = html;
@@ -28790,14 +28803,14 @@ var _rexLastHTML = null; // dernier fichier produit (vérifications)
 
 // ── Mail d'accompagnement (v2.136.7, raccourci en v2.136.8) : écrit pour l'ensemble des collègues
 // (vouvoiement), met en avant le gain de temps, recommande un navigateur de la famille Chrome
-// (enregistrement direct dans le fichier). Brave est volontairement absent de la liste : il bloque
-// par défaut l'enregistrement direct et se comporte donc comme Firefox.
+// (enregistrement direct dans le fichier). ⚠️ Brave est de la famille Chrome MAIS bloque par défaut
+// l'enregistrement direct (showSaveFilePicker absent) : il est rangé avec Firefox et Safari.
 var _rexMail = { ctx: null };
 function _rexMailCtx(built) {
   const st = _rexStudents(), sids = Object.keys(st);
   const r = _reuGet(_rex.reu);
   return {
-    name: built?.name || ('Réunion parents – ' + _rexTitle()).replace(/[\\/:*?"<>|]/g, '') + '.html',
+    name: built?.name || _rexTitle().replace(/[\\/:*?"<>|]/g, '') + '.html',
     n: built?.n ?? sids.length,
     nph: built?.nph ?? (_rex.photos ? sids.filter(sid => _photoHas(sid)).length : 0),
     size: built?.size || '',
@@ -28816,7 +28829,7 @@ function _rexMailText(c) {
     `Un vrai gain de temps : vous cliquez sur un créneau, vous tapez deux ou trois lettres du nom, l'élève est proposé, Entrée… et le créneau suivant s'ouvre aussitôt. Recopier une pile de coupons ne prend que quelques minutes. Vous pouvez aussi faire glisser un élève de la liste directement sur la feuille, qui s'imprime ensuite au format habituel de l'établissement.`, '',
     'Pour commencer :',
     `1. Enregistrez la pièce jointe « ${c.name} » dans vos Documents, puis ouvrez-la d'un double-clic. Rien à installer, pas besoin d'internet.`,
-    `2. Utilisez de préférence Chrome ou un navigateur de la même famille (Edge, Opera, Vivaldi, Chromium) : l'enregistrement se fait directement dans le fichier, en un clic. Avec Firefox ou Safari, le fichier fonctionne aussi, mais chaque enregistrement télécharge une nouvelle copie, à garder à la place de l'ancienne.`,
+    `2. Utilisez de préférence Google Chrome ou un navigateur de la même famille (Microsoft Edge, Opera, Opera GX, Vivaldi, Chromium, Arc, Yandex) : l'enregistrement se fait directement dans le fichier, en un clic. Avec les autres navigateurs (Firefox, Safari, Brave, DuckDuckGo, Tor…), le fichier fonctionne aussi, mais chaque enregistrement télécharge une nouvelle copie, à garder à la place de l'ancienne.`,
     c.reu ? `3. Cliquez sur la réunion « ${c.reu.titre} », puis sur « ⚙ Réglages » pour mettre votre nom et votre discipline.`
           : `3. Cliquez sur « ＋ Nouvelle réunion » et choisissez la date, les horaires et vos classes.`,
     `4. Pensez à cliquer sur « 💾 Enregistrer » : la première fois, choisissez le fichier que vous avez ouvert et acceptez de le remplacer.`, '',
