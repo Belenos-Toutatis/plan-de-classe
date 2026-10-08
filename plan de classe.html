@@ -1860,6 +1860,11 @@ body.ff-no-reunions #nb-reunions, body.ff-no-reunions .reu-plan-hint { display:n
 .reu-mt{font-size:.84em;color:var(--pencil)}
 .reu-help{font-size:.8em;color:var(--pencil);margin:6px 0 0}
 .reu-help a{color:var(--link-fg)}
+.rexm-rich{border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);background:var(--paper);color:var(--ink-deep);padding:12px 16px;max-height:52vh;overflow-y:auto;font-size:.93em;line-height:1.5;margin-top:4px}
+.rexm-rich:focus{outline:2px solid var(--ink-blue-soft);outline-offset:1px}
+.rexm-rich p{margin:0 0 .75em}
+.rexm-rich ol{margin:0 0 .75em;padding-left:1.6em}
+.rexm-rich li{margin:0 0 .35em}
 #reu-side-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .reu-togs{display:inline-flex;flex-wrap:wrap;gap:4px}
 .reu-tog{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);border-radius:999px;padding:2px 10px;font:500 .82em var(--font-sans);cursor:pointer;line-height:1.5}
@@ -7580,9 +7585,9 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <p id="rexm-intro" class="clf-note" style="margin-top:0"></p>
     <label class="reu-flbl">Objet
       <span style="display:flex;gap:6px"><input type="text" id="rexm-subj" style="flex:1"><button type="button" class="btn btn-g btn-sm" onclick="_rexMailCopy('subj')" title="Copier l'objet du mail">⧉ Copier</button></span></label>
-    <label class="reu-flbl">Texte du mail <span class="clf-note" style="margin:0">— modifiable ici avant de le copier</span>
-      <textarea id="rexm-body" rows="22" style="width:100%;box-sizing:border-box;font:inherit;font-size:.92em;line-height:1.45;resize:vertical"></textarea></label>
-    <div class="hm-foot"><button class="btn btn-g" onclick="_rexMailOpen()" title="Ouvrir un nouveau message dans le logiciel de messagerie de cet ordinateur, avec l'objet et le texte (si le texte arrive coupé, utilise plutôt « Copier le texte »)">✉ Ouvrir dans ma messagerie</button><span><button class="btn btn-g" onclick="closeMod2('mreumail')">Fermer</button><button class="btn btn-p" onclick="_rexMailCopy('body')" title="Copier tout le texte du mail, à coller dans ta messagerie académique">⧉ Copier le texte du mail</button></span></div>
+    <div class="reu-flbl">Texte du mail <span class="clf-note" style="margin:0">— mis en forme, modifiable ici avant de le copier</span></div>
+    <div id="rexm-body" class="rexm-rich" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Texte du mail" title="Tu peux modifier le texte ici ; « Copier le texte du mail » garde la mise en forme (gras, listes, émojis)"></div>
+    <div class="hm-foot"><button class="btn btn-g" onclick="_rexMailOpen()" title="Ouvrir un nouveau message dans le logiciel de messagerie de cet ordinateur, avec l'objet et le texte SANS mise en forme (et parfois coupé) : préfère « Copier le texte du mail »">✉ Ouvrir dans ma messagerie</button><span><button class="btn btn-g" onclick="closeMod2('mreumail')">Fermer</button><button class="btn btn-p" onclick="_rexMailCopy('body')" title="Copier tout le mail avec sa mise en forme (gras, listes, émojis), à coller dans ta messagerie académique">⧉ Copier le texte du mail</button></span></div>
   </div>
 </div>
 
@@ -8759,11 +8764,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.9';
+const APP_VERSION    = '2.136.10';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T22:44:20Z';
+const APP_BUILD_DATE = '2026-10-08T22:49:58Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -28820,40 +28825,76 @@ function _rexMailCtx(built) {
   };
 }
 function _rexMailText(c) {
+  // Mini-balisage : **gras**. Version riche (HTML, styles en ligne — les messageries ignorent les classes)
+  // et version texte (copie en secours, « Ouvrir dans ma messagerie ») produites depuis la même source.
   const quand = c.reu?.date ? ` du ${_reuDateLong(c.reu.date)}` : '';
   const liste = c.cls.length > 1 ? c.cls.slice(0, -1).join(', ') + ' et ' + c.cls[c.cls.length - 1] : (c.cls[0] || '');
-  const subject = `Réunion parents-professeurs${quand} : votre fichier de prise de rendez-vous`;
-  const L = [
-    'Bonjour à toutes et à tous,', '',
-    `Je vous envoie en pièce jointe un fichier pour préparer vos rendez-vous de la réunion parents-professeurs. Il contient les élèves de ${liste}${c.nph > 0 ? ', avec leur photo' : ''}.`, '',
-    `Un vrai gain de temps : vous cliquez sur un créneau, vous tapez deux ou trois lettres du nom, l'élève est proposé, Entrée… et le créneau suivant s'ouvre aussitôt. Recopier une pile de coupons ne prend que quelques minutes. Vous pouvez aussi faire glisser un élève de la liste directement sur la feuille, qui s'imprime ensuite au format habituel de l'établissement.`, '',
-    'Pour commencer :',
-    `1. Enregistrez la pièce jointe « ${c.name} » dans vos Documents, puis ouvrez-la d'un double-clic. Rien à installer, pas besoin d'internet.`,
-    `2. Utilisez de préférence Google Chrome ou un navigateur de la même famille (Microsoft Edge, Opera, Opera GX, Vivaldi, Chromium, Arc, Yandex) : l'enregistrement se fait directement dans le fichier, en un clic. Avec les autres navigateurs (Firefox, Safari, Brave, DuckDuckGo, Tor…), le fichier fonctionne aussi, mais chaque enregistrement télécharge une nouvelle copie, à garder à la place de l'ancienne.`,
-    c.reu ? `3. Cliquez sur la réunion « ${c.reu.titre} », puis sur « ⚙ Réglages » pour mettre votre nom et votre discipline.`
-          : `3. Cliquez sur « ＋ Nouvelle réunion » et choisissez la date, les horaires et vos classes.`,
-    `4. Pensez à cliquer sur « 💾 Enregistrer » : la première fois, choisissez le fichier que vous avez ouvert et acceptez de le remplacer.`, '',
-    `Bon à savoir : chaque bouton a une bulle d'aide, et « 🖨 Mini bilans » imprime ce que vous voulez dire à chaque famille, avec de la place pour noter pendant l'entretien.`, '',
-    `Ce fichier contient des données d'élèves : gardez-le sur votre ordinateur professionnel et supprimez-le après la réunion.`, '',
-    'Bonne réunion,',
+  const subject = `📅 Réunion parents-professeurs${quand} : votre fichier de prise de rendez-vous`;
+  const blocks = [
+    ['p', 'Bonjour à toutes et à tous,'],
+    ['p', `📎 Je vous envoie en pièce jointe un fichier pour préparer vos rendez-vous de la **réunion parents-professeurs**. Il contient les élèves de **${liste}**${c.nph > 0 ? ', avec leur photo' : ''}.`],
+    ['p', `⏱️ **Un vrai gain de temps** : vous cliquez sur un créneau, vous tapez deux ou trois lettres du nom, l'élève est proposé, **Entrée**… et le créneau suivant s'ouvre aussitôt. Recopier une pile de coupons ne prend que quelques minutes. Vous pouvez aussi **faire glisser un élève** de la liste directement sur la feuille, qui s'imprime ensuite au format habituel de l'établissement.`],
+    ['p', '✅ **Pour commencer**'],
+    ['ol', [
+      `**Enregistrez** la pièce jointe « ${c.name} » dans vos Documents, puis **ouvrez-la d'un double-clic**. Rien à installer, pas besoin d'internet.`,
+      `🌐 Utilisez de préférence **Google Chrome** ou un navigateur de la même famille (Microsoft Edge, Opera, Opera GX, Vivaldi, Chromium, Arc, Yandex) : l'enregistrement se fait **directement dans le fichier, en un clic**. Avec les autres navigateurs (Firefox, Safari, Brave, DuckDuckGo, Tor…), le fichier fonctionne aussi, mais chaque enregistrement télécharge une nouvelle copie, à garder à la place de l'ancienne.`,
+      c.reu ? `Cliquez sur la réunion « ${c.reu.titre} », puis sur **⚙ Réglages** pour mettre votre nom et votre discipline.`
+            : `Cliquez sur **＋ Nouvelle réunion** et choisissez la date, les horaires et vos classes.`,
+      `💾 Pensez à cliquer sur **Enregistrer** : la première fois, choisissez le fichier que vous avez ouvert et acceptez de le remplacer.`,
+    ]],
+    ['p', `💡 **Bon à savoir** : chaque bouton a une bulle d'aide, et **🖨 Mini bilans** imprime ce que vous voulez dire à chaque famille, avec de la place pour noter pendant l'entretien.`],
+    ['p', `🔒 **Données personnelles** : ce fichier contient des données d'élèves. Gardez-le sur votre ordinateur professionnel et supprimez-le après la réunion.`],
+    ['p', 'Bonne réunion,' + (c.by ? '\n' + c.by : '')],
   ];
-  if (c.by) L.push(c.by);
-  return { subject, body: L.join('\n') };
+  const H = t => _esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  const P = t => t.replace(/\*\*(.+?)\*\*/g, '$1');
+  const html = blocks.map(([k, v]) => k === 'ol'
+    ? '<ol style="margin:0 0 12px;padding-left:24px">' + v.map(x => `<li style="margin:0 0 6px">${H(x)}</li>`).join('') + '</ol>'
+    : `<p style="margin:0 0 12px">${H(v)}</p>`).join('');
+  const text = blocks.map(([k, v]) => k === 'ol' ? v.map((x, i) => `${i + 1}. ${P(x)}`).join('\n') : P(v)).join('\n\n');
+  return { subject, html, text };
 }
 function _rexMailRender() {
   const c = _rexMail.ctx; if (!c) return;
   const m = _rexMailText(c);
   document.getElementById('rexm-subj').value = m.subject;
-  document.getElementById('rexm-body').value = m.body;
-  document.getElementById('rexm-intro').innerHTML = `Copie ce texte dans ta messagerie académique et <strong>joins le fichier « ${_esc(c.name)} »</strong>${c.size ? ` (${_esc(c.size)})` : ''} — il est dans ton dossier de téléchargements.`;
+  document.getElementById('rexm-body').innerHTML = m.html;
+  document.getElementById('rexm-intro').innerHTML = `Copie ce mail dans ta messagerie académique (la mise en forme est gardée) et <strong>joins le fichier « ${_esc(c.name)} »</strong>${c.size ? ` (${_esc(c.size)})` : ''} — il est dans ton dossier de téléchargements.`;
 }
 function _rexMailShow(ctx) { _rexMail.ctx = ctx; _rexMailRender(); openMod('mreumail'); }
-function _rexMailCopy(what) {
-  const v = document.getElementById(what === 'subj' ? 'rexm-subj' : 'rexm-body').value;
-  navigator.clipboard.writeText(v).then(() => toast(what === 'subj' ? '⧉ Objet copié' : '⧉ Texte du mail copié — colle-le dans ta messagerie, puis joins le fichier')).catch(() => toast('❌ Copie impossible', 'warn'));
+// Texte brut du corps tel qu'affiché (après d'éventuelles retouches) : paragraphes séparés, listes numérotées.
+function _rexMailBodyText() {
+  const el = document.getElementById('rexm-body');
+  const walk = n => [...n.childNodes].map(x => {
+    if (x.nodeType === 3) return x.textContent;
+    if (x.nodeName === 'BR') return '\n';
+    if (x.nodeName === 'OL') return [...x.children].map((li, i) => `${i + 1}. ${walk(li).trim()}`).join('\n') + '\n\n';
+    const t = walk(x);
+    return /^(P|DIV)$/.test(x.nodeName) ? t.trim() + '\n\n' : t;
+  }).join('');
+  return walk(el).replace(/\n{3,}/g, '\n\n').trim();
+}
+async function _rexMailCopy(what) {
+  if (what === 'subj') {
+    return navigator.clipboard.writeText(document.getElementById('rexm-subj').value).then(() => toast('⧉ Objet copié')).catch(() => toast('❌ Copie impossible', 'warn'));
+  }
+  const html = document.getElementById('rexm-body').innerHTML, text = _rexMailBodyText();
+  const ok = () => toast('⧉ Mail copié avec sa mise en forme — colle-le dans ta messagerie, puis joins le fichier');
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+    ok();
+  } catch (e) {
+    // Repli : sélectionner l'aperçu et copier (le navigateur garde la mise en forme).
+    try {
+      const el = document.getElementById('rexm-body'), r = document.createRange(); r.selectNodeContents(el);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      const done = document.execCommand('copy'); sel.removeAllRanges();
+      if (done) ok(); else throw e;
+    } catch (_) { navigator.clipboard.writeText(text).then(() => toast('⧉ Texte copié (sans mise en forme)')).catch(() => toast('❌ Copie impossible', 'warn')); }
+  }
 }
 function _rexMailOpen() {
-  const sj = document.getElementById('rexm-subj').value, bd = document.getElementById('rexm-body').value;
+  const sj = document.getElementById('rexm-subj').value, bd = _rexMailBodyText();
   const a = document.createElement('a'); a.href = 'mailto:?subject=' + encodeURIComponent(sj) + '&body=' + encodeURIComponent(bd);
   document.body.appendChild(a); a.click(); a.remove();
 }
