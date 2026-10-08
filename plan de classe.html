@@ -8674,11 +8674,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.2';
+const APP_VERSION    = '2.136.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T21:51:54Z';
+const APP_BUILD_DATE = '2026-10-08T21:54:53Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -28629,12 +28629,14 @@ function _rexRender() {
   document.getElementById('rex-reu').innerHTML = `<div class="reu-lvrow">${pill(!_rex.reu, `_rex.reu='';_rexRender()`, 'aucune')}${reus.map(r => pill(_rex.reu === r.id, `_rex.reu='${_escJsAttr(r.id)}';_rexRender()`, _esc(r.titre || 'Réunion') + ' — ' + _esc(_reuDateShort(r.date)))).join('')}</div>`;
   const st = _rexStudents(), n = Object.keys(st).length;
   const nph = Object.keys(st).filter(sid => _photoHas(sid)).length;
-  const kb = 30 + (_rex.photos ? nph * 22 : 0);
+  const kb = 30 + (_rex.photos ? nph * 14 : 0);
   document.getElementById('rex-sum').innerHTML = `<b>Réunion parents – ${_esc(_rexTitle())}.html</b>
     <div class="reu-mt">${n} élève${n > 1 ? 's' : ''} · ${_rex.cls.size} classe${_rex.cls.size > 1 ? 's' : ''} · ${_rex.photos ? (_photos.ready ? `${nph} photo${nph > 1 ? 's' : ''}` : 'photos lues dans ton dossier de sauvegarde à la création') : 'sans photos'} · ≈ ${kb >= 1000 ? (kb / 1000).toFixed(1).replace('.', ',') + ' Mo' : kb + ' Ko'}</div>`;
   document.getElementById('rex-go').disabled = !n;
 }
-// Photo ramenée à 300 × 300 au plus (jamais agrandie), en JPEG dans le fichier.
+// Photo ramenée à 300 × 300 au plus (jamais agrandie), en WebP qualité 0,8 dans le fichier (v2.136.3 :
+// ~38 % de moins que le JPEG 0,85 mesuré sur des photos réelles). Un navigateur qui ne sait pas ENCODER
+// le WebP (Safari) renvoie un PNG, bien plus lourd : on retombe alors sur le JPEG 0,85.
 async function _rexPhoto(url) {
   const img = new Image();
   img.src = url;
@@ -28643,7 +28645,8 @@ async function _rexPhoto(url) {
   const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-  return cv.toDataURL('image/jpeg', 0.85);
+  const webp = cv.toDataURL('image/webp', 0.8);
+  return webp.startsWith('data:image/webp') ? webp : cv.toDataURL('image/jpeg', 0.85);
 }
 // ⚠️ Même assemblage que buildHTML() dans le code du fichier autonome : à garder identiques.
 function _rexHTML(data, title) {
