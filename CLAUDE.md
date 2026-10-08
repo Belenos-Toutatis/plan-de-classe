@@ -2020,6 +2020,13 @@ Quand actif (`_planCstrMode`), `renderTeacherGrid` route le rendu des cellules v
 
 ⚠️ Le ressenti tactile (Surface/iPad) reste à valider sur l'appareil ; la logique (clic, glisser-paire, peinture, annulation) est vérifiée via Pointer Events synthétiques dans l'aperçu desktop.
 
+## Mélanger tout — refonte v2.124.0 (maquette validée le 2026-10-08) — remplace la description ci-dessous là où elle diffère
+- **Le tirage est calculé sans être appliqué** : **`_computeRandomPlacement(cls, opts)`** (extrait de `_runRandomPlacement`) fait les 30 essais puis **remet l'état de la classe tel quel** et renvoie `{ seating, aeshSeating, violations, toPlace }`. `_runRandomPlacement(opts, afterUndo, preset)` applique `preset` s'il est fourni (sinon calcule) — « Placer les non placés » et les autres appelants sont inchangés.
+- Fenêtre en deux colonnes. **Réglages** : interrupteurs `sw-chk` (remplir d'avant en arrière, garder l'AESH, placer les hors inclusion), **cartes illustrées** par taille de rangée (`.shf-card`, aperçu ■□ de `_spacingPreview`, deux aperçus pour intérieur / extérieur), îlots en `.ip-seg` ; ligne « Toujours respectés » chiffrée (paires, places autorisées, zones). Tout changement redessine l'aperçu (`_shufSet`, `_shufSetSpacing`). Les anciens `<select>` et `_updateSpacingPreview` / `_renderIlotPreview` / `_updateIlotPreview` ont été supprimés.
+- **Aperçu** `#mshuffle-preview` (`_shufDraw`, `_shufRenderPreview`) : plan en vue prof (tableau en bas) avec les **prénoms**, AESH en rose, allées hachurées ; bilan « ✓ aucune contrainte enfreinte · N élèves changent de place » ; **🎲 Autre tirage**. **Épingles** : clic sur un élève de l'aperçu → `_shufPins[sid] = key`, il garde cette place aux tirages suivants (`opts.pinned`, posé comme seating de départ, l'élève sort de la liste à placer) ; « Retirer les épingles ».
+- **« ✓ Appliquer ce plan »** (`confirmShuffle`) applique **exactement** le tirage affiché (`_shufPreview` passé en `preset`), après l'instantané automatique ; mémorise les réglages pour la salle comme avant.
+- Audit : 0 écart en clair et en sombre ; 363 px à 375. Testé : épingle conservée sur 5 tirages, plan appliqué identique à l'aperçu, Ctrl+Z.
+
 ## Mélange aléatoire — modale "🔀 Mélanger tout" (`mshuffle`)
 
 Remplace le simple `confirm()` historique. Permet d'ajuster les **règles de répartition spatiale** avant placement, sans toucher aux contraintes (toujours respectées en arrière-plan).
