@@ -7981,10 +7981,12 @@ textarea{width:100%;resize:vertical}
 .pm{font-size:.85em;margin-left:4px}
 #pp{position:fixed;z-index:450;pointer-events:none;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.25);text-align:center;font-size:.85em;color:var(--ink)}
 #pp img{display:block;width:220px;height:220px;object-fit:cover;border-radius:7px;margin-bottom:4px}
+#pp .ptip{max-width:220px;margin-top:4px;color:var(--pencil);font-size:.92em;line-height:1.3}
+#tip{position:fixed;z-index:470;pointer-events:none;max-width:300px;background:var(--ink-blue);color:var(--paper);padding:6px 10px;border-radius:7px;font-size:.85em;line-height:1.35;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:pre-line}
 button:disabled{opacity:.45;cursor:default}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink-blue);color:var(--paper);padding:8px 14px;border-radius:8px;z-index:600;font-size:.9em;max-width:90vw}
 #pa{display:none}
-@media print{body{background:#fff}#app,.mo,.menu,.toast,#pp{display:none!important}#pa{display:block!important}}
+@media print{html,body{width:auto!important;min-width:0!important;margin:0!important;background:#fff}#app,.mo,.menu,.toast,#pp,#tip{display:none!important}#pa{display:block!important;padding:0 1.5mm!important}}
 </script>
 <script type="text/plain" id="rdv-standalone-js">// Fichier de prise de rendez-vous parents-professeurs — généré par « Plan de classe ».
 // Autonome : élèves (nom, prénom, classe, photo), réunions, feuille imprimée. L'enregistrement
@@ -8084,7 +8086,7 @@ function render() {
   closeMenu();
   if (!cur()) { V.id = null; V.view = 'list'; }
   var b = '';
-  try { var k = JSON.parse(localStorage.getItem(BK) || 'null'); if (k && k.ts > (D.savedAt || 0) && !dirty && JSON.stringify(k.reunions) !== JSON.stringify(D.reunions)) b = '<div class="banner">Ce navigateur garde une version plus récente, non enregistrée dans le fichier (' + _esc(new Date(k.ts).toLocaleString('fr-FR')) + ').<button data-a="restore">Reprendre</button><button data-a="dropbk">Ignorer</button></div>'; } catch (e) {}
+  try { var k = JSON.parse(localStorage.getItem(BK) || 'null'); if (k && k.ts > (D.savedAt || 0) && !dirty && JSON.stringify(k.reunions) !== JSON.stringify(D.reunions)) b = '<div class="banner">Ce navigateur garde une version plus récente, non enregistrée dans le fichier (' + _esc(new Date(k.ts).toLocaleString('fr-FR')) + ').<button data-a="restore" title="Reprendre les modifications que ce navigateur a gardées (elles n\'avaient pas été enregistrées dans le fichier)">Reprendre</button><button data-a="dropbk" title="Oublier cette version et garder celle qui est enregistrée dans le fichier">Ignorer</button></div>'; } catch (e) {}
   app.innerHTML = '<div class="top" id="top"></div>' + b + '<div id="main"></div>';
   renderTop();
   var m = document.getElementById('main');
@@ -8096,20 +8098,20 @@ function listHTML() {
   var all = Object.values(D.reunions), td = today();
   var card = function (r) {
     var n = booked(r), nb = Object.values(r.slots || {}).length, isT = r.date === td;
-    return '<div class="card" data-a="open" data-id="' + _escAttr(r.id) + '"><b>' + _esc(r.titre || 'Réunion') + '</b>' + (isT ? '<span class="badge">ce soir</span>' : '')
+    return '<div class="card" data-a="open" data-id="' + _escAttr(r.id) + '" title="Ouvrir cette réunion pour prendre les rendez-vous"><b>' + _esc(r.titre || 'Réunion') + '</b>' + (isT ? '<span class="badge">ce soir</span>' : '')
       + '<div class="mt">' + _esc(dateLong(r.date) || 'date à choisir') + ' · ' + _esc(fmt(r.first)) + ' – ' + _esc(fmt(r.last)) + ' · ' + r.step + ' min</div>'
       + '<div class="mt">' + (r.prof ? _esc(r.prof) + ' · ' : '') + (r.discipline ? _esc(r.discipline) + ' · ' : '') + nb + ' rendez-vous (' + n.size + ' élève' + (n.size > 1 ? 's' : '') + ')</div></div>';
   };
   var up = all.filter(function (r) { return (r.date || '9999') >= td; }).sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
   var past = all.filter(function (r) { return (r.date || '9999') < td; }).sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
-  var h = '<div class="cards">' + up.map(card).join('') + '<div class="card new" data-a="new">＋ Nouvelle réunion</div></div>';
+  var h = '<div class="cards">' + up.map(card).join('') + '<div class="card new" data-a="new" title="Créer une nouvelle réunion : date, horaires, durée des rendez-vous, classes">＋ Nouvelle réunion</div></div>';
   if (past.length) h += '<div class="gh">Réunions passées</div><div class="cards">' + past.map(card).join('') + '</div>';
   if (!all.length) h += '<p class="mt">Crée ta réunion : date, horaires, durée des rendez-vous, classes. La feuille s\'imprime ensuite au format de l\'établissement (et s\'enregistre en PDF depuis la fenêtre d\'impression).</p>';
   return h;
 }
 function slotHTML(r, t, ts) {
   var st = slotState(r, t, ts), s = r.slots[t];
-  if (V.edit === t) return '<div class="sl edit" data-t="' + t + '"><span class="t">' + fmt(t) + '</span><span class="sp"><input id="ed" type="text" autocomplete="off" placeholder="2 ou 3 lettres du nom ou du prénom, puis Entrée"><div id="ac" class="ac" hidden></div></span><span></span></div>';
+  if (V.edit === t) return '<div class="sl edit" data-t="' + t + '"><span class="t">' + fmt(t) + '</span><span class="sp"><input id="ed" type="text" autocomplete="off" title="Tape le début du nom ou du prénom, puis Entrée pour donner ce créneau (Échap pour arrêter)" placeholder="2 ou 3 lettres du nom ou du prénom, puis Entrée"><div id="ac" class="ac" hidden></div></span><span></span></div>';
   var inner = st === 'pause' ? 'pause' : st === 'free' ? 'libre'
     : (st === 'suite' ? '↳ ' : '') + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + '</span>' + (st === 'suite' ? ' <span class="cls">(suite)</span>' : '') + (st === 'booked' && bil(r, s.sid) ? ' <span class="pm" title="Mini bilan préparé">✍</span>' : '') + (s.note ? ' 📝' : '');
   var x = (st === 'booked' || st === 'suite') ? '<button class="x" data-a="free" data-t="' + t + '" title="Libérer ce créneau" aria-label="Libérer ce créneau">✕</button>' : '';
@@ -8121,20 +8123,21 @@ function prepHTML(r) {
   var free = ts.filter(function (t) { return slotState(r, t, ts) === 'free'; }).length;
   var col = function (a) { return '<div>' + a.map(function (t) { return slotHTML(r, t, ts); }).join('') + '</div>'; };
   return '<div class="hd" style="margin-bottom:4px"><h2>' + _esc(r.titre) + '</h2><span class="mt">' + _esc(dateLong(r.date)) + ' · ' + _esc(fmt(r.first)) + ' – ' + _esc(fmt(r.last)) + ' · rendez-vous de ' + r.step + ' min</span>'
-    + '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button data-a="list">↩ Réunions</button><button data-a="settings">⚙ Réglages</button><button data-a="bilall" title="Écrire, élève par élève dans l\'ordre des rendez-vous, ce que je veux dire aux parents">✍ Préparer les entretiens</button>'
-    + '<button data-a="print" data-m="filled" title="Feuille remplie (Ctrl+P)">🖨 Feuille</button><button data-a="print" data-m="alpha">🖨 + liste alphabétique</button><button data-a="print" data-m="blank">🖨 Vierge</button>'
-    + '<button class="' + (r.date === today() ? 'p' : '') + '" data-a="view" data-v="soir">▶ Ce soir</button></span></div>'
+    + '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button data-a="list" title="Revenir à la liste de tes réunions">↩ Réunions</button><button data-a="settings" title="Modifier la date, les horaires, la durée des rendez-vous, les classes, ton nom et ta discipline">⚙ Réglages</button><button data-a="bilall" title="Écrire, élève par élève dans l\'ordre des rendez-vous, ce que je veux dire aux parents">✍ Préparer les entretiens</button>'
+    + '<button data-a="print" data-m="filled" title="Imprimer la feuille de rendez-vous remplie (ou l\'enregistrer en PDF dans la fenêtre d\'impression) — Ctrl+P">🖨 Feuille</button><button data-a="print" data-m="alpha" title="Imprimer la feuille remplie, plus une page avec les élèves par ordre alphabétique et leur heure de rendez-vous">🖨 + liste alphabétique</button><button data-a="print" data-m="blank" title="Imprimer la feuille sans aucun nom, pour la remplir à la main">🖨 Vierge</button>'
+    + '<button data-a="printbil" title="Imprimer, dans l\'ordre des rendez-vous, ce que tu veux dire à chaque famille, avec de la place pour écrire à la main pendant l\'entretien — pratique si tu n\'as pas d\'ordinateur le soir de la réunion">🖨 Mini bilans</button>'
+    + '<button class="' + (r.date === today() ? 'p' : '') + '" data-a="view" data-v="soir" title="Le soir de la réunion : les rendez-vous dans l\'ordre, ce que tu veux dire et la note d\'entretien de chaque famille">▶ Ce soir</button></span></div>'
     + '<div class="mt" style="margin-bottom:8px">' + (r.prof ? 'Professeur : ' + _esc(r.prof) + ' · ' : '') + (r.discipline ? _esc(r.discipline) + ' · ' : '') + nb + ' rendez-vous · ' + free + ' créneau' + (free > 1 ? 'x' : '') + ' libre' + (free > 1 ? 's' : '') + '</div>'
     + '<div class="prep"><div><div class="grid">' + col(ts.slice(0, half)) + col(ts.slice(half)) + '</div>'
     + '<p class="help">Clic sur un créneau libre : tape 2 ou 3 lettres puis Entrée — le créneau libre suivant s\'ouvre aussitôt (Entrée sur un champ vide = le laisser libre, Échap = arrêter). On peut aussi glisser un élève, ou cliquer sur son nom à droite pour le premier créneau libre. Clic sur un rendez-vous : noter ce que je veux dire aux parents (✍). Clic droit sur un créneau : pause, libérer. Fratrie ou entretien long : l\'élève sur deux créneaux qui se suivent.</p></div>'
-    + '<div class="side"><input id="q" type="search" placeholder="Chercher un élève" value="' + _escAttr(V.q) + '"><div id="sf" style="margin:6px 0"></div><div id="slist"></div></div></div>';
+    + '<div class="side"><input id="q" type="search" title="Tape le début d\'un nom ou d\'un prénom pour trouver un élève" placeholder="Chercher un élève" value="' + _escAttr(V.q) + '"><div id="sf" style="margin:6px 0"></div><div id="slist"></div></div></div>';
 }
 function renderSide() {
   var r = cur(), fEl = document.getElementById('sf'), lEl = document.getElementById('slist'); if (!r || !fEl || !lEl) return;
   var b = booked(r), all = sids(r), cs = D.classes.filter(function (c) { return (r.classIds || []).indexOf(c.id) >= 0; });
   if (V.f !== 'all' && !cs.some(function (c) { return c.id === V.f; })) V.f = 'all';
   var inCls = function (s) { return V.f === 'all' || stu(s).cls === V.f; };
-  var btn = function (v, l) { return '<button class="' + (V.f === v ? 'on' : '') + '" data-a="f" data-v="' + _escAttr(v) + '">' + l + '</button>'; };
+  var btn = function (v, l) { return '<button class="' + (V.f === v ? 'on' : '') + '" data-a="f" data-v="' + _escAttr(v) + '" title="' + (v === 'all' ? 'Afficher les élèves de toutes les classes' : 'N\'afficher que les élèves de ' + l) + '">' + l + '</button>'; };
   fEl.className = 'sf';
   fEl.innerHTML = (cs.length > 1 ? '<span class="seg">' + btn('all', 'Toutes') + cs.map(function (c) { return btn(c.id, _esc(c.nom)); }).join('') + '</span>' : '')
     + '<button class="tog' + (V.none ? ' on' : '') + '" data-a="none" aria-pressed="' + (V.none ? 'true' : 'false') + '" title="Ne montrer que les élèves sans rendez-vous — se cumule avec la classe choisie">Sans rendez-vous ' + all.filter(function (s) { return inCls(s) && !b.has(s); }).length + '</button>';
@@ -8160,7 +8163,7 @@ function acRender() {
   var m = matches(r, inp.value), b = booked(r);
   V.acIdx = Math.max(0, Math.min(V.acIdx, m.length - 1));
   ac.hidden = false;
-  ac.innerHTML = m.length ? m.map(function (sid, i) { return '<div class="' + (i === V.acIdx ? 'on' : '') + '" data-pick="' + _escAttr(sid) + '" data-psid="' + _escAttr(sid) + '">' + avatar(sid) + '<span>' + nameHTML(sid) + ' <span class="cls">' + _esc(stuCls(sid)) + (b.has(sid) ? ' · déjà ' + b.get(sid).map(fmt).join(', ') : '') + '</span></span></div>'; }).join('') : '<div class="mt">Aucun élève ne correspond</div>';
+  ac.innerHTML = m.length ? m.map(function (sid, i) { return '<div class="' + (i === V.acIdx ? 'on' : '') + '" data-pick="' + _escAttr(sid) + '" data-psid="' + _escAttr(sid) + '" title="Clic (ou Entrée) : donner ce créneau à cet élève">' + avatar(sid) + '<span>' + nameHTML(sid) + ' <span class="cls">' + _esc(stuCls(sid)) + (b.has(sid) ? ' · déjà ' + b.get(sid).map(fmt).join(', ') : '') + '</span></span></div>'; }).join('') : '<div class="mt">Aucun élève ne correspond</div>';
 }
 
 // ── Réserver (avec avertissement pour un deuxième rendez-vous)
@@ -8174,7 +8177,7 @@ function book(r, t, sid, then, cancel) {
 }
 function confirmBox(title, msg, ok, onOk, onCancel) {
   var m = document.createElement('div'); m.className = 'mo';
-  m.innerHTML = '<div class="mb" style="max-width:460px" role="dialog" aria-modal="true"><h2>' + _esc(title) + '</h2><p style="white-space:pre-line">' + _esc(msg) + '</p><div class="foot"><span></span><span><button data-c="0">Annuler</button> <button class="p" data-c="1">' + _esc(ok) + '</button></span></div></div>';
+  m.innerHTML = '<div class="mb" style="max-width:460px" role="dialog" aria-modal="true"><h2>' + _esc(title) + '</h2><p style="white-space:pre-line">' + _esc(msg) + '</p><div class="foot"><span></span><span><button data-c="0" title="Ne rien changer (Échap)">Annuler</button> <button class="p" data-c="1" title="Confirmer (Entrée)">' + _esc(ok) + '</button></span></div></div>';
   document.body.appendChild(m);
   var done = function (v) { m.remove(); document.removeEventListener('keydown', key, true); if (v) onOk(); else if (onCancel) onCancel(); };
   var key = function (e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
@@ -8203,10 +8206,10 @@ function bilanBox(sid) {
   var m = document.createElement('div'); m.className = 'mo'; bilOpen = m; m._sid = sid;
   var draw = function () {
     var cs = m._sid, ts = booked(r).get(cs) || [], i = ord.indexOf(cs);
-    m.innerHTML = '<div class="mb" style="max-width:620px" role="dialog" aria-modal="true" aria-label="Ce que je veux dire"><div class="hd"><span data-psid="' + _escAttr(cs) + '">' + avatar(cs, true) + '</span><div style="flex:1;min-width:0"><div class="dname">' + nameHTML(cs) + '</div><div class="mt">' + _esc(stuCls(cs)) + ' · rendez-vous ' + ts.map(fmt).join(' et ') + ' · ' + (i + 1) + ' / ' + ord.length + '</div></div><button data-k="close" aria-label="Fermer">✕</button></div>'
-      + '<div class="gh">Ce que je veux dire aux parents</div><textarea id="bilm" rows="8" maxlength="2000" placeholder="Points forts, difficultés, conseils, ce que j\'attends…">' + _esc((r.bilans || {})[cs] || '') + '</textarea>'
+    m.innerHTML = '<div class="mb" style="max-width:620px" role="dialog" aria-modal="true" aria-label="Ce que je veux dire"><div class="hd"><span data-psid="' + _escAttr(cs) + '">' + avatar(cs, true) + '</span><div style="flex:1;min-width:0"><div class="dname">' + nameHTML(cs) + '</div><div class="mt">' + _esc(stuCls(cs)) + ' · rendez-vous ' + ts.map(fmt).join(' et ') + ' · ' + (i + 1) + ' / ' + ord.length + '</div></div><button data-k="close" aria-label="Fermer" title="Fermer — ce que tu as écrit est déjà gardé">✕</button></div>'
+      + '<div class="gh">Ce que je veux dire aux parents</div><textarea id="bilm" rows="8" maxlength="2000" title="Ce que tu veux dire aux parents de cet élève — gardé au fil de la frappe" placeholder="Points forts, difficultés, conseils, ce que j\'attends…">' + _esc((r.bilans || {})[cs] || '') + '</textarea>'
       + '<p class="help">Enregistré au fil de la frappe (pense à 💾 Enregistrer le fichier). Relu et modifiable dans « Ce soir ». <span id="bilc">' + bilCount() + '</span></p>'
-      + '<div class="foot"><span><button data-k="prev"' + (i > 0 ? '' : ' disabled') + '>◀ Précédent</button> <button data-k="next"' + (i < ord.length - 1 ? '' : ' disabled') + '>Suivant ▶</button></span><span><button data-k="empty" title="Élève suivant dont le mini bilan est vide">Suivant sans mini bilan ⏭</button> <button class="p" data-k="close">✓ Terminé</button></span></div></div>';
+      + '<div class="foot"><span><button data-k="prev"' + (i > 0 ? '' : ' disabled') + ' title="Élève du rendez-vous précédent">◀ Précédent</button> <button data-k="next"' + (i < ord.length - 1 ? '' : ' disabled') + ' title="Élève du rendez-vous suivant">Suivant ▶</button></span><span><button data-k="empty" title="Élève suivant dont le mini bilan est vide">Suivant sans mini bilan ⏭</button> <button class="p" data-k="close" title="Fermer cette fenêtre — ce que tu as écrit est déjà gardé (pense à 💾 Enregistrer le fichier)">✓ Terminé</button></span></div></div>';
     var ta = m.querySelector('#bilm'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   };
   var bilCount = function () { var n = ord.filter(function (x) { return bil(r, x); }).length; return n + ' élève' + (n > 1 ? 's' : '') + ' préparé' + (n > 1 ? 's' : '') + ' sur ' + ord.length + '.'; };
@@ -8241,7 +8244,9 @@ function photoPop(e) {
   var sid = el && el.getAttribute('data-psid'), ph = sid && D.photos && D.photos[sid];
   if (!ph || drag) { if (pp) pp.remove(); return; }
   if (!pp) { pp = document.createElement('div'); pp.id = 'pp'; document.body.appendChild(pp); }
-  if (pp._sid !== sid) { pp._sid = sid; pp.innerHTML = '<img src="' + _escAttr(ph) + '" alt=""><div>' + nameHTML(sid) + '</div><div class="mt">' + _esc(stuCls(sid)) + '</div>'; }
+  if (el.hasAttribute('title')) { el.setAttribute('data-tip', el.getAttribute('title')); el.removeAttribute('title'); }
+  var tt = el.getAttribute('data-tip') || '';
+  if (pp._sid !== sid || pp._tt !== tt) { pp._sid = sid; pp._tt = tt; pp.innerHTML = '<img src="' + _escAttr(ph) + '" alt=""><div>' + nameHTML(sid) + '</div><div class="mt">' + _esc(stuCls(sid)) + '</div>' + (tt ? '<div class="ptip">' + _esc(tt) + '</div>' : ''); }
   var w = pp.offsetWidth, h = pp.offsetHeight, x = e.clientX + 18, y = e.clientY + 14;
   if (x + w > innerWidth - 8) x = e.clientX - w - 18;
   if (y + h > innerHeight - 8) y = innerHeight - h - 8;
@@ -8251,7 +8256,32 @@ document.addEventListener('mousemove', photoPop);
 document.documentElement.addEventListener('mouseleave', function () { var pp = document.getElementById('pp'); if (pp) pp.remove(); });
 document.addEventListener('mousedown', function () { var pp = document.getElementById('pp'); if (pp) pp.remove(); }, true);
 
+// ── Bulles d'aide : chaque bouton porte un title ; on l'affiche dans une bulle plus lisible
+var tipEl = null, tipTimer = null, tipFor = null;
+function hideTip() { clearTimeout(tipTimer); tipTimer = null; tipFor = null; if (tipEl) { tipEl.remove(); tipEl = null; } }
+document.addEventListener('mouseover', function (e) {
+  var el = e.target && e.target.closest ? e.target.closest('[title],[data-tip]') : null;
+  if (el === tipFor) return;
+  hideTip(); if (!el) return;
+  if (el.hasAttribute('title')) { el.setAttribute('data-tip', el.getAttribute('title')); el.removeAttribute('title'); }
+  var txt = el.getAttribute('data-tip'); if (!txt) return;
+  var ps = el.getAttribute('data-psid'); if (ps && D.photos && D.photos[ps]) return; // déjà dans la bulle de la photo
+  tipFor = el;
+  tipTimer = setTimeout(function () {
+    if (!tipFor || !document.body.contains(tipFor) || drag) return;
+    tipEl = document.createElement('div'); tipEl.id = 'tip'; tipEl.setAttribute('role', 'tooltip'); tipEl.textContent = txt; document.body.appendChild(tipEl);
+    var b = tipFor.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    var x = Math.min(Math.max(8, b.left + b.width / 2 - w / 2), innerWidth - w - 8), y = b.bottom + 8;
+    if (y + h > innerHeight - 8) y = b.top - h - 8;
+    tipEl.style.left = x + 'px'; tipEl.style.top = Math.max(8, y) + 'px';
+  }, 350);
+});
+document.addEventListener('mousedown', hideTip, true);
+document.addEventListener('keydown', hideTip, true);
+document.documentElement.addEventListener('mouseleave', hideTip);
+
 // ── Menu du clic droit
+var MENU_TIPS = { edit: 'Taper le nom de l\'élève à qui donner ce créneau', pause: 'Faire de ce créneau une pause : personne ne pourra le prendre', 'pause-off': 'Rendre ce créneau à nouveau libre', bil: 'Écrire ce que tu veux dire aux parents de cet élève', soir: 'Voir ce rendez-vous dans la vue du soir', free: 'Retirer l\'élève de ce créneau, qui redevient libre' };
 function closeMenu() { var m = document.getElementById('menu'); if (m) m.remove(); }
 function slotMenu(e, t) {
   e.preventDefault(); closeMenu();
@@ -8260,7 +8290,7 @@ function slotMenu(e, t) {
   else if (st === 'pause') items.push(['pause', '↺ Retirer la pause']);
   else items.push(['bil', '✍ Ce que je veux dire'], ['soir', '▶ Ouvrir dans « Ce soir »'], ['free', '✕ Libérer le créneau']);
   var m = document.createElement('div'); m.id = 'menu'; m.className = 'menu';
-  m.innerHTML = '<div class="mt" style="padding:2px 10px">' + fmt(t) + '</div>' + items.map(function (x) { return '<button data-m="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+  m.innerHTML = '<div class="mt" style="padding:2px 10px">' + fmt(t) + '</div>' + items.map(function (x) { return '<button data-m="' + x[0] + '" title="' + _escAttr(MENU_TIPS[x[0] + (x[0] === 'pause' && st === 'pause' ? '-off' : '')] || '') + '">' + x[1] + '</button>'; }).join('');
   document.body.appendChild(m);
   m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + 'px';
   m.addEventListener('click', function (ev) { var b = ev.target.closest('[data-m]'); if (!b) return; var k = b.getAttribute('data-m'); closeMenu();
@@ -8279,20 +8309,21 @@ function soirHTML(r) {
     if (!s || !stu(s.sid)) return '<div class="row mini' + (isNow ? ' now' : '') + '"><span class="t">' + fmt(t) + '</span><span>' + ((r.pauses || []).indexOf(t) >= 0 ? 'pause' : 'libre') + '</span></div>';
     var suite = i > 0 && r.slots[ts[i - 1]] && r.slots[ts[i - 1]].sid === s.sid;
     var ic = s.st === 'vu' ? '<span class="ok-t">✓</span>' : s.st === 'absent' ? '<span class="ab-t">✗</span>' : s.note ? '📝' : '';
-    return '<div class="row' + (t === V.cur ? ' sel' : '') + (isNow ? ' now' : '') + '" data-a="sel" data-t="' + t + '" data-psid="' + _escAttr(s.sid) + '"><span class="t">' + fmt(t) + '</span>' + (suite ? '<span class="t">↳</span>' : avatar(s.sid)) + '<span>' + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + (suite ? ' (suite)' : '') + '</span></span>' + ic + '</div>';
+    return '<div class="row' + (t === V.cur ? ' sel' : '') + (isNow ? ' now' : '') + '" data-a="sel" data-t="' + t + '" data-psid="' + _escAttr(s.sid) + '" title="Clic : afficher ce rendez-vous à droite"><span class="t">' + fmt(t) + '</span>' + (suite ? '<span class="t">↳</span>' : avatar(s.sid)) + '<span>' + nameHTML(s.sid) + ' <span class="cls">' + _esc(stuCls(s.sid)) + (suite ? ' (suite)' : '') + '</span></span>' + ic + '</div>';
   }).join('');
   var det = '<p class="mt">Aucun rendez-vous pour l\'instant.</p>';
   var s = V.cur && r.slots[V.cur];
   if (s) {
     var mine = Object.keys(r.slots).filter(function (k) { return r.slots[k].sid === s.sid; }).sort();
-    var stb = function (v, l) { return '<button class="' + ((s.st || '') === v ? 'on' : '') + '" data-a="st" data-v="' + v + '">' + l + '</button>'; };
+    var STT = { '': 'Ce rendez-vous n\'a pas encore eu lieu', vu: 'Les parents sont venus', absent: 'Les parents ne sont pas venus' };
+    var stb = function (v, l) { return '<button class="' + ((s.st || '') === v ? 'on' : '') + '" data-a="st" data-v="' + v + '" title="' + STT[v] + '">' + l + '</button>'; };
     det = '<div class="hd"><span data-psid="' + _escAttr(s.sid) + '">' + avatar(s.sid, true) + '</span><div style="flex:1;min-width:0"><div class="dname">' + nameHTML(s.sid) + '</div><div class="mt">' + _esc(stuCls(s.sid)) + ' · rendez-vous ' + mine.map(fmt).join(' et ') + '</div></div>'
-      + '<span><button data-a="nav" data-v="-1" aria-label="Rendez-vous précédent">◀</button> <button data-a="nav" data-v="1" aria-label="Rendez-vous suivant">▶</button></span></div>'
-      + '<div class="gh">Ce que je veux dire</div><textarea id="bil" data-sid="' + _escAttr(s.sid) + '" rows="3" maxlength="2000" placeholder="Préparé avant la réunion (clic sur un rendez-vous de la grille)">' + _esc((r.bilans || {})[s.sid] || '') + '</textarea>'
-      + '<div class="gh">Note d\'entretien</div><textarea id="note" rows="6" maxlength="2000" placeholder="Qui est venu, ce qui a été dit, ce qui est convenu…">' + _esc(s.note || '') + '</textarea>'
+      + '<span><button data-a="nav" data-v="-1" aria-label="Rendez-vous précédent" title="Rendez-vous précédent">◀</button> <button data-a="nav" data-v="1" aria-label="Rendez-vous suivant" title="Rendez-vous suivant">▶</button></span></div>'
+      + '<div class="gh">Ce que je veux dire</div><textarea id="bil" title="Ce que tu as préparé pour les parents — modifiable" data-sid="' + _escAttr(s.sid) + '" rows="3" maxlength="2000" placeholder="Préparé avant la réunion (clic sur un rendez-vous de la grille)">' + _esc((r.bilans || {})[s.sid] || '') + '</textarea>'
+      + '<div class="gh">Note d\'entretien</div><textarea id="note" title="Ce qui s\'est dit pendant l\'entretien" rows="6" maxlength="2000" placeholder="Qui est venu, ce qui a été dit, ce qui est convenu…">' + _esc(s.note || '') + '</textarea>'
       + '<div class="acts"><span class="seg">' + stb('', 'À venir') + stb('vu', '✓ Vu') + stb('absent', 'Absent') + '</span></div>';
   }
-  return '<div class="hd"><h2>' + (isT ? 'Ce soir' : 'Le soir de la réunion') + ' · ' + _esc(r.titre) + '</h2><span class="mt">' + _esc(nowTxt) + '</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center"><span class="mt">' + (bk.length - vus - abs) + ' à venir · ' + vus + ' vu' + (vus > 1 ? 's' : '') + ' · ' + abs + ' absent' + (abs > 1 ? 's' : '') + '</span><button data-a="view" data-v="prep">✍ Préparer</button><button data-a="list">↩ Réunions</button></span></div>'
+  return '<div class="hd"><h2>' + (isT ? 'Ce soir' : 'Le soir de la réunion') + ' · ' + _esc(r.titre) + '</h2><span class="mt">' + _esc(nowTxt) + '</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center"><span class="mt">' + (bk.length - vus - abs) + ' à venir · ' + vus + ' vu' + (vus > 1 ? 's' : '') + ' · ' + abs + ' absent' + (abs > 1 ? 's' : '') + '</span><button data-a="printbil" title="Imprimer ce que tu veux dire à chaque famille, dans l\'ordre des rendez-vous, avec de la place pour écrire à la main">🖨 Mini bilans</button><button data-a="view" data-v="prep" title="Revenir à la grille des créneaux">✍ Préparer</button><button data-a="list" title="Revenir à la liste de tes réunions">↩ Réunions</button></span></div>'
     + '<div class="soir"><div class="slist">' + rows + '</div><div class="det">' + det + '</div></div>';
 }
 
@@ -8304,19 +8335,19 @@ function settings(id) {
   var m = document.createElement('div'); m.className = 'mo';
   var draw = function () {
     var ts = times({ first: F.first, last: F.last, step: F.step });
-    m.innerHTML = '<div class="mb" role="dialog" aria-modal="true"><div class="hd"><h2>' + (r ? 'Réglages de la réunion' : 'Nouvelle réunion parents-professeurs') + '</h2><span style="margin-left:auto"></span><button data-k="cancel" aria-label="Fermer">✕</button></div>'
-      + '<div class="cols"><div><label class="lbl">Date <input type="date" data-f="date" value="' + _escAttr(F.date) + '"></label>'
-      + '<div style="display:flex;gap:10px"><label class="lbl" style="flex:1">Premier rendez-vous <input type="time" data-f="first" value="' + _escAttr(F.first) + '"></label><label class="lbl" style="flex:1">Dernier rendez-vous <input type="time" data-f="last" value="' + _escAttr(F.last) + '"></label></div>'
-      + '<span class="lbl">Durée d\'un rendez-vous</span>' + [5, 10, 15].map(function (n) { return '<button class="chip' + (F.step === n ? ' on' : '') + '" data-step="' + n + '">' + n + ' min</button>'; }).join('') + ' <input type="number" min="2" max="60" data-f="step" value="' + F.step + '" style="width:70px"> min'
+    m.innerHTML = '<div class="mb" role="dialog" aria-modal="true"><div class="hd"><h2>' + (r ? 'Réglages de la réunion' : 'Nouvelle réunion parents-professeurs') + '</h2><span style="margin-left:auto"></span><button data-k="cancel" aria-label="Fermer" title="Fermer sans rien changer">✕</button></div>'
+      + '<div class="cols"><div><label class="lbl">Date <input type="date" title="Jour de la réunion" data-f="date" value="' + _escAttr(F.date) + '"></label>'
+      + '<div style="display:flex;gap:10px"><label class="lbl" style="flex:1">Premier rendez-vous <input type="time" title="Heure du tout premier rendez-vous" data-f="first" value="' + _escAttr(F.first) + '"></label><label class="lbl" style="flex:1">Dernier rendez-vous <input type="time" title="Heure à laquelle commence le dernier rendez-vous" data-f="last" value="' + _escAttr(F.last) + '"></label></div>'
+      + '<span class="lbl">Durée d\'un rendez-vous</span>' + [5, 10, 15].map(function (n) { return '<button class="chip' + (F.step === n ? ' on' : '') + '" data-step="' + n + '" title="Chaque rendez-vous dure ' + n + ' minutes">' + n + ' min</button>'; }).join('') + ' <input type="number" min="2" max="60" title="Autre durée, en minutes (de 2 à 60)" data-f="step" value="' + F.step + '" style="width:70px"> min'
       + '<p class="mt">' + (ts.length ? ts.length + ' créneaux de ' + F.step + ' min, de ' + fmt(ts[0]) + ' à ' + fmt(ts[ts.length - 1]) + ' — la feuille aura ' + Math.ceil(ts.length / 2) + ' lignes sur deux colonnes.' : '⚠ Le dernier rendez-vous doit commencer après le premier.') + '</p></div>'
       + '<div><span class="lbl">Classes concernées <span class="mt">— clic sur un niveau : toutes ses classes</span></span>' + levels().map(function (n) {
           var cs = D.classes.filter(function (c) { return c.lvl === n; }), k = cs.filter(function (c) { return F.cls.indexOf(c.id) >= 0; }).length;
-          return '<div class="lvrow"><button class="chip lv' + (k === cs.length ? ' on' : k ? ' part' : '') + '" data-lvl="' + n + '" title="Cocher ou décocher toutes les classes de ce niveau">' + _esc(lvlName(n)) + '</button>' + cs.map(function (c) { return '<button class="chip' + (F.cls.indexOf(c.id) >= 0 ? ' on' : '') + '" data-cls="' + _escAttr(c.id) + '">' + _esc(c.nom) + '</button>'; }).join('') + '</div>';
+          return '<div class="lvrow"><button class="chip lv' + (k === cs.length ? ' on' : k ? ' part' : '') + '" data-lvl="' + n + '" title="Cocher ou décocher toutes les classes de ce niveau">' + _esc(lvlName(n)) + '</button>' + cs.map(function (c) { return '<button class="chip' + (F.cls.indexOf(c.id) >= 0 ? ' on' : '') + '" data-cls="' + _escAttr(c.id) + '" title="Cocher ou décocher la classe ' + _escAttr(c.nom) + '">' + _esc(c.nom) + '</button>'; }).join('') + '</div>';
         }).join('')
-      + '<label class="lbl">Titre de la feuille <input type="text" data-f="titre" maxlength="80" placeholder="' + _escAttr(autoTitle(F.cls)) + ' (automatique)" value="' + _escAttr(F.titre) + '"></label>'
-      + '<label class="lbl">Professeur <input type="text" data-f="prof" maxlength="80" placeholder="ton nom, tel qu\'il doit apparaître sur la feuille" value="' + _escAttr(F.prof) + '"></label>'
-      + '<label class="lbl">Discipline <input type="text" data-f="disc" maxlength="80" value="' + _escAttr(F.disc) + '"></label></div></div>'
-      + '<div class="foot"><span>' + (r ? '<button class="d" data-k="del">🗑 Supprimer la réunion</button>' : '') + '</span><span><button data-k="cancel">Annuler</button> <button class="p" data-k="ok">' + (r ? '✓ Enregistrer' : '✓ Créer la réunion') + '</button></span></div></div>';
+      + '<label class="lbl">Titre de la feuille <input type="text" title="Laisse vide : le titre se fait tout seul d\'après les classes (par exemple « Niveau 3ème »)" data-f="titre" maxlength="80" placeholder="' + _escAttr(autoTitle(F.cls)) + ' (automatique)" value="' + _escAttr(F.titre) + '"></label>'
+      + '<label class="lbl">Professeur <input type="text" title="Ton nom, tel qu\'il doit apparaître sur la feuille imprimée" data-f="prof" maxlength="80" placeholder="ton nom, tel qu\'il doit apparaître sur la feuille" value="' + _escAttr(F.prof) + '"></label>'
+      + '<label class="lbl">Discipline <input type="text" title="Ta matière, imprimée sur la feuille" data-f="disc" maxlength="80" value="' + _escAttr(F.disc) + '"></label></div></div>'
+      + '<div class="foot"><span>' + (r ? '<button class="d" data-k="del" title="Supprimer cette réunion et tous ses rendez-vous (Ctrl+Z pour revenir en arrière)">🗑 Supprimer la réunion</button>' : '') + '</span><span><button data-k="cancel" title="Fermer sans rien changer">Annuler</button> <button class="p" data-k="ok" title="' + (r ? 'Garder ces réglages' : 'Créer la réunion avec ces réglages') + '">' + (r ? '✓ Enregistrer' : '✓ Créer la réunion') + '</button></span></div></div>';
   };
   draw(); document.body.appendChild(m);
   var close = function () { m.remove(); };
@@ -8373,6 +8404,27 @@ function printSheet(mode) {
   setTimeout(function () { window.print(); document.title = ot; pa.innerHTML = ''; }, 100);
 }
 
+// ── Mini bilans imprimés : un cadre par élève dans l'ordre des rendez-vous, avec des lignes pour écrire
+function printBilans() {
+  var r = cur(); if (!r) return;
+  var ord = bilOrder(r); if (!ord.length) return toast('Aucun rendez-vous pour l\'instant.');
+  var b = booked(r), nb = ord.filter(function (x) { return bil(r, x); }).length;
+  var css = '<style>@page{size:A4 portrait;margin:12mm}#pa .bl{font-family:"Times New Roman",Times,serif;color:#000}#pa .bl h1{font:700 15pt "Times New Roman",Times,serif;text-align:center;margin:0 0 1mm;color:#000}#pa .bl .bsub{text-align:center;font-size:11pt;margin:0 0 5mm}#pa .be{border:1px solid #000;padding:2mm 3.5mm 2.5mm;margin:0 0 3.5mm;page-break-inside:avoid;break-inside:avoid}#pa .bh{display:flex;justify-content:space-between;gap:4mm;font-size:12.5pt;border-bottom:1px solid #000;padding-bottom:1.5mm;margin-bottom:1.5mm}#pa .bk{font-size:9pt;text-transform:uppercase;letter-spacing:.05em;margin:1.4mm 0 .6mm;color:#333}#pa .bx{font-size:11.5pt;white-space:pre-line;line-height:1.35}#pa .bv{color:#555;font-style:italic;font-size:10.5pt}#pa .bln{border-bottom:1px solid #999;height:6.8mm}</style>';
+  var sup = function (x) { return _esc(x).replace(/(\d)(ème|ère|nde|er|e)\b/g, '$1<sup>$2</sup>'); };
+  var h = css + '<div class="bl"><h1>Réunion Parents Professeurs – ' + sup(r.titre) + '</h1><div class="bsub">' + _esc(dateLong(r.date, true)) + (r.prof ? ' · ' + _esc(r.prof) : '') + (r.discipline ? ' · ' + _esc(r.discipline) : '') + ' · ' + ord.length + ' rendez-vous · ce que je veux dire</div>';
+  ord.forEach(function (sid) {
+    var ts = b.get(sid) || [], note = (r.slots[ts[0]] && r.slots[ts[0]].note || '').trim(), txt = (r.bilans || {})[sid] || '';
+    h += '<div class="be"><div class="bh"><span><b>' + ts.map(fmt).join(' et ') + '</b> · <b>' + _esc((stu(sid).nom || '').toUpperCase()) + '</b> ' + _esc(stu(sid).prenom || '') + '</span><span>' + _esc(stuCls(sid)) + '</span></div>'
+      + '<div class="bk">Ce que je veux dire</div>' + (txt.trim() ? '<div class="bx">' + _esc(txt.trim()) + '</div>' : '<div class="bv">Rien de préparé.</div>')
+      + '<div class="bk">Notes pendant l\'entretien</div>' + (note ? '<div class="bx">' + _esc(note) + '</div>' : '') + '<div class="bln"></div><div class="bln"></div><div class="bln"></div>' + (note ? '' : '<div class="bln"></div>') + '</div>';
+  });
+  h += '</div>';
+  var pa = document.getElementById('pa'); pa.innerHTML = h;
+  var ot = document.title; document.title = ('RDV parents - mini bilans - ' + r.titre + ' - ' + r.date).replace(/[\\/:*?"<>|]/g, '');
+  setTimeout(function () { window.print(); document.title = ot; pa.innerHTML = ''; }, 100);
+  if (!nb) toast('Aucun mini bilan écrit pour l\'instant : la feuille aura seulement les noms et les lignes pour écrire.');
+}
+
 // ── Événements (délégués)
 document.addEventListener('click', function (e) {
   if (!e.target.closest('#menu')) closeMenu();
@@ -8392,6 +8444,7 @@ document.addEventListener('click', function (e) {
   if (k === 'settings') return settings(V.id);
   if (k === 'view') { V.view = a.getAttribute('data-v'); V.edit = null; return render(); }
   if (k === 'print') return printSheet(a.getAttribute('data-m'));
+  if (k === 'printbil') return printBilans();
   if (k === 'f') { V.f = a.getAttribute('data-v'); return renderSide(); }
   if (k === 'free') { e.stopPropagation(); return freeSlot(t); }
   if (k === 'slot') { var ss = slotState(r, t, times(r)); if (ss === 'free' && V.edit !== t) { V.edit = t; V.acIdx = 0; render(); } else if ((ss === 'booked' || ss === 'suite') && r.slots[t]) bilanBox(r.slots[t].sid); return; }
@@ -8674,11 +8727,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.4';
+const APP_VERSION    = '2.136.5';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T21:57:53Z';
+const APP_BUILD_DATE = '2026-10-08T22:09:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
