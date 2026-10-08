@@ -8028,11 +8028,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.129.0';
+const APP_VERSION    = '2.130.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T17:09:31Z';
+const APP_BUILD_DATE = '2026-10-08T17:37:04Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -15932,7 +15932,7 @@ function _forEachEvalPerClassMap(ev, fn) {
   ];
   for (const sub of subs) {
     if (!sub || typeof sub !== 'object') continue;
-    for (const k of ['dates', 'slotIds', 'datesByGroup', 'slotIdsByGroup', 'skippedClasses']) {
+    for (const k of ['dates', 'slotIds', 'datesByGroup', 'slotIdsByGroup', 'skippedClasses', 'skippedComps']) {
       if (sub[k] && typeof sub[k] === 'object') fn(sub[k]);
     }
   }
@@ -18777,7 +18777,7 @@ function _renduListCols(ev, classId) {
     const sortedPass = (ev.passations || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     for (const p of sortedPass) {
       if (_subSkippedFor(p, _skc)) continue;
-      for (const cid of (p.competenceIds || [])) {
+      for (const cid of _passComps(p, _skc)) {
         const c = S.competences?.[cid];
         cols.push({ key: `pass:${p.id}:${cid}`, label: `${p.code || '?'} · ${c?.code || cid}`, kind: 'pass-comp', passId: p.id, cid });
       }
@@ -27807,6 +27807,7 @@ function _studentHasAnyDataInEval(ev, sid) {
       const nv = pass.niveaux?.[sid];
       if (!nv || typeof nv !== 'object') continue;
       for (const k in nv) {
+        if (_passCompSkipped(pass, _skc, k)) continue;   // compétence non travaillée par sa classe
         const v = nv[k];
         if (v == null || v === '' || v === 0) continue;
         if (v === 'A') return true;
@@ -35051,7 +35052,7 @@ const _NotesExport = (function () {
       for (const ev of Object.values(S.evaluations || {})) {
         if (!_evalIncludesClass(ev, cls.id)) continue;
         if (ev.type === 'B') {
-          for (const p of (ev.passations || [])) { if (_subSkippedFor(p, cls.id)) continue; for (const cid of (p.competenceIds || [])) compIds.add(cid); }
+          for (const p of (ev.passations || [])) { if (_subSkippedFor(p, cls.id)) continue; for (const cid of _passComps(p, cls.id)) compIds.add(cid); }
         } else if (ev.type === 'D') {
           for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) compIds.add(cid);
         }
@@ -35194,7 +35195,7 @@ const _NotesExport = (function () {
     const compIds = new Set();
     for (const ev of evs) {
       if (ev.type === 'B') {
-        for (const p of (ev.passations || [])) { if (_subSkippedFor(p, cls.id)) continue; for (const cid of (p.competenceIds || [])) compIds.add(cid); }
+        for (const p of (ev.passations || [])) { if (_subSkippedFor(p, cls.id)) continue; for (const cid of _passComps(p, cls.id)) compIds.add(cid); }
       } else if (ev.type === 'D') {
         for (const mn of (ev.miniNotes || [])) for (const cid of (mn.competenceIds || [])) compIds.add(cid);
       }
@@ -35374,7 +35375,7 @@ const _NotesExport = (function () {
       // Collecte toutes les paires (passation, compétence)
       const cols = [];
       for (const p of passations) {
-        for (const cid of (p.competenceIds || [])) {
+        for (const cid of _passComps(p, cls.id)) {
           const c = S.competences?.[cid];
           cols.push({ pid: p.id, p, cid, code: c?.code || cid, name: c?.name || '' });
         }
@@ -45756,7 +45757,7 @@ function _evalListEvaluatedCompetences(ev, sortMode, classId) {
   if (!ev) return [];
   const set = new Set();
   if (ev.type === 'B') {
-    for (const p of (ev.passations || [])) { if (_subSkippedFor(p, classId)) continue; for (const cid of (p.competenceIds || [])) set.add(cid); }
+    for (const p of (ev.passations || [])) { if (_subSkippedFor(p, classId)) continue; for (const cid of _passComps(p, classId)) set.add(cid); }
   } else if (ev.type === 'C' || ev.type === 'D') {
     for (const mn of (ev.miniNotes || [])) { if (_subSkippedFor(mn, classId)) continue; for (const cid of (mn.competenceIds || [])) set.add(cid); }
   }
@@ -46577,6 +46578,7 @@ function _evalPlanOverlayOpen() {
   // Fermeture → re-render tableur pour rafraîchir les niveaux saisis
   _modalReturnTo['meval-plan-overlay'] = () => _evalTableurRender();
   openMod('meval-plan-overlay');
+  setTimeout(_evpFit, 0);   // la largeur disponible n'existe qu'une fois la fenêtre affichée (pas de rAF : il ne joue pas onglet masqué)
 }
 
 function _evalPlanOverlayChangePass(dateStr) {
@@ -46603,7 +46605,7 @@ function _evalPlanOverlayRender() {
   // Liste de paires (passation, cid) à afficher dans chaque cellule
   const pairs = [];
   for (const p of passesActive) {
-    for (const cid of (p.competenceIds || [])) {
+    for (const cid of _passComps(p, cls.id)) {
       pairs.push({ pass: p, cid });
     }
   }
@@ -46626,7 +46628,7 @@ function _evalPlanOverlayRender() {
   const _gPlan = _evalTableurGroup(cls);
   // Taille de cellule adaptative selon le total de compétences à afficher
   const cellMinH = Math.max(120, 70 + pairs.length * 36);
-  let html = `<div style="display:grid;grid-template-columns:repeat(${cols}, minmax(160px, 1fr));gap:6px;width:max-content;margin:0 auto">`;
+  let html = `<div id="evp-plan" style="display:grid;grid-template-columns:repeat(${cols}, minmax(150px, 1fr));gap:6px;width:max-content;margin:0 auto">`;
   // Vue prof : r=rows-1 en haut, col 0 à droite
   for (let r = rows - 1; r >= 0; r--) {
     for (let c = cols - 1; c >= 0; c--) {
@@ -46698,7 +46700,32 @@ function _evalPlanOverlayRender() {
   grid.innerHTML = html;
   _evpBrushRender(pairs, passesActive.length > 1);
   _evpGroupRender(cls);
+  _evpFit();
 }
+
+// Le plan tient dans la LARGEUR de l'écran : rendu à sa taille naturelle, puis réduit
+// (propriété CSS `zoom`, qui réduit aussi la zone cliquable — pas un `transform`) juste
+// assez pour ne plus défiler en largeur. Recalculé au redimensionnement de la fenêtre.
+function _evpFit() {
+  const box = document.getElementById('meval-plan-overlay-grid');
+  const g = document.getElementById('evp-plan');
+  if (!box || !g) return;
+  g.style.zoom = '';
+  const cs = getComputedStyle(box);
+  const avail = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 6;   // marge : arrondi du zoom
+  const nat = g.offsetWidth;
+  if (nat > avail && avail > 0) g.style.zoom = String(Math.max(0.3, Math.floor((avail / nat) * 1000) / 1000));
+  // Suit toute variation de la largeur de la zone (fenêtre, rotation d'une tablette, panneau) :
+  // un ResizeObserver, posé une fois — l'événement `resize` de la fenêtre ne couvre pas tout.
+  if (!box.dataset.fitObs && window.ResizeObserver) {
+    box.dataset.fitObs = '1';
+    let w = box.clientWidth;
+    new ResizeObserver(() => { if (box.clientWidth !== w) { w = box.clientWidth; _evpFit(); } }).observe(box);
+  }
+}
+window.addEventListener('resize', () => {
+  if (document.getElementById('meval-plan-overlay')?.classList.contains('on')) _evpFit();
+});
 
 // Pastilles d'une compétence : A · 0 · 1..n (n = réglage), encre dérivée du fond.
 function _evpButtons(colors) {
@@ -46918,8 +46945,12 @@ function _evalTableurRenderB(ev, cls) {
     const compIds = p.competenceIds || [];
     for (const cid of compIds) {
       const c = S.competences?.[cid];
-      const compTip = c ? `${c.code}${c.name ? ' — ' + c.name : ''}\n\nClic pour ouvrir le picker multi-sélection de la passation` : 'Clic pour modifier les compétences de la passation';
-      html += `<th class="meval-comp-chip-cell" style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;width:54px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">
+      if (_passCompSkipped(p, cls.id, cid)) {
+        html += `<th class="meval-head-skip" oncontextmenu="event.preventDefault();_tableurPassCompContextMenu(event,'${_escJsAttr(p.id)}','${_escJsAttr(cid)}')" title="⊘ ${_escAttr(c?.code || '?')} (${_escAttr(p.code || '?')}) non évaluée par ${_escAttr(cls.nom)} — clic droit pour la réactiver"><span class="meval-skip-mark" aria-hidden="true">⊘</span><span class="meval-skip-lbl">${_esc(c?.code || '?')}</span></th>`;
+        continue;
+      }
+      const compTip = c ? `${c.code}${c.name ? ' — ' + c.name : ''}\n\nClic pour ouvrir le picker multi-sélection de la passation\nClic droit : classes qui l'ont travaillée` : 'Clic pour modifier les compétences de la passation';
+      html += `<th class="meval-comp-chip-cell" oncontextmenu="event.preventDefault();_tableurPassCompContextMenu(event,'${_escJsAttr(p.id)}','${_escJsAttr(cid)}')" style="padding:3px 4px;border-bottom:2px solid var(--rule-line);text-align:center;min-width:54px;width:54px;background:var(--paper-warm);border-left:1px solid var(--rule-line-soft)">
         <button type="button" class="meval-comp-chip" onclick="_evalTableurOpenPassPicker('${_esc(p.id)}')" title="${_escAttr(compTip)}">${_esc(c?.code || '?')}</button>
       </th>`;
     }
@@ -46967,10 +46998,16 @@ function _evalTableurRenderB(ev, cls) {
         continue;
       }
       compIds.forEach((cid, kIdx) => {
+        // Compétence non travaillée par cette classe : case repliée (data-ci compté, pas d'input)
+        if (_passCompSkipped(p, cls.id, cid)) {
+          html += `<td class="meval-cell-skip" data-ci="${ci}" data-passid="${_esc(p.id)}" style="${kIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)'}" title="⊘ ${_escAttr(S.competences?.[cid]?.code || '?')} non évaluée par ${_escAttr(cls.nom)}"></td>`;
+          ci++;
+          return;
+        }
         const cur = niv[cid];
         const dispVal = (cur === 'A') ? (S.evalPrefs?.codeAbsent || 'A')
                        : (cur === 0) ? (S.evalPrefs?.zeroLabel || '0')   // non évalué explicite
-                       : (typeof cur === 'number' && cur >= 1 && cur <= 4
+                       : (typeof cur === 'number' && cur >= 1 && cur <= _nbLevels()
                           ? (S.evalPrefs?.niveauLabels?.[cur - 1] || String(cur))
                           : '');
         const bg = (typeof cur === 'number' && cur >= 1) ? colors[cur - 1] : (cur === 'A' ? '#9ca3af' : '');
@@ -47034,6 +47071,10 @@ function _evalTableurRenderB(ev, cls) {
       continue;
     }
     compIds.forEach((cid, kIdx) => {
+      if (_passCompSkipped(p, cls.id, cid)) {
+        html += `<td class="meval-cell-skip" style="${kIdx === 0 ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)'}"></td>`;
+        return;
+      }
       const vals = sids.map(sid => p.niveaux?.[sid]?.[cid])
                        .filter(v => typeof v === 'number' && v >= 1);   // 0 = non évalué explicite
       const borderLeft = (kIdx === 0) ? 'border-left:2px solid var(--ink-blue-soft)' : 'border-left:1px solid var(--rule-line-soft)';
@@ -47282,7 +47323,7 @@ function _studentNoteAbsenceReason(ev, sid) {
       if (_subSkippedFor(p, _skc)) continue;
       const perStu = p.niveaux?.[sid];
       if (!perStu) continue;
-      for (const cid of (p.competenceIds || [])) {
+      for (const cid of _passComps(p, _skc)) {
         const v = perStu[cid];
         if (v === 'A') nA++;
         else if (typeof v === 'number' && v >= 1) nNum++;
@@ -48659,15 +48700,20 @@ function _tableurSubSkipFill(kind, ev, sub, cls) {
   if (cids.length < 2) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
   const list = document.getElementById(`meval-${kind}-menu-skip-list`);
+  const comps = kind === 'pass' ? (sub.competenceIds || []).filter(c => S.competences?.[c]) : [];
   if (list) list.innerHTML = cids.map(cid => {
     const c = S.classes[cid];
     const done = !_subSkippedFor(sub, cid);
+    // Passation : une pastille par compétence (allumée = travaillée par cette classe)
+    const pills = (kind === 'pass' && done && comps.length > 1)
+      ? `<div class="clf-pills" style="margin:2px 0 6px 45px">${comps.map(k => `<label class="clf-pill" title="${_escAttr((S.competences[k].name || S.competences[k].code) + ' — décocher si ' + (c.nom || cid) + ' ne l\'a pas travaillée')}"><input type="checkbox" ${_passCompSkipped(sub, cid, k) ? '' : 'checked'} onchange="_tableurPassCompSkipSet('${_escJsAttr(cid)}','${_escJsAttr(k)}',!this.checked)"><b style="font-family:var(--font-mono)">${_esc(S.competences[k].code)}</b></label>`).join('')}</div>`
+      : '';
     return `<label class="hm-skip"><input type="checkbox" class="sw-chk" ${done ? 'checked' : ''} onchange="_tableurSubSkipSet('${kind}','${_escJsAttr(cid)}',!this.checked)">
-      <span>Faite par <b>${_esc(c.nom || cid)}</b>${done ? '' : ' <span style="color:var(--pencil);font-size:.88em">· colonne repliée</span>'}${cls && cls.id === cid ? ' <span style="color:var(--pencil);font-size:.88em">(affichée)</span>' : ''}</span></label>`;
+      <span>Faite par <b>${_esc(c.nom || cid)}</b>${done ? '' : ' <span style="color:var(--pencil);font-size:.88em">· colonne repliée</span>'}${cls && cls.id === cid ? ' <span style="color:var(--pencil);font-size:.88em">(affichée)</span>' : ''}</span></label>${pills}`;
   }).join('');
   const what = kind === 'pass' ? 'la passation' : (ev.type === 'A' ? 'la mini-note' : 'la question');
   const hint = document.getElementById(`meval-${kind}-menu-skip-hint`);
-  if (hint) hint.textContent = `Pour une classe qui n'a pas fait ${what} : la colonne se replie, sans saisie, hors note et niveaux, hors pré-remplissage des absents et hors exports. Agit tout de suite.`;
+  if (hint) hint.textContent = `Pour une classe qui n'a pas fait ${what}${kind === 'pass' && comps.length > 1 ? ' (ou une de ses compétences : décoche sa pastille)' : ''} : la colonne se replie, sans saisie, hors note et niveaux, hors pré-remplissage des absents et hors exports. Agit tout de suite.`;
 }
 function _tableurSubSkipSet(kind, cid, skipped) {
   const evalId = document.getElementById('meval-tableur-evalid').value;
@@ -48680,6 +48726,35 @@ function _tableurSubSkipSet(kind, cid, skipped) {
   const sub = (ev.miniNotes || []).find(m => m.id === subId) || (ev.passations || []).find(p => p.id === subId);
   if (sub) _tableurSubSkipFill(kind, ev, sub, _evalTableurActiveCls(ev));
   toast(skipped ? `⊘ Marquée non faite par ${c.nom} — colonne repliée` : `✓ Réactivée pour ${c.nom}`);
+}
+// Une compétence d'une passation, travaillée ou non par une classe (agit tout de suite).
+function _tableurPassCompSkipSet(cid, comp, skipped) {
+  const ev = S.evaluations?.[document.getElementById('meval-pass-new-evalid').value || document.getElementById('meval-tableur-evalid').value];
+  const pass = ev?.passations?.find(p => p.id === document.getElementById('meval-pass-new-passid').value);
+  const c = S.classes?.[cid];
+  if (!pass || !c || _passCompSkipped(pass, cid, comp) === !!skipped) return;
+  pushUndo();
+  _passCompSetSkipped(pass, cid, comp, !!skipped);
+  ev.updatedAt = Date.now();
+  save();
+  if (document.getElementById('meval-tableur')?.classList.contains('on')) _evalTableurRender();
+  _tableurSubSkipFill('pass', ev, pass, _evalTableurActiveCls(ev));
+  const code = S.competences?.[comp]?.code || '?';
+  toast(skipped ? `⊘ ${code} non évaluée par ${c.nom} sur ${pass.code || 'cette passation'}` : `✓ ${code} réactivée pour ${c.nom}`);
+}
+// Clic droit sur une compétence de l'en-tête : la fenêtre de la passation, section Classes.
+function _tableurPassCompContextMenu(event, passId, cid) {
+  _tableurPassContextMenu(event, passId);
+  setTimeout(() => {
+    const w = document.getElementById('meval-pass-menu-skip-wrap');
+    if (w && w.style.display !== 'none') {
+      w.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const pill = [...w.querySelectorAll('.clf-pill input')].find(i => (i.getAttribute('onchange') || '').includes(`'${cid}'`));
+      pill?.closest('.clf-pill')?.classList.add('aesh-flash');
+    } else if (w) {
+      toast('Une seule classe sur ce devoir : pour ne pas l\'évaluer, retire la compétence de la passation', 'info');
+    }
+  }, 120);
 }
 // Ancienne signature (bascule de la classe affichée) — gardée pour les appels restants.
 function _tableurSubSkipToggle(kind, on) {
@@ -48699,7 +48774,7 @@ function _hmColSynthHTML(ev, sub, cls) {
     let has = false;
     if (isPass) {
       const lv = sub.niveaux?.[sid] || {};
-      for (const cid of (sub.competenceIds || [])) { const v = lv[cid]; if (v != null && v !== '' && v !== 0) { has = true; if (typeof v === 'number') { nNum++; sum += v; } } }
+      for (const cid of _passComps(sub, cls?.id)) { const v = lv[cid]; if (v != null && v !== '' && v !== 0) { has = true; if (typeof v === 'number') { nNum++; sum += v; } } }
     } else if (ev.type === 'D') {
       const lv = rec?.levels?.[sub.id] || {};
       for (const v of Object.values(lv)) { if (v != null && v !== '' && v !== 0) { has = true; if (typeof v === 'number') { nNum++; sum += v; } } }
@@ -49719,6 +49794,34 @@ function _evalSetSlotIdFor(ev, classId, slotId) {
 // ⚠️ Map keyée par classId → visitée par _forEachEvalPerClassMap (purge et renommage).
 // Une colonne vide compte déjà pour rien dans le calcul : le marquage porte
 // l'INTENTION (« pas faite » ≠ « pas encore saisie ») et bloque la saisie.
+// Type B, cran plus fin que la passation : une COMPÉTENCE d'une passation que telle classe
+// n'a pas travaillée. `pass.skippedComps = { [classId]: { [cid]: true } }` (supprimé quand
+// vide). Une passation entière non faite (`skippedClasses`) emporte toutes ses compétences.
+// ⚠️ Map keyée par classId : elle est dans _forEachEvalPerClassMap (purge, renommage).
+function _passCompSkipped(pass, classId, cid) {
+  if (!pass || !classId) return false;
+  return _subSkippedFor(pass, classId) || !!pass.skippedComps?.[classId]?.[cid];
+}
+// Compétences d'une passation évaluées par une classe (toutes si classId est vide).
+function _passComps(pass, classId) {
+  const ids = Array.isArray(pass?.competenceIds) ? pass.competenceIds : [];
+  if (!pass || !classId) return ids;
+  if (_subSkippedFor(pass, classId)) return [];
+  const m = pass.skippedComps?.[classId];
+  return m ? ids.filter(c => !m[c]) : ids;
+}
+function _passCompSetSkipped(pass, classId, cid, on) {
+  if (!pass || !classId || !cid) return;
+  if (on) {
+    pass.skippedComps = pass.skippedComps || {};
+    (pass.skippedComps[classId] = pass.skippedComps[classId] || {})[cid] = true;
+  } else if (pass.skippedComps?.[classId]) {
+    delete pass.skippedComps[classId][cid];
+    if (!Object.keys(pass.skippedComps[classId]).length) delete pass.skippedComps[classId];
+    if (!Object.keys(pass.skippedComps).length) delete pass.skippedComps;
+  }
+}
+
 function _subSkippedFor(sub, classId) {
   return !!(classId && sub?.skippedClasses && sub.skippedClasses[classId] === true);
 }
@@ -49861,7 +49964,7 @@ function _evalAutoFillAbsentsForPass(ev, pass, classId) {
   if (!defDate) return 0;
   const pgDates = pass.datesByGroup?.[classId];
   const pgSlots = pass.slotIdsByGroup?.[classId];
-  const cids = pass.competenceIds || [];
+  const cids = _passComps(pass, classId);   // sans les compétences que la classe n'a pas travaillées
   if (cids.length === 0) return 0;
   let filled = 0;
   const sids = (cls.eleves || []).filter(sid => S.eleves?.[sid]);
@@ -49952,7 +50055,7 @@ function _computeStudentCompetenceLevel(ev, sid, cId) {
   const _skc = _evalStuClassId(ev, sid);
   for (const p of ev.passations) {
     if (!p.competenceIds?.includes(cId)) continue;
-    if (_subSkippedFor(p, _skc)) continue;
+    if (_passCompSkipped(p, _skc, cId)) continue;
     const niv = p.niveaux?.[sid]?.[cId];
     if (typeof niv === 'number' && niv >= 1 && niv <= _nb) {
       entries.push({ date: _passDateFor(p, _cls), niveau: niv });
@@ -50012,13 +50115,13 @@ function _evalNoteTipB(ev, sid) {
     // Chaque entrée convertie en pts puis moyenne par compétence (selon règle),
     // puis moyenne arithmétique des compétences.
     const compIds = new Set();
-    for (const p of _passes) for (const cid of (p.competenceIds || [])) compIds.add(cid);
+    for (const p of _passes) for (const cid of _passComps(p, _skc)) compIds.add(cid);
     let sumPts = 0, nbComps = 0;
     for (const cid of compIds) {
       const c = S.competences?.[cid];
       const entries = [];
       for (const p of _passes) {
-        if (!(p.competenceIds || []).includes(cid)) continue;
+        if (!_passComps(p, _skc).includes(cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
         if (typeof v === 'number' && v >= 1 && v <= _nb) entries.push({ niveau: v, date: _passDateFor(p, _cls), code: p.code || '?' });
       }
@@ -50061,7 +50164,7 @@ function _evalNoteTipB(ev, sid) {
   for (const p of _passes) {
     const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
     if (w <= 0) continue;
-    const compIds = p.competenceIds || [];
+    const compIds = _passComps(p, _skc);
     for (const cid of compIds) {
       const v = p.niveaux?.[sid]?.[cid];
       if (typeof v !== 'number' || v < 1 || v > _nb) continue;
@@ -50116,7 +50219,7 @@ function _computeStudentEvalNoteB(ev, sid) {
       const entries = [];
       for (const p of ev.passations) {
         if (!(p.competenceIds || []).includes(cid)) continue;
-        if (_subSkippedFor(p, _skc)) continue;
+        if (_passCompSkipped(p, _skc, cid)) continue;
         const v = p.niveaux?.[sid]?.[cid];
         if (typeof v === 'number' && v >= 1 && v <= _nb) entries.push({ niveau: v, date: _passDateFor(p, _cls) });
       }
@@ -50149,7 +50252,7 @@ function _computeStudentEvalNoteB(ev, sid) {
     const w = (weighting === 'coef') ? (p.coef ?? 1) : 1;
     if (w <= 0) continue;
     if (_subSkippedFor(p, _skc)) continue;
-    for (const cid of (p.competenceIds || [])) {
+    for (const cid of _passComps(p, _skc)) {
       const niv = p.niveaux?.[sid]?.[cid];
       if (typeof niv !== 'number' || niv < 1 || niv > _nb) continue;
       sumPts += w * niveauToPts(niv);
@@ -50648,6 +50751,8 @@ function _evalPassNewSaveFinalize(transferAction) {
         }
       }
       pass.competenceIds = Array.from(_passNewSelected);
+      for (const cid0 of Object.keys(pass.skippedComps || {})) for (const c of Object.keys(pass.skippedComps[cid0] || {}))
+        if (!_passNewSelected.has(c)) _passCompSetSkipped(pass, cid0, c, false);
       _tableurPassApplyPerGroup(ev, pass);
     }
   } else {
@@ -50859,7 +50964,8 @@ function _evalOpenPassationSaisie(passId) {
 }
 
 function _psHasEntry(p, sid) {
-  return Object.values(p.niveaux?.[sid] || {}).some(n => n != null && n !== 0 && n !== '');
+  const cl = document.getElementById('meval-pass-saisie')?.dataset.clsId;
+  return _passComps(p, cl).some(c => { const n = p.niveaux?.[sid]?.[c]; return n != null && n !== 0 && n !== ''; });
 }
 
 function _evalPassSaisieRender() {
@@ -50898,7 +51004,7 @@ function _evalPassSaisieRender() {
   p.niveaux = p.niveaux || {};
   const niv = p.niveaux[sid] || {};
   const colors = _maitriseColors();
-  const comps = (p.competenceIds || []).filter(cid => S.competences?.[cid]);
+  const comps = _passComps(p, m.dataset.clsId).filter(cid => S.competences?.[cid]);
   if (_psFocus >= comps.length) _psFocus = 0;
   document.getElementById('meval-pass-saisie-comps').innerHTML = comps.length ? comps.map((cid, k) => {
     const c = S.competences[cid];
@@ -50944,7 +51050,7 @@ function _evalPassSaisieKey(e) {
   const ev = S.evaluations?.[document.getElementById('meval-pass-saisie-evalid').value];
   const p = ev?.passations?.find(x => x.id === document.getElementById('meval-pass-saisie-passid').value);
   if (!p) return;
-  const comps = (p.competenceIds || []).filter(cid => S.competences?.[cid]);
+  const comps = _passComps(p, m.dataset.clsId).filter(cid => S.competences?.[cid]);
   const k = e.key;
   let val;
   if (/^[1-9]$/.test(k) && +k <= _nbLevels()) val = +k;
@@ -52630,7 +52736,7 @@ function _aggregateStudentCompetence(classId, sid, cid, periode, disciplineFilte
     if (ev.type === 'B') {
       for (const p of (ev.passations || [])) {
         if (!p.competenceIds?.includes(cid)) continue;
-        if (_subSkippedFor(p, _skc)) continue;
+        if (_passCompSkipped(p, _skc, cid)) continue;
         const niv = p.niveaux?.[sid]?.[cid];
         if (typeof niv !== 'number' || niv < 1 || niv > (S.evalPrefs?.nbLevels || 4)) continue;
         entries.push({ evalId: ev.id, evalNomCourt: ev.nomCourt, code: p.code, date: _passDateFor(p, classId) || ev.date, niveau: niv });
@@ -53335,7 +53441,7 @@ function _rwTipHTML(ev, sid) {
       if (_subSkippedFor(p, cid)) continue;
       const d = _passDateFor(p, cid);
       const per = p.niveaux?.[sid] || {};
-      const lv = (p.competenceIds || []).map(c => `${_esc(S.competences?.[c]?.code || '?')} ${_esc(per[c] == null ? '—' : (_formatNiveau(per[c]) || '—'))}`).join(' · ');
+      const lv = _passComps(p, cid).map(c => `${_esc(S.competences?.[c]?.code || '?')} ${_esc(per[c] == null ? '—' : (_formatNiveau(per[c]) || '—'))}`).join(' · ');
       rows.push(`<tr><td>${_esc(p.code || '?')}</td><td class="rw-tip-d">${d ? _fmtDateFr(d).slice(0, 5) : ''}</td><td style="text-align:left">${lv || '—'}</td></tr>`);
     }
   } else if (ev.type === 'D') {
@@ -54720,7 +54826,7 @@ function _evalCompetencesEvaluated(ev, classId) {
   if (ev.type === 'B') {
     for (const p of (ev.passations || [])) {
       if (_subSkippedFor(p, classId)) continue;
-      for (const cid of (p.competenceIds || [])) ids.add(cid);
+      for (const cid of _passComps(p, classId)) ids.add(cid);
     }
   } else if (ev.type === 'C' || ev.type === 'A' || ev.type === 'D') {
     for (const mn of (ev.miniNotes || [])) {
@@ -54968,11 +55074,12 @@ function _evalPasteOpen() {
     }
     // Une option par couple (passation × compétence) ; format value : "passId|cid"
     const sortedPass = ev.passations.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    const _pcls = _evalTableurActiveCls(ev);
     for (const p of sortedPass) {
-      if ((p.competenceIds || []).length === 0) continue;
+      if (_passComps(p, _pcls?.id).length === 0) continue;
       const og = document.createElement('optgroup');
       og.label = `${p.code || '?'} — ${_fmtDateFr(p.date)}`;
-      for (const cid of p.competenceIds) {
+      for (const cid of _passComps(p, _pcls?.id)) {
         const c = S.competences?.[cid];
         if (!c) continue;
         const opt = document.createElement('option');
