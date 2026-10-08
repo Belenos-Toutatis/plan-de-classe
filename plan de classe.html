@@ -1702,6 +1702,8 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .shf-plan i.nt{border:none;background:repeating-linear-gradient(135deg,transparent 0 6px,var(--rule-line-soft) 6px 7px)}
 .shf-plan i.st{border:1px solid var(--rule-line);background:var(--paper);color:var(--ink-deep);cursor:pointer}
 .shf-plan i.st:hover{border-color:var(--ink-blue)}
+.shf-plan i.z1{background:var(--g1-light)}.shf-plan i.z2{background:var(--g2-light)}.shf-plan i.z3{background:var(--g3-light)}
+.shf-plan i.st.z1,.shf-plan i.st.z2,.shf-plan i.st.z3{color:var(--ink-deep)}
 .shf-plan i.st.pin{border:2px solid var(--ink-blue);background:var(--info-bg);font-weight:600}
 .shf-plan i.ae{border:1px solid var(--aesh-bd);background:var(--aesh-bg);color:var(--aesh-fg);font-weight:600}
 .shf-board{text-align:center;font-size:.72em;color:var(--pencil);margin-top:4px;border-top:2px solid var(--ink-blue);padding-top:2px}
@@ -8003,11 +8005,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.125.0';
+const APP_VERSION    = '2.125.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-08T03:36:25Z';
+const APP_BUILD_DATE = '2026-10-08T03:40:39Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10127,15 +10129,17 @@ function _violRenderPreview() {
   const moved = new Set(Object.keys(ws).filter(sid => wc[sid] !== ws[sid]));
   const aeshAt = {}; for (const [i, k] of Object.entries(room?.aeshSeating || {})) aeshAt[k] = +i;
   const nA = _aeshList(cls).length, vides = new Set(salle.positions_vides || []);
+  const zones = (cls.groupes && Object.keys(cls.groupes).length) ? getEffectiveGroupes(cls) : {};
   let h = `<div class="shf-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
   for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
     const key = `${r},${c}`;
     if (vides.has(key)) { h += '<i class="nt"></i>'; continue; }
     if (key in aeshAt) { h += `<i class="ae">${_esc(aeshLabel(aeshAt[key], nA, cls))}</i>`; continue; }
     const sid = seat[key], st = sid && S.eleves[sid];
-    if (!st) { h += '<i></i>'; continue; }
+    const z = zones[key] ? ' z' + zones[key] : '';
+    if (!st) { h += `<i class="${z.trim()}"></i>`; continue; }
     const pin = _violPins.has(sid), mv = _violShow === 'sol' && moved.has(sid);
-    h += `<i class="st${pin ? ' pin' : ''}${mv ? ' mv' : ''}${bad.has(sid) ? ' bad' : ''}" onclick="_violTogglePin('${_escJsAttr(sid)}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${mv ? ' — déplacé·e' : ''}${bad.has(sid) ? ' — contrainte enfreinte' : ''}${pin ? ' — épinglé·e : ne sera pas déplacé·e' : ' — clic : ne pas déplacer'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
+    h += `<i class="st${z}${pin ? ' pin' : ''}${mv ? ' mv' : ''}${bad.has(sid) ? ' bad' : ''}" onclick="_violTogglePin('${_escJsAttr(sid)}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${mv ? ' — déplacé·e' : ''}${bad.has(sid) ? ' — contrainte enfreinte' : ''}${pin ? ' — épinglé·e : ne sera pas déplacé·e' : ' — clic : ne pas déplacer'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
   }
   box.innerHTML = h + '</div><div class="shf-board">🖥 tableau</div>';
   const p = _violPreview, np = _violPins.size;
@@ -10349,6 +10353,19 @@ function _updateMovedHighlightBtnUI() {
 // Tente de résoudre la violation impliquant sid actuellement à fromKey, en
 // le déplaçant vers une autre position (libre ou en swap). Renvoie un array
 // [fromKey, toKey] des keys impliquées si améliorisation, sinon null.
+// Une place convient-elle à un élève vis-à-vis des zones de groupe et des places taggées ?
+function _placeFitFn(cls, room) {
+  const grps = (cls.groupes && Object.keys(cls.groupes).length) ? getEffectiveGroupes(cls) : null;
+  const tags = room?.posTagId || {};
+  return (sid, k) => {
+    const st = S.eleves[sid]; if (!st) return true;
+    const g = _grp(st, cls);
+    if (grps && (g === 1 || g === 2 || g === 3) && grps[k] !== g) return false;
+    const t = tags[k];
+    if (t && !(Array.isArray(st.tags) && st.tags.includes(t))) return false;
+    return true;
+  };
+}
 function _tryFixOneViolation(cls, sid, fromKey, o) {
   const pins = o?.pins;
   if (pins && pins.has(sid)) return null;
@@ -10356,14 +10373,21 @@ function _tryFixOneViolation(cls, sid, fromKey, o) {
   if (!room) return null;
   const order = getPlacementOrder(cls);
   const beforeViolations = collectAllViolations(cls).length;
+  // Zones de groupe (G1/G2/G3) et places taggées : un échange ne doit pas envoyer un élève
+  // hors de sa zone, ni sur une place réservée à un tag qu'il n'a pas — mêmes règles que le
+  // mélange (inZone, tagOK). On n'exige rien de plus que l'état de départ : un élève déjà
+  // mal placé peut bouger, mais personne n'est rendu « moins bien placé ».
+  const fit = _placeFitFn(cls, room);
 
   // Mélange l'ordre des positions candidates pour ne pas toujours tester dans le même sens
   const candidates = shuffle([...order]);
   for (const toKey of candidates) {
     if (toKey === fromKey) continue;
     if (!isPlaceAllowedForStudent(room, sid, toKey)) continue;
+    if (!fit(sid, toKey) && fit(sid, fromKey)) continue;
     const occupant = cls.seating[toKey];
     if (occupant && pins && pins.has(occupant)) continue;
+    if (occupant && !fit(occupant, fromKey) && fit(occupant, toKey)) continue;
     if (occupant && !isPlaceAllowedForStudent(room, occupant, fromKey)) continue;
 
     // Simule le swap (ou simple move si toKey libre)
@@ -14142,15 +14166,17 @@ function _shufRenderPreview() {
   const aeshAt = {}; for (const [i, k] of Object.entries(aesh)) aeshAt[k] = +i;
   const nA = _aeshList(cls).length;
   const vides = new Set(salle.positions_vides || []);
+  const zones = (cls.groupes && Object.keys(cls.groupes).length) ? getEffectiveGroupes(cls) : {};
   let h = `<div class="shf-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
   for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
     const key = `${r},${c}`;
     if (vides.has(key)) { h += '<i class="nt"></i>'; continue; }
     if (key in aeshAt) { h += `<i class="ae">${_esc(aeshLabel(aeshAt[key], nA, cls))}</i>`; continue; }
     const sid = seat[key], st = sid && S.eleves[sid];
-    if (!st) { h += '<i></i>'; continue; }
+    const z = zones[key] ? ' z' + zones[key] : '';
+    if (!st) { h += `<i class="${z.trim()}"></i>`; continue; }
     const pin = _shufPins[sid] === key;
-    h += `<i class="st${pin ? ' pin' : ''}" onclick="_shufTogglePin('${_escJsAttr(sid)}','${key}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${pin ? ' — épinglé·e : garde cette place' : ' — clic : épingler à cette place'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
+    h += `<i class="st${z}${pin ? ' pin' : ''}" onclick="_shufTogglePin('${_escJsAttr(sid)}','${key}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${pin ? ' — épinglé·e : garde cette place' : ' — clic : épingler à cette place'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
   }
   h += '</div><div class="shf-board">🖥 tableau</div>';
   box.innerHTML = h;
