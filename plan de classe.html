@@ -8764,11 +8764,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.11';
+const APP_VERSION    = '2.136.12';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-09T06:10:32Z';
+const APP_BUILD_DATE = '2026-10-09T20:21:31Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -28959,17 +28959,25 @@ function _reuPlanHint() {
 // choisissent en pastilles dans l'onglet (la fenêtre « Copier des colonnes » a disparu).
 // Familles : Place · Élève · Vie de classe · Suivi. Choix retenu sur la machine.
 const POS_VIEW_KEY = 'planClasse_posView';
-const POS_DEFAULT_COLS = ['pos', 'nom', 'prenom', 'grp', 'oublis', 'nt', 'amen'];
+const POS_DEFAULT_COLS = ['pos', 'nom', 'prenom', 'grp', 'tags', 'oublis', 'nt', 'amen'];
+const POS_VIEW_VER = 2;    // v2 (v2.136.12) : colonne Tags (options) ajoutée une fois aux choix déjà retenus
 let _posFilter = 'all';   // all | g1 | g2 | g3 | np (session)
 let _posLastRows = null;  // { cols, data } du dernier rendu — source de la copie / du CSV
 function _posView() {
   try {
     const v = JSON.parse(localStorage.getItem(POS_VIEW_KEY) || 'null');
-    if (v && Array.isArray(v.cols)) return { cols: v.cols.map(String), head: v.head !== false };
+    if (v && Array.isArray(v.cols)) {
+      const r = { cols: v.cols.map(String), head: v.head !== false };
+      if ((v.ver || 1) < POS_VIEW_VER) {   // choix retenu avant l'ajout des tags par défaut : on les ajoute une fois
+        if (!r.cols.includes('tags')) r.cols.push('tags');
+        _posSaveView(r);
+      }
+      return r;
+    }
   } catch (e) {}
   return { cols: POS_DEFAULT_COLS.slice(), head: true };
 }
-function _posSaveView(v) { try { localStorage.setItem(POS_VIEW_KEY, JSON.stringify(v)); } catch (e) {} }
+function _posSaveView(v) { try { localStorage.setItem(POS_VIEW_KEY, JSON.stringify({ cols: v.cols, head: v.head, ver: POS_VIEW_VER })); } catch (e) {} }
 function _posToggleCol(key) {
   const v = _posView();
   const i = v.cols.indexOf(key);
@@ -28991,7 +28999,7 @@ function _posColDefs() {
     { fam: 'Élève', key: 'prenom', label: 'Prénom', txt: d => d.prenom, cls: 'pos-name' },
     { fam: 'Élève', key: 'grp', label: 'Groupe', cls: 'c', txt: d => d.grp ? 'G' + d.grp : '', html: d => d.grp ? `<span class="pos-g">G${d.grp}</span>` : '', sv: d => d.grp || 99 },
     { fam: 'Élève', key: 'civ', label: 'Civilité', cls: 'c', txt: d => d.civ },
-    { fam: 'Élève', key: 'tags', label: 'Tags', txt: d => d.tagList.map(t => t.abbr).join(', '), html: tagH },
+    { fam: 'Élève', key: 'tags', label: 'Tags (options)', tip: 'Options et dispositifs de l\'élève (DF, DNL, latin…), dans l\'ordre choisi dans ⚙ Tags', txt: d => d.tagList.map(t => t.abbr).join(', '), html: tagH },
     { fam: 'Vie de classe', key: 'oublis', label: 'Oublis', cls: 'n', txt: d => d.oublis || '', sv: d => d.oublis, tip: 'Matériel oublié' },
     { fam: 'Vie de classe', key: 'nt', label: 'Non faits', cls: 'n', txt: d => d.nt || '', sv: d => d.nt, tip: 'Travail non fait' },
     { fam: 'Vie de classe', key: 'abs', label: 'Absences', feat: 'appel', cls: 'n', txt: d => d.abs || '', sv: d => d.abs },
