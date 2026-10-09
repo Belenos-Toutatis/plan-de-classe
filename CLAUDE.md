@@ -1865,7 +1865,7 @@ Les douze fenêtres ouvertes autour du tableur. Gabarits repris des lots précé
 |---|---|
 | `Esc` | Fermer modals / désélectionner élèves |
 | `Ctrl+Z` | Annuler |
-| `Ctrl+Y` ou `Ctrl+Maj+Z` | Refaire |
+| `Ctrl+Y` ou `Ctrl+Maj+Z` | Rétablir (mot fixé : jamais « Refaire » ; tout bouton ↩ Annuler a son ↪ Rétablir à côté) |
 | `Ctrl+P` | Imprimer selon l'onglet actif (Plan, Vue Élève, Tablettes, Config, Élèves, Classes) ou ouvrir la modale "🎯 Marqueurs ArUco" sur l'onglet QCMCam |
 | `+` / `-` / `=` | Zoom in / out / reset |
 
