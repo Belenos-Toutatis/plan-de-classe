@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyse de la page MBN</title>
+<!--
+  Outil annexe (non lié à l'application) : fournit un « favori actif » (bookmarklet) qui,
+  cliqué sur la page de saisie des notes de MBN, décrit la STRUCTURE de la page (cases de
+  saisie, tableaux, noms techniques des champs, bibliothèques utilisées) dans un rapport
+  ANONYMISÉ : tout texte est remplacé par sa forme (Xxxx, 99), sauf une liste de mots
+  d'interface (Note, Élève, Valider…). Le rapport s'affiche dans un panneau, rien n'est
+  envoyé nulle part, la page de MBN n'est pas modifiée.
+  Objectif : savoir si un favori actif pourrait remplir les notes de MBN directement,
+  sans passer par MBN Typer.
+  ⚠️ Pas de commentaire « // » dans mbnAnalyse : sa source devient le code du favori.
+-->
+<style>
+:root{--paper:#f4f6fa;--ink:#0e1a26;--pencil:#56697f;--rule:#c8d2e0;--red:#b03d2e;--blue:#1d5fa8}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--paper);color:var(--ink);line-height:1.5}
+header{padding:14px 20px;background:#1a252f;color:#f4f6fa}
+header h1{margin:0;font-size:1.25em}
+header p{margin:4px 0 0;font-size:.9em;opacity:.9}
+main{padding:16px 20px;max-width:900px;margin:0 auto}
+.card{background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px 18px;margin-bottom:14px}
+.card h2{margin:0 0 8px;font-size:1.05em}
+ol{margin:6px 0;padding-left:22px}
+li{margin:4px 0}
+.bm{display:inline-block;padding:9px 16px;border-radius:6px;background:#1a252f;color:#fff;text-decoration:none;font-weight:600;cursor:grab}
+.btn{font:inherit;padding:6px 12px;border-radius:5px;border:1px solid var(--rule);background:#fff;cursor:pointer}
+.muted{color:var(--pencil);font-size:.9em}
+.warn{background:#fef9e7;border:1px solid #e9c46a;border-radius:6px;padding:8px 12px;font-size:.92em}
+table.demo{border-collapse:collapse;margin-top:8px}
+table.demo th,table.demo td{border:1px solid var(--rule);padding:4px 8px}
+table.demo input{width:60px}
+kbd{font-family:ui-monospace,Consolas,monospace;border:1px solid var(--rule);border-radius:3px;padding:0 4px;background:#f4f6fa}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔎 Analyse de la page de saisie des notes de MBN</h1>
+  <p>Un favori à cliquer sur la page de MBN : il décrit la structure de la page, sans aucun nom ni aucune note. Rien n'est envoyé nulle part.</p>
+</header>
+<main>
+  <div class="card">
+    <h2>1. Installer le favori</h2>
+    <ol>
+      <li>Affiche la barre de favoris si elle est cachée (<kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>B</kbd> dans Chrome, Edge et Firefox).</li>
+      <li><strong>Fais glisser</strong> ce bouton dans la barre de favoris (ne clique pas dessus ici) :<br><br>
+        <a class="bm" id="bm" href="#" title="À faire glisser dans la barre de favoris">🔎 Analyser MBN</a>
+        <a class="bm" id="bmtest" href="#" title="À faire glisser aussi : un favori minuscule qui dit seulement « ça marche »" style="background:#1b5e20">✅ Test favori</a> <span id="bm-msg" class="muted"></span><br>
+        <span class="muted">Cliquer ces boutons <em>ici</em> ne fait rien : ils ne servent qu'une fois dans la barre de favoris, sur la page de MBN.</span><br><br>
+      </li>
+      <li class="muted">Si le glisser ne marche pas : <button class="btn" id="copy">⧉ Copier le code du favori</button>, puis crée un favori (clic droit sur la barre de favoris → <em>Ajouter une page</em>), nomme-le « Analyser MBN » et colle le code à la place de l'adresse.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>2. L'utiliser dans MBN</h2>
+    <ol>
+      <li>Ouvre dans MBN la page où tu saisis les notes d'un devoir, comme d'habitude.</li>
+      <li><strong>Clique dans la case de note du premier élève</strong>, comme si tu allais taper une note (ne tape rien). C'est utile si les cases ne deviennent modifiables qu'au clic.</li>
+      <li>Clique sur le favori <strong>🔎 Analyser MBN</strong> dans la barre de favoris.</li>
+      <li>Un panneau s'ouvre avec le rapport. <strong>Relis-le</strong> : il ne doit contenir ni nom ni note (les textes sont remplacés par des X et des 9). Puis <strong>⧉ Copier le rapport</strong> et colle-le dans la conversation avec Claude.</li>
+      <li>Ferme le panneau (✕ ou <kbd>Échap</kbd>). La page de MBN n'a pas été modifiée ; n'enregistre rien de particulier.</li>
+    </ol>
+    <p class="warn"><strong>Si rien ne s'affiche</strong> : clique sur <strong>✅ Test favori</strong> sur la même page de MBN. S'il affiche « Le favori fonctionne », c'est le gros favori qui pose problème (souvent : coupé lors du glisser — recrée-le avec ⧉ Copier le code). S'il ne se passe rien non plus, MBN bloque les favoris actifs : dis-le simplement, c'est déjà une réponse utile. Si la saisie se fait sur plusieurs pages (notes, puis compétences, puis appréciations), fais l'analyse sur chacune.</p>
+  </div>
+
+  <div class="card">
+    <h2>3. Observer une saisie (deuxième favori)</h2>
+    <p>Fais glisser aussi ce favori dans la barre :
+      <a class="bm" id="bmobs" href="#" title="À faire glisser dans la barre de favoris" style="background:#6d4aa8">👁 Observer MBN</a> <span id="obs-msg" class="muted"></span>
+      <br><span class="muted">Si le glisser ne marche pas : <button class="btn" id="copyobs">⧉ Copier le code</button> et crée le favori à la main, comme pour le premier.</span></p>
+    <ol>
+      <li>Dans MBN, ouvre la saisie d'un devoir <strong>dont les résultats ne sont pas encore publiés</strong> si possible, et <strong>clique sur un élève</strong> de la liste pour afficher son panneau à droite.</li>
+      <li>Clique sur <strong>👁 Observer MBN</strong>. Un bandeau violet foncé apparaît en bas à droite : l'observation commence.</li>
+      <li>Fais une saisie comme d'habitude, sans te presser :
+        <ul>
+          <li>change la note de cet élève (tape une autre note), puis appuie sur <kbd>Tab</kbd> ;</li>
+          <li>change une compétence dans sa liste déroulante ;</li>
+          <li>s'il y a une case de remarque, tape un mot ;</li>
+          <li>clique sur l'élève suivant dans la liste, puis <strong>reviens sur le premier et remets tout comme avant</strong> (note, compétence, remarque).</li>
+        </ul>
+      </li>
+      <li>Clique sur <strong>Terminer</strong> dans le bandeau. Le rapport s'affiche : relis-le, <strong>⧉ Copier le rapport</strong>, colle-le à Claude.</li>
+    </ol>
+    <p class="muted">L'observation note les événements (clic, frappe, changement), les champs modifiés et les requêtes envoyées à MBN — leur adresse et le <em>nom</em> de leurs paramètres, jamais les valeurs ; les notes et les textes sont remplacés par leur forme. Elle ne modifie rien elle-même et s'arrête à « Terminer » ou « Annuler » (ou en rechargeant la page).</p>
+    <p><button class="btn" type="button" id="tryobs">▶ Essayer l'observation sur le faux tableau ci-dessous</button></p>
+  </div>
+
+  <div class="card">
+    <h2>Essai sur un faux tableau</h2>
+    <p class="muted">Pour voir à quoi ressemble le rapport avant d'aller dans MBN (noms inventés) :</p>
+    <form id="demo" onsubmit="return false" onchange="var x=new XMLHttpRequest();x.open('POST','data:text/plain,ok');x.send('ACTION=SAUVER&amp;NOTE_'+event.target.name.replace(/\D/g,'')+'='+encodeURIComponent(event.target.value))">
+      <table class="demo">
+        <thead><tr><th>Élève</th><th>Note /20</th><th>Appréciation</th></tr></thead>
+        <tbody>
+          <tr><td>DURAND Léa</td><td><input name="note[101]" value="14,5"></td><td><input name="app[101]" value="Bon travail"></td></tr>
+          <tr><td>MARTIN Hugo</td><td><input name="note[102]" value="Abs"></td><td><input name="app[102]"></td></tr>
+          <tr><td>PETIT Zoé</td><td><input name="note[103]" value="9"></td><td><input name="app[103]"></td></tr>
+        </tbody>
+      </table>
+      <p><button class="btn" type="button" id="try">▶ Lancer l'analyse sur cette page</button></p>
+    </form>
+  </div>
+</main>
+
+<script>
+function mbnAnalyse() {
+  var OLD = document.getElementById('mbn-analyse-panel');
+  if (OLD) OLD.remove();
+
+  /*KIT-DEBUT*/
+  /* Mots d'interface conservés en clair (comparés sans accents ni casse) */
+  var KEEP = ('note notes noter compétence compétences competence competences appréciation appréciations remarque remarques commentaire commentaires '
+    + 'élève élèves moyenne moyennes absent absente absents abs disp dispensé dispense nn non noté évaluation évaluations évaluer devoir devoirs '
+    + 'période trimestre semestre coefficient coef sur total niveau niveaux maîtrise acquis enregistrer valider annuler sauvegarder modifier supprimer '
+    + 'ajouter fermer retour suivant précédent nom prénom classe classes groupe groupes date matière discipline service barème saisie saisir résultats '
+    + 'résultat rang min max mini maxi et de du des la le les à au aux en pour par ou un une oui page imprimer export exporter importer import valeur '
+    + 'champ colonne colonnes ligne lignes tous toutes aucun aucune statut état visible parents bulletin cahier texte mbn accueil menu rechercher filtrer '
+    + 'trier afficher masquer aide déconnexion profil carnet vie scolaire ent mon bureau numérique enseignant professeur domaine domaines item items socle '
+    + 'cycle sujet titre libellé description publier publié publication brouillon verrouiller verrouillé copier coller tout effacer vider calculer '
+    + 'calculée calculé points pts écrit oral bonus malus sans avec moyen insuffisant satisfaisant très bonne fragile maîtrisé maîtrisée partiellement '
+    + 'non-noté non-rendu rendu oubli justifié liste tableau grille élèves/notes').split(/\s+/);
+  function norm(w) { return String(w).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  var keep = {}; KEEP.forEach(function (w) { keep[norm(w)] = 1; });
+
+  function shapeWord(w) {
+    if (keep[norm(w)]) return w;
+    return w.replace(/\p{Lu}/gu, 'X').replace(/\p{Ll}/gu, 'x').replace(/[0-9]/g, '9');
+  }
+  function shape(s) {
+    s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    return s.replace(/[\p{L}\p{N}]+(?:[-'’][\p{L}\p{N}]+)*/gu, function (w) {
+      if (keep[norm(w)]) return w;
+      return w.split(/([-'’])/).map(function (p) { return /[-'’]/.test(p) ? p : shapeWord(p); }).join('');
+    });
+  }
+
+  var docs = [];
+  var crossFrames = [];
+  function collectDocs(d, label) {
+    docs.push({ d: d, label: label });
+    var fr = d.querySelectorAll('iframe,frame');
+    for (var i = 0; i < fr.length; i++) {
+      var f = fr[i], sub = null;
+      try { sub = f.contentDocument; } catch (e) { sub = null; }
+      var src = f.getAttribute('src') || '';
+      if (sub && sub.documentElement) collectDocs(sub, label + ' > cadre ' + (i + 1));
+      else crossFrames.push(label + ' > cadre ' + (i + 1) + ' : ' + urlShape(src));
+    }
+  }
+
+  var personal = {};
+  function gatherWords(d) {
+    var w = d.createTreeWalker(d.body || d.documentElement, NodeFilter.SHOW_TEXT, null);
+    var n;
+    while ((n = w.nextNode())) {
+      var p = n.parentNode && n.parentNode.nodeName;
+      if (p === 'SCRIPT' || p === 'STYLE') continue;
+      (n.nodeValue.match(/[\p{L}]{2,}/gu) || []).forEach(function (x) { if (!keep[norm(x)]) personal[norm(x)] = 1; });
+    }
+    var vals = d.querySelectorAll('input,textarea,option');
+    for (var i = 0; i < vals.length; i++) {
+      var v = (vals[i].value || '') + ' ' + (vals[i].textContent || '');
+      (v.match(/[\p{L}]{2,}/gu) || []).forEach(function (x) { if (!keep[norm(x)]) personal[norm(x)] = 1; });
+    }
+  }
+  function techVal(s) {
+    s = String(s).replace(/[0-9]/g, '9');
+    s = s.replace(/[\p{L}]{2,}/gu, function (w) { return personal[norm(w)] ? 'Ⓧ' : w; });
+    return s.length > 160 ? s.slice(0, 160) + '…' : s;
+  }
+  function urlShape(u) {
+    try {
+      var x = new URL(u, location.href);
+      var q = []; x.searchParams.forEach(function (v, k) { q.push(techVal(k) + '=…'); });
+      return x.protocol + '//' + x.host + techVal(x.pathname) + (q.length ? '?' + q.join('&') : '') + (x.hash ? ' #' + techVal(x.hash.slice(0, 40)) : '');
+    } catch (e) { return techVal(u); }
+  }
+  var TEXTATTR = { value: 1, placeholder: 1, title: 1, 'aria-label': 1, alt: 1, label: 1, 'data-original-title': 1, 'data-title': 1, 'data-label': 1 };
+  function attrStr(el) {
+    var out = [];
+    for (var i = 0; i < el.attributes.length; i++) {
+      var a = el.attributes[i], n = a.name, v = a.value;
+      if (n === 'style') { out.push('style=…'); continue; }
+      if (TEXTATTR[n]) v = shape(v);
+      else if (n === 'href' || n === 'src' || n === 'action') v = urlShape(v);
+      else v = techVal(v);
+      out.push(v === '' ? n : n + '="' + v + '"');
+    }
+    return out.join(' ');
+  }
+  function desc(el) {
+    if (!el || el.nodeType !== 1) return String(el);
+    var s = el.tagName.toLowerCase();
+    if (el.id) s += '#' + techVal(el.id);
+    if (typeof el.className === 'string' && el.className.trim()) s += '.' + techVal(el.className.trim().split(/\s+/).slice(0, 4).join('.'));
+    return s;
+  }
+  function path(el) {
+    var p = [];
+    while (el && el.nodeType === 1 && el.tagName !== 'HTML' && p.length < 14) { p.unshift(desc(el)); el = el.parentElement; }
+    return p.join(' > ');
+  }
+  function ser(node, depth, budget) {
+    if (budget.n <= 0) return '';
+    if (node.nodeType === 3) {
+      var t = shape(node.nodeValue);
+      budget.n -= t.length;
+      return t;
+    }
+    if (node.nodeType !== 1) return '';
+    var tag = node.tagName.toLowerCase();
+    if (tag === 'script' || tag === 'style') return '<' + tag + '>…</' + tag + '>';
+    var a = attrStr(node);
+    var open = '<' + tag + (a ? ' ' + a : '') + '>';
+    if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') {
+      open = open.replace(/>$/, ' [valeur actuelle : « ' + shape(node.value) + ' »]>');
+    }
+    budget.n -= open.length;
+    if (tag === 'svg') return open + '…</svg>';
+    var ind = '\n' + new Array(depth + 1).join('  ');
+    var inner = '';
+    var kids = node.childNodes;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].nodeType === 3 && !kids[i].nodeValue.trim()) continue;
+      if (budget.n <= 0) { inner += ind + '  …'; break; }
+      var c = ser(kids[i], depth + 1, budget);
+      if (c) inner += ind + '  ' + c;
+    }
+    if (/^(input|br|img|hr|meta|link)$/.test(tag)) return open;
+    return open + inner + (inner ? ind : '') + '</' + tag + '>';
+  }
+  /*KIT-FIN*/
+  function rowOf(el) {
+    var r = el.closest('tr,[role=row],li');
+    if (r) return r;
+    var p = el;
+    for (var i = 0; i < 3 && p.parentElement; i++) p = p.parentElement;
+    return p;
+  }
+  function headerOf(row) {
+    var t = row.closest('table');
+    if (t) {
+      var h = t.querySelector('thead') || t.querySelector('tr');
+      if (h && h !== row) return h;
+    }
+    var g = row.closest('[role=grid],[role=table],[role=treegrid]');
+    if (g) return g.querySelector('[role=row]');
+    return null;
+  }
+  function editable(d) {
+    var list = [];
+    var all = d.querySelectorAll('input,textarea,select,[contenteditable=""],[contenteditable=true]');
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      if (e.tagName === 'INPUT' && /^(hidden|submit|button|image|reset|file|checkbox|radio)$/i.test(e.type)) continue;
+      list.push(e);
+    }
+    return list;
+  }
+  function sig(e) {
+    return e.tagName.toLowerCase() + (e.type ? '[' + e.type + ']' : '')
+      + (e.getAttribute('name') ? ' name="' + techVal(e.getAttribute('name')) + '"' : '')
+      + (typeof e.className === 'string' && e.className.trim() ? ' class="' + techVal(e.className.trim()) + '"' : '');
+  }
+  function visible(e) { var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+
+  var R = [];
+  function L(s) { R.push(s); }
+  collectDocs(document, 'page');
+  docs.forEach(function (x) { try { gatherWords(x.d); } catch (e) {} });
+
+  L('=== Rapport d\'analyse MBN (anonymisé) — ' + new Date().toISOString().slice(0, 10) + ' ===');
+  L('Adresse : ' + urlShape(location.href));
+  L('Titre : ' + shape(document.title));
+  L('Navigateur : ' + (navigator.userAgent.match(/(Firefox|Edg|OPR|Chrome|Safari)\/[0-9]+/) || ['?'])[0] + ' · contexte sécurisé : ' + window.isSecureContext);
+  L('Presse-papiers lisible par un script : ' + !!(navigator.clipboard && navigator.clipboard.readText));
+  var csp = document.querySelector('meta[http-equiv="Content-Security-Policy" i]');
+  L('CSP dans la page : ' + (csp ? techVal(csp.getAttribute('content')) : 'aucune balise meta (une CSP d\'en-tête reste possible ; ce favori, lui, s\'est bien exécuté)'));
+
+  var fw = [];
+  try { if (window.Prototype) fw.push('Prototype.js ' + (window.Prototype.Version || '')); } catch (e) {}
+  try { if (window.Scriptaculous) fw.push('script.aculo.us ' + (window.Scriptaculous.Version || '')); } catch (e) {}
+  try { if (window.jQuery) fw.push('jQuery ' + (window.jQuery.fn && window.jQuery.fn.jquery)); } catch (e) {}
+  try { if (window.angular) fw.push('AngularJS ' + (window.angular.version && window.angular.version.full)); } catch (e) {}
+  try { var ng = document.querySelector('[ng-version]'); if (ng) fw.push('Angular ' + ng.getAttribute('ng-version')); } catch (e) {}
+  try { if (window.Ext) fw.push('ExtJS ' + (window.Ext.versions && window.Ext.versions.extjs && window.Ext.versions.extjs.version || '')); } catch (e) {}
+  try { if (window.PrimeFaces) fw.push('PrimeFaces'); } catch (e) {}
+  try { if (window.RichFaces) fw.push('RichFaces'); } catch (e) {}
+  try { if (window.Vue || document.querySelector('[data-v-app]') || /\sdata-v-[0-9a-f]{6,}/.test(document.body.innerHTML.slice(0, 200000))) fw.push('Vue'); } catch (e) {}
+  try { if (window.ko) fw.push('Knockout'); } catch (e) {}
+  try { if (window.zk) fw.push('ZK'); } catch (e) {}
+  try { if (window.dojo) fw.push('Dojo'); } catch (e) {}
+  try { if (document.querySelector('input[name="javax.faces.ViewState"],input[name="jakarta.faces.ViewState"]')) fw.push('JSF (ViewState)'); } catch (e) {}
+  try {
+    var rk = false;
+    docs.forEach(function (x) { var els = x.d.querySelectorAll('input,textarea,div'); for (var i = 0; i < Math.min(els.length, 400); i++) { for (var k in els[i]) { if (k.indexOf('__react') === 0) { rk = true; break; } } if (rk) break; } });
+    if (rk) fw.push('React');
+  } catch (e) {}
+  L('Bibliothèques repérées : ' + (fw.length ? fw.join(', ') : 'aucune des courantes'));
+  L('Cadres (iframes) : ' + docs.length + ' document(s) lisible(s)' + (crossFrames.length ? ' · ' + crossFrames.length + ' cadre(s) d\'un autre site, non lisibles :' : ''));
+  crossFrames.forEach(function (c) { L('   - ' + c); });
+
+  var ae = document.activeElement;
+  try { while (ae && ae.tagName === 'IFRAME' && ae.contentDocument && ae.contentDocument.activeElement) ae = ae.contentDocument.activeElement; } catch (e) {}
+  L('');
+  L('--- Élément actif (là où tu avais cliqué) ---');
+  if (ae && ae !== document.body && ae.tagName !== 'BODY') {
+    L('Chemin : ' + path(ae));
+    L('Élément : ' + ser(ae.cloneNode(false), 0, { n: 600 }).replace(/\s+/g, ' '));
+    if (ae.value != null) L('Valeur actuelle (forme) : « ' + shape(ae.value) + ' »');
+  } else {
+    L('aucun (rien n\'était sélectionné)');
+  }
+
+  docs.forEach(function (x) {
+    var d = x.d;
+    var eds = editable(d).filter(visible);
+    L('');
+    L('=== Document : ' + x.label + ' — ' + eds.length + ' case(s) modifiable(s) visible(s) ===');
+    var groups = {}, order = [];
+    eds.forEach(function (e) { var s = sig(e); if (!groups[s]) { groups[s] = []; order.push(s); } groups[s].push(e); });
+    order.sort(function (a, b) { return groups[b].length - groups[a].length; });
+    order.slice(0, 15).forEach(function (s) {
+      var g = groups[s], e = g[0];
+      L('');
+      L('• ' + g.length + ' × ' + s);
+      L('  chemin du 1er : ' + path(e));
+      var ex = [];
+      ['id', 'maxlength', 'size', 'inputmode', 'pattern', 'readonly', 'disabled', 'tabindex', 'autocomplete', 'onchange', 'onblur', 'onkeyup', 'onkeydown', 'oninput', 'onfocus'].forEach(function (k) { if (e.hasAttribute(k)) ex.push(k + '="' + techVal(e.getAttribute(k)) + '"'); });
+      if (ex.length) L('  attributs : ' + ex.join(' '));
+      var vs = g.slice(0, 6).map(function (y) { return '« ' + shape(y.value != null ? y.value : y.textContent) + ' »'; });
+      L('  valeurs (forme) des premiers : ' + vs.join(' '));
+      if (g.length > 1) L('  noms des 3 premiers : ' + g.slice(0, 3).map(function (y) { return techVal(y.getAttribute('name') || y.id || '—'); }).join(' | '));
+    });
+    if (order.length > 15) L('… ' + (order.length - 15) + ' autre(s) type(s) de case');
+
+    var target = (ae && ae.ownerDocument === d && ae !== d.body) ? ae : (eds.length ? groups[order[0]][0] : null);
+    if (!target) {
+      var big = null, max = 0;
+      var cands = d.querySelectorAll('table,[role=grid],[role=table],[role=treegrid]');
+      for (var i = 0; i < cands.length; i++) { var n = cands[i].querySelectorAll('tr,[role=row]').length; if (n > max) { max = n; big = cands[i]; } }
+      if (big) {
+        L('');
+        L('--- Aucune case modifiable : plus grand tableau (' + max + ' lignes), 3 premières lignes ---');
+        L('Chemin : ' + path(big));
+        var rows = big.querySelectorAll('tr,[role=row]');
+        for (var j = 0; j < Math.min(3, rows.length); j++) L(ser(rows[j], 0, { n: 2500 }));
+      }
+      return;
+    }
+    var row = rowOf(target);
+    var hd = headerOf(row);
+    if (hd) {
+      L('');
+      L('--- En-tête du tableau (HTML anonymisé) ---');
+      L(ser(hd, 0, { n: 3000 }));
+    }
+    L('');
+    L('--- Ligne d\'un élève (HTML anonymisé) ---');
+    L(ser(row, 0, { n: 5000 }));
+    /* Pas de Array.prototype.xxx.call sur une collection DOM : Prototype.js remplace ces
+       méthodes par des versions qui exigent this.each (erreur rencontrée sur MBN). */
+    var sib = 0;
+    if (row.parentElement) { var ch = row.parentElement.children; for (var si = 0; si < ch.length; si++) if (ch[si].tagName === row.tagName) sib++; } else sib = 1;
+    L('Lignes du même type à côté : ' + sib);
+    var forms = d.querySelectorAll('form');
+    L('');
+    L('--- Formulaires : ' + forms.length + ' ---');
+    for (var f = 0; f < Math.min(forms.length, 6); f++) {
+      var fo = forms[f];
+      L('form ' + desc(fo) + ' method="' + (fo.getAttribute('method') || '') + '" action="' + urlShape(fo.getAttribute('action') || '') + '" · ' + fo.elements.length + ' champs');
+    }
+    var btns = d.querySelectorAll('button,input[type=submit],input[type=button],a[role=button],[role=button]');
+    var bl = [];
+    for (var b = 0; b < btns.length && bl.length < 25; b++) { if (!visible(btns[b])) continue; var tx = shape(btns[b].textContent || btns[b].value || btns[b].getAttribute('title') || btns[b].getAttribute('aria-label') || ''); if (tx) bl.push(tx); }
+    L('Boutons visibles : ' + (bl.length ? bl.join(' · ') : 'aucun'));
+  });
+
+  L('');
+  L('=== Fin du rapport ===');
+  var report = R.join('\n');
+
+  var P = document.createElement('div');
+  P.id = 'mbn-analyse-panel';
+  P.setAttribute('style', 'position:fixed;inset:4% 6%;z-index:2147483647;background:#fff;color:#0e1a26;border:2px solid #1a252f;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;font:14px system-ui,sans-serif');
+  var H = document.createElement('div');
+  H.setAttribute('style', 'display:flex;gap:8px;align-items:center;padding:10px 12px;background:#1a252f;color:#fff;border-radius:6px 6px 0 0');
+  H.innerHTML = '<strong style="flex:1">🔎 Rapport anonymisé — relis-le, puis copie-le</strong>';
+  function mk(t, fn) { var b = document.createElement('button'); b.textContent = t; b.setAttribute('style', 'font:inherit;padding:5px 12px;border-radius:5px;border:0;cursor:pointer;background:#fff;color:#1a252f'); b.onclick = fn; H.appendChild(b); return b; }
+  var T = document.createElement('textarea');
+  T.readOnly = true; T.value = report;
+  T.setAttribute('style', 'flex:1;margin:0;border:0;padding:10px 12px;font:12px ui-monospace,Consolas,monospace;resize:none;white-space:pre;color:#0e1a26;background:#fff');
+  var cp = mk('⧉ Copier le rapport', function () {
+    function ok() { cp.textContent = '✓ Copié'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(report).then(ok, function () { T.select(); document.execCommand('copy'); ok(); });
+    else { T.select(); document.execCommand('copy'); ok(); }
+  });
+  function close() { P.remove(); document.removeEventListener('keydown', esc, true); }
+  function esc(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+  mk('✕', close);
+  document.addEventListener('keydown', esc, true);
+  P.appendChild(H); P.appendChild(T);
+  if (!document.body || document.body.tagName === 'FRAMESET') {
+    var W = window.open('', '_blank');
+    if (!W) { alert('Analyse MBN : la page est découpée en cadres et la fenêtre du rapport a été bloquée. Autorise les fenêtres pour MBN puis recommence.'); return; }
+    W.document.title = 'Rapport MBN (anonymisé)';
+    var wt = W.document.createElement('textarea');
+    wt.value = report; wt.setAttribute('style', 'width:100%;height:95vh;font:12px monospace');
+    W.document.body.appendChild(wt);
+    return;
+  }
+  document.body.appendChild(P);
+}
+
+/* Favori « observateur » : décrit le panneau de l'élève, les événements écoutés par MBN,
+   puis enregistre ce qui se passe pendant une saisie faite à la main (événements, champs
+   modifiés, requêtes envoyées : adresse et NOMS de paramètres seulement). Les outils
+   d'anonymisation (shape, techVal, ser…) sont ceux de mbnAnalyse, insérés devant. */
+function mbnObserveBody() {
+  if (window.__mbnObs) { alert('Une observation est déjà en cours : utilise le bandeau en bas de la page.'); return; }
+  var OLD = document.getElementById('mbn-analyse-panel'); if (OLD) OLD.remove();
+  gatherWords(document);
+  var T0 = Date.now();
+  function ms() { return ((Date.now() - T0) / 1000).toFixed(2) + ' s'; }
+  function uniqCount(arr) {
+    var c = {}, o = [];
+    for (var i = 0; i < arr.length; i++) { if (!c[arr[i]]) { c[arr[i]] = 0; o.push(arr[i]); } c[arr[i]]++; }
+    var r = [];
+    for (var j = 0; j < o.length; j++) r.push(o[j] + (c[o[j]] > 1 ? ' ×' + c[o[j]] : ''));
+    return r;
+  }
+
+  var R = [];
+  function L(x) { R.push(x); }
+  L('=== Observation MBN (anonymisée) — ' + new Date().toISOString().slice(0, 10) + ' ===');
+  L('Adresse : ' + urlShape(location.href));
+
+  var note = document.querySelector('[id$="eleve__note"]');
+  var aside = (note && note.closest('aside')) || document.querySelector('aside.evaluations-eleve');
+  L('');
+  L('--- Panneau de l\'élève (HTML anonymisé) ---');
+  L(aside ? 'Chemin : ' + path(aside) : 'introuvable (aucun élément aside.evaluations-eleve)');
+  if (aside) L(ser(aside, 0, { n: 15000 }));
+
+  if (aside) {
+    var sels = aside.querySelectorAll('select');
+    L('');
+    L('--- Listes déroulantes du panneau : ' + sels.length + ' ---');
+    for (var i = 0; i < sels.length; i++) {
+      var sl = sels[i], op = [];
+      for (var k = 0; k < sl.options.length; k++) {
+        var o = sl.options[k], v = o.value;
+        op.push('[' + (v.length <= 8 && !personal[norm(v)] ? v : techVal(v)) + '] ' + shape(o.textContent) + (o.selected ? ' ◀ choisi' : ''));
+      }
+      L(desc(sl) + ' :');
+      for (var m = 0; m < op.length; m++) L('    ' + op[m]);
+    }
+    var tas = aside.querySelectorAll('textarea,[contenteditable=""],[contenteditable=true]');
+    L('Zones de texte dans le panneau : ' + tas.length + (tas.length ? ' — ' + (function () { var x = []; for (var t = 0; t < tas.length; t++) x.push(desc(tas[t])); return x.join(' | '); })() : ''));
+  }
+
+  function evInfo(el) {
+    var out = [];
+    try {
+      var jq = window.jQuery;
+      var ev = jq && jq._data && jq._data(el, 'events');
+      if (ev) for (var t in ev) {
+        var hs = ev[t], how = [];
+        for (var i = 0; i < hs.length; i++) how.push(hs[i].selector ? 'délégué à « ' + techVal(hs[i].selector) + ' »' : 'direct');
+        out.push('jQuery ' + t + ' : ' + uniqCount(how).join(', '));
+      }
+    } catch (e) { out.push('jQuery : illisible (' + e.message + ')'); }
+    try {
+      if (window.Element && window.Element.retrieve && el.nodeType === 1) {
+        var reg = window.Element.retrieve(el, 'prototype_event_registry');
+        if (reg && reg.keys) { var ks = reg.keys(); for (var j = 0; j < ks.length; j++) out.push('Prototype ' + ks[j] + ' ×' + ((reg.get(ks[j]) || []).length)); }
+      }
+    } catch (e) {}
+    if (el.attributes) for (var a = 0; a < el.attributes.length; a++) { var nm = el.attributes[a].name; if (nm.indexOf('on') === 0) out.push('attribut ' + nm + ' = ' + techVal(el.attributes[a].value)); }
+    return out;
+  }
+  L('');
+  L('--- Événements écoutés ---');
+  var probe = [];
+  if (note) probe.push(['case de note', note]);
+  if (aside) { var ss = aside.querySelectorAll('select,textarea,input[type=text]'); for (var p2 = 0; p2 < ss.length; p2++) if (ss[p2] !== note) probe.push([desc(ss[p2]), ss[p2]]); probe.push(['panneau', aside]); }
+  var fd = document.getElementById('form_devoir'); if (fd) probe.push(['formulaire du devoir', fd]);
+  var e1 = document.querySelector('.js-eleve'); if (e1) { probe.push(['élève de la liste', e1]); for (var c = 0; c < e1.children.length; c++) probe.push(['  enfant ' + (c + 1) + ' ' + desc(e1.children[c]), e1.children[c]]); }
+  var col = document.querySelector('.colonne_eleves'); if (col) probe.push(['liste des élèves', col]);
+  probe.push(['document', document]); probe.push(['body', document.body]); probe.push(['window', window]);
+  for (var q = 0; q < probe.length; q++) {
+    var info = evInfo(probe[q][1]);
+    L(probe[q][0] + ' : ' + (info.length ? '' : 'rien de visible'));
+    for (var z = 0; z < info.length; z++) L('    ' + info[z]);
+  }
+
+  var fn = [];
+  try { for (var key in window) { try { if (typeof window[key] === 'function' && /(eval|note|comp|sav|sauv|auto|eleve|devoir|appr|remarq|saisi|valid)/i.test(key) && !/^on/.test(key)) fn.push(key); } catch (e) {} } } catch (e) {}
+  L('');
+  L('Fonctions globales en rapport : ' + (fn.length ? fn.slice(0, 80).map(techVal).join(', ') : 'aucune'));
+
+  /* --- Instantané des champs de formulaire, comparé à la fin --- */
+  function snap() {
+    var m = {}, fs = document.forms;
+    for (var i = 0; i < fs.length; i++) {
+      var els = fs[i].elements;
+      for (var j = 0; j < els.length; j++) {
+        var e = els[j];
+        var id = 'form ' + (i + 1) + ' · ' + (e.name || e.id || e.tagName) + ' #' + j;
+        m[id] = { v: e.type === 'checkbox' || e.type === 'radio' ? String(e.checked) : String(e.value), el: e };
+      }
+    }
+    return m;
+  }
+  var before = snap();
+
+  /* --- Journal --- */
+  var LOG = [];
+  function log(x) { if (LOG.length < 600) LOG.push(x); upd(); }
+  var bar;
+  function mine(t) { return bar && t && bar.contains && bar.contains(t); }
+  function evLog(e) {
+    if (mine(e.target)) return;
+    var t = e.target, d = desc(t);
+    var extra = '';
+    if (e.type === 'keydown') extra = /^(Tab|Enter|Escape|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Backspace|Delete)$/.test(e.key) ? ' [' + e.key + ']' : ' [caractère]';
+    if ((e.type === 'input' || e.type === 'change' || e.type === 'focusout') && t && t.value != null) extra = ' valeur « ' + shape(t.value) + ' »';
+    var last = LOG[LOG.length - 1];
+    var line = e.type + ' sur ' + d + extra;
+    if (last && last.kind === 'ev' && last.line === line) { last.n++; upd(); return; }
+    log({ kind: 'ev', t: ms(), line: line, n: 1 });
+  }
+  var TYPES = ['focusin', 'focusout', 'keydown', 'input', 'change', 'click', 'submit', 'blur'];
+  for (var ti = 0; ti < TYPES.length; ti++) document.addEventListener(TYPES[ti], evLog, true);
+
+  function bodyKeys(b) {
+    try {
+      if (b == null) return 'aucun corps';
+      var ks = [];
+      if (typeof b === 'string') {
+        var s = b.trim();
+        if (s.charAt(0) === '{' || s.charAt(0) === '[') { var o = JSON.parse(s); for (var k in o) ks.push(k); }
+        else { var parts = s.split('&'); for (var i = 0; i < parts.length; i++) { var kk = parts[i].split('=')[0]; try { kk = decodeURIComponent(kk.replace(/\+/g, ' ')); } catch (e) {} ks.push(kk); } }
+      } else if (typeof FormData !== 'undefined' && b instanceof FormData) { b.forEach(function (v, k) { ks.push(k); }); }
+      else if (typeof URLSearchParams !== 'undefined' && b instanceof URLSearchParams) { b.forEach(function (v, k) { ks.push(k); }); }
+      else return 'corps de type ' + Object.prototype.toString.call(b);
+      var masked = []; for (var j = 0; j < ks.length; j++) masked.push(techVal(ks[j]));
+      var u = uniqCount(masked);
+      return ks.length + ' paramètre(s) : ' + u.slice(0, 60).join(', ') + (u.length > 60 ? ', …' : '');
+    } catch (e) { return 'corps illisible (' + e.message + ')'; }
+  }
+  function respKeys(txt) {
+    try { var s = String(txt || '').trim(); if (s.charAt(0) === '{') { var o = JSON.parse(s), k = []; for (var x in o) k.push(techVal(x)); return 'JSON {' + k.slice(0, 30).join(', ') + '}'; } return s.length + ' caractères' + (/^</.test(s) ? ' (HTML/XML)' : ''); } catch (e) { return '?'; }
+  }
+  var XO = XMLHttpRequest.prototype.open, XS = XMLHttpRequest.prototype.send, FO = window.fetch, BO = navigator.sendBeacon;
+  XMLHttpRequest.prototype.open = function (mth, url) { this.__mbn = { m: mth, u: url }; return XO.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function (body) {
+    var r = this.__mbn, xhr = this;
+    if (r) {
+      var rec = { kind: 'req', t: ms(), line: 'REQUÊTE (XHR) ' + r.m + ' ' + urlShape(r.u) + ' — ' + bodyKeys(body) };
+      log(rec);
+      xhr.addEventListener('loadend', function () { var rt = ''; try { rt = xhr.responseText; } catch (e) {} rec.line += ' → réponse ' + xhr.status + ', ' + respKeys(rt); upd(); });
+    }
+    return XS.apply(this, arguments);
+  };
+  if (FO) window.fetch = function (input, init) {
+    var u = typeof input === 'string' ? input : (input && input.url) || String(input);
+    var rec = { kind: 'req', t: ms(), line: 'REQUÊTE (fetch) ' + ((init && init.method) || (input && input.method) || 'GET') + ' ' + urlShape(u) + ' — ' + bodyKeys(init && init.body) };
+    log(rec);
+    var pr = FO.apply(this, arguments);
+    pr.then(function (res) { rec.line += ' → réponse ' + res.status; upd(); }, function (er) { rec.line += ' → échec'; upd(); });
+    return pr;
+  };
+  if (BO) navigator.sendBeacon = function (u, b) { log({ kind: 'req', t: ms(), line: 'REQUÊTE (sendBeacon) ' + urlShape(u) + ' — ' + bodyKeys(b) }); return BO.apply(navigator, arguments); };
+
+  /* ⚠️ Le bandeau se met à jour lui-même (compteur) : ses propres mutations sont ignorées,
+     et upd() n'écrit que si le texte change — sinon boucle sans fin observateur ↔ bandeau. */
+  var MO = new MutationObserver(function (list) {
+    var any = false;
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      if (mine(m.target) || m.target === bar) continue;
+      if (m.type === 'childList' && ((m.addedNodes.length === 1 && m.addedNodes[0] === bar) || (m.removedNodes.length === 1 && m.removedNodes[0] === bar))) continue;
+      var line = m.type === 'attributes' ? 'attribut ' + m.attributeName + ' modifié sur ' + desc(m.target) : 'contenu modifié dans ' + desc(m.target) + ' (+' + m.addedNodes.length + ' / −' + m.removedNodes.length + ')';
+      var last = LOG[LOG.length - 1];
+      any = true;
+      if (last && last.kind === 'mut' && last.line === line) { last.n++; continue; }
+      log({ kind: 'mut', t: ms(), line: line, n: 1 });
+    }
+    if (any) upd();
+  });
+  MO.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'value', 'data-verrouille', 'style', 'disabled', 'title'] });
+
+  bar = document.createElement('div');
+  bar.setAttribute('style', 'position:fixed;right:12px;bottom:12px;z-index:2147483647;background:#1a252f;color:#fff;border-radius:8px;padding:10px 12px;font:14px system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center;max-width:520px');
+  var lbl = document.createElement('span');
+  bar.appendChild(lbl);
+  function btn(t, f, bg) { var b = document.createElement('button'); b.textContent = t; b.setAttribute('style', 'font:inherit;padding:5px 12px;border-radius:5px;border:0;cursor:pointer;background:' + bg + ';color:#1a252f'); b.onclick = f; bar.appendChild(b); return b; }
+  function upd() { if (lbl) { var nr = 0; for (var i = 0; i < LOG.length; i++) if (LOG[i].kind === 'req') nr++; var tx = '👁 Observation en cours — fais ta saisie… (' + LOG.length + ' faits, ' + nr + ' requête' + (nr > 1 ? 's' : '') + ')'; if (lbl.textContent !== tx) lbl.textContent = tx; } }
+  function stop() {
+    for (var i = 0; i < TYPES.length; i++) document.removeEventListener(TYPES[i], evLog, true);
+    XMLHttpRequest.prototype.open = XO; XMLHttpRequest.prototype.send = XS;
+    if (FO) window.fetch = FO;
+    if (BO) navigator.sendBeacon = BO;
+    MO.disconnect();
+    bar.remove();
+    window.__mbnObs = null;
+  }
+  btn('Terminer', function () {
+    stop();
+    var after = snap(), ch = [];
+    for (var id in after) {
+      var b = before[id];
+      if (!b) ch.push('nouveau : ' + techVal(id) + ' = « ' + shape(after[id].v) + ' »');
+      else if (b.v !== after[id].v) ch.push(techVal(id) + ' (' + after[id].el.type + ') : « ' + shape(b.v) + ' » → « ' + shape(after[id].v) + ' »');
+    }
+    for (var id2 in before) if (!after[id2]) ch.push('disparu : ' + techVal(id2));
+    L('');
+    L('--- Champs de formulaire changés pendant l\'observation : ' + ch.length + ' ---');
+    for (var c = 0; c < Math.min(ch.length, 80); c++) L('  ' + ch[c]);
+    L('');
+    L('--- Déroulé de l\'observation (' + ms() + ') ---');
+    for (var j = 0; j < LOG.length; j++) L(LOG[j].t + '  ' + LOG[j].line + (LOG[j].n > 1 ? '  (×' + LOG[j].n + ')' : ''));
+    if (LOG.length >= 600) L('… journal plein (600 lignes)');
+    L('');
+    L('=== Fin de l\'observation ===');
+    showReport(R.join('\n'));
+  }, '#fff');
+  btn('Annuler', function () { stop(); }, '#e6ebf2');
+  document.body.appendChild(bar);
+  window.__mbnObs = true;
+  upd();
+
+  function showReport(report) {
+    var P = document.createElement('div');
+    P.id = 'mbn-analyse-panel';
+    P.setAttribute('style', 'position:fixed;inset:4% 6%;z-index:2147483647;background:#fff;color:#0e1a26;border:2px solid #1a252f;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;font:14px system-ui,sans-serif');
+    var H = document.createElement('div');
+    H.setAttribute('style', 'display:flex;gap:8px;align-items:center;padding:10px 12px;background:#1a252f;color:#fff;border-radius:6px 6px 0 0');
+    H.innerHTML = '<strong style="flex:1">👁 Observation anonymisée — relis-la, puis copie-la</strong>';
+    function mk(t, f) { var b = document.createElement('button'); b.textContent = t; b.setAttribute('style', 'font:inherit;padding:5px 12px;border-radius:5px;border:0;cursor:pointer;background:#fff;color:#1a252f'); b.onclick = f; H.appendChild(b); return b; }
+    var TA = document.createElement('textarea');
+    TA.readOnly = true; TA.value = report;
+    TA.setAttribute('style', 'flex:1;margin:0;border:0;padding:10px 12px;font:12px ui-monospace,Consolas,monospace;resize:none;white-space:pre;color:#0e1a26;background:#fff');
+    var cp = mk('⧉ Copier le rapport', function () {
+      function ok() { cp.textContent = '✓ Copié'; }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(report).then(ok, function () { TA.select(); document.execCommand('copy'); ok(); });
+      else { TA.select(); document.execCommand('copy'); ok(); }
+    });
+    function close() { P.remove(); document.removeEventListener('keydown', esc, true); }
+    function esc(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    mk('✕', close);
+    document.addEventListener('keydown', esc, true);
+    P.appendChild(H); P.appendChild(TA);
+    document.body.appendChild(P);
+  }
+}
+
+var code = '(function(){try{(' + mbnAnalyse.toString() + ')();}catch(e){alert("Analyse MBN — erreur : "+(e&&e.message||e));}})();void 0';
+/* Observateur = outils d'anonymisation de mbnAnalyse (entre les marqueurs KIT) + corps de mbnObserveBody */
+var _src = mbnAnalyse.toString();
+var _kit = _src.slice(_src.indexOf('/*KIT-DEBUT*/'), _src.indexOf('/*KIT-FIN*/'));
+var _ob = mbnObserveBody.toString();
+_ob = _ob.slice(_ob.indexOf('{') + 1, _ob.lastIndexOf('}'));
+var codeObs = '(function(){try{' + _kit + _ob + '}catch(e){alert("Observation MBN — erreur : "+(e&&e.message||e));}})();void 0';
+var TEST = 'javascript:' + encodeURIComponent('alert("✅ Le favori fonctionne sur cette page ("+location.host+").");void 0');
+document.getElementById('bm').href = 'javascript:' + encodeURIComponent(code);
+document.getElementById('bmtest').href = TEST;
+document.getElementById('bmobs').href = 'javascript:' + encodeURIComponent(codeObs);
+document.getElementById('bmobs').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('obs-msg').textContent = '← fais-le glisser dans la barre de favoris.'; });
+document.getElementById('copyobs').addEventListener('click', function () { var b = this; navigator.clipboard.writeText('javascript:' + encodeURIComponent(codeObs)).then(function () { b.textContent = '✓ Code copié'; }); });
+document.getElementById('tryobs').addEventListener('click', function () { (0, eval)(codeObs); });
+document.getElementById('bmtest').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('bm-msg').textContent = '← fais-les glisser dans la barre de favoris : les cliquer ici ne sert à rien.'; });
+document.getElementById('bm').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('bm-msg').textContent = '← fais-le glisser dans la barre de favoris : le cliquer ici ne sert à rien.'; });
+document.getElementById('copy').addEventListener('click', function () {
+  var b = this;
+  navigator.clipboard.writeText('javascript:' + encodeURIComponent(code)).then(function () { b.textContent = '✓ Code copié'; });
+});
+document.getElementById('try').addEventListener('click', function () {
+  document.querySelector('#demo input').focus();
+  mbnAnalyse();
+});
+</script>
+</body>
+</html>

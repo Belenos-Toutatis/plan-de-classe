@@ -1826,6 +1826,11 @@ body.rendu-projecting #mrendu-body .mres-tbl{font-size:1em}
 .xc-tbl td:first-child{font-family:var(--font-serif);font-weight:600}
 .xc-tbl .xc-tot td{border-top:2px solid var(--rule-line);background:var(--paper-warm)}
 @media (max-width:700px){.xc-row{grid-template-columns:80px minmax(0,1fr)}.xc-row .xc-num{grid-column:1/-1;text-align:left}}
+/* Vers MBN (v2.137.0) — favori « Remplir MBN » */
+.mbn-steps{margin:0;padding-left:22px}
+.mbn-steps li{margin:8px 0}
+.mbn-bm{display:inline-block;padding:7px 14px;border-radius:6px;background:var(--ink-blue);color:var(--paper) !important;text-decoration:none;font-weight:600;cursor:grab}
+.mbn-codes{font-family:var(--font-mono);font-size:.9em}
 /* Petites fenêtres des évaluations (v2.131.0) */
 .cc-preview{margin:0;padding:8px 10px;background:var(--paper-warm);color:var(--ink-deep);border:1px solid var(--rule-line);border-radius:var(--radius-md);font:.8em/1.5 var(--font-mono);white-space:pre;overflow-x:auto;max-height:120px}
 .cc-all{font-weight:400;font-size:.95em;margin-left:6px}
@@ -5351,6 +5356,29 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   </div>
 </div>
 
+<!-- 🏫 Vers MBN (v2.137.0) : copie des résultats d'un devoir + favori « Remplir MBN » qui les
+     saisit dans la page de MBN (code du favori : bloc texte « mbn-fill-src », avant le gros script) -->
+<div id="mmbn" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:min(96vw,720px);width:100%">
+    <div class="lst-head">
+      <h2>🏫 Envoyer vers MBN</h2>
+      <span class="lst-count" id="mmbn-sub"></span>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('mmbn')" aria-label="Fermer" style="margin-left:auto;padding:4px 8px">✕</button>
+    </div>
+    <div id="mmbn-synth" class="bsynth"></div>
+    <div id="mmbn-warn"></div>
+    <ol class="mbn-steps">
+      <li><strong>Une seule fois</strong> : fais glisser ce bouton dans la barre de favoris du navigateur (<kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>B</kbd> si elle est cachée) :
+        <a class="mbn-bm" id="mmbn-bm" href="#" title="À faire glisser dans la barre de favoris — le cliquer ici ne fait rien" onclick="event.preventDefault();toast('Fais-le glisser dans la barre de favoris : il sert sur la page de MBN.','info')">📥 Remplir MBN</a>
+        <br><span class="nd-dim" style="font-size:.85em">Si le glisser ne marche pas : <button class="btn btn-g btn-sm" onclick="_mbnCopyBookmarklet()">⧉ Copier le code du favori</button>, crée un favori et colle ce code à la place de l'adresse.</span></li>
+      <li><button class="btn btn-p" onclick="_mbnCopy()">⧉ Copier les résultats pour MBN</button></li>
+      <li>Dans MBN, ouvre la <strong>saisie des notes de ce devoir</strong> et clique sur le favori <strong>📥 Remplir MBN</strong>. Colle (<kbd>Ctrl</kbd>+<kbd>V</kbd>) dans la case qui s'affiche : un aperçu montre ce qui sera écrit, élève par élève, avant de remplir.</li>
+    </ol>
+    <p class="nd-dim" style="font-size:.85em;margin:10px 0 0">Les élèves sont retrouvés par leur nom. Les cases déjà remplies dans MBN sont remplacées ; une case vide ici ne touche pas à MBN. Les compétences sont associées par leur code (ceux de MBN). Les résultats passent par le presse-papiers de cet ordinateur et vont directement à MBN.</p>
+    <div class="hm-foot"><span></span><button class="btn btn-g" onclick="closeMod2('mmbn')">Fermer</button></div>
+  </div>
+</div>
+
 <!-- Détail du calcul d'une note (clic sur ligne dans Historique → Notes) -->
 <!-- 🪪 Fiche élève (consultation + rédaction de la remarque de bulletin), Précédent / Suivant -->
 <div id="mrw" class="mo" onclick="closeMod(this,event)" onkeydown="_rwKeydown(event)">
@@ -7903,6 +7931,319 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 <!-- Format d'import d'une évaluation : copie EXACTE de docs/format-import-evaluation.md (test/run.test.js le vérifie). Téléchargée par le bouton « 📄 Format du fichier ». -->
 <!-- Fichier de prise de rendez-vous pour un collègue (v2.136.0) : styles et code du fichier
      autonome, recopiés tels quels par _rexHTML (jamais exécutés ici — type text/plain). -->
+<script type="text/plain" id="mbn-fill-src">/* Favori « Remplir MBN » — généré par Plan de classe. Exécuté DANS la page de saisie des
+   notes d'un devoir de MBN (Mon Bureau Numérique, Kosmos). Il lit les résultats copiés par
+   Plan de classe (bouton « Vers MBN » de 📊 Résultats du devoir), les associe aux élèves de
+   MBN par le nom, montre un aperçu, puis remplit élève par élève en passant par l'interface
+   de MBN (clic sur l'élève, valeur posée, événement « change ») : c'est MBN qui calcule et
+   enregistre. Rien n'est envoyé ailleurs qu'à MBN.
+   MBN charge Prototype.js : pas de méthode d'Array appliquée à une collection DOM, et pas
+   de JSON.stringify (Prototype ancien le fausse). */
+(function () {
+  var PID = 'pdc-mbn-panel';
+  if (document.getElementById(PID)) document.getElementById(PID).remove();
+
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { var l = (r || document).querySelectorAll(s), a = []; for (var i = 0; i < l.length; i++) a.push(l[i]); return a; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[-'’.]/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function tight(s) { return norm(s).replace(/ /g, ''); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function codeKey(s) { return String(s || '').toUpperCase().replace(/\s+/g, ''); }
+  function fmtNote(n) { var r = Math.round(n * 100) / 100; return String(r).replace('.', ','); }
+  function numOf(s) { var v = parseFloat(String(s || '').replace(',', '.')); return isFinite(v) ? v : null; }
+
+  /* ── Panneau ── */
+  var P = document.createElement('div');
+  P.id = PID;
+  P.setAttribute('style', 'position:fixed;inset:3% 5%;z-index:2147483647;background:#fff;color:#0e1a26;border:2px solid #1a252f;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;font:14px system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45');
+  P.innerHTML = '<div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:#1a252f;color:#fff;border-radius:6px 6px 0 0">'
+    + '<strong style="flex:1">📥 Remplir MBN depuis Plan de classe</strong>'
+    + '<button data-x="close" style="font:inherit;padding:4px 10px;border:0;border-radius:5px;background:#fff;color:#1a252f;cursor:pointer">✕</button></div>'
+    + '<div data-x="body" style="flex:1;overflow:auto;padding:12px 16px"></div>'
+    + '<div data-x="foot" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:10px 14px;border-top:1px solid #c8d2e0;background:#f4f6fa;border-radius:0 0 6px 6px"></div>';
+  document.body.appendChild(P);
+  var BODY = $('[data-x="body"]', P), FOOT = $('[data-x="foot"]', P);
+  var running = false, stopAsked = false, hooked = false;
+  function close() {
+    if (running) { stopAsked = true; return; }
+    unhook(); P.remove(); document.removeEventListener('keydown', onKey, true);
+  }
+  function onKey(e) { if (e.key === 'Escape' && !running) { e.stopPropagation(); close(); } }
+  document.addEventListener('keydown', onKey, true);
+  $('[data-x="close"]', P).onclick = close;
+  function btn(label, fn, main) {
+    var b = document.createElement('button');
+    b.textContent = label;
+    b.setAttribute('style', 'font:inherit;padding:7px 14px;border-radius:5px;cursor:pointer;border:1px solid ' + (main ? '#1a252f;background:#1a252f;color:#fff;font-weight:600' : '#c8d2e0;background:#fff;color:#1a252f'));
+    b.onclick = fn;
+    FOOT.appendChild(b);
+    return b;
+  }
+  function note(html, kind) {
+    var c = { warn: 'background:#fff3d6;border:1px solid #e9c46a;color:#5c3a00', err: 'background:#fde8e7;border:1px solid #e3a49a;color:#7d2017', ok: 'background:#e3f4e8;border:1px solid #9ccfa9;color:#14532d', info: 'background:#eaf2fc;border:1px solid #b5cde8;color:#1f3a5c' }[kind || 'info'];
+    return '<div style="' + c + ';border-radius:6px;padding:8px 12px;margin:0 0 10px">' + html + '</div>';
+  }
+
+  /* ── Lecture de la page MBN ── */
+  function readMbn() {
+    var aside = $('aside.evaluations-eleve') || ($('[id$="eleve__note"]') && $('[id$="eleve__note"]').closest('aside'));
+    var list = $$('.js-eleve').map(function (el) {
+      var nt = $('.eleve__note', el);
+      return {
+        el: el, uid: el.getAttribute('data-eleveuid') || '',
+        nom: el.getAttribute('data-elevenom') || '', prenom: el.getAttribute('data-eleveprenom') || '',
+        locked: String(el.getAttribute('data-verrouille')) === 'true',
+        noteTxt: nt ? nt.textContent.trim() : ''
+      };
+    });
+    var comps = aside ? $$('select.select_competence', aside).map(function (s) {
+      var lb = s.id ? $('label[for="' + s.id + '"]') : null;
+      var txt = lb ? lb.textContent.replace(/\s+/g, ' ').trim() : '';
+      return { id: s.id, idSc: s.getAttribute('data-id-sous-competence') || '', code: codeKey(txt.split(/\s[-–—]\s/)[0]), label: txt };
+    }) : [];
+    var bareme = null;
+    var f = document.getElementById('form_devoir');
+    if (f && f.elements && f.elements.DEVOIR_BAREME) bareme = numOf(f.elements.DEVOIR_BAREME.value);
+    if (bareme == null) { var b = $('.eleve__bareme'); if (b) bareme = numOf(b.textContent); }
+    var ap = aside ? $('[id$="eleve__appreciation"]', aside) : null;
+    return { aside: aside, list: list, comps: comps, bareme: bareme, apprMax: ap ? (parseInt(ap.getAttribute('maxlength'), 10) || 0) : 0 };
+  }
+
+  /* ── Association des élèves par le nom ── */
+  function match(mbnList, eleves) {
+    var used = {}, res = [];
+    function pick(cands) { var free = cands.filter(function (i) { return !used[i]; }); return free.length === 1 ? free[0] : (free.length > 1 ? -2 : -1); }
+    mbnList.forEach(function (m) {
+      var mn = norm(m.nom), mp = norm(m.prenom), idx = -1, how = '';
+      var c1 = [], c2 = [], c3 = [], c4 = [];
+      eleves.forEach(function (e, i) {
+        var en = norm(e.nom), ep = norm(e.prenom);
+        if (en === mn && ep === mp) c1.push(i);
+        if (en === mp && ep === mn) c2.push(i);
+        if (tight(e.nom) === tight(m.nom) && (ep.indexOf(mp) === 0 || mp.indexOf(ep) === 0) && ep && mp) c3.push(i);
+        if (tight(e.nom + e.prenom) === tight(m.nom + m.prenom)) c4.push(i);
+      });
+      var tries = [[c1, ''], [c4, 'graphie différente'], [c2, 'nom et prénom inversés'], [c3, 'prénom abrégé']];
+      for (var t = 0; t < tries.length && idx < 0; t++) {
+        var p = pick(tries[t][0]);
+        if (p >= 0) { idx = p; how = tries[t][1]; }
+        else if (p === -2) { idx = -2; break; }
+      }
+      if (idx >= 0) used[idx] = true;
+      res.push({ m: m, i: idx, how: how });
+    });
+    var missing = [];
+    eleves.forEach(function (e, i) { if (!used[i]) missing.push(e); });
+    return { rows: res, missing: missing };
+  }
+
+  /* ── Étape 1 : récupérer les résultats ── */
+  var DATA = null, MBN = null, PLAN = null;
+  function askData(msg) {
+    BODY.innerHTML = (msg ? note(msg, 'err') : '')
+      + '<p style="margin:0 0 8px"><strong>1.</strong> Dans Plan de classe : <em>📊 Résultats du devoir → 📤 Export ENT → 🏫 Vers MBN → ⧉ Copier les résultats</em>.</p>'
+      + '<p style="margin:0 0 8px"><strong>2.</strong> Ici, clique dans la case ci-dessous et appuie sur <kbd>Ctrl</kbd>+<kbd>V</kbd> (ou sur « Lire le presse-papiers »).</p>'
+      + '<textarea data-x="paste" placeholder="Colle ici les résultats copiés depuis Plan de classe" style="width:100%;height:90px;font:12px ui-monospace,Consolas,monospace;border:1px solid #c8d2e0;border-radius:6px;padding:8px;color:#0e1a26;background:#fff"></textarea>';
+    FOOT.innerHTML = '';
+    btn('Fermer', close);
+    btn('📋 Lire le presse-papiers', function () {
+      if (!navigator.clipboard || !navigator.clipboard.readText) { askData('Ce navigateur ne permet pas de lire le presse-papiers : colle avec Ctrl+V.'); return; }
+      navigator.clipboard.readText().then(load, function () { askData('Lecture refusée par le navigateur : colle avec Ctrl+V dans la case.'); });
+    }, true);
+    var ta = $('[data-x="paste"]', BODY);
+    ta.addEventListener('input', function () { if (ta.value.trim()) load(ta.value); });
+    setTimeout(function () { ta.focus(); }, 30);
+  }
+  function load(txt) {
+    var d = null;
+    try { var s = String(txt || ''); d = JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1)); } catch (e) { d = null; }
+    if (!d || d.app !== 'plan-de-classe' || d.type !== 'mbn-notes' || !d.eleves || !d.eleves.length) {
+      askData('Ce n\'est pas un envoi de Plan de classe. Recopie les résultats depuis la fenêtre « Vers MBN ».');
+      return;
+    }
+    DATA = d;
+    preview();
+  }
+
+  /* ── Étape 2 : aperçu ── */
+  function preview() {
+    MBN = readMbn();
+    if (!MBN.list.length || !MBN.aside) {
+      BODY.innerHTML = note('Je ne trouve pas la saisie des notes : ouvre le devoir dans MBN, onglet de saisie des notes (liste des élèves à gauche, panneau à droite), puis reclique sur le favori.', 'err');
+      FOOT.innerHTML = ''; btn('Fermer', close); return;
+    }
+    var mres = match(MBN.list, DATA.eleves);
+    var scale = (MBN.bareme && DATA.devoir && DATA.devoir.bareme && Math.abs(MBN.bareme - DATA.devoir.bareme) > 1e-9) ? MBN.bareme / DATA.devoir.bareme : 1;
+    var mbnCodes = {}; MBN.comps.forEach(function (c) { mbnCodes[c.code] = c; });
+    var ourCodes = {}; DATA.eleves.forEach(function (e) { for (var k in (e.comps || {})) ourCodes[codeKey(k)] = 1; });
+    var compMissingInMbn = [], compMissingInOurs = [];
+    for (var oc in ourCodes) if (!mbnCodes[oc]) compMissingInMbn.push(oc);
+    MBN.comps.forEach(function (c) { if (!ourCodes[c.code]) compMissingInOurs.push(c.code || '?'); });
+
+    PLAN = [];
+    var html = '', nWrite = 0, nLocked = 0, nNone = 0, nUnmatched = 0, nAmb = 0;
+    var rowsH = mres.rows.map(function (r) {
+      var m = r.m, who = esc(m.nom + ' ' + m.prenom), st = '', act = null;
+      if (r.i === -2) { nAmb++; st = '<span style="color:#7d2017">⚠ plusieurs élèves possibles — laissé tel quel</span>'; }
+      else if (r.i < 0) { nUnmatched++; st = '<span style="color:#7d2017">⚠ absent des résultats — laissé tel quel</span>'; }
+      else {
+        var e = DATA.eleves[r.i];
+        act = { m: m, e: e, motif: e.motif || '', note: e.note == null ? null : Math.round(e.note * scale * 100) / 100, comps: [], appr: e.appr || '' };
+        for (var k in (e.comps || {})) { var mc = mbnCodes[codeKey(k)]; if (mc && e.comps[k] != null) act.comps.push({ sel: mc, code: mc.code, v: e.comps[k] }); }
+        if (MBN.apprMax && act.appr.length > MBN.apprMax) { act.apprCut = true; act.appr = act.appr.slice(0, MBN.apprMax); }
+        var has = act.motif || act.note != null || act.comps.length || act.appr;
+        if (m.locked) { nLocked++; st = '🔒 verrouillé dans MBN — laissé tel quel'; act = null; }
+        else if (!has) { nNone++; st = '<span style="color:#56697f">rien à écrire</span>'; act = null; }
+        else { nWrite++; st = (m.noteTxt ? 'remplace « ' + esc(m.noteTxt) + ' »' : '') + (r.how ? ' <span style="color:#8a4b00">(' + esc(r.how) + ')</span>' : ''); PLAN.push(act); }
+      }
+      var nt = !act ? '' : (act.motif ? esc(act.motif) : (act.note != null ? esc(fmtNote(act.note)) : '—'));
+      var cp = !act ? '' : act.comps.map(function (c) { return esc(c.code) + '=' + esc(c.v); }).join(' ');
+      var ap = !act ? '' : (act.appr ? '✓ ' + act.appr.length + ' car.' + (act.apprCut ? ' <span style="color:#7d2017">(coupée)</span>' : '') : '');
+      return '<tr><td style="padding:3px 8px;border-bottom:1px solid #dde4ee;white-space:nowrap">' + who + '</td>'
+        + '<td style="padding:3px 8px;border-bottom:1px solid #dde4ee;text-align:center;font-weight:600">' + nt + '</td>'
+        + '<td style="padding:3px 8px;border-bottom:1px solid #dde4ee;font-family:ui-monospace,Consolas,monospace;font-size:12px">' + cp + '</td>'
+        + '<td style="padding:3px 8px;border-bottom:1px solid #dde4ee">' + ap + '</td>'
+        + '<td style="padding:3px 8px;border-bottom:1px solid #dde4ee;font-size:12.5px">' + st + '</td></tr>';
+    }).join('');
+
+    var dv = DATA.devoir || {};
+    html += note('Résultats de <strong>« ' + esc(dv.nom || '?') + ' »</strong>' + (dv.classe ? ' · ' + esc(dv.classe) : '') + (dv.date ? ' · ' + esc(dv.date) : '') + ' · sur ' + esc(dv.bareme || '?')
+      + '<br>Page MBN : <strong>' + esc(document.title) + '</strong><br><span style="font-size:12.5px">Vérifie qu\'il s\'agit bien du même devoir.</span>');
+    var warns = [];
+    if (scale !== 1) warns.push('Le devoir est sur <strong>' + esc(MBN.bareme) + '</strong> dans MBN et sur <strong>' + esc(dv.bareme) + '</strong> dans Plan de classe : les notes sont converties (× ' + esc(Math.round(scale * 1000) / 1000) + ').');
+    if (compMissingInMbn.length) warns.push('Compétences de Plan de classe absentes de ce devoir MBN, ignorées : <strong>' + esc(compMissingInMbn.join(', ')) + '</strong>.');
+    if (compMissingInOurs.length) warns.push('Compétences de MBN sans valeur dans Plan de classe, laissées telles quelles : <strong>' + esc(compMissingInOurs.join(', ')) + '</strong>.');
+    if (mres.missing.length) warns.push(mres.missing.length + ' élève(s) des résultats introuvable(s) dans MBN : ' + esc(mres.missing.map(function (e) { return e.nom + ' ' + e.prenom; }).join(', ')) + '.');
+    if (nUnmatched || nAmb) warns.push((nUnmatched + nAmb) + ' élève(s) de MBN sans correspondance : rien ne sera écrit pour eux.');
+    if (warns.length) html += note(warns.join('<br>'), 'warn');
+    html += '<p style="margin:0 0 6px"><strong>' + nWrite + '</strong> élève(s) à remplir · ' + nNone + ' sans résultat · ' + nLocked + ' verrouillé(s). Les cases remplies dans MBN sont <strong>remplacées</strong> ; une case vide dans Plan de classe ne touche pas à MBN.</p>';
+    html += '<table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr style="background:#e6ebf2">'
+      + '<th style="padding:5px 8px;text-align:left">Élève (MBN)</th><th style="padding:5px 8px">Note</th><th style="padding:5px 8px;text-align:left">Compétences</th><th style="padding:5px 8px;text-align:left">Appréciation</th><th style="padding:5px 8px;text-align:left">État</th>'
+      + '</tr></thead><tbody>' + rowsH + '</tbody></table>';
+    BODY.innerHTML = html;
+    FOOT.innerHTML = '';
+    btn('Annuler', close);
+    var go = btn('▶ Remplir ' + nWrite + ' élève' + (nWrite > 1 ? 's' : ''), run, true);
+    if (!nWrite) go.disabled = true;
+  }
+
+  /* ── Suivi des enregistrements de MBN (requêtes envoyées par la page) ── */
+  var XS = XMLHttpRequest.prototype.send, pend = 0, saves = 0, srvErr = [];
+  function hook() {
+    if (hooked) return; hooked = true;
+    XMLHttpRequest.prototype.send = function () {
+      var x = this; pend++;
+      x.addEventListener('loadend', function () {
+        pend--; saves++;
+        var txt = ''; try { txt = x.responseText; } catch (e) {}
+        if (x.status && x.status !== 200) srvErr.push('réponse ' + x.status);
+        else {
+          try {
+            var j = JSON.parse(txt);
+            if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status)))) srvErr.push(String(j.message || j.status));
+          } catch (e) {}
+        }
+      });
+      return XS.apply(this, arguments);
+    };
+  }
+  function unhook() { if (hooked) { XMLHttpRequest.prototype.send = XS; hooked = false; } }
+  async function idle() {
+    await sleep(120);
+    var t0 = Date.now();
+    while (pend > 0 && Date.now() - t0 < 15000) await sleep(60);
+    if (pend > 0) throw new Error('MBN ne répond plus (enregistrement en attente depuis 15 s)');
+    await sleep(60);
+  }
+  function fire(el, types) {
+    for (var i = 0; i < types.length; i++) {
+      var t = types[i];
+      var ev = (t === 'blur' || t === 'focus') ? new FocusEvent(t, { bubbles: false }) : (t === 'focusout' || t === 'focusin') ? new FocusEvent(t, { bubbles: true }) : new Event(t, { bubbles: true });
+      el.dispatchEvent(ev);
+    }
+  }
+  async function selectStudent(m) {
+    var cands = $$('[onclick]', m.el), target = null;
+    for (var i = 0; i < cands.length && !target; i++) { var oc = cands[i].getAttribute('onclick') || ''; if (oc.indexOf('afficherEvaluationEleve') >= 0 && oc.indexOf(m.uid) >= 0) target = cands[i]; }
+    if (!target) throw new Error('impossible d\'ouvrir la fiche de ' + m.nom + ' ' + m.prenom);
+    target.click();
+    var t0 = Date.now();
+    while (Date.now() - t0 < 6000) {
+      var u = $('[id$="eleve__uid"]');
+      if (u && u.value === m.uid) { await sleep(80); return; }
+      await sleep(50);
+    }
+    throw new Error('la fiche de ' + m.nom + ' ' + m.prenom + ' ne s\'affiche pas');
+  }
+  async function setField(el, value, isText) {
+    if (!el || el.disabled) return false;
+    if (String(el.value) === String(value)) return false;
+    try { el.focus(); } catch (e) {}
+    el.value = value;
+    fire(el, isText ? ['input', 'change', 'blur', 'focusout'] : ['change', 'blur', 'focusout']);
+    await idle();
+    return true;
+  }
+
+  /* ── Étape 3 : remplissage ── */
+  async function run() {
+    running = true; stopAsked = false; srvErr = []; saves = 0;
+    hook();
+    var done = 0, changed = 0, probs = [];
+    FOOT.innerHTML = '';
+    var stopB = btn('⏹ Arrêter', function () { stopAsked = true; stopB.disabled = true; stopB.textContent = 'Arrêt après cet élève…'; });
+    try {
+      for (var i = 0; i < PLAN.length; i++) {
+        if (stopAsked) break;
+        var a = PLAN[i], who = a.m.nom + ' ' + a.m.prenom;
+        BODY.innerHTML = '<p style="font-size:16px;margin:10px 0">Élève <strong>' + (i + 1) + ' / ' + PLAN.length + '</strong> : ' + esc(who) + '</p>'
+          + '<div style="height:10px;background:#e6ebf2;border-radius:5px;overflow:hidden"><div style="height:100%;width:' + Math.round(i / PLAN.length * 100) + '%;background:#1a252f"></div></div>'
+          + '<p style="color:#56697f;font-size:13px">Ne touche pas à la page pendant le remplissage. Échap ne l\'interrompt pas : utilise « Arrêter ».</p>';
+        try {
+          await selectStudent(a.m);
+          var aside = MBN.aside = $('aside.evaluations-eleve') || MBN.aside;
+          var mot = $('[id$="eleve__non-notation"]', aside), noteIn = $('[id$="eleve__note"]', aside);
+          var c = 0;
+          if (a.motif || a.note != null) {
+            var want = '';
+            if (a.motif && mot) { for (var o = 0; o < mot.options.length; o++) if (mot.options[o].getAttribute('data-code') === a.motif) want = mot.options[o].value; if (!want) probs.push(who + ' : motif « ' + a.motif + ' » inconnu de MBN'); }
+            if (mot && await setField(mot, want)) c++;
+            if (!a.motif && a.note != null && noteIn) { if (await setField(noteIn, fmtNote(a.note), true)) c++; }
+          }
+          for (var k = 0; k < a.comps.length; k++) {
+            var sel = document.getElementById(a.comps[k].sel.id);
+            var v = String(a.comps[k].v), okv = false;
+            if (sel) for (var q = 0; q < sel.options.length; q++) if (sel.options[q].value === v) okv = true;
+            if (!okv) { probs.push(who + ' : niveau « ' + v + ' » impossible pour ' + a.comps[k].code); continue; }
+            if (await setField(sel, v)) c++;
+          }
+          if (a.appr) { var ta = $('[id$="eleve__appreciation"]', aside); if (await setField(ta, a.appr, true)) c++; }
+          if (!a.motif && a.note != null) {
+            var row = null; $$('.js-eleve').forEach(function (el) { if (el.getAttribute('data-eleveuid') === a.m.uid) row = el; });
+            var shown = row && $('.eleve__note', row) ? numOf($('.eleve__note', row).textContent) : null;
+            if (shown == null || Math.abs(shown - a.note) > 0.005) probs.push(who + ' : MBN affiche « ' + (row && $('.eleve__note', row) ? $('.eleve__note', row).textContent.trim() : '?') + ' » au lieu de ' + fmtNote(a.note) + ' — à vérifier');
+          }
+          done++; if (c) changed++;
+        } catch (e) { probs.push(who + ' : ' + (e && e.message || e)); if (/ne répond plus/.test(String(e && e.message))) break; }
+      }
+    } finally {
+      unhook(); running = false;
+    }
+    var html = '';
+    var ok = !probs.length && !srvErr.length && !stopAsked;
+    html += note((stopAsked ? '⏹ Arrêté à ta demande. ' : '') + '<strong>' + done + ' / ' + PLAN.length + '</strong> élève(s) traité(s), dont ' + changed + ' modifié(s) · ' + saves + ' enregistrement(s) envoyé(s) par MBN.', ok ? 'ok' : 'warn');
+    if (srvErr.length) html += note('MBN a signalé ' + srvErr.length + ' problème(s) à l\'enregistrement : ' + esc(srvErr.slice(0, 5).join(' · ')), 'err');
+    if (probs.length) html += note('À vérifier :<br>' + probs.map(esc).join('<br>'), 'warn');
+    html += '<p>Vérifie quelques élèves dans MBN, puis termine comme d\'habitude.</p>';
+    BODY.innerHTML = html;
+    FOOT.innerHTML = '';
+    btn('Fermer', close, true);
+  }
+
+  askData();
+})();
+</script>
 <script type="text/plain" id="rdv-standalone-css">:root{--paper:#fff;--paper-warm:#eef1f6;--paper-deep:#dfe5ee;--ink:#0e1a26;--ink-blue:#1a252f;--pencil:#4f6075;--rule:#c8d2e0;--rule-soft:#dde4ee;--accent:#1f4e79;--accent-bg:#e3eef9;--ok:#1b6b3a;--ok-bg:#e3f4e8;--warn:#8a4b00;--warn-bg:#fff3d6;--danger:#9b2c1f;--on-dark:#fff;--mark:#f5d76e;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--paper:#161c24;--paper-warm:#1f2733;--paper-deep:#2a3442;--ink:#e8e2d4;--ink-blue:#f0e6cf;--pencil:#a9b4c2;--rule:#3a4656;--rule-soft:#2a3442;--accent:#9cc3ea;--accent-bg:#1e3349;--ok:#8fd4a5;--ok-bg:#183326;--warn:#f0c36b;--warn-bg:#3a2d12;--danger:#f2a093;--on-dark:#0e1a26;--mark:#f5d76e;color-scheme:dark}}
 *{box-sizing:border-box}
@@ -8764,11 +9105,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.136.14';
+const APP_VERSION    = '2.137.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T09:02:05Z';
+const APP_BUILD_DATE = '2026-10-10T09:50:11Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -19733,7 +20074,7 @@ function _renduRender() {
     synth.style.display = 'none';
     _evalExportRender();
     foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Pour une partie seulement : sélectionne des cellules à la souris puis Ctrl+C. Une compétence sans niveau reste vide.</span>
-      <span><button class="btn btn-g" onclick="_evalExportDownloadCsv()">💾 CSV</button><button class="btn btn-p" onclick="_evalExportCopyAll()">⧉ Copier tout</button></span>`;
+      <span><button class="btn btn-g" onclick="_mbnOpen()" title="Saisir ces résultats directement dans MBN, avec le favori « Remplir MBN »">🏫 Vers MBN…</button><button class="btn btn-g" onclick="_evalExportDownloadCsv()">💾 CSV</button><button class="btn btn-p" onclick="_evalExportCopyAll()">⧉ Copier tout</button></span>`;
     return;
   }
   body.style.display = ''; entWrap.style.display = 'none';
@@ -56939,6 +57280,80 @@ function _evalExportBuildRows(ev) {
     rows.push({ sid, name, note, noteCell, comps: compLevels, remarque });
   }
   return { rows, comps };
+}
+
+// ═══ Vers MBN (v2.137.0) ═══
+// Résultats d'un devoir → presse-papiers (JSON marqué app / type) → favori « Remplir MBN »
+// (code dans le bloc texte « mbn-fill-src »), qui les saisit dans la page de
+// saisie des notes de MBN en passant par son interface. Structure de MBN relevée par
+// outils/analyse-mbn.html (rapports anonymisés du 2026-10-10).
+// Niveaux : MBN a 4 niveaux (1..4, -1 = aucune évaluation) ; nbLevels ≠ 4 → ramené sur 4.
+const MBN_LEVELS = 4;
+function _mbnLevel(l, nb) {
+  const n = Math.round(l);
+  if (!(n >= 1)) return null;
+  const v = nb === MBN_LEVELS ? n : Math.round(1 + (n - 1) * (MBN_LEVELS - 1) / Math.max(1, nb - 1));
+  return Math.max(1, Math.min(MBN_LEVELS, v));
+}
+function _mbnPayload(ev) {
+  const { rows, comps } = _evalExportBuildRows(ev);
+  const nb = _nbLevels();
+  const cid = (_renduState.classId && _evalIncludesClass(ev, _renduState.classId) && S.classes?.[_renduState.classId]) ? _renduState.classId : _evalPrimaryAliveClassId(ev);
+  const d = _evalDateFor(ev, cid);
+  const eleves = rows.map(r => {
+    const stu = S.eleves[r.sid] || {};
+    const disp = _studentNoteDisplay(ev, r.sid);
+    const c = {};
+    for (const x of r.comps) { const v = x.level == null ? null : _mbnLevel(x.level, nb); if (v != null && x.code) c[x.code] = v; }
+    return {
+      nom: stu.nom || '', prenom: stu.prenom || '',
+      note: disp.kind === 'num' ? disp.value : null,
+      motif: disp.kind === 'A' ? 'Abs' : disp.kind === 'NN' ? 'NoN' : null,
+      comps: c, appr: (r.remarque || '').trim(),
+    };
+  });
+  return {
+    app: 'plan-de-classe', type: 'mbn-notes', v: 1,
+    devoir: { nom: ev.nomCourt || '', long: ev.nomLong || '', classe: S.classes?.[cid]?.nom || '', date: d ? _fmtDateFr(d) : '', bareme: ev.noteMax ?? 20 },
+    codes: comps.map(c => c.code).filter(Boolean),
+    eleves,
+  };
+}
+function _mbnBookmarkletCode() {
+  const src = document.getElementById('mbn-fill-src')?.textContent || '';
+  return 'javascript:' + encodeURIComponent('(function(){try{' + src + '}catch(e){alert("Remplir MBN — erreur : "+(e&&e.message||e));}})();void 0');
+}
+function _mbnOpen() {
+  const ev = S.evaluations?.[_renduState.evalId];
+  if (!ev) return;
+  const P = _mbnPayload(ev);
+  const nNote = P.eleves.filter(e => e.note != null).length;
+  const nMot = P.eleves.filter(e => e.motif).length;
+  const nApp = P.eleves.filter(e => e.appr).length;
+  const nComp = P.eleves.filter(e => Object.keys(e.comps).length).length;
+  document.getElementById('mmbn-sub').textContent = [ev.nomCourt, P.devoir.classe, P.devoir.date, `/${P.devoir.bareme}`].filter(Boolean).join(' · ');
+  const big = n => `<div class="bsynth-big">${n}</div>`, sub = t => `<div class="bsynth-sub">${t}</div>`;
+  document.getElementById('mmbn-synth').innerHTML =
+    _bsynthCard('Élèves', big(P.eleves.length) + sub(`${nNote} note${nNote > 1 ? 's' : ''}${nMot ? ` · ${nMot} absent / non noté` : ''}`))
+    + _bsynthCard('Compétences', big(P.codes.length) + sub(P.codes.length ? `<span class="mbn-codes">${P.codes.map(_esc).join(' · ')}</span> · ${nComp} élève${nComp > 1 ? 's' : ''}` : 'aucune'))
+    + _bsynthCard('Remarques', big(nApp) + sub('deviennent l\'appréciation MBN'));
+  const nb = _nbLevels();
+  document.getElementById('mmbn-warn').innerHTML = nb !== 4
+    ? `<p class="nd-dim" style="font-size:.85em">⚠ Tes évaluations ont ${nb} niveaux et MBN en a 4 : les niveaux sont ramenés sur 4.</p>` : '';
+  document.getElementById('mmbn-bm').href = _mbnBookmarkletCode();
+  openMod('mmbn');
+}
+function _mbnCopy() {
+  const ev = S.evaluations?.[_renduState.evalId];
+  if (!ev) return;
+  const txt = JSON.stringify(_mbnPayload(ev));
+  navigator.clipboard.writeText(txt).then(
+    () => toast('⧉ Résultats copiés : dans MBN, clique sur le favori « Remplir MBN » puis Ctrl+V'),
+    () => toast('⚠ Copie impossible dans ce navigateur', 'warn'));
+}
+function _mbnCopyBookmarklet() {
+  navigator.clipboard.writeText(_mbnBookmarkletCode()).then(
+    () => toast('⧉ Code du favori copié'), () => toast('⚠ Copie impossible', 'warn'));
 }
 
 function _evalExportRender() {

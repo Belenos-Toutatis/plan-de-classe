@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Devoir Test - Évaluation du 1er semestre (en modification)</title>
+<!--
+  FAUSSE page de saisie des notes de MBN (Kosmos), pour tester le favori « Remplir MBN »
+  sans toucher au vrai MBN. Structure recopiée des rapports anonymisés du 2026-10-10
+  (outils/analyse-mbn.html) : liste .js-eleve à gauche avec data-elevenom / -eleveprenom /
+  -eleveuid / -verrouille, panneau aside.evaluations-eleve à droite, un seul écouteur
+  « change » sur le panneau qui met à jour le champ caché NOTATIONS puis envoie le
+  formulaire (ici : une requête vers une adresse data:). Prototype.js est imité
+  (Array.prototype.each / map / filter réécrits). Noms inventés.
+-->
+<style>
+body{font:14px system-ui,sans-serif;margin:0;padding:12px}
+.ecran{display:flex;gap:16px}
+.grille-eleves{width:360px}
+.eleve{border:1px solid #ccc;padding:4px 8px;margin:2px 0;cursor:pointer;display:flex;gap:8px}
+.eleve--is-selected{background:#dbeafe}
+.eleve__note{font-weight:700;min-width:30px}
+aside{border:1px solid #888;padding:10px;width:420px}
+.form-field{margin:6px 0}
+</style>
+<script>
+  /* Imitation de Prototype.js 1.7 : méthodes d'Array qui exigent this.each */
+  Object.defineProperty(Array.prototype, 'each', { value: function (it) { for (var i = 0; i < this.length; i++) it(this[i], i); return this; }, writable: true, configurable: true });
+  Array.prototype.map = function (it) { var r = []; this.each(function (v, i) { r.push(it(v, i)); }); return r; };
+  Array.prototype.filter = function (it) { var r = []; this.each(function (v, i) { if (it(v, i)) r.push(v); }); return r; };
+  window.Prototype = { Version: '1.7' };
+</script>
+</head>
+<body>
+<form id="form_devoir" class="edition-devoir js-autosaved" method="post" action="sg.do" onsubmit="return false">
+  <input type="hidden" name="CSRF" value="x">
+  <input type="hidden" name="NOTATIONS" value="">
+  <input type="text" name="DEVOIR_BAREME" value="20">
+  <div id="devoir-tab-notes">
+    <div class="ecran">
+      <section class="grille-eleves"><div class="colonne_eleves" id="liste"></div></section>
+      <aside id="js-saisie-eleve" class="evaluations-eleve">
+        <header><span id="js-saisie-eleve__nom"></span></header>
+        <input type="hidden" id="js-saisie-eleve__uid" value="">
+        <div class="form-field">
+          <label for="js-saisie-eleve__non-notation">Motif de non évaluation</label>
+          <select id="js-saisie-eleve__non-notation">
+            <option value=""></option>
+            <option value="1" data-code="Abs">Absent</option>
+            <option value="2" data-code="Dis">Dispensé</option>
+            <option value="3" data-code="NoN">Non Noté</option>
+            <option value="4" data-code="NoR">Non rendu</option>
+            <option value="5" data-code="Ina">Inapte</option>
+            <option value="6" data-code="EA">En attente</option>
+          </select>
+          <label for="js-saisie-eleve__note">Note</label>
+          <input type="text" size="5" id="js-saisie-eleve__note" autocomplete="off">
+        </div>
+        <div class="form-field"><label class="label_competence" for="js-saisie-eleve__comp-11111">C3 - Pratiquer des démarches scientifiques</label>
+          <select class="select_competence" id="js-saisie-eleve__comp-11111" data-id-sous-competence="11111"></select></div>
+        <div class="form-field"><label class="label_competence" for="js-saisie-eleve__comp-22222">C4 - Concevoir, créer, réaliser</label>
+          <select class="select_competence" id="js-saisie-eleve__comp-22222" data-id-sous-competence="22222"></select></div>
+        <div class="form-field"><label class="label_competence" for="js-saisie-eleve__comp-33333">C6 - Pratiquer des langages</label>
+          <select class="select_competence" id="js-saisie-eleve__comp-33333" data-id-sous-competence="33333"></select></div>
+        <div class="form-field"><label for="js-saisie-eleve__appreciation">Appréciation</label>
+          <textarea id="js-saisie-eleve__appreciation" maxlength="300" rows="3" cols="40"></textarea></div>
+      </aside>
+    </div>
+  </div>
+</form>
+<p id="log" style="font:12px monospace;color:#555"></p>
+<script>
+  var LEVELS = '<option value="-1">0 – Aucune évaluation</option><option value="1">1 – Maîtrise insuffisante</option><option value="2">2 – Maîtrise fragile</option><option value="3">3 – Maîtrise satisfaisante</option><option value="4">4 – Très bonne maîtrise</option>';
+  document.querySelectorAll('select.select_competence').forEach(function (s) { s.innerHTML = LEVELS; });
+  var ELEVES = [
+    { uid: 'ELV00001', nom: 'DURAND', prenom: 'Léa', locked: false },
+    { uid: 'ELV00002', nom: 'MARTIN', prenom: 'Hugo', locked: false },
+    { uid: 'ELV00003', nom: 'PETIT-JEAN', prenom: 'Zoé', locked: false },
+    { uid: 'ELV00004', nom: 'BERNARD', prenom: 'Lucas', locked: true },
+    { uid: 'ELV00005', nom: 'ROUX', prenom: 'Inès', locked: false },
+    { uid: 'ELV00006', nom: 'FAURE', prenom: 'Tom', locked: false }
+  ];
+  var DATA = {};
+  ELEVES.forEach(function (e) { DATA[e.uid] = { valeur: null, motif: '', comps: {}, commentaire: '' }; });
+  DATA.ELV00002.valeur = 12;
+  var cur = null, saves = 0;
+  function renderList() {
+    var h = '';
+    ELEVES.forEach(function (e) {
+      var d = DATA[e.uid];
+      var txt = d.motif ? ({ 1: 'Abs', 2: 'Dis', 3: 'NoN', 4: 'NoR', 5: 'Ina', 6: 'EA' })[d.motif] : (d.valeur == null ? '' : String(d.valeur).replace('.', ','));
+      h += '<div class="eleve js-eleve' + (cur === e.uid ? ' eleve--is-selected' : '') + '" data-verrouille="' + e.locked + '" data-eleveuid="' + e.uid + '" data-elevenom="' + e.nom + '" data-eleveprenom="' + e.prenom + '">'
+        + '<div class="selection__checkbox" onclick="afficherEvaluationEleve(event,\'\',false);"><input type="checkbox"></div>'
+        + '<div class="eleve__simple" onclick="afficherEvaluationEleve(event,\'' + e.uid + '\',' + e.locked + ');"><div class="eleve__name">' + e.nom + ' ' + e.prenom + '</div><div class="eleve__note">' + txt + '</div></div></div>';
+    });
+    document.getElementById('liste').innerHTML = h;
+  }
+  function afficherEvaluationEleve(ev, uid, locked) {
+    if (!uid) return;
+    setTimeout(function () {
+      cur = uid;
+      var d = DATA[uid], e = ELEVES.filter(function (x) { return x.uid === uid; })[0];
+      document.getElementById('js-saisie-eleve__nom').textContent = 'Évaluation de ' + e.prenom + ' ' + e.nom;
+      document.getElementById('js-saisie-eleve__uid').value = uid;
+      document.getElementById('js-saisie-eleve__non-notation').value = d.motif;
+      var n = document.getElementById('js-saisie-eleve__note');
+      n.value = d.valeur == null ? '' : String(d.valeur).replace('.', ',');
+      n.disabled = !!d.motif;
+      document.querySelectorAll('select.select_competence').forEach(function (s) { s.value = d.comps[s.getAttribute('data-id-sous-competence')] || '-1'; });
+      document.getElementById('js-saisie-eleve__appreciation').value = d.commentaire;
+      renderList();
+    }, 150);
+  }
+  document.getElementById('js-saisie-eleve').addEventListener('change', function (ev) {
+    if (!cur) return;
+    var d = DATA[cur], t = ev.target;
+    if (t.id === 'js-saisie-eleve__non-notation') { d.motif = t.value; if (d.motif) d.valeur = null; var n = document.getElementById('js-saisie-eleve__note'); n.disabled = !!d.motif; if (d.motif) n.value = ''; }
+    else if (t.id === 'js-saisie-eleve__note') { var v = parseFloat(t.value.replace(',', '.')); d.valeur = isFinite(v) ? v : null; }
+    else if (t.classList.contains('select_competence')) d.comps[t.getAttribute('data-id-sous-competence')] = t.value;
+    else if (t.id === 'js-saisie-eleve__appreciation') d.commentaire = t.value;
+    document.forms[0].elements.NOTATIONS.value = 'maj ' + Date.now();
+    renderList();
+    var x = new XMLHttpRequest();
+    x.open('POST', 'data:application/json,{"status":"ok","message":"","data":null}');
+    x.onloadend = function () { saves++; document.getElementById('log').textContent = saves + ' enregistrement(s)'; };
+    x.send('ACTION=SAUVER');
+  });
+  renderList();
+  window.__FAKE = { DATA: DATA };
+</script>
+</body>
+</html>

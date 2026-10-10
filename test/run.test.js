@@ -2964,3 +2964,31 @@ test('Fichier pour un collègue : code autonome valide, sans </script>, et donn�
   assert.deepEqual(Object.keys(st), ['e1'], 'seulement les élèves présents des classes cochées');
   assert.deepEqual(Object.keys(st.e1).sort(), ['cls', 'nom', 'prenom'], 'rien d\'autre que nom, prénom, classe');
 });
+
+test('Vers MBN : favori embarqué valide, niveaux ramenés sur 4, résultats d\'un devoir', () => {
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const js = /<script type="text\/plain" id="mbn-fill-src">([\s\S]*?)<\/script>/.exec(html);
+  assert.ok(js, 'le code du favori doit être présent');
+  new vm.Script(js[1]);
+  assert.ok(!/<!--/.test(js[1]), 'pas de <!-- dans le code embarqué');
+  assert.ok(!/Array\.prototype\.\w+\.call/.test(js[1]), 'MBN charge Prototype.js : pas de Array.prototype.xxx.call');
+  assert.deepEqual(JSON.parse(ev('JSON.stringify([1,2,3,4,0,null,3.4].map(l => _mbnLevel(l, 4)))')), [1, 2, 3, 4, null, null, 3]);
+  assert.deepEqual(JSON.parse(ev('JSON.stringify([1,2].map(l => _mbnLevel(l, 2)))')), [1, 4]);
+  assert.deepEqual(JSON.parse(ev('JSON.stringify([1,3,5].map(l => _mbnLevel(l, 5)))')), [1, 3, 4]);
+  ev(`S.classes = { c1: { id: 'c1', nom: '6A', eleves: ['e1', 'e2', 'e3'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' }, e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c1' } };
+      S.competences = { k1: { id: 'k1', code: 'C3', name: 'Pratiquer' } };
+      S.evalPrefs = Object.assign({}, S.evalPrefs || {}, { nbLevels: 4 });
+      S.evaluations = { v1: { id: 'v1', type: 'A', nomCourt: 'DS1', classIds: ['c1'], noteMax: 20, coef: 1, periode: 'S1',
+        miniNotes: [{ id: 'm1', label: 'Q1', max: 20, competenceIds: ['k1'] }],
+        notes: { e1: { values: { m1: 15 } }, e2: { values: { m1: 'A' } } }, studentRemarks: { e1: ' Bien ' } } };
+      _renduState.evalId = 'v1'; _renduState.classId = 'c1';`);
+  const P = JSON.parse(ev('JSON.stringify(_mbnPayload(S.evaluations.v1))'));
+  assert.equal(P.app, 'plan-de-classe'); assert.equal(P.type, 'mbn-notes'); assert.equal(P.devoir.bareme, 20);
+  const by = Object.fromEntries(P.eleves.map(e => [e.nom, e]));
+  assert.equal(by.Un.note, 15); assert.equal(by.Un.motif, null); assert.equal(by.Un.appr, 'Bien');
+  assert.ok(by.Un.comps.C3 >= 1 && by.Un.comps.C3 <= 4, 'niveau de compétence 1..4');
+  assert.equal(by.Deux.note, null); assert.equal(by.Deux.motif, 'Abs');
+  assert.equal(by.Trois.note, null); assert.equal(by.Trois.motif, null); assert.deepEqual(by.Trois.comps, {});
+});
