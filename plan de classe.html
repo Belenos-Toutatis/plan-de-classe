@@ -1020,9 +1020,14 @@ body.el-bulk-on.noise-widget-on:has(#tab-eleves.on) #toast, body.el-bulk-on.time
 #gtip.rich{background:var(--paper);color:var(--ink-deep);border:1px solid var(--rule-line);max-width:380px}
 #gtip .gtip-mnp{margin-top:8px;padding-top:6px;border-top:1px solid var(--rule-line-soft);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--pencil);white-space:normal}
 /* Élève dont on rédige la remarque, dans la barre du titre des bilans (v2.140.0) */
-.bilan-who{display:inline-flex;visibility:hidden;align-items:center;gap:6px;margin-left:12px;height:28px;width:210px;flex:none;box-sizing:border-box;padding:0 10px 0 1px;border:1px solid var(--rule-line);border-radius:40px;background:var(--paper);cursor:zoom-in;font-size:.88em;white-space:nowrap;position:relative}
+.bilan-who-slot{display:inline-block;flex:none;width:210px;height:28px;margin-left:12px}
+.bilan-who{display:inline-flex;visibility:hidden;align-items:center;gap:6px;height:28px;width:210px;flex:none;box-sizing:border-box;padding:0 10px 0 1px;border:1px solid var(--rule-line);border-radius:40px;background:var(--paper);cursor:grab;font-size:.88em;white-space:nowrap;position:relative;touch-action:none;user-select:none}
 .bilan-who.on{visibility:visible}
 .bilan-who.float{position:fixed;right:24px;z-index:60;margin:0;box-shadow:var(--shadow-pop,0 4px 16px rgba(0,0,0,.18))}
+.bilan-who.moved{position:fixed;right:auto;z-index:60;margin:0;box-shadow:var(--shadow-pop,0 4px 16px rgba(0,0,0,.18))}
+.bilan-who.dragging{cursor:grabbing;opacity:.92}
+.bilan-who.up .bw-big{top:auto;bottom:calc(100% + 6px)}
+.bilan-who.rt .bw-big{left:auto;right:0}
 .bilan-who>img,.bilan-who>.bw-av{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:none}
 .bilan-who .bw-av{display:inline-flex;align-items:center;justify-content:center;background:var(--paper-deep);color:var(--ink-blue);font-weight:600;font-family:var(--font-serif);font-size:.75em}
 .bilan-who>b{font-family:var(--font-serif);font-weight:600;color:var(--ink-blue);overflow:hidden;text-overflow:ellipsis}
@@ -5015,7 +5020,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="sh">
       <h2>📜 Bilan des notes</h2>
       <span class="tab-ctx" id="tabctx-bilan"></span>
-      <span class="bilan-who" id="bilan-who-bilan" aria-live="polite"></span>
+      <span class="bilan-who-slot"><span class="bilan-who" id="bilan-who-bilan" aria-live="polite"></span></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <span id="bilan-sort-toolbar" style="display:flex;gap:6px;align-items:center;font-size:.86em"></span>
         <button class="btn btn-g btn-sm" id="evhelp-btn-bilan" onclick="_evhelpToggle('bilan')" title="Réafficher le mode d'emploi" style="display:none;padding:2px 8px">?</button>
@@ -5043,7 +5048,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     <div class="sh">
       <h2>🎯 Bilan des compétences</h2>
       <span class="tab-ctx" id="tabctx-comp"></span>
-      <span class="bilan-who" id="bilan-who-comp" aria-live="polite"></span>
+      <span class="bilan-who-slot"><span class="bilan-who" id="bilan-who-comp" aria-live="polite"></span></span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <button class="btn btn-g btn-sm" onclick="printBilanComp()" title="Imprimer le tableau affiché (paysage), avec la remarque de classe et les éléments travaillés — Ctrl+P">🖨 Imprimer</button>
         <button class="btn btn-g btn-sm" onclick="_bilanCompCopy()" title="Copier le tableau au format TSV (collable dans Excel/LibreOffice/ENT)">⧉ Copier</button>
@@ -9634,11 +9639,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.143.0';
+const APP_VERSION    = '2.143.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T13:36:57Z';
+const APP_BUILD_DATE = '2026-10-10T14:47:50Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -41908,7 +41913,7 @@ window.addEventListener('beforeunload', () => {
 var _bilanWhoBig = false, _bilanWhoSid = null;
 function _bilanWhoHide() {
   _bilanWhoSid = null;
-  document.querySelectorAll('.bilan-who').forEach(b => { b.classList.remove('on', 'big', 'float'); b.style.top = ''; b.innerHTML = ''; delete b.dataset.sid; });
+  document.querySelectorAll('.bilan-who').forEach(b => { b.classList.remove('on', 'big', 'float', 'moved', 'up', 'rt'); b.style.top = ''; b.style.left = ''; b.innerHTML = ''; delete b.dataset.sid; });
 }
 function _bilanWhoPer(tab) { return document.getElementById(tab === 'comp' ? 'comp-period-filter' : 'bilan-period-filter')?.value || ''; }
 async function _bilanWhoShow(tab, sid, per) {
@@ -41918,9 +41923,17 @@ async function _bilanWhoShow(tab, sid, per) {
   _bilanWhoSid = sid;
   box.dataset.sid = sid;
   box.classList.toggle('big', _bilanWhoBig);
-  box.title = 'Clic = photo en grand / en petit';
+  box.title = 'Glisser = la poser où tu veux · clic = photo en grand / en petit · double-clic = la remettre dans la barre du titre';
   box.onmousedown = e => e.preventDefault();   /* garde le curseur dans la remarque */
-  box.onclick = e => { e.stopPropagation(); _bilanWhoBig = !_bilanWhoBig; document.querySelectorAll('.bilan-who.on').forEach(b => b.classList.toggle('big', _bilanWhoBig)); };
+  box.onpointerdown = _bilanWhoDragStart;
+  box.ondblclick = e => { e.stopPropagation(); _bilanWhoSavePos(null); _bilanWhoPlace(); };
+  box.onclick = e => {
+    e.stopPropagation();
+    if (_bilanWhoDragged) { _bilanWhoDragged = false; return; }
+    _bilanWhoBig = !_bilanWhoBig;
+    document.querySelectorAll('.bilan-who.on').forEach(b => b.classList.toggle('big', _bilanWhoBig));
+    _bilanWhoPlace();
+  };
   const ini = _esc(((s.prenom || '')[0] || '') + ((s.nom || '')[0] || ''));
   const nm = `${_esc(s.prenom || '')} ${_esc((s.nom || '').toUpperCase())}`;
   box.innerHTML = `<span class="bw-av">${ini}</span><b>${nm}</b><span class="bw-big"><span class="bw-av">${ini}</span><b>${nm}</b><small>${_esc(_periodeLongLabel(per ?? _bilanWhoPer(tab)))}</small></span>`;
@@ -41930,14 +41943,69 @@ async function _bilanWhoShow(tab, sid, per) {
   try { url = await _photoUrl(sid); } catch (e) {}
   if (url && box.dataset.sid === sid) box.querySelectorAll('.bw-av').forEach(av => { av.outerHTML = `<img src="${url}" alt="">`; });
 }
-// Barre du titre sortie de l'écran (page descendue) : la pastille flotte sous le bandeau.
+// Position choisie par l'utilisateur (glisser, v2.143.1 — demande : « la poser là où ça
+// m'arrange »), retenue sur cette machine, en coordonnées d'écran. null = dans la barre du titre.
+// Sinon, barre du titre sortie de l'écran (page descendue) : la pastille flotte sous le bandeau.
+// L'emplacement .bilan-who-slot garde sa place dans la barre : rien ne bouge quand elle en sort.
+var _bilanWhoDragged = false;
+function _bilanWhoPos() {
+  try { const p = JSON.parse(localStorage.getItem('planClasse_bilanWhoPos') || 'null'); return (p && isFinite(p.x) && isFinite(p.y)) ? p : null; } catch (e) { return null; }
+}
+function _bilanWhoSavePos(p) {
+  try { if (p) localStorage.setItem('planClasse_bilanWhoPos', JSON.stringify(p)); else localStorage.removeItem('planClasse_bilanWhoPos'); } catch (e) {}
+}
+function _bilanWhoClamp(x, y) {
+  return { x: Math.max(4, Math.min(x, innerWidth - 214)), y: Math.max(4, Math.min(y, innerHeight - 32)) };
+}
 function _bilanWhoPlace() {
+  const pos = _bilanWhoPos();
   document.querySelectorAll('.bilan-who.on').forEach(box => {
-    box.classList.remove('float'); box.style.top = '';
-    const top = (document.getElementById('topbar')?.getBoundingClientRect().bottom || 0);
-    if (box.getBoundingClientRect().top < top + 2) { box.classList.add('float'); box.style.top = (top + 8) + 'px'; }
+    box.classList.remove('float', 'moved'); box.style.top = ''; box.style.left = '';
+    if (pos) {
+      const c = _bilanWhoClamp(pos.x, pos.y);
+      box.classList.add('moved'); box.style.left = c.x + 'px'; box.style.top = c.y + 'px';
+    } else {
+      const top = (document.getElementById('topbar')?.getBoundingClientRect().bottom || 0);
+      if (box.getBoundingClientRect().top < top + 2) { box.classList.add('float'); box.style.top = (top + 8) + 'px'; }
+    }
+    _bilanWhoFlip(box);
   });
 }
+// Grande photo : au-dessus si la place manque en dessous, alignée à droite près du bord droit.
+function _bilanWhoFlip(box) {
+  const r = box.getBoundingClientRect();
+  box.classList.toggle('up', r.bottom + 230 > innerHeight && r.top > 230);
+  box.classList.toggle('rt', r.left + 180 > innerWidth);
+}
+function _bilanWhoDragStart(e) {
+  if (e.button != null && e.button !== 0) return;
+  const box = e.currentTarget, r = box.getBoundingClientRect();
+  const dx = e.clientX - r.left, dy = e.clientY - r.top, x0 = e.clientX, y0 = e.clientY;
+  let moving = false;
+  _bilanWhoDragged = false;
+  const move = ev => {
+    if (!moving && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return;
+    if (!moving) { moving = true; box.classList.remove('float'); box.classList.add('moved', 'dragging'); }
+    const c = _bilanWhoClamp(ev.clientX - dx, ev.clientY - dy);
+    box.style.left = c.x + 'px'; box.style.top = c.y + 'px';
+    _bilanWhoFlip(box);
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    if (!moving) return;
+    box.classList.remove('dragging');
+    _bilanWhoDragged = true;
+    setTimeout(() => { _bilanWhoDragged = false; }, 300);   /* pas de clic après un glisser (doigt : pas de click émis) */
+    _bilanWhoSavePos({ x: parseFloat(box.style.left), y: parseFloat(box.style.top) });
+    _bilanWhoPlace();
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
+window.addEventListener('resize', () => { if (document.querySelector('.bilan-who.on')) _bilanWhoPlace(); });
 // Changement de classe : la pastille d'un élève qui n'est pas dans la classe affichée disparaît.
 function _bilanWhoCheck() { if (_bilanWhoSid && !getCls()?.eleves?.includes(_bilanWhoSid)) _bilanWhoHide(); }
 window.addEventListener('scroll', () => { if (document.querySelector('.bilan-who.on')) _bilanWhoPlace(); }, true);
