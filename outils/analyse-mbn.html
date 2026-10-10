@@ -91,6 +91,18 @@ kbd{font-family:ui-monospace,Consolas,monospace;border:1px solid var(--rule);bor
   </div>
 
   <div class="card">
+    <h2>4. Relever le code de saisie de MBN (troisième favori)</h2>
+    <p>Fais glisser ce favori dans la barre :
+      <a class="bm" id="bmcode" href="#" title="À faire glisser dans la barre de favoris" style="background:#8a4b00">🧩 Code MBN</a> <span id="code-msg" class="muted"></span>
+      <br><span class="muted">Si le glisser ne marche pas : <button class="btn" id="copycode">⧉ Copier le code</button>.</span></p>
+    <ol>
+      <li>Dans MBN, ouvre la saisie d'un devoir et <strong>clique sur un élève</strong> de la liste.</li>
+      <li>Clique sur <strong>🧩 Code MBN</strong> : il recopie le programme de MBN qui gère la saisie (ses fonctions et ce qui réagit à la case de note). C'est du code, pas des données ; les textes qu'il contient sont quand même anonymisés.</li>
+      <li><strong>⧉ Copier</strong>, puis colle-le à Claude (c'est long, c'est normal).</li>
+    </ol>
+  </div>
+
+  <div class="card">
     <h2>Essai sur un faux tableau</h2>
     <p class="muted">Pour voir à quoi ressemble le rapport avant d'aller dans MBN (noms inventés) :</p>
     <form id="demo" onsubmit="return false" onchange="var x=new XMLHttpRequest();x.open('POST','data:text/plain,ok');x.send('ACTION=SAUVER&amp;NOTE_'+event.target.name.replace(/\D/g,'')+'='+encodeURIComponent(event.target.value))">
@@ -661,6 +673,108 @@ function mbnObserveBody() {
   }
 }
 
+/* Favori « Code MBN » : recopie le PROGRAMME de saisie de MBN (ses fonctions et les écouteurs
+   posés sur le panneau de l'élève), pour comprendre comment une note est enregistrée.
+   Aucune donnée d'élève : les chaînes de caractères du code passent par techVal (chiffres → 9,
+   mots affichés dans la page → Ⓧ). Outils d'anonymisation insérés devant (KIT). */
+function mbnCodeBody() {
+  var OLD = document.getElementById('mbn-analyse-panel'); if (OLD) OLD.remove();
+  gatherWords(document);
+  function code(src, max) {
+    src = String(src);
+    src = src.replace(/(["'])((?:\\.|(?!\1)[^\\\n])*)\1/g, function (m, q, body) { return q + techVal(body) + q; });
+    src = src.replace(/\b[0-9]{5,}\b/g, function (m) { return m.replace(/[0-9]/g, '9'); });
+    return src.length > max ? src.slice(0, max) + '\n… (coupé)' : src;
+  }
+  var R = [];
+  function L(x) { R.push(x); }
+  L('=== Code de saisie de MBN — ' + new Date().toISOString().slice(0, 10) + ' ===');
+  L('Programme de la page (fonctions de MBN). Les textes du code sont anonymisés ; aucune donnée d\'élève.');
+  var NAMES = ['afficherEvaluationEleve', 'remplirEvaluationEleve', 'getDonneesEleve', 'enregistrerEvaluationEleve', 'verifierEvaluationEleve',
+    'formatNote', 'enableEvaluationField', 'resetEvaluationEleve', 'selectionnerEleve', 'isEleveNote', 'isEleveAvecMotifNonNotation',
+    'miseAJourValeurCompetences', 'refreshMoyenneDevoir', 'refreshDonneesElevesButton', 'updateClasseSansNote', 'saveField',
+    'traiterEvaluationValider', 'handleSubmitValider', 'handleSubmitValiderPartiel', 'validerFormulaire', 'kui_validerFormulaire'];
+  for (var i = 0; i < NAMES.length; i++) {
+    var f = null; try { f = window[NAMES[i]]; } catch (e) {}
+    L('');
+    L('--- function ' + NAMES[i] + ' ---');
+    L(typeof f === 'function' ? code(f.toString(), 9000) : '(absente)');
+  }
+  function handlers(el, label) {
+    var out = [];
+    try {
+      if (window.Element && window.Element.retrieve && el && el.nodeType === 1) {
+        var reg = window.Element.retrieve(el, 'prototype_event_registry');
+        if (reg && reg.keys) {
+          var ks = reg.keys();
+          for (var j = 0; j < ks.length; j++) {
+            var rs = reg.get(ks[j]) || [];
+            for (var r = 0; r < rs.length; r++) {
+              var h = rs[r] && (rs[r].handler || rs[r]);
+              out.push('Prototype « ' + ks[j] + ' » :\n' + code(h && h.toString ? h.toString() : String(h), 9000));
+            }
+          }
+        }
+      }
+    } catch (e) { out.push('Prototype : illisible (' + e.message + ')'); }
+    try {
+      var jq = window.jQuery, ev = jq && jq._data && jq._data(el, 'events');
+      if (ev) for (var t in ev) for (var k = 0; k < ev[t].length; k++) {
+        var hh = ev[t][k];
+        out.push('jQuery « ' + t + ' »' + (hh.selector ? ' délégué à « ' + techVal(hh.selector) + ' »' : '') + ' :\n' + code(hh.handler.toString(), 9000));
+      }
+    } catch (e) { out.push('jQuery : illisible (' + e.message + ')'); }
+    L('');
+    L('--- écouteurs : ' + label + ' ---');
+    L(out.length ? out.join('\n\n') : 'aucun visible');
+  }
+  var note = document.querySelector('[id$="eleve__note"]');
+  var aside = note ? note.closest('aside') : document.querySelector('aside.evaluations-eleve');
+  handlers(note, 'case de note');
+  handlers(aside, 'panneau de l\'élève');
+  handlers(document.getElementById('form_devoir'), 'formulaire du devoir');
+  handlers(document.querySelector('.js-eleve'), 'élève de la liste');
+  handlers(document, 'document');
+  var scripts = document.querySelectorAll('script:not([src])'), nsn = 0;
+  for (var s2 = 0; s2 < scripts.length && nsn < 6; s2++) {
+    var tx = scripts[s2].textContent || '', pos = tx.search(/eleve__note|evaluations-eleve|enregistrerEvaluationEleve|js-autosave/);
+    if (pos < 0) continue;
+    nsn++;
+    L('');
+    L('--- extrait de script de la page n° ' + (s2 + 1) + ' ---');
+    L(code(tx.slice(Math.max(0, pos - 1500), pos + 2500), 5000));
+  }
+  var srcs = document.querySelectorAll('script[src]'), list = [];
+  for (var s3 = 0; s3 < srcs.length; s3++) list.push(urlShape(srcs[s3].getAttribute('src')));
+  L('');
+  L('--- scripts chargés ---');
+  L(list.join('\n'));
+  L('');
+  L('=== Fin ===');
+  var report = R.join('\n');
+  var P = document.createElement('div');
+  P.id = 'mbn-analyse-panel';
+  P.setAttribute('style', 'position:fixed;inset:4% 6%;z-index:2147483647;background:#fff;color:#0e1a26;border:2px solid #1a252f;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;font:14px system-ui,sans-serif');
+  var H = document.createElement('div');
+  H.setAttribute('style', 'display:flex;gap:8px;align-items:center;padding:10px 12px;background:#1a252f;color:#fff;border-radius:6px 6px 0 0');
+  H.innerHTML = '<strong style="flex:1">🧩 Code de saisie de MBN — copie-le pour Claude</strong>';
+  function mk(t, fn) { var b = document.createElement('button'); b.textContent = t; b.setAttribute('style', 'font:inherit;padding:5px 12px;border-radius:5px;border:0;cursor:pointer;background:#fff;color:#1a252f'); b.onclick = fn; H.appendChild(b); return b; }
+  var TA = document.createElement('textarea');
+  TA.readOnly = true; TA.value = report;
+  TA.setAttribute('style', 'flex:1;margin:0;border:0;padding:10px 12px;font:12px ui-monospace,Consolas,monospace;resize:none;white-space:pre;color:#0e1a26;background:#fff');
+  var cp = mk('⧉ Copier', function () {
+    function ok() { cp.textContent = '✓ Copié'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(report).then(ok, function () { TA.select(); document.execCommand('copy'); ok(); });
+    else { TA.select(); document.execCommand('copy'); ok(); }
+  });
+  function close() { P.remove(); document.removeEventListener('keydown', esc, true); }
+  function esc(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+  mk('✕', close);
+  document.addEventListener('keydown', esc, true);
+  P.appendChild(H); P.appendChild(TA);
+  document.body.appendChild(P);
+}
+
 var code = '(function(){try{(' + mbnAnalyse.toString() + ')();}catch(e){alert("Analyse MBN — erreur : "+(e&&e.message||e));}})();void 0';
 /* Observateur = outils d'anonymisation de mbnAnalyse (entre les marqueurs KIT) + corps de mbnObserveBody */
 var _src = mbnAnalyse.toString();
@@ -668,10 +782,16 @@ var _kit = _src.slice(_src.indexOf('/*KIT-DEBUT*/'), _src.indexOf('/*KIT-FIN*/')
 var _ob = mbnObserveBody.toString();
 _ob = _ob.slice(_ob.indexOf('{') + 1, _ob.lastIndexOf('}'));
 var codeObs = '(function(){try{' + _kit + _ob + '}catch(e){alert("Observation MBN — erreur : "+(e&&e.message||e));}})();void 0';
+var _cb = mbnCodeBody.toString();
+_cb = _cb.slice(_cb.indexOf('{') + 1, _cb.lastIndexOf('}'));
+var codeCode = '(function(){try{' + _kit + _cb + '}catch(e){alert("Code MBN — erreur : "+(e&&e.message||e));}})();void 0';
 var TEST = 'javascript:' + encodeURIComponent('alert("✅ Le favori fonctionne sur cette page ("+location.host+").");void 0');
 document.getElementById('bm').href = 'javascript:' + encodeURIComponent(code);
 document.getElementById('bmtest').href = TEST;
 document.getElementById('bmobs').href = 'javascript:' + encodeURIComponent(codeObs);
+document.getElementById('bmcode').href = 'javascript:' + encodeURIComponent(codeCode);
+document.getElementById('bmcode').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('code-msg').textContent = '← fais-le glisser dans la barre de favoris.'; });
+document.getElementById('copycode').addEventListener('click', function () { var b = this; navigator.clipboard.writeText('javascript:' + encodeURIComponent(codeCode)).then(function () { b.textContent = '✓ Code copié'; }); });
 document.getElementById('bmobs').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('obs-msg').textContent = '← fais-le glisser dans la barre de favoris.'; });
 document.getElementById('copyobs').addEventListener('click', function () { var b = this; navigator.clipboard.writeText('javascript:' + encodeURIComponent(codeObs)).then(function () { b.textContent = '✓ Code copié'; }); });
 document.getElementById('tryobs').addEventListener('click', function () { (0, eval)(codeObs); });
