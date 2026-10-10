@@ -4465,6 +4465,7 @@ body.topbar-free #topbar { position: static !important; }
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();openSnapshotsModal('incidents')" title="Sauvegarder ou consulter l'état des incidents à une date">🔖 Instantanés</button>
           <button onclick="closeAllDd();printElevesList()" title="Imprimer la liste : élève, groupe, oublis, travail non fait (portrait — Ctrl+P)">🖨 Imprimer la liste</button>
+          <button onclick="closeAllDd();openEvacPrint()" title="Listes d'appel pour une évacuation, à imprimer à l'avance : une page par classe (et par groupe), cases « absent au cours » et « manquant après évacuation », élèves hors classe signalés">🚨 Listes d'évacuation…</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();resetAll()">↺ Réinitialiser les compteurs 📦/📝</button>
           <button onclick="closeAllDd();clearAllSeating()" style="color:var(--danger-fg)">🗑 Retirer toutes les positions</button>
@@ -4544,6 +4545,7 @@ body.topbar-free #topbar { position: static !important; }
           <button onclick="closeAllDd();printTrombiCurrent()" title="Photos, prénoms et noms de la classe — une page A4 portrait">🖼 Trombinoscope de la classe</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();openPrintAllClasses()">🖨 Plusieurs plans (Prof)…</button>
+          <button onclick="closeAllDd();openEvacPrint()" title="Listes d'appel pour une évacuation, à imprimer à l'avance : une page par classe (et par groupe), cases « absent au cours » et « manquant après évacuation », élèves hors classe signalés">🚨 Listes d'évacuation…</button>
           <div class="dd-sep"></div>
           <button onclick="event.stopPropagation();togglePrintColors()" title="Bascule couleurs / noir & blanc pour toutes les impressions"><span class="pc-tog-lbl">🎨 Couleurs : ON</span></button>
         </div>
@@ -4665,6 +4667,7 @@ body.topbar-free #topbar { position: static !important; }
           <button onclick="closeAllDd();printTrombiCurrent()" title="Photos, prénoms et noms de la classe — une page A4 portrait">🖼 Trombinoscope de la classe</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();openPrintAllClasses()">🖨 Plusieurs plans (Prof)…</button>
+          <button onclick="closeAllDd();openEvacPrint()" title="Listes d'appel pour une évacuation, à imprimer à l'avance : une page par classe (et par groupe), cases « absent au cours » et « manquant après évacuation », élèves hors classe signalés">🚨 Listes d'évacuation…</button>
           <div class="dd-sep"></div>
           <button onclick="event.stopPropagation();togglePrintColors()" title="Bascule couleurs / noir & blanc pour toutes les impressions"><span class="pc-tog-lbl">🎨 Couleurs : ON</span></button>
         </div>
@@ -7564,6 +7567,19 @@ body.topbar-free #topbar { position: static !important; }
   </div>
 </div>
 
+<!-- ── MODAL Listes d'évacuation (v2.144.0) ── -->
+<div id="mevac" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="max-width:640px;width:100%">
+    <div class="lst-head"><h2>🚨 Listes d'évacuation</h2>
+      <button class="btn btn-g btn-sm" onclick="closeMod2('mevac')" aria-label="Fermer" style="margin-left:auto;padding:4px 8px">✕</button></div>
+    <p class="lst-intro" style="margin:4px 0 6px">À imprimer <b>à l'avance</b> et à garder avec soi (pochette d'évacuation). Une page par classe : chaque élève avec deux cases à cocher à la main, <b>absent au cours</b> et <b>manquant après évacuation</b>. Les élèves ULIS / UPE2A hors inclusion sont grisés : <b>à ne pas appeler</b>.</p>
+    <div id="evac-list" style="max-height:48vh;overflow-y:auto"></div>
+    <div class="tool-q" style="margin-top:10px"><span>Ajouter une page par groupe (G1, G2…) pour les classes en demi-groupes</span><input type="checkbox" class="sw-chk" id="evac-groups" onchange="_evacSum()" aria-label="Une page par groupe"></div>
+    <div class="hm-foot"><span class="clf-note" style="margin:0"><a href="#" onclick="event.preventDefault();_evacAll(true)" style="color:var(--link-fg)">tout</a> · <a href="#" onclick="event.preventDefault();_evacAll(false)" style="color:var(--link-fg)">aucun</a></span>
+      <span><span class="clf-note" style="margin:0" id="evac-sum"></span><button class="btn btn-g" onclick="closeMod2('mevac')">Annuler</button><button class="btn btn-p" onclick="printEvac()">🖨 Imprimer</button></span></div>
+  </div>
+</div>
+
 <!-- ── MODAL Snapshots (positions ou incidents) ── -->
 <div id="msnap" class="mo" onclick="closeMod(this,event)">
   <!-- Instantanés — refonte v2.123.0 (maquette validée le 2026-10-08) : Positions | Incidents dans une
@@ -9668,11 +9684,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.143.6';
+const APP_VERSION    = '2.144.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T15:10:41Z';
+const APP_BUILD_DATE = '2026-10-10T16:38:15Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -36189,6 +36205,125 @@ document.addEventListener('paste', e => {
 // 30 mm, une classe de 32 élèves faisait 305 mm, plus qu'une page ; en 6 colonnes elle tient jusqu'à ~40 élèves). Couleurs LITTÉRALES (convention
 // des constructeurs d'impression : un token suivrait le thème de l'écran). Les photos sont des
 // URL blob: lues de façon asynchrone — on attend qu'elles soient toutes décodées avant print().
+// ─── Listes d'évacuation (v2.144.0, demande de l'utilisateur) ───
+// Imprimées À L'AVANCE (pas de pré-remplissage : on ne connaît pas les absents avant
+// l'évacuation). Une page A4 portrait par classe (+ une par groupe si demandé) : élèves
+// présents aujourd'hui dans l'effectif (arrivée / départ ; membres de la période pour une
+// recomposée), par ordre alphabétique, cases « absent au cours » / « manquant après
+// évacuation » à cocher à la main ; ULIS / UPE2A hors inclusion grisés « ne pas appeler »,
+// non comptés ; AESH en fin de liste. Couleurs littérales (papier).
+function _evacStudents(cls) {
+  const per = _currentPeriode();
+  return (cls.eleves || []).map(id => S.eleves[id]).filter(s => s && _stuActiveOn(s) && (!cls.virtual || _stuActiveInClassForPeriod(cls, s.id, per)))
+    .sort((a, b) => ((a.nom || '') + '|' + (a.prenom || '')).localeCompare((b.nom || '') + '|' + (b.prenom || ''), 'fr'));
+}
+function _evacOut(s) {
+  if (s.ulis && !s.ulis_incl) return 'ULIS hors inclusion';
+  if (s.upe2a && !s.upe2a_incl) return 'UPE2A hors inclusion';
+  return '';
+}
+function _evacGroups(cls) {
+  const st = _evacStudents(cls);
+  return [1, 2, 3].filter(g => st.some(s => _grp(s, cls) === g));
+}
+function openEvacPrint() {
+  const classes = sortedClasses().filter(c => _evacStudents(c).length);
+  if (!classes.length) return toast('⚠️ Aucune classe avec des élèves.', 'warn');
+  const byLvl = new Map();
+  for (const c of classes) {
+    const lv = c.virtual ? 'Classes recomposées' : _levelLabel(clsLevel(c));
+    if (!byLvl.has(lv)) byLvl.set(lv, []);
+    byLvl.get(lv).push(c);
+  }
+  const ent = [...byLvl.entries()].sort((x, y) => (x[0] === 'Classes recomposées') - (y[0] === 'Classes recomposées'));
+  document.getElementById('evac-list').innerHTML = ent.map(([lv, arr]) => `<div class="ev-h" style="margin-top:8px">${_esc(lv)} <a href="#" onclick="event.preventDefault();_evacLevel(this)" style="color:var(--link-fg);text-transform:none;letter-spacing:0;font-family:var(--font-sans)">tout le niveau</a></div>
+    <div class="clf-pills">${arr.map(c => `<label class="clf-pill"><input type="checkbox" class="evac-cb" data-cid="${_escAttr(c.id)}"${c.virtual ? '' : ' checked'} onchange="_evacSum()">${_escName(c.nom)} <span class="lst-use">${_evacStudents(c).length}</span></label>`).join('')}</div>`).join('');
+  let grp = true;
+  try { grp = localStorage.getItem('planClasse_evacGroups') !== '0'; } catch (e) {}
+  document.getElementById('evac-groups').checked = grp;
+  _evacSum();
+  openMod('mevac');
+}
+function _evacLevel(a) {
+  const cbs = [...a.closest('.ev-h').nextElementSibling.querySelectorAll('.evac-cb')];
+  const all = cbs.every(cb => cb.checked);
+  cbs.forEach(cb => { cb.checked = !all; });
+  _evacSum();
+}
+function _evacAll(on) { document.querySelectorAll('#evac-list .evac-cb').forEach(cb => { cb.checked = on; }); _evacSum(); }
+function _evacSel() { return [...document.querySelectorAll('#evac-list .evac-cb:checked')].map(cb => S.classes[cb.dataset.cid]).filter(Boolean); }
+function _evacSum() {
+  const grp = document.getElementById('evac-groups').checked;
+  try { localStorage.setItem('planClasse_evacGroups', grp ? '1' : '0'); } catch (e) {}
+  const sel = _evacSel();
+  const pages = sel.reduce((n, c) => n + 1 + (grp ? _evacGroups(c).length : 0), 0);
+  document.getElementById('evac-sum').textContent = sel.length ? `${sel.length} classe${sel.length > 1 ? 's' : ''} · ${pages} page${pages > 1 ? 's' : ''}` : 'aucune classe';
+}
+function _evacPageHTML(cls, g, first) {
+  const all = _evacStudents(cls);
+  const studs = g ? all.filter(s => _grp(s, cls) === g) : all;
+  const aesh = (Array.isArray(cls.aesh) ? cls.aesh : []).map((a, i) => ({ a, i }))
+    .filter(({ a }) => !g || (a.sids || []).some(sid => S.eleves[sid] && _grp(S.eleves[sid], cls) === g));
+  const nRows = studs.length + aesh.length + (aesh.length ? 1 : 0);
+  const rh = Math.max(5.4, Math.min(8, 190 / Math.max(1, nRows)));
+  const box = '<span style="display:inline-block;width:4.2mm;height:4.2mm;border:0.35mm solid #1a252f;border-radius:0.6mm"></span>';
+  const td = 'border:0.25mm solid #9aa6b5;padding:0 2mm;';
+  let n = 0, rows = '';
+  for (const s of studs) {
+    const out = _evacOut(s);
+    const name = `<b>${_escName((s.nom || '').toLocaleUpperCase('fr'))}</b> ${_escName(s.prenom || '')}`;
+    const gr = _grp(s, cls) ? 'G' + _grp(s, cls) : '';
+    if (out) rows += `<tr style="height:${rh}mm;background:#e6e9ee;color:#56697f"><td style="${td}text-align:center"></td><td style="${td}font-style:italic">${name}</td><td style="${td}text-align:center">${gr}</td><td colspan="2" style="${td}text-align:center;font-style:italic;font-size:8.5pt;line-height:1.15">${_esc(out)} — ne pas appeler</td><td style="${td}"></td></tr>`;
+    else rows += `<tr style="height:${rh}mm"><td style="${td}text-align:center;color:#56697f">${++n}</td><td style="${td}">${name}</td><td style="${td}text-align:center">${gr}</td><td style="${td}text-align:center">${box}</td><td style="${td}text-align:center">${box}</td><td style="${td}"></td></tr>`;
+  }
+  if (aesh.length) {
+    rows += `<tr><td colspan="6" style="${td}background:#f4f6fa;font-size:8.5pt;color:#56697f;padding:1mm 2mm">Adultes accompagnants</td></tr>`;
+    for (const { i } of aesh) rows += `<tr style="height:${rh}mm"><td style="${td}"></td><td style="${td}">🧑‍🏫 ${_escName(aeshLabel(i, cls.aesh.length, cls))} <span style="color:#56697f;font-size:8.5pt">(AESH)</span></td><td style="${td}"></td><td style="${td}text-align:center">${box}</td><td style="${td}text-align:center">${box}</td><td style="${td}"></td></tr>`;
+  }
+  const nOut = studs.filter(_evacOut).length;
+  const blank = w => `<span style="display:inline-block;width:${w}mm;border-bottom:0.3mm solid #1a252f"></span>`;
+  const th = 'border:0.3mm solid #1a252f;padding:1mm 2mm;background:#e6ebf2;font-size:9pt;';
+  return `<div style="${first ? '' : 'page-break-before:always;break-before:page;'}font-family:Arial,sans-serif;color:#0e1a26">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:0.6mm solid #b03d2e;padding-bottom:1.5mm;margin-bottom:3mm">
+      <h1 style="font-size:17pt;margin:0">🚨 Évacuation — ${_escName(cls.nom)}${g ? ' · groupe G' + g : ''}</h1>
+      <span style="font-size:10pt;color:#56697f">${studs.length - nOut} élève${studs.length - nOut > 1 ? 's' : ''} à appeler${aesh.length ? ` + ${aesh.length} AESH` : ''}</span>
+    </div>
+    <div style="font-size:10.5pt;margin-bottom:3mm;display:flex;gap:6mm;flex-wrap:wrap">
+      <span>Date : ${blank(28)}</span><span>Heure : ${blank(16)}</span><span>Salle : ${blank(22)}</span><span>Professeur : ${blank(40)}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:10.5pt">
+      <thead><tr><th style="${th}width:8mm">N°</th><th style="${th}text-align:left">Élève</th><th style="${th}width:9mm">Gr.</th><th style="${th}width:24mm">Absent au cours</th><th style="${th}width:27mm">Manquant après évacuation</th><th style="${th}width:38mm">Observations</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="margin-top:4mm;font-size:10.5pt;display:flex;flex-wrap:wrap;gap:3mm 7mm">
+      <span style="white-space:nowrap">Élèves à appeler : <b>${studs.length - nOut}</b></span>
+      <span style="white-space:nowrap">Absents au cours : ${blank(12)}</span>
+      <span style="white-space:nowrap">Présents au rassemblement : ${blank(12)}</span>
+      <span style="white-space:nowrap"><b>Manquants :</b> ${blank(12)}</span>
+      <span style="white-space:nowrap">Manquants signalés à : ${blank(50)} à ${blank(12)} h</span>
+      <span style="white-space:nowrap">Signature : ${blank(45)}</span>
+    </div></div>`;
+}
+function printEvac() {
+  const sel = _evacSel();
+  if (!sel.length) return toast('⚠️ Choisis au moins une classe.', 'warn');
+  const grp = document.getElementById('evac-groups').checked;
+  const pages = [];
+  for (const c of sel) {
+    pages.push(_evacPageHTML(c, 0, !pages.length));
+    if (grp) for (const g of _evacGroups(c)) pages.push(_evacPageHTML(c, g, false));
+  }
+  closeMod2('mevac');
+  const pa = document.getElementById('pa');
+  pa.innerHTML = `<div style="padding:1mm">${pages.join('')}</div>`;
+  pa.style.display = 'block';
+  const _ot = document.title;
+  const today = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+  document.title = sel.length === 1 ? `Liste d'évacuation - ${sel[0].nom}` : `Listes d'évacuation - ${today}`;
+  _setPrintOrientation('portrait', '10mm');
+  setTimeout(() => { window.print(); document.title = _ot; pa.style.display = 'none'; pa.innerHTML = ''; }, 200);
+}
+
 async function printTrombi(all) {
   const ids = all ? _memoRealClasses().filter(c => _tvStudents(c.id).some(s => _photoHas(s.id))).map(c => c.id)
                   : [_tvClassId].filter(Boolean);

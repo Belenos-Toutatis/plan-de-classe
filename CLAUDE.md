@@ -3218,6 +3218,14 @@ Bouton **📷 Photos** de l'onglet Élèves → modale `mtrombi` (`openTrombiImp
 - Correction au passage : `_photosRefresh` ne compte plus les `.jpeg` (ils étaient comptés mais jamais affichés, `_photoUrl` ne lit que `<sid>.jpg`).
 - Audit : 0 écart en clair et en sombre ; 363 px à 375. Testé avec `test/fixtures/trombi/fake-trombi.pdf` et des images fabriquées.
 
+## 🚨 Listes d'évacuation (modale `mevac`, v2.144.0)
+
+Demande de l'utilisateur : une liste par classe pour faire l'appel en cas d'évacuation. Entrée **« 🚨 Listes d'évacuation… »** dans le menu 🖨 ▾ du Plan **et** de la Vue Élève (copies, cf. convention), et dans ⋯ Plus de l'onglet Élèves (`openEvacPrint`).
+- ⚠️ **Imprimée À L'AVANCE, rien de pré-rempli** (arbitrage : « une évacuation, on évacue ; on ne connaît pas les absents à l'avance ») — pas d'appel du jour reporté.
+- Fenêtre : classes en pastilles par niveau (`_evacSel`), classes réelles cochées, recomposées décochées ; interrupteur **« une page par groupe »** (`#evac-groups`, retenu dans `planClasse_evacGroups`, actif par défaut) — une page classe entière + une par groupe présent (`_evacGroups`).
+- Page (`_evacPageHTML(cls, g, first)`, A4 portrait, marges 10 mm, couleurs littérales) : en-tête « 🚨 Évacuation — classe · groupe », nombre à appeler ; lignes Date / Heure / Salle / Professeur à remplir ; tableau N° · Élève (NOM Prénom, ordre alphabétique) · Gr. · **☐ Absent au cours** · **☐ Manquant après évacuation** · Observations ; élèves **ULIS / UPE2A hors inclusion grisés « … hors inclusion — ne pas appeler »**, sans numéro ni case, non comptés (`_evacOut`) ; élèves présents aujourd'hui seulement (`_stuActiveOn` ; membres de la période en cours pour une recomposée — `_evacStudents`) ; **AESH** en fin de liste (sur une page de groupe : celles qui accompagnent un élève du groupe) ; pied à remplir : à appeler, absents au cours, présents au rassemblement, manquants, signalés à … à … h, signature. Hauteur de ligne adaptée au nombre (5,4 à 8 mm) : mesuré ≤ 263 mm pour 36 élèves (place utile 277 mm).
+- Un chemin d'impression de plus pour l'audit (écrit dans `#pa`, `document.title` = « Liste(s) d'évacuation … »).
+
 ## 🖼 Trombinoscope — affichage et impression (modale `mtrombiview`, v2.68.0)
 
 Bouton **🖼 Trombinoscope** de l'onglet Élèves (`#btn-trombiview`, visible seulement s'il existe au moins une photo, comme 🧠 Mémoriser — `_updateMemoBtn` gère les deux). La modale montre la classe choisie dans son sélecteur (défaut : classe courante ; classes réelles seulement, élèves actifs, triés par nom) : photo, prénom, NOM — case pointillée 📷 si pas de photo. Un clic sur un élève ouvre sa fiche, qui rouvre le trombinoscope à la fermeture.
