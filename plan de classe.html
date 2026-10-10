@@ -8179,7 +8179,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   /* Touche imitée : keyCode / which / charCode posés à la main (le constructeur les laisse à 0,
      et du code ancien comme celui de MBN les lit). */
   function key(el, type, k) {
-    var code = k === 'Tab' ? 9 : k === 'Backspace' ? 8 : k.charCodeAt(0);
+    var code = k === 'Tab' ? 9 : k === 'Backspace' ? 8 : k === 'Enter' ? 13 : k.charCodeAt(0);
     var e = new KeyboardEvent(type, { key: k, bubbles: true, cancelable: true });
     try {
       Object.defineProperty(e, 'keyCode', { get: function () { return code; } });
@@ -8201,10 +8201,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       key(el, 'keydown', 'Backspace'); el.value = ''; fire(el, ['input']); key(el, 'keyup', 'Backspace');
       var v = String(value);
       for (var i = 0; i < v.length; i++) {
-        var ch = v.charAt(i);
-        key(el, 'keydown', ch); key(el, 'keypress', ch);
+        var ch = v.charAt(i), kk = ch === '\n' ? 'Enter' : ch;
+        key(el, 'keydown', kk); key(el, 'keypress', kk);
         el.value = el.value + ch;
-        fire(el, ['input']); key(el, 'keyup', ch);
+        fire(el, ['input']); key(el, 'keyup', kk);
       }
       key(el, 'keydown', 'Tab');
     } else {
@@ -8215,6 +8215,25 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     if (isText && typeIt) key(el, 'keyup', 'Tab');
     await idle();
     return true;
+  }
+  /* Un enregistrement peut partir en différé (après la frappe) : on l'attend un peu. */
+  async function waitSave(s0, ms) {
+    var t0 = Date.now();
+    while (saves === s0 && pend === 0 && Date.now() - t0 < ms) await sleep(80);
+    await idle();
+  }
+  /* Commentaire enregistré pour un élève dans le champ caché NOTATIONS (JSON de toute la
+     classe) ; undefined si illisible. */
+  function notationsComment(uid) {
+    try {
+      var f = document.getElementById('form_devoir');
+      var arr = JSON.parse(f.elements.NOTATIONS.value);
+      for (var i = 0; i < arr.length; i++) {
+        var o = arr[i];
+        for (var k in o) if (o[k] === uid) return o.commentaire == null ? '' : o.commentaire;
+      }
+    } catch (e) {}
+    return undefined;
   }
   var BIG = P.getAttribute('style');
   function compact(on) {
@@ -8258,7 +8277,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
             if (!okv) { probs.push(who + ' : niveau « ' + v + ' » impossible pour ' + a.comps[k].code); continue; }
             if (await setField(sel, v)) c++;
           }
-          if (a.appr) { var ta = $('[id$="eleve__appreciation"]', aside); if (await setField(ta, a.appr, true)) c++; }
+          if (a.appr) {
+            var ta = $('[id$="eleve__appreciation"]', aside), s1 = saves;
+            if (await setField(ta, a.appr, true, true)) { c++; await waitSave(s1, 3000); }
+            var cm = notationsComment(a.m.uid);
+            if (cm !== undefined && String(cm || '') !== a.appr) probs.push(who + ' : appréciation non prise par MBN (MBN a gardé « ' + String(cm || '').slice(0, 40) + ' »)');
+          }
           if (!a.motif && a.note != null) {
             var row = null; $$('.js-eleve').forEach(function (el) { if (el.getAttribute('data-eleveuid') === a.m.uid) row = el; });
             var shown = row && $('.eleve__note', row) ? numOf($('.eleve__note', row).textContent) : null;
@@ -9145,11 +9169,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.137.1';
+const APP_VERSION    = '2.137.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T10:05:27Z';
+const APP_BUILD_DATE = '2026-10-10T10:16:58Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »

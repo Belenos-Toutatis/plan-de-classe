@@ -116,15 +116,25 @@ aside{border:1px solid #888;padding:10px;width:420px}
     if (t.id === 'js-saisie-eleve__non-notation') { d.motif = t.value; if (d.motif) d.valeur = null; var n = document.getElementById('js-saisie-eleve__note'); n.disabled = !!d.motif; if (d.motif) n.value = ''; }
     else if (t.id === 'js-saisie-eleve__note') { var v = parseFloat(t.value.replace(',', '.')); d.valeur = isFinite(v) ? v : null; }
     else if (t.classList.contains('select_competence')) d.comps[t.getAttribute('data-id-sous-competence')] = t.value;
-    else if (t.id === 'js-saisie-eleve__appreciation') d.commentaire = t.value;
-    document.forms[0].elements.NOTATIONS.value = 'maj ' + Date.now();
+    else if (t.id === 'js-saisie-eleve__appreciation') return;   /* comme on le suppose de MBN : appréciation enregistrée en différé, sur la frappe */
+    sauver();
+  });
+  /* Appréciation : enregistrée 600 ms après la dernière touche (et pas sur « change ») */
+  var apprTimer = null;
+  document.getElementById('js-saisie-eleve__appreciation').addEventListener('keyup', function (ev) {
+    var t = ev.target, uid = cur;
+    clearTimeout(apprTimer);
+    apprTimer = setTimeout(function () { DATA[uid].commentaire = t.value; sauver(); }, 600);
+  });
+  function sauver() {
+    document.forms[0].elements.NOTATIONS.value = JSON.stringify(ELEVES.map(function (e) { var d = DATA[e.uid]; return { uidEleve: e.uid, valeur: d.valeur, commentaire: d.commentaire || null }; }));
     renderList();
     var x = new XMLHttpRequest();
     x.open('POST', 'data:application/json,{"status":"ok","message":"","data":null}');
     x.onloadend = function () { saves++; document.getElementById('log').textContent = saves + ' enregistrement(s)'; };
     x.send('ACTION=SAUVER');
-  });
-  renderList();
+  }
+  sauver(); saves = 0;
   window.__FAKE = { DATA: DATA };
 </script>
 </body>
