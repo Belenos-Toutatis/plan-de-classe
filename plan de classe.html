@@ -447,6 +447,17 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 .mnp-c.occ{background:var(--rule-line)}
 .mnp-c.me{background:#1f9d55;border-color:#14703b;box-shadow:0 0 0 1px #1f9d55}
 .mnp-desk{grid-column:1/-1;height:3px;margin-top:2px;border-radius:2px;background:var(--pencil-soft);width:40%;justify-self:center}
+.nd-who{display:flex;align-items:center;gap:12px;margin:2px 0 10px;padding:8px 10px;border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);background:var(--paper-warm);color:var(--ink-deep);font-size:.86em;min-height:84px}
+.nd-who:empty{display:none}
+.nd-who{flex-wrap:wrap}
+.nd-who .mnp{zoom:1.7}
+.nd-who>.nd-ph{width:72px;height:72px;flex:none;border-radius:6px;object-fit:cover;display:flex;align-items:center;justify-content:center;background:var(--paper-deep);color:var(--ink-blue);font-family:var(--font-serif);font-weight:600;font-size:1.5em}
+.nd-who .nd-wtxt{line-height:1.35;min-width:0}
+.nd-who .nd-wtxt b{font-family:var(--font-serif);color:var(--ink-blue)}
+.nd-who .nd-wsrc{color:var(--pencil);font-size:.92em}
+.nd-who.sub{background:var(--info-bg,var(--paper-warm))}
+[data-nd-sub]{cursor:default}
+.nd-row[data-nd-sub]:hover,.nd-q[data-nd-sub]:hover{outline:2px solid var(--link-fg);outline-offset:-2px}
 #meval-miniplan{display:flex;align-items:center;gap:6px;padding:3px 6px;border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);background:var(--paper-warm);font-size:.78em;color:var(--ink-deep);min-height:30px;max-width:340px}
 #meval-miniplan img{width:42px;height:42px;object-fit:cover;border-radius:3px;display:block}
 #meval-miniplan .mnp-txt{line-height:1.25;max-width:120px;overflow:hidden}
@@ -1020,6 +1031,16 @@ body.el-bulk-on.noise-widget-on:has(#tab-eleves.on) #toast, body.el-bulk-on.time
 #gtip.rich{background:var(--paper);color:var(--ink-deep);border:1px solid var(--rule-line);max-width:380px}
 #gtip .gtip-mnp{margin-top:8px;padding-top:6px;border-top:1px solid var(--rule-line-soft);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--pencil);white-space:normal}
 /* Élève dont on rédige la remarque, dans la barre du titre des bilans (v2.140.0) */
+/* En-tête collant des deux bilans (v2.143.4) : titre, outils, cartes et filtres restent en haut
+   quand la page défile ; les cartes se réduisent par la barre .bsplit (hauteur retenue sur la machine). */
+.bilan-stick{position:sticky;top:var(--topbar-h,0px);z-index:40;background:var(--paper);padding-bottom:4px}
+@media (max-height:560px){.bilan-stick{position:static}}
+.bilan-head .bsynth-box{overflow:hidden auto}
+.bsplit{display:flex;align-items:center;justify-content:center;gap:8px;height:12px;margin:2px 0 4px;cursor:ns-resize;touch-action:none;user-select:none;color:var(--pencil);font-size:.72em}
+.bsplit::before,.bsplit::after{content:"";flex:1;height:1px;background:var(--rule-line)}
+.bsplit>span{padding:0 8px;border:1px solid var(--rule-line);border-radius:8px;background:var(--paper);line-height:10px;letter-spacing:2px}
+.bsplit:hover>span,.bsplit.drag>span{background:var(--paper-deep);color:var(--ink-deep)}
+.bsplit.closed>span{letter-spacing:0;padding:0 10px}
 .bilan-who-slot{display:inline-block;flex:none;width:210px;height:28px;margin-left:12px}
 .bilan-who{display:inline-flex;visibility:hidden;align-items:center;gap:6px;height:28px;width:210px;flex:none;box-sizing:border-box;padding:0 10px 0 1px;border:1px solid var(--rule-line);border-radius:40px;background:var(--paper);cursor:zoom-in;font-size:.88em;white-space:nowrap;position:relative}
 .bilan-who.on{visibility:visible}
@@ -4268,11 +4289,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   /* Liste des Devoirs : la rangée d'une éval porte six boutons d'action (⚙ ⧉ 📊 🆚 📤 🗑),
      290 px à eux seuls — ils passent sous le libellé */
   .bsg-row, .bsg-row > div { flex-wrap: wrap !important; }
-  /* Header + nav dépliés sur deux lignes chacun occupent ~520 px des 812 px d'un téléphone
-     en portrait : collés en haut (sticky), ils ne laisseraient qu'un tiers d'écran au contenu.
-     Ils défilent donc avec la page sur petit écran. */
-  #topbar { position: static !important; }
 }
+/* Bandeau collé en haut, SAUF s'il prend plus du tiers de l'écran (téléphone en portrait :
+   header + nav dépliés ≈ 520 px sur 812). Décidé en JS d'après la hauteur réelle (_topbarFit,
+   v2.143.5) : une fenêtre étroite d'ordinateur garde son bandeau fixe (signalé par
+   l'utilisateur, la règle « largeur ≤ 760 px » le faisait défiler avec la page). */
+body.topbar-free #topbar { position: static !important; }
 
 </style>
 </head>
@@ -5017,6 +5039,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
 
   <!-- ── TAB: Bilan (volet Évaluation — phase 12 : agrégation semestrielle) ── -->
   <div id="tab-bilan" class="tab">
+    <div class="bilan-stick" id="bilan-stick-bilan">
     <div class="sh">
       <h2>📜 Bilan des notes</h2>
       <span class="tab-ctx" id="tabctx-bilan"></span>
@@ -5040,11 +5063,14 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button onclick="_evhelpToggle('bilan')" title="Masquer ce mode d'emploi (réaffichable via le ? à gauche de Période)" style="position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1">✕</button>
       Synthèse de la période pour le bulletin. <strong>Une colonne par évaluation</strong> (note /20 individuelle de chaque élève, fond coloré selon la valeur), triées <strong>par date croissante</strong> de gauche à droite (sans date à la fin). En multi-période (« Toutes »), les colonnes <strong>Moyenne /20</strong>, <strong>Rang</strong> et <strong>📝 Remarque</strong> sont dédupliquées par période (S1/S2 ou T1/T2/T3). La moyenne est <strong>pondérée par les coefficients</strong> de chaque éval. Les évals marquées <em>« ne compte pas dans la moyenne »</em> (diagnostiques) sont ignorées. Clic sur le code court d'une éval = ouvrir sa saisie tableur. Bouton <strong>🆚 Comparer classes</strong> : tableau croisé classes × civilité (moyenne, σ, médiane) sur la période ou un sous-ensemble d'évaluations. Le <strong>bandeau de synthèse</strong> résume la classe (moyenne, répartition, remarques rédigées, élèves à surveiller) ; les <strong>pastilles de filtre</strong> n'affichent que certains élèves — le pied de tableau reste calculé sur toute la classe.
     </p>
+    <div class="bilan-head" id="bilan-head-bilan"></div>
+    </div>
     <div id="bilan-wrap"></div>
   </div>
 
   <!-- ── TAB: Compétences (volet Évaluation — phase 11 : bilan transverse) ── -->
   <div id="tab-comp" class="tab">
+    <div class="bilan-stick" id="bilan-stick-comp">
     <div class="sh">
       <h2>🎯 Bilan des compétences</h2>
       <span class="tab-ctx" id="tabctx-comp"></span>
@@ -5073,6 +5099,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <button onclick="_evhelpToggle('comp')" title="Masquer ce mode d'emploi (réaffichable via le ? à gauche de Période)" style="position:absolute;top:4px;right:6px;background:transparent;border:none;color:var(--pencil);cursor:pointer;font-size:1.05em;padding:2px 6px;line-height:1">✕</button>
       Vue transverse <strong>élèves × compétences</strong> (ou <strong>domaines du socle</strong> selon l'affichage choisi) sur toutes les évaluations de la classe et de la période. Chaque cellule = <strong>niveau entier (1–4)</strong> : chaque évaluation produit un niveau entier pour la compétence, et la période fait la moyenne de ces niveaux <strong>pondérée par le coefficient</strong> de chaque évaluation, arrondie à l'entier. En mode <em>domaines</em>, le niveau d'un domaine = moyenne des compétences évaluées qu'il regroupe, entière elle aussi. La colonne <strong>Moyenne</strong> agrège les niveaux de la ligne (1–4), et la colonne <strong>📝 Remarque</strong> est synchronisée avec celle de l'onglet <em>Bilan des notes</em>. Tous les niveaux étant entiers, les exports CSV / ENT le sont aussi. Survole une cellule pour voir le détail des saisies. Le <strong>bandeau de synthèse</strong> résume la classe (niveau moyen, répartition des niveaux, compétences les moins acquises, remarques) ; les <strong>pastilles de filtre</strong> n'affichent que certains élèves.
     </p>
+    <div class="bilan-head" id="bilan-head-comp"></div>
+    </div>
     <div id="comp-wrap"></div>
   </div>
 
@@ -5470,6 +5498,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="closeMod2('mnotedet')" aria-label="Fermer" style="padding:4px 8px">✕</button>
       </span>
     </div>
+    <div id="mnotedet-who" class="nd-who"></div>
     <div id="mnotedet-synth" class="bsynth nd-synth"></div>
     <div id="mnotedet-body"></div>
     <div class="ev-h" style="margin-top:12px">📝 Remarque sur ce devoir</div>
@@ -9639,11 +9668,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.143.2';
+const APP_VERSION    = '2.143.6';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T14:53:57Z';
+const APP_BUILD_DATE = '2026-10-10T15:10:41Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21326,7 +21355,7 @@ function _ndRender() {
         if (_subSkippedFor(p, cid) || !_passComps(p, cid).includes(c.id)) continue;
         const v = p.niveaux?.[sid]?.[c.id];
         const pd = _passDateFor(p, cid);
-        chips += `<span class="nd-q" title="${_escAttr((p.name ? p.code + ' — ' + p.name : p.code || '?') + (pd ? ' · ' + _fmtDateFr(pd) : ''))}">${_esc(p.code || '?')} ${(v == null || v === '') ? '<span class="nd-dim">vide</span>' : _ndLvSq(v, nb)}</span>` + comChips(p.id + '|' + c.id);
+        chips += `<span class="nd-q" data-nd-sub="pass:${_escAttr(p.id)}" title="${_escAttr((p.name ? p.code + ' — ' + p.name : p.code || '?') + (pd ? ' · ' + _fmtDateFr(pd) : ''))}">${_esc(p.code || '?')} ${(v == null || v === '') ? '<span class="nd-dim">vide</span>' : _ndLvSq(v, nb)}</span>` + comChips(p.id + '|' + c.id);
       }
       const lv = _evalStudentLevelForComp(ev, sid, c.id);
       html += `<div class="nd-row nd-row-b"><span class="nd-lbl"><b>${_esc(c.code)}</b>${c.name ? ' <span class="nd-dim">' + _esc(c.name) + '</span>' : ''}</span><span class="nd-qs">${chips || '<span class="nd-dim">aucune saisie</span>'}</span><span class="nd-tot">${lv == null ? '<span class="nd-dim">—</span>' : _ndLvSq(lv, nb)}</span></div>`;
@@ -21388,7 +21417,7 @@ function _ndRender() {
     } else {
       for (const mn of (ev.miniNotes || [])) {
         const md = _mnDateFor(mn, cid);
-        groups.push({ lbl: mn.label || '?', name: [mn.name, md ? _fmtDateFr(md) : ''].filter(Boolean).join(' · '), mns: [mn], single: true });
+        groups.push({ lbl: mn.label || '?', name: [mn.name, md ? _fmtDateFr(md) : ''].filter(Boolean).join(' · '), mns: [mn], single: true, sub: 'mn:' + mn.id });
       }
     }
     html += `<div class="ev-h">${isC ? 'Par exercice' : 'Par question'}</div><div class="lst-box">`;
@@ -21402,7 +21431,7 @@ function _ndRender() {
       }
       if (any) { sumG += got; sumM += mx; anyG = true; }
       const tot = any ? `${_fmtNote(got)} / ${_fmtNote(mx)}` : '<span class="nd-dim">—</span>';
-      html += `<div class="nd-row"><span class="nd-lbl"><b>${_esc(g.lbl)}</b>${g.name ? ' <span class="nd-dim">' + _esc(g.name) + '</span>' : ''}</span><span class="nd-qs">${chips}</span>${any ? _ndBar(got, mx) : '<span></span>'}<span class="nd-tot">${tot}</span></div>`;
+      html += `<div class="nd-row"${g.sub ? ` data-nd-sub="${_escAttr(g.sub)}"` : ''}><span class="nd-lbl"><b>${_esc(g.lbl)}</b>${g.name ? ' <span class="nd-dim">' + _esc(g.name) + '</span>' : ''}</span><span class="nd-qs">${chips}</span>${any ? _ndBar(got, mx) : '<span></span>'}<span class="nd-tot">${tot}</span></div>`;
     }
     if (!groups.length) html += '<div class="nd-row"><span class="nd-empty">Aucune question définie.</span></div>';
     html += '</div>';
@@ -21425,6 +21454,7 @@ function _ndRender() {
     }
   }
   document.getElementById('mnotedet-body').innerHTML = html;
+  _ndWhoRender('');
 
   // ── Remarque ──
   const ta = document.getElementById('mnotedet-rem');
@@ -21440,6 +21470,89 @@ function _ndRender() {
     ? `<span style="color:var(--danger-fg)">⚖ ${adjInfo.list.map(a => _esc(_adjustLabel(a))).join(' · ')} — calculée ${_fmtNote(adjInfo.base)} → finale ${_fmtNote(adjInfo.final)}</span>`
     : '<span class="nd-dim">⚖ Aucun ajustement de la note</span>';
 }
+// ─── Bande photo + mini-plan du détail de la note (v2.143.3, demande de l'utilisateur) ───
+// Plan de l'élève le JOUR DU DEVOIR ; au survol d'une mini-note (type A) ou d'une passation
+// (type B), le plan au jour de CETTE mini-note / passation (date et créneau de son groupe).
+// Le libellé dit d'où vient le plan : appel du jour, plan noté avec le devoir, ou plan actuel.
+function _seatingOnDate(ev, cls, date, slot) {
+  const base = _mnpEvalSeating(ev, cls), roomId = base.roomId;
+  const cur = cls.rooms?.[roomId]?.seating || {};
+  if (!date) return { roomId, seating: cur, src: 'plan actuel (pas de date)' };
+  if (date >= todayKey()) return { roomId, seating: cur, src: date === todayKey() ? 'plan actuel (aujourd\'hui)' : 'plan actuel (date à venir)' };
+  const recs = Object.values(S.attendance?.[cls.id] || {})
+    .filter(r => r && r.date === date && r.seatingHash && !(r.aeshSalleIdSnap && r.aeshSalleIdSnap !== roomId) && !(slot && r.slotId && r.slotId !== slot))
+    .sort((a, b) => ((slot && b.slotId === slot) - (slot && a.slotId === slot)) || ((b.ts || 0) - (a.ts || 0)));
+  for (const r of recs) {
+    const snap = _getSeatingSnapshot(r.seatingHash);
+    if (snap && Object.keys(snap).length && _seatingFitsRoom(snap, null, cls.id, roomId)) return { roomId, seating: snap, src: `plan de l'appel du ${_fmtDateFr(date)}${r.slotId ? ' (' + r.slotId + ')' : ''}` };
+  }
+  const hash = _evalSeatingHashFor(ev, cls.id);
+  const snap = hash ? _getSeatingSnapshot(hash) : null;
+  if (snap && Object.keys(snap).length && _seatingFitsRoom(snap, ev, cls.id, roomId)) return { roomId, seating: snap, src: 'plan noté avec le devoir' };
+  return { roomId, seating: cur, src: 'plan actuel — aucun plan connu à cette date' };
+}
+function _ndWhoHTML(ev, cls, sid, sub) {
+  const stu = S.eleves[sid];
+  const g = _grp(stu, cls);
+  let date, slot, head;
+  if (sub) {
+    const isP = sub.kind === 'pass';
+    date = isP ? _passDateFor(sub.o, cls.id, g) : _mnDateFor(sub.o, cls.id, g);
+    slot = isP ? _passSlotIdFor(sub.o, cls.id, g) : _mnSlotIdFor(sub.o, cls.id, g);
+    head = `${isP ? 'Passation' : 'Question'} <b>${_esc((isP ? sub.o.code : sub.o.label) || '?')}</b>`;
+    if (!date) { date = _evalDateFor(ev, cls.id); slot = _evalSlotIdFor(ev, cls.id); head += ' (sans date propre : jour du devoir)'; }
+  } else {
+    date = _evalDateFor(ev, cls.id); slot = _evalSlotIdFor(ev, cls.id);
+    head = 'Jour du devoir';
+  }
+  const when = date ? _fmtDateFr(date) + (slot ? ' · ' + _esc(slot) : '') : 'sans date';
+  const hidden = typeof _confHides === 'function' && _confHides(sid);
+  const st = hidden ? null : _seatingOnDate(ev, cls, date, slot);
+  const m = st ? _mnpBuild(null, cls, sid, 230, st.roomId, st.seating) : null;
+  const ini = _esc(((stu.prenom || '')[0] || '') + ((stu.nom || '')[0] || ''));
+  return `<span class="nd-ph" data-nd-ph>${ini}</span>`
+    + (m ? m.html : '')
+    + `<span class="nd-wtxt">${head} — ${when}<br>${m ? `<b>${_esc(m.label)}</b><br><span class="nd-wsrc">${_esc(st.src)}</span>` : '<span class="nd-wsrc">plan masqué (mode confidentiel)</span>'}`
+    + `${!sub && ev.type === 'A' ? '<br><span class="nd-wsrc">Survole une question : plan au jour de cette question.</span>' : ''}`
+    + `${!sub && ev.type === 'B' ? '<br><span class="nd-wsrc">Survole une passation : plan au jour de cette passation.</span>' : ''}</span>`;
+}
+async function _ndWhoRender(subKey) {
+  const box = document.getElementById('mnotedet-who');
+  if (!box || !_nd) return;
+  const ev = S.evaluations?.[_nd.evalId], sid = _nd.sid;
+  const cls = ev && S.classes?.[_evalStuClassId(ev, sid)];
+  if (!ev || !cls || !S.eleves[sid]) { box.innerHTML = ''; return; }
+  let sub = null;
+  if (subKey) {
+    const [kind, id] = subKey.split(':');
+    const o = (kind === 'pass' ? ev.passations : ev.miniNotes || []).find(x => x.id === id);
+    if (o) sub = { kind, o };
+  }
+  box.dataset.sub = subKey || '';
+  box.classList.toggle('sub', !!sub);
+  box.innerHTML = _ndWhoHTML(ev, cls, sid, sub);
+  let url = null;
+  try { url = await _photoUrl(sid); } catch (e) {}
+  const ph = box.querySelector('[data-nd-ph]');
+  if (url && ph && _nd?.sid === sid) ph.outerHTML = `<img class="nd-ph" src="${url}" alt="">`;
+}
+(function () {
+  const body = () => document.getElementById('mnotedet-body');
+  document.addEventListener('mouseover', e => {
+    const b = body();
+    if (!b || !_nd || !b.contains(e.target)) return;
+    const el = e.target.closest('[data-nd-sub]');
+    const key = el ? el.getAttribute('data-nd-sub') : '';
+    const box = document.getElementById('mnotedet-who');
+    if (box && (box.dataset.sub || '') !== key) _ndWhoRender(key);
+  });
+  document.addEventListener('mouseout', e => {
+    const b = body();
+    if (!b || !_nd || !b.contains(e.target) || (e.relatedTarget && b.contains(e.relatedTarget))) return;
+    const box = document.getElementById('mnotedet-who');
+    if (box && box.dataset.sub) _ndWhoRender('');
+  });
+})();
 function _ndRemInput(ta) {
   if (!_nd) return;
   const ev = S.evaluations?.[_nd.evalId];
@@ -42117,7 +42230,7 @@ function _periodeLongLabel(code) {
   return o ? o.label.replace(/^\S+ — /, '') : code;
 }
 function _renderTabCtx(key) {
-  if (key === 'bilan' || key === 'comp') _bilanWhoCheck();
+  if (key === 'bilan' || key === 'comp') { _bilanWhoCheck(); _bilanFit(key); }
   const el = document.getElementById('tabctx-' + key);
   if (!el) return;
   const cls = getCls();
@@ -54469,11 +54582,103 @@ function _bsynthRemInner(counts) {
     <div class="bsynth-bar" aria-hidden="true"><span style="width:${pct}%;background:var(--ink-blue)"></span></div>
     <div class="bsynth-sub">${sub}</div>`;
 }
+// ─── En-tête collant + cartes réductibles (v2.143.4, demande de l'utilisateur) ───
+// L'en-tête (titre, outils, cartes, filtres) reste en haut quand la page défile (.bilan-stick,
+// sticky sous le bandeau) ; le tableau prend la hauteur qui reste (_bilanFit) et défile dans
+// sa boîte, en-tête de colonnes collant. La barre .bsplit sous les cartes se glisse pour les
+// réduire (jusqu'à 0) ; double-clic = tout replier / tout afficher. Hauteur retenue sur la
+// machine, par onglet (planClasse_bilanCardsH_<tab>, absente = cartes entières).
+function _bsplitH(tab) {
+  try { const v = localStorage.getItem('planClasse_bilanCardsH_' + tab); return v == null ? null : Math.max(0, +v || 0); } catch (e) { return null; }
+}
+function _bsplitSave(tab, h) {
+  try { if (h == null) localStorage.removeItem('planClasse_bilanCardsH_' + tab); else localStorage.setItem('planClasse_bilanCardsH_' + tab, String(Math.round(h))); } catch (e) {}
+}
+function _bsplitHTML(tab, cardsHTML) {
+  const h = _bsplitH(tab);
+  const closed = h === 0;
+  return `<div class="bsynth-box" id="bsbox-${tab}"${h != null ? ` style="max-height:${h}px"` : ''}>${cardsHTML}</div>`
+    + `<div class="bsplit${closed ? ' closed' : ''}" id="bsplit-${tab}" role="separator" aria-orientation="horizontal" onpointerdown="_bsplitDown(event,'${tab}')" ondblclick="_bsplitToggle('${tab}')" title="Glisser pour réduire ou agrandir les cartes de synthèse · double-clic : tout replier / tout afficher"><span>${closed ? '▾ cartes de synthèse' : '⋯'}</span></div>`;
+}
+function _bsplitApply(tab, h) {
+  const box = document.getElementById('bsbox-' + tab), bar = document.getElementById('bsplit-' + tab);
+  if (!box) return;
+  const full = box.scrollHeight;
+  if (h != null && h >= full - 2) h = null;
+  box.style.maxHeight = h == null ? '' : h + 'px';
+  if (bar) { bar.classList.toggle('closed', h === 0); bar.firstElementChild.textContent = h === 0 ? '▾ cartes de synthèse' : '⋯'; }
+  return h;
+}
+function _bsplitToggle(tab) {
+  const h = _bsplitH(tab) === 0 ? null : 0;
+  _bsplitSave(tab, _bsplitApply(tab, h));
+  _bilanFit(tab);
+}
+function _bsplitDown(e, tab) {
+  if (e.button != null && e.button !== 0) return;
+  const box = document.getElementById('bsbox-' + tab), bar = document.getElementById('bsplit-' + tab);
+  if (!box) return;
+  e.preventDefault();
+  const y0 = e.clientY, h0 = box.getBoundingClientRect().height;
+  let h = _bsplitH(tab);
+  bar?.classList.add('drag');
+  const move = ev => { h = _bsplitApply(tab, Math.max(0, h0 + ev.clientY - y0)); _bilanFit(tab); };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    bar?.classList.remove('drag');
+    _bsplitSave(tab, h);
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
+// Hauteur du tableau = ce qui reste sous l'en-tête collant (au moins 220 px).
+function _bilanFit(tab) {
+  const top = document.getElementById('topbar');
+  const th = top && getComputedStyle(top).position === 'sticky' ? top.getBoundingClientRect().height : 0;
+  document.documentElement.style.setProperty('--topbar-h', th + 'px');
+  const st = document.getElementById('bilan-stick-' + tab);
+  // L'en-tête se colle là où il est déjà (sous le bandeau + marge de l'onglet), pas au ras du
+  // bandeau : sinon il remontait de cette marge au premier tour de molette (signalé, v2.143.6).
+  const tabEl = document.getElementById('tab-' + tab);
+  if (st && tabEl && th) {
+    const natural = tabEl.getBoundingClientRect().top + scrollY + (parseFloat(getComputedStyle(tabEl).paddingTop) || 0);
+    st.style.top = Math.max(th, Math.round(natural)) + 'px';
+  } else if (st) st.style.top = '';
+  const sc = document.querySelector(`#${tab}-wrap .bilan-table-scroll`);
+  if (!st || !sc) return;
+  const sticky = getComputedStyle(st).position === 'sticky';
+  const avail = innerHeight - (sticky ? (parseFloat(st.style.top) || th) + st.getBoundingClientRect().height : 0) - 14;
+  sc.style.maxHeight = Math.max(220, Math.floor(avail)) + 'px';
+}
+function _topbarFit() {
+  const top = document.getElementById('topbar');
+  if (!top) return;
+  document.body.classList.toggle('topbar-free', top.getBoundingClientRect().height > innerHeight / 3);
+}
+(function () {
+  window.addEventListener('resize', _topbarFit);
+  if (typeof ResizeObserver === 'function') {
+    const go = () => { const t = document.getElementById('topbar'); if (t) new ResizeObserver(_topbarFit).observe(t); _topbarFit(); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  }
+})();
+(function () {
+  const refit = () => ['bilan', 'comp'].forEach(t => { if (document.getElementById('tab-' + t)?.classList.contains('on')) _bilanFit(t); });
+  window.addEventListener('resize', refit);
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(refit);
+    const go = () => ['bilan-stick-bilan', 'bilan-stick-comp', 'topbar'].forEach(id => { const el = document.getElementById(id); if (el) ro.observe(el); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  }
+})();
 // Recompte en direct depuis les champs du tableau (appelé à chaque frappe d'une
 // remarque) : le bandeau suit la saisie sans re-rendre le tableau.
 function _bsynthRemRefresh(input) {
   const wrap = input?.closest?.('#bilan-wrap, #comp-wrap');
-  const box = wrap?.querySelector('.bsynth-rem');
+  const box = wrap && document.querySelector(`#bilan-head-${wrap.id === 'comp-wrap' ? 'comp' : 'bilan'} .bsynth-rem`);
   if (!box) return;
   const counts = {};
   wrap.querySelectorAll('table .bilan-rem-textarea').forEach(t => {
@@ -54706,6 +54911,7 @@ function renderBilanTab() {
   const wrap = document.getElementById('bilan-wrap');
   if (!wrap) return;
   // Reset la toolbar de tri en haut (sera re-peuplée plus bas si une classe est sélectionnée)
+  const _h0 = document.getElementById('bilan-head-bilan'); if (_h0) _h0.innerHTML = '';
   const _tbReset = document.getElementById('bilan-sort-toolbar');
   if (_tbReset) _tbReset.innerHTML = '';
   _renderDisciplineToolbar('bilan');
@@ -54973,7 +55179,9 @@ function renderBilanTab() {
   const _bfShow = sid => _bf === 'all' || _bs.flags.get(sid)?.has(_bf);
   const _dots = _bilanCellStyle() === 'dot';
   const _remIcon = _bilanRemMode() === 'icon';
-  let html = _bs.html + _bsynthChipsHTML('bilan', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanDisplayTogglesHTML(true));
+  const _hd = document.getElementById('bilan-head-bilan');
+  if (_hd) _hd.innerHTML = _bsplitHTML('bilan', _bs.html) + _bsynthChipsHTML('bilan', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanDisplayTogglesHTML(true));
+  let html = '';
   if (synthData.length > 1) {
     const allKeys = synthData.flatMap(sd => [`bilan:moy:${sd.perCode}`, `bilan:rang:${sd.perCode}`, `bilan:rem:${sd.perCode}`]);
     html += _bilanHiddenBanner(allKeys, k => {
@@ -57222,6 +57430,7 @@ function renderCompetencesTab() {
   const cls = getCls();
   const wrap = document.getElementById('comp-wrap');
   if (!wrap) return;
+  const _h0 = document.getElementById('bilan-head-comp'); if (_h0) _h0.innerHTML = '';
   _renderDisciplineToolbar('comp');
   // Restaure l'état UI des contrôles
   const dispSel = document.getElementById('comp-display-mode');
@@ -57413,7 +57622,9 @@ function renderCompetencesTab() {
   if (!_bs.chips.some(c => c.v === _bf)) _bf = 'all';
   const _bfShow = sid => _bf === 'all' || _bs.flags.get(sid)?.has(_bf);
   const _remIcon = _bilanRemMode() === 'icon';
-  let html = _bs.html + _bsynthChipsHTML('comp', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanLevelLegendHTML(colors) + _bilanDisplayTogglesHTML(false));
+  const _hd = document.getElementById('bilan-head-comp');
+  if (_hd) _hd.innerHTML = _bsplitHTML('comp', _bs.html) + _bsynthChipsHTML('comp', _bs.chips, _bf, sids.filter(_bfShow).length, sids.length, _bilanLevelLegendHTML(colors) + _bilanDisplayTogglesHTML(false));
+  let html = '';
   // Bandeau toggle "Évals d'autres classes" — affiché si on détecte au moins une
   // compétence orpheline OU si le toggle masque actuellement (pour pouvoir le réactiver).
   const _hasOrphanPotentialComp = (() => {
