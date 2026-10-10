@@ -76,6 +76,7 @@ function stateMaximal() {
         } },
         noNeighbors: [SID + '|sTemoin', 'sTemoin|' + SID],
         membership: { [SID]: { fromPer: 'S1', toPer: null } },
+        journal: [{ id: 'j1', date: '2026-09-01', slot: '', titre: '', notes: { [SID]: 'a fini', sTemoin: 'distrait' } }],
         disciplineIds: ['disc1'],
       },
       cAutre: {
