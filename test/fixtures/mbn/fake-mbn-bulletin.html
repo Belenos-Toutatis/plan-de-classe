@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Prof Test - 6A - Premier semestre 2026 - PHYSIQUE-CHIMIE</title>
+<!--
+  FAUSSE page bulletin de MBN (appréciations d'une classe pour une période et une discipline),
+  pour tester le favori « MBN · Bulletin » sans toucher au vrai MBN. Structure recopiée des
+  rapports anonymisés du 2026-10-10 (outils/analyse-mbn.html) :
+  - tableau YUI (th.yui-dt-col-appreciation, td.yui-dt-col-nomEleve .bulletin-libelle-eleve
+    title="NOM Prénom") ; clic sur la cellule d'appréciation → éditeur .yui-dt-editor
+    (textarea + button.yui-dt-default « Valider ») ; Valider → requête, cellule mise à jour ;
+  - appréciation de classe textarea.js-content-appreciationGroupe, enregistrée 3 s après la
+    dernière touche ;
+  - liste form#form-edition-list-x : input#ajout-list-x + input#bouton-ajouter-list-x, ul#zone-list-x
+    de li#list_x_n contenant un a.supprimer-list-x-action > img.
+  Prototype.js imité. Noms inventés.
+-->
+<style>
+body{font:14px system-ui,sans-serif;margin:0;padding:12px}
+table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px;vertical-align:top}
+.yui-dt-editor{position:absolute;background:#fff;border:2px solid #333;padding:6px}
+.placeholderToCompleteSansIcone,.placeholderToCompletePermanentSansIcone{color:#999;min-height:16px;cursor:pointer}
+</style>
+<script>
+  Object.defineProperty(Array.prototype, 'each', { value: function (it) { for (var i = 0; i < this.length; i++) it(this[i], i); return this; }, writable: true, configurable: true });
+  Array.prototype.map = function (it) { var r = []; this.each(function (v, i) { r.push(it(v, i)); }); return r; };
+  Array.prototype.filter = function (it) { var r = []; this.each(function (v, i) { if (it(v, i)) r.push(v); }); return r; };
+  window.Prototype = { Version: '1.7' };
+</script>
+</head>
+<body>
+<div id="bulletin-tab-bul">
+  <div id="appreciations-enseignant" class="yui-dt"><table>
+    <thead><tr><th class="yui-dt-col-nomEleve">Élève</th><th class="yui-dt-col-moyenne">Moy.</th><th class="yui-dt-col-appreciation">Appréciations</th></tr></thead>
+    <tbody class="yui-dt-data" id="tb"></tbody>
+  </table></div>
+  <fieldset><legend>Appréciation de la classe</legend>
+    <textarea id="APPRECIATION_CLASSE_12" class="js-content-appreciationGroupe" maxlength="500" rows="3" cols="60"></textarea></fieldset>
+  <form class="en-colonne saisie_liste" id="form-edition-list-elements" onsubmit="return false;">
+    <fieldset><legend>Éléments travaillés</legend>
+      <input type="text" name="AJOUT_LIST_ELEMENTS" maxlength="300" id="ajout-list-elements">
+      <input type="button" value="Ajouter" id="bouton-ajouter-list-elements">
+      <ul id="zone-list-elements"></ul>
+    </fieldset>
+  </form>
+</div>
+<div id="yui-textareaceditor0-container" class="yui-dt-editor" style="display:none">
+  <textarea maxlength="400" rows="4" cols="40"></textarea><br>
+  <div class="yui-dt-button"><button class="yui-dt-default">Valider</button><button id="ed-cancel">Annuler</button></div>
+</div>
+<p id="log" style="font:12px monospace;color:#555"></p>
+<script>
+  var ELEVES = [
+    { code: 'E1', label: 'DURAND Léa', appr: '' },
+    { code: 'E2', label: 'MARTIN Hugo', appr: 'Ancienne appréciation.' },
+    { code: 'E3', label: 'PETIT--JEAN Zoé', appr: '' },
+    { code: 'E4', label: 'ROUX Inès', appr: '' }
+  ];
+  var ITEMS = [{ id: 1, text: 'Ancien élément' }], nextId = 2, saves = 0, edRow = null;
+  function req(cb) {
+    var x = new XMLHttpRequest();
+    x.open('POST', 'data:application/json,{"code":"OK","libelleLong":"","libelle":""}');
+    x.onloadend = function () { saves++; document.getElementById('log').textContent = saves + ' enregistrement(s)'; if (cb) cb(); };
+    x.send('PROC=X');
+  }
+  function renderTable() {
+    var h = '';
+    ELEVES.forEach(function (e, i) {
+      h += '<tr id="yui-rec' + i + '"><td class="yui-dt-col-nomEleve"><div class="yui-dt-liner"><div class="bulletin-libelle-eleve ellipse" title="' + e.label + '">' + e.label + '</div></div></td>'
+        + '<td class="yui-dt-col-moyenne"><div class="yui-dt-liner">12</div></td>'
+        + '<td class="yui-dt-col-appreciation yui-dt-editable" data-i="' + i + '"><div class="yui-dt-liner">'
+        + (e.appr ? '<div>' + e.appr.replace(/\n/g, '<br>') + '</div>' : '<div class="placeholderToCompleteSansIcone" title="Saisir un commentaire"></div>') + '</div></td></tr>';
+    });
+    document.getElementById('tb').innerHTML = h;
+  }
+  /* Comme YUI : un seul écouteur de clic sur le tableau */
+  document.getElementById('tb').addEventListener('click', function (ev) {
+    var td = ev.target.closest('td.yui-dt-col-appreciation');
+    if (!td) return;
+    edRow = +td.getAttribute('data-i');
+    var ed = document.getElementById('yui-textareaceditor0-container');
+    var r = td.getBoundingClientRect();
+    ed.style.left = (r.left + scrollX) + 'px'; ed.style.top = (r.top + scrollY) + 'px';
+    ed.style.display = 'block';
+    var ta = ed.querySelector('textarea'); ta.value = ELEVES[edRow].appr; ta.focus();
+  });
+  document.querySelector('.yui-dt-default').addEventListener('click', function () {
+    var ta = document.querySelector('#yui-textareaceditor0-container textarea'), i = edRow;
+    req(function () { ELEVES[i].appr = ta.value; renderTable(); });
+    document.getElementById('yui-textareaceditor0-container').style.display = 'none';
+  });
+  document.getElementById('ed-cancel').addEventListener('click', function () { document.getElementById('yui-textareaceditor0-container').style.display = 'none'; });
+  /* Appréciation de classe : enregistrée 3 s après la dernière touche */
+  var tm = null, CLASSE = '';
+  document.getElementById('APPRECIATION_CLASSE_12').addEventListener('keyup', function (ev) {
+    var t = ev.target; clearTimeout(tm);
+    tm = setTimeout(function () { req(function () { CLASSE = t.value; }); }, 3000);
+  });
+  /* Liste */
+  function renderList() {
+    document.getElementById('zone-list-elements').innerHTML = ITEMS.map(function (it) {
+      return '<li id="list_elements_' + it.id + '" class="w-99"><span class="libelle-list">' + it.text + '</span>'
+        + '<span id="waiter_list_elements_' + it.id + '" class="waiter-list-elements f-right" style="display:none">…</span>'
+        + '<a href="#" class="button-reset supprimer-list-elements-action" data-id="' + it.id + '"><img alt="Supprimer" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></a></li>';
+    }).join('');
+  }
+  document.getElementById('bouton-ajouter-list-elements').addEventListener('click', function () {
+    var inp = document.getElementById('ajout-list-elements'), v = inp.value.trim();
+    if (!v) return;
+    inp.disabled = true;
+    req(function () { ITEMS.push({ id: nextId++, text: v }); inp.value = ''; inp.disabled = false; renderList(); });
+  });
+  document.getElementById('zone-list-elements').addEventListener('click', function (ev) {
+    var a = ev.target.closest('a.supprimer-list-elements-action');
+    if (!a) return;
+    ev.preventDefault();
+    var id = +a.getAttribute('data-id');
+    req(function () { ITEMS = ITEMS.filter(function (x) { return x.id !== id; }); renderList(); });
+  });
+  renderTable(); renderList();
+  window.__FAKE = { get: function () { return { eleves: ELEVES.map(function (e) { return e.label + ' = ' + e.appr; }), classe: CLASSE, items: ITEMS.map(function (x) { return x.text; }) }; } };
+</script>
+</body>
+</html>

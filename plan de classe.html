@@ -4990,6 +4990,7 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         <button class="btn btn-g btn-sm" onclick="_bilanCopyAll()" title="Copie le tableau (TSV) au presse-papier">⧉ Copier</button>
         <button class="btn btn-g btn-sm" onclick="_bilanDownloadCsv()" title="Télécharge un fichier CSV">💾 CSV</button>
         <button class="btn btn-g btn-sm" onclick="_bilanNotesExportEnt()" title="Export prêt pour l'ENT (copié) : une ligne par élève, moyenne /20 et remarque bulletin de la période">📤 Export ENT</button>
+        <button class="btn btn-g btn-sm" onclick="_mbnBulOpen()" title="Saisir dans MBN les remarques du bulletin, la remarque de classe et les éléments travaillés de la période, avec le favori « MBN · Bulletin »">🏫 Vers MBN…</button>
         <button class="btn btn-g btn-sm ff-eval" onclick="openExportNotes()" title="Sauvegarde lisible des évaluations au format tableur (XLSX / ODS) — un fichier par classe">📊 XLSX / ODS</button>
       </div>
     </div>
@@ -5371,10 +5372,10 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       <li><strong>Une seule fois</strong> : fais glisser ce bouton dans la barre de favoris du navigateur (<kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>B</kbd> si elle est cachée) :
         <a class="mbn-bm" id="mmbn-bm" href="#" title="À faire glisser dans la barre de favoris — le cliquer ici ne fait rien" onclick="event.preventDefault();toast('Fais-le glisser dans la barre de favoris : il sert sur la page de MBN.','info')">📥 MBN · Notes du devoir</a>
         <br><span class="nd-dim" style="font-size:.85em">Si le glisser ne marche pas : <button class="btn btn-g btn-sm" onclick="_mbnCopyBookmarklet()">⧉ Copier le code du favori</button>, crée un favori et colle ce code à la place de l'adresse.</span></li>
-      <li><button class="btn btn-p" onclick="_mbnCopy()">⧉ Copier les résultats pour MBN</button></li>
-      <li>Dans MBN, ouvre la <strong>saisie des notes de ce devoir</strong> et clique sur le favori <strong>📥 MBN · Notes du devoir</strong>. Colle (<kbd>Ctrl</kbd>+<kbd>V</kbd>) dans la case qui s'affiche : un aperçu montre ce qui sera écrit, élève par élève, avant de remplir.</li>
+      <li><button class="btn btn-p" id="mmbn-copy" onclick="_mbnCopy()">⧉ Copier les résultats pour MBN</button></li>
+      <li id="mmbn-step3">Dans MBN, ouvre la <strong>saisie des notes de ce devoir</strong> et clique sur le favori <strong>📥 MBN · Notes du devoir</strong>. Colle (<kbd>Ctrl</kbd>+<kbd>V</kbd>) dans la case qui s'affiche : un aperçu montre ce qui sera écrit, élève par élève, avant de remplir.</li>
     </ol>
-    <p class="nd-dim" style="font-size:.85em;margin:10px 0 0">Les élèves sont retrouvés par leur nom. Les cases déjà remplies dans MBN sont remplacées ; une case vide ici ne touche pas à MBN. Les compétences sont associées par leur code (ceux de MBN). Les résultats passent par le presse-papiers de cet ordinateur et vont directement à MBN.</p>
+    <p class="nd-dim" id="mmbn-foot-note" style="font-size:.85em;margin:10px 0 0"></p>
     <div class="hm-foot"><span></span><button class="btn btn-g" onclick="closeMod2('mmbn')">Fermer</button></div>
   </div>
 </div>
@@ -8308,6 +8309,385 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   askData();
 })();
 </script>
+<script type="text/plain" id="mbn-bul-src">/* Favori « MBN · Bulletin » — généré par Plan de classe. Exécuté DANS la page bulletin de MBN
+   (appréciations d'une classe pour une période et une discipline). Remplit, au choix :
+   les appréciations des élèves (tableau YUI : clic sur la cellule → éditeur → « Valider »),
+   l'appréciation de la classe (zone de texte enregistrée en différé après la frappe) et les
+   éléments travaillés (liste : case « ajout » + bouton « Ajouter », suppression par l'icône).
+   Structure relevée par outils/analyse-mbn.html (rapports anonymisés du 2026-10-10).
+   MBN charge Prototype.js : pas de méthode d'Array appliquée à une collection DOM, pas de
+   JSON.stringify. */
+(function () {
+  var PID = 'pdc-mbn-panel';
+  if (document.getElementById(PID)) document.getElementById(PID).remove();
+
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { var l = (r || document).querySelectorAll(s), a = []; for (var i = 0; i < l.length; i++) a.push(l[i]); return a; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[-'’.]/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function tight(s) { return norm(s).replace(/ /g, ''); }
+  function flat(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ── Panneau ── */
+  var BIG = 'position:fixed;inset:3% 5%;z-index:2147483647;background:#fff;color:#0e1a26;border:2px solid #1a252f;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;font:14px system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45';
+  var SMALL = 'position:fixed;right:12px;bottom:12px;width:min(92vw,400px);z-index:2147483647;background:#fff;color:#0e1a26;border:2px solid #1a252f;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;font:14px system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45';
+  var P = document.createElement('div');
+  P.id = PID;
+  P.setAttribute('style', BIG);
+  P.innerHTML = '<div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:#1a252f;color:#fff;border-radius:6px 6px 0 0">'
+    + '<strong style="flex:1">📥 MBN · Bulletin — depuis Plan de classe</strong>'
+    + '<button data-x="close" style="font:inherit;padding:4px 10px;border:0;border-radius:5px;background:#fff;color:#1a252f;cursor:pointer">✕</button></div>'
+    + '<div data-x="body" style="flex:1;overflow:auto;padding:12px 16px"></div>'
+    + '<div data-x="foot" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:10px 14px;border-top:1px solid #c8d2e0;background:#f4f6fa;border-radius:0 0 6px 6px"></div>';
+  document.body.appendChild(P);
+  var BODY = $('[data-x="body"]', P), FOOT = $('[data-x="foot"]', P);
+  var running = false, stopAsked = false, hooked = false;
+  function close() { if (running) { stopAsked = true; return; } unhook(); P.remove(); document.removeEventListener('keydown', onKey, true); }
+  function onKey(e) { if (e.key === 'Escape' && !running) { e.stopPropagation(); close(); } }
+  document.addEventListener('keydown', onKey, true);
+  $('[data-x="close"]', P).onclick = close;
+  function btn(label, fn, main) {
+    var b = document.createElement('button');
+    b.textContent = label;
+    b.setAttribute('style', 'font:inherit;padding:7px 14px;border-radius:5px;cursor:pointer;border:1px solid ' + (main ? '#1a252f;background:#1a252f;color:#fff;font-weight:600' : '#c8d2e0;background:#fff;color:#1a252f'));
+    b.onclick = fn;
+    FOOT.appendChild(b);
+    return b;
+  }
+  function note(html, kind) {
+    var c = { warn: 'background:#fff3d6;border:1px solid #e9c46a;color:#5c3a00', err: 'background:#fde8e7;border:1px solid #e3a49a;color:#7d2017', ok: 'background:#e3f4e8;border:1px solid #9ccfa9;color:#14532d', info: 'background:#eaf2fc;border:1px solid #b5cde8;color:#1f3a5c' }[kind || 'info'];
+    return '<div style="' + c + ';border-radius:6px;padding:8px 12px;margin:0 0 10px">' + html + '</div>';
+  }
+
+  /* ── Suivi des enregistrements (requêtes envoyées par la page) ── */
+  var XS = XMLHttpRequest.prototype.send, pend = 0, saves = 0, srvErr = [];
+  function hook() {
+    if (hooked) return; hooked = true;
+    XMLHttpRequest.prototype.send = function () {
+      var x = this; pend++;
+      x.addEventListener('loadend', function () {
+        pend--; saves++;
+        if (x.status && x.status !== 200) srvErr.push('réponse ' + x.status);
+        else { try { var j = JSON.parse(x.responseText); if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status || j.code || '')))) srvErr.push(String(j.libelleLong || j.libelle || j.message || j.status || j.code)); } catch (e) {} }
+      });
+      return XS.apply(this, arguments);
+    };
+  }
+  function unhook() { if (hooked) { XMLHttpRequest.prototype.send = XS; hooked = false; } }
+  async function idle() {
+    await sleep(120);
+    var t0 = Date.now();
+    while (pend > 0 && Date.now() - t0 < 15000) await sleep(60);
+    if (pend > 0) throw new Error('MBN ne répond plus (enregistrement en attente depuis 15 s)');
+    await sleep(60);
+  }
+  async function waitSave(s0, ms) {
+    var t0 = Date.now();
+    while (saves === s0 && pend === 0 && Date.now() - t0 < ms) await sleep(80);
+    await idle();
+    return saves > s0;
+  }
+  function fire(el, types) {
+    for (var i = 0; i < types.length; i++) {
+      var t = types[i];
+      el.dispatchEvent((t === 'blur' || t === 'focus') ? new FocusEvent(t, { bubbles: false }) : (t === 'focusout' || t === 'focusin') ? new FocusEvent(t, { bubbles: true }) : new Event(t, { bubbles: true }));
+    }
+  }
+  function key(el, type, k) {
+    var code = k === 'Tab' ? 9 : k === 'Backspace' ? 8 : k === 'Enter' ? 13 : k.charCodeAt(0);
+    var e = new KeyboardEvent(type, { key: k, bubbles: true, cancelable: true });
+    try {
+      Object.defineProperty(e, 'keyCode', { get: function () { return code; } });
+      Object.defineProperty(e, 'which', { get: function () { return code; } });
+      Object.defineProperty(e, 'charCode', { get: function () { return type === 'keypress' ? code : 0; } });
+    } catch (x) {}
+    el.dispatchEvent(e);
+  }
+  function typeInto(el, value) {
+    try { el.focus(); } catch (e) {}
+    fire(el, ['focus', 'focusin']);
+    try { el.select(); } catch (e) {}
+    key(el, 'keydown', 'Backspace'); el.value = ''; fire(el, ['input']); key(el, 'keyup', 'Backspace');
+    var v = String(value);
+    for (var i = 0; i < v.length; i++) {
+      var ch = v.charAt(i), kk = ch === '\n' ? 'Enter' : ch;
+      key(el, 'keydown', kk); key(el, 'keypress', kk);
+      el.value = el.value + ch;
+      fire(el, ['input']); key(el, 'keyup', kk);
+    }
+  }
+  function cut(s, el) { var m = el ? parseInt(el.getAttribute('maxlength'), 10) : 0; return m > 0 && s.length > m ? s.slice(0, m) : s; }
+
+  /* ── Lecture de la page bulletin ── */
+  function cellText(cell) {
+    if (!cell) return '';
+    if ($('[class*="placeholderToComplete"]', cell)) return '';
+    return flat(cell.textContent);
+  }
+  function readItems(ul) {
+    return ul ? $$('li', ul).map(function (li) {
+      var c = li.cloneNode(true);
+      $$('a,button,img,input,[class*="waiter"]', c).forEach(function (x) { x.remove(); });
+      return { li: li, text: flat(c.textContent) };
+    }) : [];
+  }
+  function readMbn() {
+    var table = null;
+    $$('.yui-dt table').forEach(function (t) { if (!table && $('th.yui-dt-col-appreciation', t)) table = t; });
+    var rows = table ? $$('tbody.yui-dt-data > tr', table).map(function (tr) {
+      var nm = $('.yui-dt-col-nomEleve .bulletin-libelle-eleve', tr) || $('.yui-dt-col-nomEleve', tr);
+      return { tr: tr, label: nm ? flat(nm.getAttribute('title') || nm.textContent) : '', cur: cellText($('td.yui-dt-col-appreciation', tr)) };
+    }) : [];
+    var form = $('form[id^="form-edition-list"]');
+    var ul = form ? $('ul[id^="zone-list-"]', form) : null;
+    return {
+      table: table, rows: rows,
+      classTa: $('textarea.js-content-appreciationGroupe') || $('textarea[id^="APPRECIATION_CLASSE"]'),
+      listInput: form ? $('input[id^="ajout-list-"]', form) : null,
+      listBtn: form ? $('input[id^="bouton-ajouter-list-"]', form) : null,
+      listUl: ul, items: readItems(ul)
+    };
+  }
+
+  /* ── Association par le nom : MBN affiche « NOM Prénom » ── */
+  function match(rows, eleves) {
+    var used = {}, res = [];
+    rows.forEach(function (r) {
+      var L = norm(r.label), T = tight(r.label), idx = -1, amb = false;
+      var tries = [
+        function (e) { return norm(e.nom + ' ' + e.prenom) === L; },
+        function (e) { return tight(e.nom + e.prenom) === T; },
+        function (e) { return norm(e.prenom + ' ' + e.nom) === L; },
+        function (e) { var n = norm(e.nom), p = norm(e.prenom); return n && p && L.indexOf(n + ' ') === 0 && (L.slice(n.length + 1).indexOf(p) === 0 || p.indexOf(L.slice(n.length + 1)) === 0); }
+      ];
+      for (var t = 0; t < tries.length && idx < 0 && !amb; t++) {
+        var c = [];
+        eleves.forEach(function (e, i) { if (!used[i] && tries[t](e)) c.push(i); });
+        if (c.length === 1) idx = c[0]; else if (c.length > 1) amb = true;
+      }
+      if (idx >= 0) used[idx] = true;
+      res.push({ r: r, i: idx, amb: amb });
+    });
+    var missing = [];
+    eleves.forEach(function (e, i) { if (!used[i] && e.appr) missing.push(e); });
+    return { rows: res, missing: missing };
+  }
+
+  /* ── Étape 1 : récupérer les données ── */
+  var DATA = null, MBN = null, PLAN = null;
+  function askData(msg) {
+    BODY.innerHTML = (msg ? note(msg, 'err') : '')
+      + '<p style="margin:0 0 8px"><strong>1.</strong> Dans Plan de classe : <em>📜 Bilan des notes (une période choisie) → 🏫 Vers MBN… → ⧉ Copier le bulletin</em>.</p>'
+      + '<p style="margin:0 0 8px"><strong>2.</strong> Ici, clique dans la case ci-dessous et appuie sur <kbd>Ctrl</kbd>+<kbd>V</kbd> (ou sur « Lire le presse-papiers »).</p>'
+      + '<textarea data-x="paste" placeholder="Colle ici le bulletin copié depuis Plan de classe" style="width:100%;height:90px;font:12px ui-monospace,Consolas,monospace;border:1px solid #c8d2e0;border-radius:6px;padding:8px;color:#0e1a26;background:#fff"></textarea>';
+    FOOT.innerHTML = '';
+    btn('Fermer', close);
+    btn('📋 Lire le presse-papiers', function () {
+      if (!navigator.clipboard || !navigator.clipboard.readText) { askData('Ce navigateur ne permet pas de lire le presse-papiers : colle avec Ctrl+V.'); return; }
+      navigator.clipboard.readText().then(load, function () { askData('Lecture refusée par le navigateur : colle avec Ctrl+V dans la case.'); });
+    }, true);
+    var ta = $('[data-x="paste"]', BODY);
+    ta.addEventListener('input', function () { if (ta.value.trim()) load(ta.value); });
+    setTimeout(function () { ta.focus(); }, 30);
+  }
+  function load(txt) {
+    var d = null;
+    try { var s = String(txt || ''); d = JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1)); } catch (e) { d = null; }
+    if (d && d.app === 'plan-de-classe' && d.type === 'mbn-notes') { askData('Ce sont les notes d\'un devoir : utilise le favori « MBN · Notes du devoir » sur la page de saisie du devoir.'); return; }
+    if (!d || d.app !== 'plan-de-classe' || d.type !== 'mbn-bulletin') { askData('Ce n\'est pas un bulletin copié depuis Plan de classe (📜 Bilan des notes → 🏫 Vers MBN…).'); return; }
+    DATA = d;
+    preview();
+  }
+
+  /* ── Étape 2 : aperçu, trois parties à cocher ── */
+  var opt = { stu: true, cls: true, el: true, elReplace: true };
+  function preview() {
+    MBN = readMbn();
+    if (!MBN.table && !MBN.classTa && !MBN.listUl) {
+      BODY.innerHTML = note('Je ne trouve pas la page bulletin : ouvre dans MBN les appréciations de la classe pour la bonne période et la bonne discipline, puis reclique sur le favori.', 'err');
+      FOOT.innerHTML = ''; btn('Fermer', close); return;
+    }
+    var m = match(MBN.rows, DATA.eleves || []);
+    var stuPlan = [], nSame = 0, nNone = 0, nRepl = 0, nAmb = 0, nUnm = 0;
+    var rowsH = m.rows.map(function (x) {
+      var st = '', act = null;
+      if (x.amb) { nAmb++; st = '<span style="color:#7d2017">⚠ plusieurs élèves possibles — laissé tel quel</span>'; }
+      else if (x.i < 0) { nUnm++; st = '<span style="color:#7d2017">⚠ absent de Plan de classe — laissé tel quel</span>'; }
+      else {
+        var a = flat(DATA.eleves[x.i].appr ? DATA.eleves[x.i].appr : '');
+        if (!a) { nNone++; st = '<span style="color:#56697f">rien à écrire</span>'; }
+        else if (tight(a) === tight(x.r.cur)) { nSame++; st = '<span style="color:#14532d">déjà identique</span>'; }
+        else { act = { row: x.r, text: DATA.eleves[x.i].appr }; stuPlan.push(act); if (x.r.cur) nRepl++; st = x.r.cur ? 'remplace l\'appréciation de MBN' : 'nouvelle'; }
+      }
+      return '<tr><td style="padding:3px 8px;border-bottom:1px solid #dde4ee;white-space:nowrap">' + esc(x.r.label) + '</td>'
+        + '<td style="padding:3px 8px;border-bottom:1px solid #dde4ee;font-size:12.5px">' + (act ? esc(flat(act.text).slice(0, 90)) + (flat(act.text).length > 90 ? '…' : '') : '') + '</td>'
+        + '<td style="padding:3px 8px;border-bottom:1px solid #dde4ee;font-size:12.5px">' + st + '</td></tr>';
+    }).join('');
+    var clsWant = flat(DATA.classe_appr || ''), clsCur = MBN.classTa ? flat(MBN.classTa.value) : '';
+    var clsAct = MBN.classTa && clsWant && clsWant !== clsCur;
+    var ours = (DATA.elements || []).map(flat).filter(Boolean);
+    var theirs = MBN.items.map(function (it) { return it.text; });
+    var same = ours.length === theirs.length && ours.every(function (t, i) { return norm(t) === norm(theirs[i]); });
+    PLAN = { stu: stuPlan, cls: clsAct ? DATA.classe_appr : null, ours: ours, sameList: same };
+
+    var dv = DATA.contexte || {};
+    var html = note('Bulletin de <strong>' + esc(dv.classe || '?') + '</strong> · <strong>' + esc(dv.periode || '?') + '</strong>' + (dv.discipline ? ' · ' + esc(dv.discipline) : '')
+      + '<br>Page MBN : <strong>' + esc(document.title) + '</strong><br><span style="font-size:12.5px">Vérifie qu\'il s\'agit bien de la même classe, de la même période et de la même discipline.</span>');
+    function box(k, label, n, extra) {
+      return '<label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 4px;font-weight:600"><input type="checkbox" data-opt="' + k + '"' + (opt[k] ? ' checked' : '') + (n ? '' : ' disabled') + ' style="margin-top:3px">'
+        + '<span>' + label + (extra ? '<span style="font-weight:400;color:#56697f"> — ' + extra + '</span>' : '') + '</span></label>';
+    }
+    html += box('stu', 'Appréciations des élèves', stuPlan.length, stuPlan.length + ' à écrire' + (nRepl ? ', dont ' + nRepl + ' remplacent celle de MBN' : '') + ' · ' + nSame + ' déjà identique(s) · ' + nNone + ' sans appréciation' + ((nAmb + nUnm) ? ' · ' + (nAmb + nUnm) + ' élève(s) de MBN non retrouvé(s)' : ''));
+    if (m.missing.length) html += note(m.missing.length + ' élève(s) de Plan de classe introuvable(s) dans MBN : ' + esc(m.missing.map(function (e) { return e.nom + ' ' + e.prenom; }).join(', ')) + '.', 'warn');
+    html += '<details style="margin:0 0 6px 26px"><summary style="cursor:pointer;color:#1f3a5c">Voir le détail par élève</summary><table style="border-collapse:collapse;width:100%;font-size:13px;margin-top:6px"><tbody>' + rowsH + '</tbody></table></details>';
+    html += box('cls', 'Appréciation de la classe', clsAct ? 1 : 0, !MBN.classTa ? 'case introuvable dans cette page' : !clsWant ? 'vide dans Plan de classe, rien à écrire' : !clsAct ? 'déjà identique' : (clsCur ? 'remplace celle de MBN' : 'nouvelle') + ' : « ' + esc(clsWant.slice(0, 90)) + (clsWant.length > 90 ? '…' : '') + ' »');
+    var elInfo = !MBN.listUl ? 'liste introuvable dans cette page' : same ? 'déjà identiques (' + ours.length + ')' : ours.length + ' dans Plan de classe, ' + theirs.length + ' dans MBN';
+    html += box('el', 'Éléments travaillés', (MBN.listUl && !same && (ours.length || theirs.length)) ? 1 : 0, elInfo);
+    if (MBN.listUl && !same) {
+      html += '<div style="margin:0 0 6px 26px;font-size:13px">'
+        + '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-opt="elReplace"' + (opt.elReplace ? ' checked' : '') + '> Remplacer toute la liste de MBN par celle de Plan de classe (sinon : seulement ajouter ceux qui manquent)</label>'
+        + '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><div><strong>Plan de classe</strong><ol style="margin:4px 0;padding-left:20px">' + ours.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ol></div>'
+        + '<div><strong>MBN aujourd\'hui</strong><ol style="margin:4px 0;padding-left:20px">' + (theirs.length ? theirs.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') : '<li style="list-style:none;color:#56697f">vide</li>') + '</ol></div></div></div>';
+    }
+    BODY.innerHTML = html;
+    $$('input[data-opt]', BODY).forEach(function (cb) { cb.onchange = function () { opt[cb.getAttribute('data-opt')] = cb.checked; refreshGo(); }; });
+    FOOT.innerHTML = '';
+    btn('Annuler', close);
+    var go = btn('▶ Remplir', run, true);
+    function refreshGo() {
+      var any = (opt.stu && stuPlan.length) || (opt.cls && clsAct) || (opt.el && MBN.listUl && !same);
+      go.disabled = !any;
+    }
+    refreshGo();
+  }
+
+  /* ── Étape 3 : remplissage ── */
+  function visibleEditor() {
+    var eds = $$('.yui-dt-editor');
+    for (var i = 0; i < eds.length; i++) if (eds[i].style.display !== 'none' && eds[i].offsetParent !== null && $('textarea', eds[i])) return eds[i];
+    return null;
+  }
+  /* Le tableau peut être redessiné après chaque enregistrement : la ligne est retrouvée par le
+     nom affiché à chaque fois, jamais gardée d'un élève à l'autre. */
+  function rowTr(label) {
+    var rows = readMbn().rows;
+    for (var i = 0; i < rows.length; i++) if (rows[i].label === label) return rows[i].tr;
+    return null;
+  }
+  function cellOf(label) { var tr = rowTr(label); return tr ? $('td.yui-dt-col-appreciation', tr) : null; }
+  async function writeStudent(a) {
+    var cell = cellOf(a.row.label);
+    if (!cell) throw new Error('ligne introuvable dans le tableau de MBN');
+    var target = $('[class*="placeholderToComplete"]', cell) || $('.yui-dt-liner', cell) || cell;
+    target.click();
+    var ed = null, t0 = Date.now();
+    while (!ed && Date.now() - t0 < 4000) { ed = visibleEditor(); if (!ed) await sleep(60); }
+    if (!ed) throw new Error('la zone de saisie ne s\'ouvre pas');
+    var ta = $('textarea', ed);
+    typeInto(ta, cut(String(a.text), ta));
+    var ok = $('button.yui-dt-default', ed);
+    if (!ok) throw new Error('bouton « Valider » introuvable');
+    var s0 = saves;
+    ok.click();
+    var sent = await waitSave(s0, 5000);
+    t0 = Date.now();
+    while (visibleEditor() && Date.now() - t0 < 2000) await sleep(60);
+    await sleep(150);
+    var now = cellText(cellOf(a.row.label));
+    if (!sent) throw new Error('aucun enregistrement envoyé par MBN');
+    /* comparaison sans les espaces : MBN affiche les retours à la ligne en <br>, que le texte de la cellule ne rend pas */
+    if (tight(now) !== tight(cut(String(a.text), ta))) throw new Error('MBN affiche « ' + now.slice(0, 40) + ' »');
+  }
+  async function removeItem(it) {
+    var a = $('a[class*="supprimer-list"]', it.li) || $('a[class*="supprimer"]', it.li);
+    if (!a) throw new Error('bouton de suppression introuvable pour « ' + it.text + ' »');
+    var s0 = saves;
+    ($('img', a) || a).click();
+    await waitSave(s0, 5000);
+    var t0 = Date.now();
+    while (it.li.isConnected && Date.now() - t0 < 4000) await sleep(60);
+    if (it.li.isConnected) throw new Error('« ' + it.text + ' » n\'a pas été supprimé');
+  }
+  async function addItem(text) {
+    var inp = MBN.listInput, b = MBN.listBtn;
+    if (!inp || !b) throw new Error('case d\'ajout introuvable');
+    var n0 = $$('li', MBN.listUl).length;
+    var t0 = Date.now();
+    while (inp.disabled && Date.now() - t0 < 4000) await sleep(60);
+    typeInto(inp, cut(text, inp));
+    fire(inp, ['change']);
+    var s0 = saves;
+    b.click();
+    await waitSave(s0, 5000);
+    t0 = Date.now();
+    while ($$('li', MBN.listUl).length <= n0 && Date.now() - t0 < 4000) await sleep(60);
+    if ($$('li', MBN.listUl).length <= n0) throw new Error('« ' + text + ' » n\'a pas été ajouté');
+  }
+  async function run() {
+    running = true; stopAsked = false; srvErr = []; saves = 0;
+    hook();
+    var probs = [], done = { stu: 0, cls: 0, add: 0, del: 0 };
+    FOOT.innerHTML = '';
+    var stopB = btn('⏹ Arrêter', function () { stopAsked = true; stopB.disabled = true; stopB.textContent = 'Arrêt en cours…'; });
+    P.setAttribute('style', SMALL);
+    function show(t, k, n) {
+      BODY.innerHTML = '<p style="margin:0 0 6px">' + esc(t) + '</p>'
+        + (n ? '<div style="height:8px;background:#e6ebf2;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + Math.round(k / n * 100) + '%;background:#1a252f"></div></div>' : '')
+        + '<p style="color:#56697f;font-size:12.5px;margin:6px 0 0">Ne touche pas à la page pendant le remplissage.</p>';
+    }
+    try {
+      if (opt.stu) for (var i = 0; i < PLAN.stu.length && !stopAsked; i++) {
+        var a = PLAN.stu[i];
+        show('Appréciation ' + (i + 1) + ' / ' + PLAN.stu.length + ' : ' + a.row.label, i, PLAN.stu.length);
+        try { await writeStudent(a); done.stu++; }
+        catch (e) { probs.push(a.row.label + ' : ' + (e && e.message || e)); if (/ne répond plus/.test(String(e && e.message))) break; }
+      }
+      if (opt.cls && PLAN.cls && !stopAsked) {
+        show('Appréciation de la classe…');
+        try {
+          var ta = MBN.classTa, s0 = saves;
+          typeInto(ta, cut(String(PLAN.cls), ta));
+          if (await waitSave(s0, 8000)) done.cls = 1;
+          else { fire(ta, ['change', 'blur', 'focusout']); if (await waitSave(s0, 4000)) done.cls = 1; else probs.push('Appréciation de la classe : aucun enregistrement envoyé par MBN'); }
+        } catch (e) { probs.push('Appréciation de la classe : ' + (e && e.message || e)); }
+      }
+      if (opt.el && MBN.listUl && !PLAN.sameList && !stopAsked) {
+        var cur = readItems(MBN.listUl);
+        var toAdd = PLAN.ours.slice();
+        if (opt.elReplace) {
+          for (var d = 0; d < cur.length && !stopAsked; d++) {
+            show('Éléments travaillés : suppression ' + (d + 1) + ' / ' + cur.length);
+            try { await removeItem(cur[d]); done.del++; } catch (e) { probs.push('Éléments travaillés : ' + (e && e.message || e)); }
+          }
+        } else {
+          toAdd = toAdd.filter(function (t) { return !cur.some(function (c) { return norm(c.text) === norm(t); }); });
+        }
+        for (var k = 0; k < toAdd.length && !stopAsked; k++) {
+          show('Éléments travaillés : ajout ' + (k + 1) + ' / ' + toAdd.length, k, toAdd.length);
+          try { await addItem(toAdd[k]); done.add++; } catch (e) { probs.push('Éléments travaillés : ' + (e && e.message || e)); }
+        }
+      }
+    } finally {
+      unhook(); running = false; P.setAttribute('style', BIG);
+    }
+    var ok = !probs.length && !srvErr.length && !stopAsked;
+    var html = note((stopAsked ? '⏹ Arrêté à ta demande. ' : '')
+      + (opt.stu ? '<strong>' + done.stu + ' / ' + PLAN.stu.length + '</strong> appréciation(s) d\'élève écrite(s)' : '')
+      + (opt.cls && PLAN.cls ? ' · appréciation de la classe ' + (done.cls ? 'enregistrée' : '<strong>non enregistrée</strong>') : '')
+      + (opt.el && !PLAN.sameList && MBN.listUl ? ' · éléments travaillés : ' + done.add + ' ajouté(s)' + (done.del ? ', ' + done.del + ' supprimé(s)' : '') : '')
+      + ' · ' + saves + ' enregistrement(s) envoyé(s) par MBN.', ok ? 'ok' : 'warn');
+    if (srvErr.length) html += note('MBN a signalé ' + srvErr.length + ' problème(s) : ' + esc(srvErr.slice(0, 5).join(' · ')), 'err');
+    if (probs.length) html += note('À vérifier :<br>' + probs.map(esc).join('<br>'), 'warn');
+    html += '<p>Vérifie le bulletin dans MBN.</p>';
+    BODY.innerHTML = html;
+    FOOT.innerHTML = '';
+    btn('Fermer', close, true);
+  }
+
+  askData();
+})();
+</script>
 <script type="text/plain" id="rdv-standalone-css">:root{--paper:#fff;--paper-warm:#eef1f6;--paper-deep:#dfe5ee;--ink:#0e1a26;--ink-blue:#1a252f;--pencil:#4f6075;--rule:#c8d2e0;--rule-soft:#dde4ee;--accent:#1f4e79;--accent-bg:#e3eef9;--ok:#1b6b3a;--ok-bg:#e3f4e8;--warn:#8a4b00;--warn-bg:#fff3d6;--danger:#9b2c1f;--on-dark:#fff;--mark:#f5d76e;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--paper:#161c24;--paper-warm:#1f2733;--paper-deep:#2a3442;--ink:#e8e2d4;--ink-blue:#f0e6cf;--pencil:#a9b4c2;--rule:#3a4656;--rule-soft:#2a3442;--accent:#9cc3ea;--accent-bg:#1e3349;--ok:#8fd4a5;--ok-bg:#183326;--warn:#f0c36b;--warn-bg:#3a2d12;--danger:#f2a093;--on-dark:#0e1a26;--mark:#f5d76e;color-scheme:dark}}
 *{box-sizing:border-box}
@@ -9169,11 +9549,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.137.3';
+const APP_VERSION    = '2.138.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T10:21:35Z';
+const APP_BUILD_DATE = '2026-10-10T10:47:03Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -57383,9 +57763,58 @@ function _mbnPayload(ev) {
     eleves,
   };
 }
-function _mbnBookmarkletCode() {
-  const src = document.getElementById('mbn-fill-src')?.textContent || '';
-  return 'javascript:' + encodeURIComponent('(function(){try{' + src + '}catch(e){alert("MBN · Notes du devoir — erreur : "+(e&&e.message||e));}})();void 0');
+// Deux favoris : « MBN · Notes du devoir » (mbn-fill-src) et « MBN · Bulletin » (mbn-bul-src).
+let _mbnMode = 'devoir';
+const MBN_FAV = { devoir: { src: 'mbn-fill-src', name: 'MBN · Notes du devoir' }, bulletin: { src: 'mbn-bul-src', name: 'MBN · Bulletin' } };
+function _mbnBookmarkletCode(mode) {
+  const f = MBN_FAV[mode || _mbnMode] || MBN_FAV.devoir;
+  const src = document.getElementById(f.src)?.textContent || '';
+  return 'javascript:' + encodeURIComponent('(function(){try{' + src + '}catch(e){alert("' + f.name + ' — erreur : "+(e&&e.message||e));}})();void 0');
+}
+// Fenêtre « Vers MBN » : textes propres au favori (nom du lien glissé = nom du favori).
+function _mbnSetupModal(mode) {
+  _mbnMode = mode;
+  const bm = document.getElementById('mmbn-bm');
+  bm.textContent = '📥 ' + MBN_FAV[mode].name;
+  bm.href = _mbnBookmarkletCode(mode);
+  document.getElementById('mmbn-copy').textContent = mode === 'bulletin' ? '⧉ Copier le bulletin pour MBN' : '⧉ Copier les résultats pour MBN';
+  document.getElementById('mmbn-step3').innerHTML = mode === 'bulletin'
+    ? 'Dans MBN, ouvre le <strong>bulletin de cette classe</strong> (appréciations, même période, même discipline) et clique sur le favori <strong>📥 MBN · Bulletin</strong>. Colle (<kbd>Ctrl</kbd>+<kbd>V</kbd>) dans la case qui s\'affiche : un aperçu te laisse cocher ce qu\'il faut remplir avant de commencer.'
+    : 'Dans MBN, ouvre la <strong>saisie des notes de ce devoir</strong> et clique sur le favori <strong>📥 MBN · Notes du devoir</strong>. Colle (<kbd>Ctrl</kbd>+<kbd>V</kbd>) dans la case qui s\'affiche : un aperçu montre ce qui sera écrit, élève par élève, avant de remplir.';
+  document.getElementById('mmbn-foot-note').textContent = mode === 'bulletin'
+    ? 'Les élèves sont retrouvés par leur nom. Les appréciations déjà saisies dans MBN sont remplacées ; une remarque vide ici ne touche pas à MBN. La liste des éléments travaillés peut remplacer celle de MBN ou seulement la compléter (choix dans l\'aperçu). Tout passe par le presse-papiers de cet ordinateur et va directement à MBN.'
+    : 'Les élèves sont retrouvés par leur nom. Les cases déjà remplies dans MBN sont remplacées ; une case vide ici ne touche pas à MBN. Les compétences sont associées par leur code (ceux de MBN). Les résultats passent par le presse-papiers de cet ordinateur et vont directement à MBN.';
+}
+// Bulletin d'une période : remarques par élève, remarque de classe, éléments travaillés
+// (discipline affichée dans le Bilan des notes).
+function _mbnBulPayload(cls, periode) {
+  const ch = _currentDiscipline(cls.id);
+  const sids = _bilanSidsFor(cls, periode);
+  return {
+    app: 'plan-de-classe', type: 'mbn-bulletin', v: 1,
+    contexte: { classe: cls.nom || '', periode: _periodeLongLabel(periode), discipline: _disciplineLabel(ch) },
+    eleves: sids.map(sid => ({ nom: S.eleves[sid]?.nom || '', prenom: S.eleves[sid]?.prenom || '', appr: _getBulletinRemarque(cls.id, sid, periode, ch).trim() })),
+    classe_appr: _getBulletinClassRemarque(cls.id, periode, ch).trim(),
+    elements: _getBulletinWorkedItems(cls.id, periode, ch).map(x => String(x || '').trim()).filter(Boolean),
+  };
+}
+function _mbnBulPeriode() { return document.getElementById('bilan-period-filter')?.value || ''; }
+function _mbnBulOpen() {
+  const cls = getCls();
+  if (!cls) return toast('⚠️ Choisis une classe.', 'warn');
+  const per = _mbnBulPeriode();
+  if (!per) return toast('⚠️ Choisis une période (pas « Toutes ») : un bulletin MBN porte sur une période.', 'warn');
+  const P = _mbnBulPayload(cls, per);
+  const nAp = P.eleves.filter(e => e.appr).length;
+  document.getElementById('mmbn-sub').textContent = [cls.nom, P.contexte.periode, P.contexte.discipline].filter(Boolean).join(' · ');
+  const big = n => `<div class="bsynth-big">${n}</div>`, sub = t => `<div class="bsynth-sub">${t}</div>`;
+  document.getElementById('mmbn-synth').innerHTML =
+    _bsynthCard('Remarques', big(nAp) + sub(`sur ${P.eleves.length} élève${P.eleves.length > 1 ? 's' : ''}`))
+    + _bsynthCard('Remarque de classe', big(P.classe_appr ? '✓' : '—') + sub(P.classe_appr ? `${P.classe_appr.length} caractères` : 'vide'))
+    + _bsynthCard('Éléments travaillés', big(P.elements.length) + sub(P.elements.length ? _esc(P.elements.slice(0, 2).join(' · ')) + (P.elements.length > 2 ? ' …' : '') : 'aucun'));
+  document.getElementById('mmbn-warn').innerHTML = '';
+  _mbnSetupModal('bulletin');
+  openMod('mmbn');
 }
 function _mbnOpen() {
   const ev = S.evaluations?.[_renduState.evalId];
@@ -57404,13 +57833,23 @@ function _mbnOpen() {
   const nb = _nbLevels();
   document.getElementById('mmbn-warn').innerHTML = nb !== 4
     ? `<p class="nd-dim" style="font-size:.85em">⚠ Tes évaluations ont ${nb} niveaux et MBN en a 4 : les niveaux sont ramenés sur 4.</p>` : '';
-  document.getElementById('mmbn-bm').href = _mbnBookmarkletCode();
+  _mbnSetupModal('devoir');
   openMod('mmbn');
 }
 function _mbnCopy() {
+  let txt;
+  if (_mbnMode === 'bulletin') {
+    const cls = getCls(), per = _mbnBulPeriode();
+    if (!cls || !per) return;
+    txt = JSON.stringify(_mbnBulPayload(cls, per));
+    navigator.clipboard.writeText(txt).then(
+      () => toast('⧉ Bulletin copié : dans MBN, ouvre le bulletin de la classe, clique sur le favori « MBN · Bulletin » puis Ctrl+V'),
+      () => toast('⚠ Copie impossible dans ce navigateur', 'warn'));
+    return;
+  }
   const ev = S.evaluations?.[_renduState.evalId];
   if (!ev) return;
-  const txt = JSON.stringify(_mbnPayload(ev));
+  txt = JSON.stringify(_mbnPayload(ev));
   navigator.clipboard.writeText(txt).then(
     () => toast('⧉ Résultats copiés : dans MBN, clique sur le favori « MBN · Notes du devoir » puis Ctrl+V'),
     () => toast('⚠ Copie impossible dans ce navigateur', 'warn'));

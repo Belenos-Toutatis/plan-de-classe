@@ -2992,3 +2992,27 @@ test('Vers MBN : favori embarqué valide, niveaux ramenés sur 4, résultats d\'
   assert.equal(by.Deux.note, null); assert.equal(by.Deux.motif, 'Abs');
   assert.equal(by.Trois.note, null); assert.equal(by.Trois.motif, null); assert.deepEqual(by.Trois.comps, {});
 });
+
+test('Vers MBN · Bulletin : favori embarqué valide, remarques / remarque de classe / éléments travaillés de la période', () => {
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const js = /<script type="text\/plain" id="mbn-bul-src">([\s\S]*?)<\/script>/.exec(html);
+  assert.ok(js, 'le code du favori bulletin doit être présent');
+  new vm.Script(js[1]);
+  assert.ok(!/<!--/.test(js[1]), 'pas de <!-- dans le code embarqué');
+  assert.ok(!/Array\.prototype\.\w+\.call/.test(js[1]), 'MBN charge Prototype.js');
+  ev(`S.classes = { c1: { id: 'c1', nom: '6A', eleves: ['e1', 'e2'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' } };
+      _bilanSidsFor = function () { return ['e1', 'e2']; };
+      const ch = _currentDiscipline('c1');
+      S.bulletinRemarques = { c1: { [ch]: { e1: { S1: ' Très bien ' } } } };
+      S.bulletinClassRemarques = { c1: { [ch]: { S1: 'Bonne classe' } } };
+      S.bulletinWorkedItems = { c1: { [ch]: { S1: ['Énergie', ' ', 'Circuits'] } } };`);
+  const P = JSON.parse(ev(`JSON.stringify(_mbnBulPayload(S.classes.c1, 'S1'))`));
+  assert.equal(P.app, 'plan-de-classe'); assert.equal(P.type, 'mbn-bulletin');
+  assert.deepEqual(P.eleves.map(e => e.appr), ['Très bien', '']);
+  assert.equal(P.classe_appr, 'Bonne classe');
+  assert.deepEqual(P.elements, ['Énergie', 'Circuits']);
+  assert.equal(P.contexte.classe, '6A');
+  assert.equal(ev(`_mbnBookmarkletCode('bulletin').indexOf('javascript:')`), 0);
+});
