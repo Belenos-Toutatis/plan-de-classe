@@ -393,6 +393,39 @@ function mbnAnalyse() {
     L('Boutons visibles : ' + (bl.length ? bl.join(' · ') : 'aucun'));
   });
 
+  /* Tableaux de données YUI (ex. appréciations du bulletin) : rien n'y est modifiable tant
+     qu'on n'a pas cliqué dans une cellule, l'inventaire des cases ne les voit donc pas. */
+  docs.forEach(function (x) {
+    var tbls = x.d.querySelectorAll('.yui-dt table');
+    for (var ti = 0; ti < tbls.length && ti < 4; ti++) {
+      var tb = tbls[ti];
+      var rows = tb.querySelectorAll('tbody.yui-dt-data > tr');
+      L('');
+      L('--- Tableau de données ' + (ti + 1) + ' (' + x.label + ') : ' + rows.length + ' ligne(s) ---');
+      L('Chemin : ' + path(tb));
+      var ths = tb.querySelectorAll('thead th'), cols = [];
+      for (var c = 0; c < ths.length; c++) {
+        var key = (String(ths[c].className).match(/yui-dt-col-([A-Za-z0-9_]+)/) || [])[1] || '?';
+        cols.push(key + ' « ' + shape(ths[c].textContent) + ' »');
+      }
+      L('Colonnes : ' + cols.join(' | '));
+      for (var r = 0; r < Math.min(2, rows.length); r++) { L('Ligne ' + (r + 1) + ' :'); L(ser(rows[r], 0, { n: 5000 })); }
+    }
+    var eds = x.d.querySelectorAll('.yui-dt-editor');
+    for (var ei = 0; ei < eds.length && ei < 3; ei++) {
+      L('');
+      L('--- Éditeur de cellule ' + (ei + 1) + ' (' + x.label + ') ---');
+      L('Chemin : ' + path(eds[ei]));
+      L(ser(eds[ei], 0, { n: 3000 }));
+    }
+    var lists = x.d.querySelectorAll('form[id^="form-edition-list"]');
+    for (var li = 0; li < lists.length && li < 3; li++) {
+      L('');
+      L('--- Formulaire de liste ' + (li + 1) + ' (' + x.label + ') ---');
+      L(ser(lists[li], 0, { n: 6000 }));
+    }
+  });
+  try { if (window.YAHOO) L('YUI : ' + (window.YAHOO.VERSION || (window.YAHOO.env && window.YAHOO.env.getVersion && window.YAHOO.env.getVersion('yahoo') && window.YAHOO.env.getVersion('yahoo').version) || 'présent')); } catch (e) {}
   L('');
   L('=== Fin du rapport ===');
   var report = R.join('\n');
@@ -533,7 +566,7 @@ function mbnObserveBody() {
 
   /* --- Journal --- */
   var LOG = [];
-  function log(x) { if (LOG.length < 600) LOG.push(x); upd(); }
+  function log(x) { if (LOG.length < 1500) LOG.push(x); upd(); }
   var bar;
   function mine(t) { return bar && t && bar.contains && bar.contains(t); }
   function evLog(e) {
@@ -543,6 +576,20 @@ function mbnObserveBody() {
     if (e.type === 'keydown') extra = /^(Tab|Enter|Escape|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Backspace|Delete)$/.test(e.key) ? ' [' + e.key + ']' : ' [caractère]';
     if ((e.type === 'input' || e.type === 'change' || e.type === 'focusout') && t && t.value != null) extra = ' valeur « ' + shape(t.value) + ' »';
     var last = LOG[LOG.length - 1];
+    /* Frappe ordinaire (caractères, effacement) : une seule ligne par case, mise à jour au fil
+       des touches — sinon une phrase tapée remplit le journal (rencontré sur la page bulletin). */
+    var plainKey = e.type === 'keydown' && !/^(Tab|Enter|Escape|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Delete)$/.test(e.key);
+    if (plainKey || e.type === 'input') {
+      if (last && last.kind === 'type' && last.d === d) {
+        if (plainKey) last.keys++;
+        if (e.type === 'input') last.val = shape(t.value);
+        last.line = 'frappe sur ' + d + ' : ' + last.keys + ' touche(s), valeur « ' + last.val + ' »';
+        upd(); return;
+      }
+      var rec = { kind: 'type', t: ms(), d: d, keys: plainKey ? 1 : 0, val: t && t.value != null ? shape(t.value) : '', n: 1 };
+      rec.line = 'frappe sur ' + d + ' : ' + rec.keys + ' touche(s), valeur « ' + rec.val + ' »';
+      log(rec); return;
+    }
     var line = e.type + ' sur ' + d + extra;
     if (last && last.kind === 'ev' && last.line === line) { last.n++; upd(); return; }
     log({ kind: 'ev', t: ms(), line: line, n: 1 });
@@ -643,7 +690,7 @@ function mbnObserveBody() {
     L('');
     L('--- Déroulé de l\'observation (' + ms() + ') ---');
     for (var j = 0; j < LOG.length; j++) L(LOG[j].t + '  ' + LOG[j].line + (LOG[j].n > 1 ? '  (×' + LOG[j].n + ')' : ''));
-    if (LOG.length >= 600) L('… journal plein (600 lignes)');
+    if (LOG.length >= 1500) L('… journal plein (1500 lignes)');
     L('');
     L('=== Fin de l\'observation ===');
     showReport(R.join('\n'));
