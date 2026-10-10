@@ -592,6 +592,7 @@ function mbnObserveBody() {
 
   /* ⚠️ Le bandeau se met à jour lui-même (compteur) : ses propres mutations sont ignorées,
      et upd() n'écrit que si le texte change — sinon boucle sans fin observateur ↔ bandeau. */
+  var MUTSEEN = {};   /* un même changement répété en rafale ne prend qu'une ligne (MBN recalcule ses statistiques des milliers de fois) */
   var MO = new MutationObserver(function (list) {
     var any = false;
     for (var i = 0; i < list.length; i++) {
@@ -602,7 +603,11 @@ function mbnObserveBody() {
       var last = LOG[LOG.length - 1];
       any = true;
       if (last && last.kind === 'mut' && last.line === line) { last.n++; continue; }
-      log({ kind: 'mut', t: ms(), line: line, n: 1 });
+      var rec = MUTSEEN[line];
+      if (rec && Date.now() - rec.at < 2000) { rec.n++; rec.at = Date.now(); continue; }
+      rec = { kind: 'mut', t: ms(), line: line, n: 1, at: Date.now() };
+      MUTSEEN[line] = rec;
+      log(rec);
     }
     if (any) upd();
   });
