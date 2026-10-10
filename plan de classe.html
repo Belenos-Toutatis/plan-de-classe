@@ -8361,13 +8361,15 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
   }
 
   /* ── Suivi des enregistrements (requêtes envoyées par la page) ── */
-  var XS = XMLHttpRequest.prototype.send, pend = 0, saves = 0, srvErr = [];
+  var XS = XMLHttpRequest.prototype.send, pend = 0, saves = 0, srvErr = [], RES = [], quiet = false;
   function hook() {
     if (hooked) return; hooked = true;
     XMLHttpRequest.prototype.send = function () {
       var x = this; pend++;
       x.addEventListener('loadend', function () {
         pend--; saves++;
+        RES.push(x.status || 0);
+        if (quiet) return;   /* liste : l'opération regarde elle-même la réponse et réessaie */
         if (x.status && x.status !== 200) srvErr.push('réponse ' + x.status);
         else { try { var j = JSON.parse(x.responseText); if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status || j.code || '')))) srvErr.push(String(j.libelleLong || j.libelle || j.message || j.status || j.code)); } catch (e) {} }
       });
@@ -8599,30 +8601,47 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
     /* comparaison sans les espaces : MBN affiche les retours à la ligne en <br>, que le texte de la cellule ne rend pas */
     if (tight(now) !== tight(cut(String(a.text), ta))) throw new Error('MBN affiche « ' + now.slice(0, 40) + ' »');
   }
+  /* Liste des éléments travaillés : le serveur de MBN a répondu « 503 Service indisponible »
+     à des ajouts trop rapprochés (essai du 2026-10-10). On espace donc les opérations
+     (LIST_GAP) et, sur un refus du serveur, on attend puis on réessaie (3 essais). */
+  var LIST_GAP = 2000, LIST_TRIES = 3;
+  function refused(r0) { for (var i = r0; i < RES.length; i++) if (RES[i] >= 500 || RES[i] === 0) return RES[i] || 'aucune réponse'; return 0; }
+  async function listOp(label, doIt, done) {
+    var last = 0;
+    for (var t = 1; t <= LIST_TRIES; t++) {
+      var r0 = RES.length, s0 = saves;
+      quiet = true;
+      try { await doIt(); await waitSave(s0, 6000); } finally { quiet = false; }
+      var t0 = Date.now();
+      while (!done() && !refused(r0) && Date.now() - t0 < 5000) await sleep(80);
+      if (done()) { await sleep(LIST_GAP); return; }
+      last = refused(r0);
+      if (!last) break;
+      await sleep(3000 * t);
+    }
+    throw new Error(label + (last ? ' — le serveur de MBN a refusé (' + last + ') malgré ' + LIST_TRIES + ' essais' : ''));
+  }
   async function removeItem(it) {
-    var a = $('a[class*="supprimer-list"]', it.li) || $('a[class*="supprimer"]', it.li);
-    if (!a) throw new Error('bouton de suppression introuvable pour « ' + it.text + ' »');
-    var s0 = saves;
-    ($('img', a) || a).click();
-    await waitSave(s0, 5000);
-    var t0 = Date.now();
-    while (it.li.isConnected && Date.now() - t0 < 4000) await sleep(60);
-    if (it.li.isConnected) throw new Error('« ' + it.text + ' » n\'a pas été supprimé');
+    await listOp('« ' + it.text + ' » n\'a pas été supprimé', async function () {
+      var li = null;
+      readItems(MBN.listUl).forEach(function (x) { if (!li && norm(x.text) === norm(it.text)) li = x.li; });
+      if (!li) return;
+      var a = $('a[class*="supprimer-list"]', li) || $('a[class*="supprimer"]', li);
+      if (!a) throw new Error('bouton de suppression introuvable pour « ' + it.text + ' »');
+      ($('img', a) || a).click();
+    }, function () { return !readItems(MBN.listUl).some(function (x) { return norm(x.text) === norm(it.text); }); });
   }
   async function addItem(text) {
     var inp = MBN.listInput, b = MBN.listBtn;
     if (!inp || !b) throw new Error('case d\'ajout introuvable');
-    var n0 = $$('li', MBN.listUl).length;
-    var t0 = Date.now();
-    while (inp.disabled && Date.now() - t0 < 4000) await sleep(60);
-    typeInto(inp, cut(text, inp));
-    fire(inp, ['change']);
-    var s0 = saves;
-    b.click();
-    await waitSave(s0, 5000);
-    t0 = Date.now();
-    while ($$('li', MBN.listUl).length <= n0 && Date.now() - t0 < 4000) await sleep(60);
-    if ($$('li', MBN.listUl).length <= n0) throw new Error('« ' + text + ' » n\'a pas été ajouté');
+    var n0 = readItems(MBN.listUl).filter(function (x) { return norm(x.text) === norm(cut(text, inp)); }).length;
+    await listOp('« ' + text + ' » n\'a pas été ajouté', async function () {
+      var t0 = Date.now();
+      while (inp.disabled && Date.now() - t0 < 6000) await sleep(80);
+      typeInto(inp, cut(text, inp));
+      fire(inp, ['change']);
+      b.click();
+    }, function () { return readItems(MBN.listUl).filter(function (x) { return norm(x.text) === norm(cut(text, inp)); }).length > n0; });
   }
   async function run() {
     running = true; stopAsked = false; srvErr = []; saves = 0;
@@ -8656,9 +8675,15 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
         var cur = readItems(MBN.listUl);
         var toAdd = PLAN.ours.slice();
         if (opt.elReplace) {
-          for (var d = 0; d < cur.length && !stopAsked; d++) {
-            show('Éléments travaillés : suppression ' + (d + 1) + ' / ' + cur.length);
-            try { await removeItem(cur[d]); done.del++; } catch (e) { probs.push('Éléments travaillés : ' + (e && e.message || e)); }
+          /* On garde le début de la liste de MBN s'il est déjà dans le bon ordre : une relance
+             après un refus du serveur ne refait que la fin. */
+          var keep = 0;
+          while (keep < cur.length && keep < PLAN.ours.length && norm(cur[keep].text) === norm(PLAN.ours[keep])) keep++;
+          var toDel = cur.slice(keep);
+          toAdd = PLAN.ours.slice(keep);
+          for (var d = 0; d < toDel.length && !stopAsked; d++) {
+            show('Éléments travaillés : suppression ' + (d + 1) + ' / ' + toDel.length);
+            try { await removeItem(toDel[d]); done.del++; } catch (e) { probs.push('Éléments travaillés : ' + (e && e.message || e)); }
           }
         } else {
           toAdd = toAdd.filter(function (t) { return !cur.some(function (c) { return norm(c.text) === norm(t); }); });
@@ -8672,6 +8697,12 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
       unhook(); running = false; P.setAttribute('style', BIG);
     }
     var ok = !probs.length && !srvErr.length && !stopAsked;
+    if (opt.el && !PLAN.sameList && MBN.listUl) {
+      var finalList = readItems(MBN.listUl).map(function (x) { return x.text; });
+      var want = opt.elReplace ? PLAN.ours : null;
+      if (want && (finalList.length !== want.length || !want.every(function (t, i) { return norm(t) === norm(finalList[i]); })))
+        probs.push('Éléments travaillés : la liste de MBN ne correspond pas encore à celle de Plan de classe (MBN : ' + (finalList.length ? finalList.join(' · ') : 'vide') + '). Relance le favori : seuls les écarts seront corrigés.');
+    }
     var html = note((stopAsked ? '⏹ Arrêté à ta demande. ' : '')
       + (opt.stu ? '<strong>' + done.stu + ' / ' + PLAN.stu.length + '</strong> appréciation(s) d\'élève écrite(s)' : '')
       + (opt.cls && PLAN.cls ? ' · appréciation de la classe ' + (done.cls ? 'enregistrée' : '<strong>non enregistrée</strong>') : '')
@@ -9549,11 +9580,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.138.0';
+const APP_VERSION    = '2.138.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-10T10:47:03Z';
+const APP_BUILD_DATE = '2026-10-10T10:54:53Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »

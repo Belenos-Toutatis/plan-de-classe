@@ -58,10 +58,13 @@ table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px;verti
     { code: 'E4', label: 'ROUX Inès', appr: '' }
   ];
   var ITEMS = [{ id: 1, text: 'Ancien élément' }], nextId = 2, saves = 0, edRow = null;
-  function req(cb) {
-    var x = new XMLHttpRequest();
-    x.open('POST', 'data:application/json,{"code":"OK","libelleLong":"","libelle":""}');
-    x.onloadend = function () { saves++; document.getElementById('log').textContent = saves + ' enregistrement(s)'; if (cb) cb(); };
+  /* window.__fail = N : les N prochaines requêtes de la liste sont refusées par le « serveur »
+     (POST vers le petit serveur local de test, qui répond 501), comme les 503 vus sur MBN. */
+  function req(cb, list) {
+    var x = new XMLHttpRequest(), fail = list && window.__fail > 0;
+    if (fail) window.__fail--;
+    x.open('POST', fail ? '/refus-simule' : 'data:application/json,{"code":"OK","libelleLong":"","libelle":""}');
+    x.onloadend = function () { saves++; document.getElementById('log').textContent = saves + ' enregistrement(s)'; if (!fail && cb) cb(); if (fail && list) list(); };
     x.send('PROC=X');
   }
   function renderTable() {
@@ -109,14 +112,14 @@ table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px;verti
     var inp = document.getElementById('ajout-list-elements'), v = inp.value.trim();
     if (!v) return;
     inp.disabled = true;
-    req(function () { ITEMS.push({ id: nextId++, text: v }); inp.value = ''; inp.disabled = false; renderList(); });
+    req(function () { ITEMS.push({ id: nextId++, text: v }); inp.value = ''; inp.disabled = false; renderList(); }, function () { inp.disabled = false; });
   });
   document.getElementById('zone-list-elements').addEventListener('click', function (ev) {
     var a = ev.target.closest('a.supprimer-list-elements-action');
     if (!a) return;
     ev.preventDefault();
     var id = +a.getAttribute('data-id');
-    req(function () { ITEMS = ITEMS.filter(function (x) { return x.id !== id; }); renderList(); });
+    req(function () { ITEMS = ITEMS.filter(function (x) { return x.id !== id; }); renderList(); }, function () {});
   });
   renderTable(); renderList();
   window.__FAKE = { get: function () { return { eleves: ELEVES.map(function (e) { return e.label + ' = ' + e.appr; }), classe: CLASSE, items: ITEMS.map(function (x) { return x.text; }) }; } };
