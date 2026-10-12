@@ -3158,6 +3158,91 @@ Arbitrages de l'utilisateur, point par point :
 - **Colonne de droite repliable (v2.99.2, élargie en v2.100.5)** : une **barre verticale** `#tp-rail` à droite de la colonne (structure `.tp-side` > `.tp-side-body` [#unpl + #att-side] + `#tp-rail`) compte ce qu'elle contient — « 🪑 N non placés », « 🚫 N absents ⏰ N retards » (`#att-side` pose `data-abs` / `data-ret`) — et **replie toute la colonne** d'un clic (26 px, « ◀ ») ; un clic la rouvre. Choix mémorisé sur la machine (`planClasse_attSideCollapsed`, `_attSideCollapsed` / `_attSideToggle`), classe `.side-collapsed` posée par `_tpSideUpdate`. En v2.99.2 la barre ne valait que pour la liste d'appel et disparaissait dès qu'un élève était à placer (un ULIS hors inclusion non placé, par exemple) : signalé par l'utilisateur. Repliée, on ne peut plus déposer un élève dans la liste : retirer d'une place par ✕ ou par le clic droit.
 - Audit : 0 écart en clair et en sombre sur la grille et le réglage.
 
+## Étiquette d'une cellule (Plan Prof) — bandeau d'en-tête réservé (v2.145.0)
+
+Le `N°` (à gauche) et le `✕` « retirer de sa place » (à droite) sont en `position:absolute`
+dans les coins, alors que **la rangée de puces ET le nom** sont dans le flux et centrés
+verticalement (`.cell{justify-content:center}`). Conséquence : dès que le contenu grandit,
+il remonte **sous** eux. Ce n'est pas un défaut de repli — `.spec-badges` porte `flex-wrap`
+depuis toujours ; c'est que rien ne protégeait le haut de la cellule.
+
+⚠️ **Le masquage au survol de la v2.99.0 ne dispense PAS du bandeau** : `opacity:0` laisse la
+boîte du `✕` dans la mise en page, et au doigt (`pointer: coarse`) il reste visible en
+permanence — c'est précisément le cas de la Surface, d'où est venu le signalement.
+
+Mesuré le 2026-10-12 sur la v2.144.3, 6e A avec un élève chargé (rappel, 3 tags, PPS-A+⅓,
+PAI, 📋) : **4 chevauchements** à cellules de 185 px (le pire : le `✕` par-dessus une puce,
+254 px²) et **40** à cellules de 110 px, le nom passant alors sous `N°`/`G`/`✕`. Après
+correction : **0** à 185 px, 0 à 110 px, 0 à la souris, en mode appel, en consultation
+d'instantané, avec le nom en « Grand », sous les filtres G1/G2 et dans les quatre modes de
+couleur.
+
+Deux changements :
+
+- **`--cell-head` réserve une ligne d'en-tête** que rien ne peut occuper
+  (`#tg:not(.tg-trombi) .cell.oc{padding-top:var(--cell-head);justify-content:safe center}`).
+  `safe center` : si le contenu déborde malgré tout, il s'ancre en haut au lieu de remonter
+  dans le bandeau.
+  - ⚠️ **La valeur est calibrée sur le `✕`, pas sur le `N°`** : le bloc
+    `@media (pointer: coarse)` lui donne `padding:4px 9px;font-size:1.1em`, ce qui le fait
+    passer de 10,4 px de haut à **20,7**. D'où `13px` à la souris et `22px` au doigt.
+    **Toute retouche de `.cell-unplace` se reporte sur `--cell-head`, aux deux endroits.**
+  - **Le coût est tactile, pas universel** : à la souris le plan mesure 495 px contre 494
+    avant (les 13 px de bandeau tiennent dans l'espace déjà libre) ; au doigt il grandit de
+    11 % à cellules larges et de 19 % à cellules étroites. L'alternative — des gouttières
+    horizontales, pour que les puces se replient avant d'atteindre les coins — a été
+    écartée : sur une cellule étroite, 44 px de gouttière ne laissent pas la place d'une
+    seule puce, qui déborderait alors de sa ligne et chevaucherait de nouveau.
+- **Le badge de groupe (`.gbadge`) est redevenu une puce ordinaire de `.spec-badges`**, en
+  1re position, au lieu d'un élément épinglé (`top:2px;left:3px;margin-top:13px`). Épinglé,
+  il occupait la colonne de gauche de la première ligne de puces et la chevauchait, et il
+  aurait fallu porter le bandeau à 28 px pour le dégager. Les trois sites d'émission
+  (branche normale et branche appel de `buildCell`, `buildSnapshotCell`) le construisent
+  désormais dans la rangée ; en mode appel il y est accompagné de l'heure d'arrivée
+  `.late-time`. Ses couleurs ne changent pas (blanc sur `--g1/--g2/--g3`, non redéfinis en
+  thème sombre : 5,97 / 4,91 / 5,87:1 dans les deux thèmes).
+
+Choix de l'utilisateur, demandés avant de coder : groupe **dans** la rangée (plutôt
+qu'épinglé) et puces qui **se replient autant qu'il faut** (plutôt qu'un plafond à 2 lignes
+avec une pastille « +N »).
+
+Hors périmètre, vérifié : la **Vue Élève** n'a pas de `.gbadge`, les **impressions** passent
+par `.pcell`/`.pgb` (balisage distinct), le **mode trombinoscope** est exclu par
+`:not(.tg-trombi)` — sa propre règle `#tg.tg-trombi .cell{padding:4px 4px 5px}` reste
+gagnante —, les cellules **AESH** ne portent pas `.oc`, et `#mse-grid` n'est pas sous `#tg`.
+
+Un lint dans `test/run.test.js` garde les trois invariants (bandeau réservé, `--cell-head`
+présent dans le bloc tactile, `.gbadge` ni `position:absolute` ni émis hors de la rangée) ;
+il a été vérifié contre les quatre régressions correspondantes, dont une qu'une première
+version laissait passer — son contexte de recherche remontait au-delà du `cell.innerHTML =`
+et attrapait le `const specBadges = … "spec-badges" …` qui le précède.
+
+### Méthode : auditer les chevauchements d'une cellule (à rejouer)
+
+Injecter dans la page un auditeur qui, pour chaque `#tg .cell.oc`, relève la boîte de
+`.cpos`, `.cell-unplace`, du `.gbadge`, de chaque enfant de `.spec-badges`, de `.cn`,
+`.cell-ctrs` et `.cipad`, puis calcule l'aire d'intersection de **toutes les paires**. Un
+chevauchement se voit mal à l'œil (deux pastilles colorées qui se touchent paraissent
+normales) et se compte en px² sans ambiguïté. Balayer **deux largeurs de cellule** — une
+fenêtre large (185 px par cellule) et une étroite (110 px), qui fait passer les noms sur
+trois lignes — et les sous-états : souris et doigt, mode appel, instantané, taille de nom,
+filtres de groupe, modes de couleur.
+
+Trois pièges de mesure, tous rencontrés le 2026-10-12 :
+1. ⚠️ **Le volet d'aperçu du navigateur intégré est `pointer: coarse`.** Les mesures qu'on y
+   fait sont donc déjà celles de la Surface de l'utilisateur, pas celles d'une souris — pour
+   obtenir l'autre géométrie, neutraliser le bloc tactile par un `<style>` injecté.
+2. ⚠️ **Le navigateur intégré ne sait pas ouvrir `file://`** : servir le dossier par
+   `python -m http.server`. Mais alors **le service worker et le cache HTTP resservent
+   l'ancienne version** après une modification — une première passe a conclu « le correctif
+   ne s'applique pas » alors que la page affichée datait d'avant. Purger
+   (`getRegistrations().unregister()` + `caches.delete`) **et** changer la query string ; le
+   plus simple est de servir deux copies, `avant.html` et `apres.html`, depuis un dossier
+   temporaire.
+3. ⚠️ Une affectation à une variable de haut niveau depuis la console (`tgZoom = 1.4`) crée
+   une propriété de `window` que le script, qui la déclare en `let`, ne lit jamais. Passer
+   par les fonctions de l'app (`tgZoomIn()`).
+
 ## Mode de coloration des cellules (Plan Prof)
 
 Sélecteur **🎨 Couleur** dans la toolbar Plan Prof (`#tg-color-mode`). 4 modes :

@@ -144,6 +144,21 @@ td.meval-cell-disp{text-align:center;font-family:var(--font-mono);font-size:.78e
 @media print{.cphoto,.ctrombi-img{display:none}}
 .cpos{font-size:.72em;color:var(--cell-meta);font-weight:600;position:absolute;top:2px;left:3px}
 .spec-badges{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px}
+/* Bandeau d'en-tête de la cellule. Le N° (à gauche) et le ✕ (à droite) sont en
+   position:absolute, alors que la rangée de puces ET le nom sont dans le flux, centrés
+   verticalement : dès que le contenu grandit, il remonte SOUS eux. Mesuré le 2026-10-12
+   sur une 6e A chargée (cellules de 76 px, zoom 150 %) : 81 chevauchements, dont le ✕
+   par-dessus une puce (182 px²) et le nom sous le N° dans 20 cellules sur 30 — y compris
+   chez des élèves sans aucune puce. On leur réserve donc une ligne que rien ne peut
+   occuper ; la rangée de puces se replie librement en dessous. `safe center` : si le
+   contenu déborde malgré tout, il s'ancre en haut plutôt que de remonter dans le bandeau.
+   ⚠️ --cell-head est calibré sur le ✕, dont le bloc @media (pointer: coarse) double la
+   hauteur (13 px à la souris, 22 px au doigt) : toute retouche de .cell-unplace se
+   reporte ici, et dans le bloc tactile en fin de feuille. Le masquage au survol de la
+   v2.99.0 ne dispense PAS du bandeau : `opacity:0` laisse la boîte dans la mise en page,
+   et au doigt le ✕ reste visible en permanence. */
+.cell{--cell-head:13px}
+#tg:not(.tg-trombi) .cell.oc{padding-top:var(--cell-head);justify-content:safe center}
 .spec-badge{display:inline-block;font-size:.58em;font-weight:700;padding:0 3px;border-radius:3px;line-height:1.4;cursor:default;white-space:nowrap}
 .spec-ppre{background:#f39c12;color:#fff}
 .spec-pap{background:#3f51b5;color:#fff}
@@ -991,8 +1006,10 @@ body.el-bulk-on.noise-widget-on:has(#tab-eleves.on) #toast, body.el-bulk-on.time
 /* ─── GROUPES ─── */
 /* Couleurs */
 :root{--g1:#23689a;--g1-light:#d6eaf8;--g1-em:#eaf4fc;--g2:#bf4d00;--g2-light:#fde8d8;--g2-em:#fef5ee;--g3:#8e44ad;--g3-light:#e8d5ee;--g3-em:#f4e6f8}
-/* Badges groupe */
-.gbadge{font-size:.65em;font-weight:700;padding:1px 5px;border-radius:3px;position:absolute;top:2px;left:3px;margin-top:13px;color:#fff}
+/* Badges groupe — puce ORDINAIRE de la rangée .spec-badges, et non plus un élément épinglé
+   en haut à gauche : épinglé, il occupait la colonne de gauche de la première ligne de
+   puces et la chevauchait. Il est désormais la 1re puce de la rangée (cf. buildCell). */
+.gbadge{font-size:.65em;font-weight:700;padding:1px 5px;border-radius:3px;color:#fff;display:inline-block;line-height:1.4;white-space:nowrap}
 .gbadge.g1{background:var(--g1)}.gbadge.g2{background:var(--g2)}.gbadge.g3{background:var(--g3)}
 /* Cases selon groupe (empty) — !important nécessaire pour battre la règle
    .cell.oc/.cell.em du design system « papier » (ligne ~1596) qui force le fond
@@ -4227,6 +4244,8 @@ html[data-theme="dark"] #cstr-banner.cstr-banner-allow{background:#1f3a2a !impor
      de retrait, pastille tablette) — mesurés à 31×15 px avant cette règle */
   .cctr { padding: 6px 9px !important; font-size: .88em !important; }
   .cell-unplace { padding: 4px 9px !important; font-size: 1.1em !important; }
+  /* …et le bandeau d'en-tête de la cellule suit la hauteur du ✕ agrandi (cf. --cell-head) */
+  .cell { --cell-head: 22px; }
   .isel, .cipad { font-size: .88em !important; padding: 4px 8px !important; }
   /* Tableur d'évaluation : cellules de saisie plus hautes */
   #meval-tableur tbody input, #meval-tableur tbody select,
@@ -9683,11 +9702,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.144.3';
+const APP_VERSION    = '2.145.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-11T19:55:58Z';
+const APP_BUILD_DATE = '2026-10-12T13:57:23Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -23451,8 +23470,7 @@ function buildSnapshotCell(salle, row, col, seating) {
     const archBadge = stu._archived ? `<span class="spec-badge" style="background:#999;color:#fff" title="Élève supprimé depuis">supprimé</span>` : '';
     cell.innerHTML = `
       <span class="cpos">N°${seatLabel(row, col, salle.cols || 10)}</span>
-      ${stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : ''}
-      ${archBadge ? `<div class="spec-badges">${archBadge}</div>` : ''}
+      ${(stuG || archBadge) ? `<div class="spec-badges">${stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : ''}${archBadge}</div>` : ''}
       <div class="cn" style="${archStyle}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
     `;
     cell.title = `${stu.prenom} ${stu.nom}${stu._archived ? ' (supprimé depuis)' : ''}`;
@@ -23705,8 +23723,14 @@ function buildCell(cls, row, col) {
       cell.title = `${stu.prenom} ${stu.nom} — ${stateLbl}\nClic gauche = absent/présent · Clic droit ou appui long = retard (heure d'arrivée)`;
       cell.innerHTML = `
         <span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>
-        ${_grp(stu, cls) ? `<span class="gbadge g${_grp(stu, cls)}">G${_grp(stu, cls)}</span>` : ''}
-        ${lateTime && !isAbsent ? `<span class="late-time">⏰ ${lateTime}</span>` : ''}
+        ${(() => {
+          // Groupe et heure d'arrivée dans la rangée de puces : hors du flux, le badge de
+          // groupe chevauchait le bandeau d'en-tête (cf. --cell-head).
+          const _g = _grp(stu, cls);
+          const _p = (_g ? `<span class="gbadge g${_g}">G${_g}</span>` : '')
+                   + (lateTime && !isAbsent ? `<span class="late-time">⏰ ${lateTime}</span>` : '');
+          return _p ? `<div class="spec-badges">${_p}</div>` : '';
+        })()}
         <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br><span class="cn-nom">${_escAttr(stu.nom)}</span></div>
         ${_cellPhotoHTML(stu.id)}
         ${isAbsent ? '<div style="font-size:1.4em;margin-top:2px">🚫</div>' : ''}`;
@@ -23761,6 +23785,9 @@ function buildCell(cls, row, col) {
       aeshLinkedBadge = `<span class="aesh-link-badge" title="Élève accompagné par ${_lbl}">🤝 ${_escAttr(_lbl)}</span>`;
     }
     const specList = [
+      // Le badge de groupe ouvre la rangée : il était épinglé en haut à gauche et
+      // chevauchait la 1re ligne de puces (cf. --cell-head).
+      stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : '',
       remBadge,
       otherClsBadge,
       aeshLinkedBadge,
@@ -23781,7 +23808,6 @@ function buildCell(cls, row, col) {
     if (stu.upe2a) cell.classList.add('upe2a-absent');
     cell.innerHTML = `
       <span class="cpos">N°${seatLabel(row,col,cls.configuration.cols||10)}</span>
-      ${stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : ''}
       ${specBadges}
       <button class="cell-unplace" onclick="event.stopPropagation();removeSeat(getCls(),'${key}')" title="Retirer de sa place">✕</button>
       <div class="cn${_delegueNameCls(stu)}">${_escAttr(stu.prenom)}<br><span class="cn-nom">${_escAttr(stu.nom)}</span></div>

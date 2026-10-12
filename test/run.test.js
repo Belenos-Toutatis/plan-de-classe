@@ -1917,6 +1917,53 @@ test('Palette de niveaux : aucun index figé à 4 (clamp sur colors.length)', ()
   assert.deepStrictEqual(bad, [], 'Clamp de palette figé :\n' + bad.join('\n'));
 });
 
+// ─── Étiquette du plan : le bandeau d'en-tête de la cellule reste réservé ─────
+// Le N° (à gauche) et le ✕ (à droite) sont en position:absolute, alors que la rangée
+// de puces et le nom sont dans le flux et centrés verticalement : sans bandeau réservé,
+// le contenu remonte SOUS eux dès qu'il grandit (81 chevauchements mesurés le 2026-10-12
+// sur une 6e A chargée, dont le ✕ par-dessus une puce et le nom sous le N° dans 20
+// cellules sur 30). Trois invariants, tous invisibles à un test qui ne lit que le modèle.
+test("Plan Prof : le bandeau d'en-tête de la cellule est réservé (--cell-head)", () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const lines = src.split(/\r?\n/);
+
+  // 1. le bandeau est réservé, et le contenu s'ancre en haut s'il déborde
+  assert.match(src, /\.cell\{--cell-head:\d+px\}/,
+    "La variable --cell-head a disparu : le bandeau d'en-tête n'est plus dimensionné.");
+  assert.match(src, /#tg:not\(\.tg-trombi\) \.cell\.oc\{padding-top:var\(--cell-head\);justify-content:safe center\}/,
+    'La réservation du bandeau a disparu (padding-top + justify-content: safe center).');
+
+  // 2. --cell-head est calibré sur le ✕, que le bloc tactile agrandit : il doit y suivre
+  const iCoarse = src.indexOf('@media (pointer: coarse) {');
+  const jCoarse = src.indexOf('.cell-unplace { padding: 4px 9px', iCoarse);
+  assert.ok(iCoarse > 0 && jCoarse > 0, 'Bloc @media (pointer: coarse) du plan introuvable.');
+  const coarse = src.slice(iCoarse, src.indexOf('\n}', jCoarse));
+  assert.ok(/--cell-head:\s*\d+px/.test(coarse),
+    "Le bloc tactile agrandit .cell-unplace sans remonter --cell-head : le ✕ repasserait par-dessus les puces.");
+
+  // 3. le badge de groupe est une puce de la rangée, plus un élément épinglé
+  const gRule = lines.find(l => /^\.gbadge\{/.test(l)) || '';
+  assert.ok(gRule && !/position:\s*absolute/.test(gRule),
+    '.gbadge est repassé en position:absolute : il chevaucherait la 1re ligne de puces.');
+  const orphans = [];
+  lines.forEach((l, i) => {
+    if (!/class="gbadge/.test(l)) return;
+    // Contexte BORNÉ : on remonte jusqu'au `cell.innerHTML =` qui ouvre le gabarit — sans
+    // cette borne, le `const specBadges = … "spec-badges" …` qui le précède fait passer
+    // pour valide un badge posé en vrac dans le gabarit (cas vérifié par méta-test).
+    const ctx = [];
+    for (let k = i; k >= 0 && i - k < 10; k--) { ctx.push(lines[k]); if (/cell\.innerHTML\s*=/.test(lines[k])) break; }
+    ctx.push(...lines.slice(i + 1, i + 7));
+    if (!/class="spec-badges"|const specList = \[/.test(ctx.join('\n'))) {
+      orphans.push('ligne ' + (i + 1) + ' : ' + l.trim().slice(0, 110));
+    }
+  });
+  assert.deepStrictEqual(orphans, [],
+    'Badge de groupe émis hors de la rangée .spec-badges :\n' + orphans.join('\n'));
+});
+
 // ─── Le papier est blanc : tout token redéfini en thème sombre doit être neutralisé ──
 // Règle du design system : le bloc `@media print { html[data-theme="dark"] { … } }`
 // rétablit les valeurs du thème clair. Un token ajouté au mode nuit et oublié là
