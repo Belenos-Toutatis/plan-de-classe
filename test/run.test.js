@@ -3116,3 +3116,9 @@ function _lumOf(hex) {
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 }
 function _contrast(a, b) { b = b === '#fff' ? '#ffffff' : b; const x = _lumOf(a), y = _lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+test('croix de saisie : aviver garde l\'ordre des niveaux d\'un dégradé d\'une seule teinte', () => {
+  ev(`S.evalPrefs = Object.assign({}, S.evalPrefs || {}, { nbLevels: 4, colorSet: 'classic-pastel' })`);
+  const out = get(`['#c9d9ea', '#8fb1d4', '#4677aa', '#1f4e85'].map(c => _crossColor(c, 'levels').bg)`);
+  const l = out.map(_lumOf);
+  for (let i = 1; i < l.length; i++) assert.ok(l[i] < l[i - 1] - 0.01, 'niveau ' + (i + 1) + ' plus sombre que le ' + i + ' : ' + out.join(' '));
+});

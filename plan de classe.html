@@ -9768,11 +9768,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.149.0';
+const APP_VERSION    = '2.149.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-14T23:44:55Z';
+const APP_BUILD_DATE = '2026-10-14T23:50:46Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -48041,12 +48041,14 @@ function _crossColor(color, kind) {
   const dark = _isDarkPalette();
   let out;
   if (_crossPaletteIsPastel(kind)) {
-    // Aviver : même teinte, plus saturée, clarté ramenée vers le milieu.
+    // Aviver : même teinte, plus saturée, plus sombre — en PROPORTION de la clarté d'origine,
+    // pour garder l'ordre des niveaux (un dégradé d'une seule teinte ne se lit que par sa
+    // clarté : la ramener à une valeur fixe rendait les 4 niveaux du Dégradé bleu identiques).
     let [r, g, b] = rgb.map(v => v / 255);
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
     let h = 0, sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
     if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
-    const s2 = sat < 0.05 ? sat : Math.min(1, Math.max(sat * 1.5, 0.65)), l2 = dark ? 0.46 : 0.42;
+    const s2 = sat < 0.05 ? sat : Math.min(1, Math.max(sat * 1.5, 0.65)), l2 = l * (dark ? 0.75 : 0.55);
     const c = (1 - Math.abs(2 * l2 - 1)) * s2, xx = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l2 - c / 2;
     const [r1, g1, b1] = h < 60 ? [c, xx, 0] : h < 120 ? [xx, c, 0] : h < 180 ? [0, c, xx] : h < 240 ? [0, xx, c] : h < 300 ? [xx, 0, c] : [c, 0, xx];
     out = [r1, g1, b1].map(v => Math.round((v + m) * 255));
