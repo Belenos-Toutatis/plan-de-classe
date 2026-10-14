@@ -143,3 +143,20 @@ il reste ~100 ms de mise en page pour 504 lignes.
 **0 écart de contraste**, en clair comme en sombre, sur 12 onglets, ~30 sous-états, 87 modales
 statiques, ~95 fenêtres dynamiques et 22 chemins d'impression ; 0 débordement sur 4 gabarits ;
 0 erreur d'exécution ; 213/213 tests. Un audit qui renvoie autre chose signale une régression.
+
+---
+
+## 6. Addendum — outil d'audit rangé dans le dépôt (v2.146.2)
+
+Les scripts de mesure sont désormais dans [`outils/audit-ui.js`](../outils/audit-ui.js) (mode
+d'emploi en tête). En les rejouant tels quels, deux défauts de plus sont apparus — le détecteur de
+« pavés clairs » ne couvrait pas encore les fenêtres dynamiques et les sous-états, et la liste des
+contraintes de Config Salle est vide dans la démo :
+
+| # | Où | Constat | Correction |
+|---|---|---|---|
+| **G4** | 🔔 Rappels : puces des motifs, et pastilles de couleur de ⚙ Motifs de rappel | pastels clairs posés en ligne, sans variante nuit | `REMINDER_COLOR_PALETTE` : variante `d` par couleur (encre 8,6 à 9,9:1), choisie par `_reminderColorById` |
+| **C4** | Config Salle → Contraintes : puces « élèves avec places autorisées » | fond `#fff` figé (pavé blanc en nuit) ; puce active **blanc sur `#27ae60` à 2,87:1** dans les deux thèmes | tokens (`--paper`, `--ok-fg`, `--chip-on-bg`) ; compteur de la puce active sur voile sombre |
+
+Passe finale avec l'outil, v2.146.2 : **tout à 0 en clair comme en sombre** (126 fenêtres
+dynamiques, 87 statiques, ~35 sous-états, 22 impressions, méta-test réussi).
