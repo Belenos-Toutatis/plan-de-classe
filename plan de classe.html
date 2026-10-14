@@ -47,26 +47,34 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333;min-h
 .hdr-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:.83em;white-space:nowrap;position:relative}
 .hdr-btn:hover{background:rgba(255,255,255,.22)}
 .hdr-btn.has-update::after{content:'';position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:#e74c3c;border:1.5px solid #2c3e50;border-radius:50%;box-shadow:0 0 6px rgba(231,76,60,.7);animation:hdrPulse 2.2s ease-in-out infinite}
-/* Tableur Type C : surligne la ligne ET la colonne en cours d'édition (focusin).
-   Filet rouge marqué (métaphore cahier), voile encre 8 % pour ajouter du
-   contraste sans engloutir les cellules vides (le filet rouge porte déjà
-   l'info "ligne/colonne active"). Sur les cellules avec fond coloré, le voile
-   reste perceptible. Pas d'animation : repère stable. */
-#meval-tableur-wrap tr.meval-active-row td,
-#meval-tableur-wrap td.meval-active-col {
-  background-image: linear-gradient(rgba(26,37,47,.08), rgba(26,37,47,.08)) !important;
-  position: relative;
-  /* Préserve la division des cellules vides à l'intérieur de la zone surlignée */
-  border-right: 1px solid var(--rule-line);
-}
-/* Ligne active : trait horizontal haut/bas ; renforcé sur les extrémités */
-#meval-tableur-wrap tr.meval-active-row td               { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red); }
-#meval-tableur-wrap tr.meval-active-row td:first-child   { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset 2px 0 0 var(--margin-red); }
-#meval-tableur-wrap tr.meval-active-row td:last-child    { box-shadow: inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red), inset -2px 0 0 var(--margin-red); }
-/* Colonne active : trait vertical gauche/droite */
-#meval-tableur-wrap td.meval-active-col                  { box-shadow: inset 2px 0 0 var(--margin-red), inset -2px 0 0 var(--margin-red); }
-/* Intersection (croisée ligne + colonne) : encadrement complet */
-#meval-tableur-wrap tr.meval-active-row td.meval-active-col { box-shadow: inset 2px 0 0 var(--margin-red), inset -2px 0 0 var(--margin-red), inset 0 2px 0 var(--margin-red), inset 0 -2px 0 var(--margin-red); }
+/* Tableurs A, B, C, D : croix de saisie — la ligne ET la colonne de la case en cours (focusin).
+   v2.148.0 (maquettes validées le 2026-10-15) : plus de filets rouges verticaux, qu'on
+   prenait pour une séparation d'exercice. Repères dans les marges dans les deux modes :
+   nom de l'élève, en-tête de la question, moyenne du pied en jaune surligneur (encre fixe,
+   --highlighter est jaune dans les deux thèmes).
+   · Pastilles (body.tableur-lisere) — « E2 » : la croix est surlignée en jaune (--cross-hl),
+     la case en cours cerclée d'encre.
+   · Cases pleines — « G2 » : la couleur de la note reste entière, un liseré jaune intérieur
+     trace la croix ; case en cours : liseré jaune puis anneau d'encre. */
+#meval-tableur-wrap tr.meval-active-row > td,
+#meval-tableur-wrap td.meval-active-col { box-shadow: inset 0 0 0 3px var(--highlighter); }
+#meval-tableur-wrap tr.meval-active-row > td.meval-active-col { box-shadow: inset 0 0 0 3px var(--highlighter), inset 0 0 0 5px var(--ink-deep); }
+body.tableur-lisere #meval-tableur-wrap tr.meval-active-row > td,
+body.tableur-lisere #meval-tableur-wrap td.meval-active-col,
+body.tableur-lisere #meval-tableur-wrap tr.meval-active-row > td.meval-cell-note,
+body.tableur-lisere #meval-tableur-wrap td.meval-active-col.meval-cell-note,
+body.tableur-lisere #meval-tableur-wrap tr.meval-active-row > td.meval-cell-comp,
+body.tableur-lisere #meval-tableur-wrap td.meval-active-col.meval-cell-comp { background: var(--cross-hl) !important; box-shadow: none; }
+body.tableur-lisere #meval-tableur-wrap tr.meval-active-row > td.meval-active-col { box-shadow: inset 0 0 0 2px var(--ink-deep) !important; }
+#meval-tableur-wrap tr.meval-active-row > td.meval-active-name,
+#meval-tableur-wrap th.meval-active-head,
+#meval-tableur-wrap td.meval-active-foot,
+body.tableur-lisere #meval-tableur-wrap tr.meval-active-row > td.meval-active-name,
+body.tableur-lisere #meval-tableur-wrap th.meval-active-head,
+body.tableur-lisere #meval-tableur-wrap td.meval-active-foot { background: var(--highlighter) !important; color: #1a252f !important; box-shadow: none !important; }
+#meval-tableur-wrap tr.meval-active-row > td.meval-active-name *,
+#meval-tableur-wrap th.meval-active-head *:not(input):not(button):not(select),
+#meval-tableur-wrap td.meval-active-foot *:not([class*="pill"]) { color: #1a252f !important; }
 @keyframes hdrPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.85}}
 #hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
 
@@ -1278,6 +1286,7 @@ body.rendu-projecting body::before{display:none}
      pour que les infos secondaires (n° de position, compteurs, dates) restent lisibles. */
   --pencil-soft:     #5b6a80;
   --highlighter:     #f5d76e;
+  --cross-hl:        rgba(245, 215, 110, .55);  /* croix de saisie du tableur, mode pastilles */
   /* Fond d'une puce active sans variante de couleur (onglets de jour, filtres neutres) */
   --chip-on-bg:      #263545;
   /* Accents sémantiques utilisés en TEXTE — déclinés par thème, car les valeurs vives
@@ -1362,6 +1371,7 @@ html[data-theme="dark"] {
   /* éclairci (ex-#5e6a7a, 2.9:1 sur --paper-warm) — même raison qu'en clair */
   --pencil-soft:     #8792a3;
   --highlighter:     #c9a93f;
+  --cross-hl:        rgba(201, 169, 63, .26);
   --chip-on-bg:      #3d5a80;
   /* Accent « discipline » : le violet clair #5b21b6 n'avait pas de variante sombre — ses
      12 usages en `color:` tombaient à ~1,6:1 sur le fond nuit. */
@@ -1438,6 +1448,7 @@ html[data-theme="dark"] {
     --rule-line:        #c8d2e0;  --rule-line-soft: #dde4ee;
     --margin-red:       #b03d2e;  --margin-red-soft: rgba(176, 61, 46, 0.14);
     --highlighter:      #f5d76e;  --chip-on-bg:   #263545;
+    --cross-hl:         rgba(245, 215, 110, .55);
     --civ-m:            #1c6ea4;  --civ-f:        #b3123f;
     --agr-fg:           #00707d;  --tt-fg:        #6d28d9;  --warn-fg:      #92400e;
     --disc-accent:      #5b21b6;  --disc-accent-soft: #ede9fe;  --disc-accent-mid: #c4b5fd;
@@ -9739,11 +9750,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.147.0';
+const APP_VERSION    = '2.148.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-14T23:00:16Z';
+const APP_BUILD_DATE = '2026-10-14T23:17:45Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -49518,6 +49529,11 @@ function _evalTableurEnsureInputVisible(inputEl) {
   }
 }
 
+// Croix de saisie du tableur (Type C) : retire tous les repères de ligne et de colonne.
+function _tableurCrossClear(wrap) {
+  wrap.querySelectorAll('.meval-active-row, .meval-active-col, .meval-active-name, .meval-active-head, .meval-active-foot')
+    .forEach(el => el.classList.remove('meval-active-row', 'meval-active-col', 'meval-active-name', 'meval-active-head', 'meval-active-foot'));
+}
 // Listener délégué installé une seule fois sur le conteneur de scroll du tableur :
 // la div #meval-tableur-wrap est créée en HTML statique et son innerHTML est
 // remplacé à chaque render, donc un listener posé dessus survit aux rerenders.
@@ -49532,23 +49548,33 @@ function _evalTableurEnsureInputVisible(inputEl) {
       if (t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') return;
       _evalTableurEnsureInputVisible(t);
       _mnpFocus(t);
-      // Surligne la ligne ET la colonne active en Type C (correction plus facile à suivre).
-      const evalId = document.getElementById('meval-tableur-evalid')?.value;
-      const ev = S.evaluations?.[evalId];
-      if (ev?.type === 'C') {
-        // Reset
-        wrap.querySelectorAll('tr.meval-active-row').forEach(tr => tr.classList.remove('meval-active-row'));
-        wrap.querySelectorAll('td.meval-active-col').forEach(td => td.classList.remove('meval-active-col'));
-        // Ligne
+      // Croix de saisie : ligne ET colonne de la case en cours, les quatre types (v2.148.0).
+      {
+        _tableurCrossClear(wrap);
+        // Ligne (+ nom de l'élève en repère)
         const tr = t.closest('tr');
-        if (tr && tr.hasAttribute('data-sid')) tr.classList.add('meval-active-row');
+        if (tr && tr.hasAttribute('data-sid')) {
+          tr.classList.add('meval-active-row');
+          tr.cells[0]?.classList.add('meval-active-name');
+        }
         // Colonne : tous les TDs contenant un input/select avec le même data-ci
         const ci = t.getAttribute('data-ci');
-        if (ci != null) {
+        if (ci != null && tr && tr.hasAttribute('data-sid')) {
           wrap.querySelectorAll(`tbody [data-ci="${ci}"]`).forEach(inp => {
             const td = inp.closest('td');
             if (td) td.classList.add('meval-active-col');
           });
+          // Repères de la colonne : la cellule de la DERNIÈRE ligne d'en-tête et celle de la
+          // 1re ligne du pied qui sont au-dessus / au-dessous de la case (par position : en B et D,
+          // une question ou une passation porte plusieurs colonnes, une par compétence).
+          const td = t.closest('td');
+          const cx = td ? (r => r.left + r.width / 2)(td.getBoundingClientRect()) : null;
+          const under = row => row ? [...row.cells].find(c => { const r = c.getBoundingClientRect(); return cx >= r.left && cx < r.right; }) : null;
+          const thead = wrap.querySelector('thead');
+          const th = cx != null && thead ? under(thead.rows[thead.rows.length - 1]) : null;
+          if (th) th.classList.add('meval-active-head');
+          const ft = cx != null ? under(wrap.querySelector('tfoot tr')) : null;
+          if (ft && ft.cellIndex > 0) ft.classList.add('meval-active-foot');
         }
       }
     });
@@ -49558,8 +49584,7 @@ function _evalTableurEnsureInputVisible(inputEl) {
       setTimeout(() => {
         const active = document.activeElement;
         if (active && wrap.contains(active)) return; // toujours dans le tableur
-        wrap.querySelectorAll('tr.meval-active-row').forEach(tr => tr.classList.remove('meval-active-row'));
-        wrap.querySelectorAll('td.meval-active-col').forEach(td => td.classList.remove('meval-active-col'));
+        _tableurCrossClear(wrap);
       }, 0);
     });
   }
