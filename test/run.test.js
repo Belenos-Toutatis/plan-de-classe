@@ -3063,3 +3063,36 @@ test('Vers MBN · Bulletin : favori embarqué valide, remarques / remarque de cl
   assert.equal(P.contexte.classe, '6A');
   assert.equal(ev(`_mbnBookmarkletCode('bulletin').indexOf('javascript:')`), 0);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.147.0 — profil de l'enseignant, aménagement retiré annoncé, marques des devoirs.
+// ─────────────────────────────────────────────────────────────────────────────
+test('profil : le nom local de la fiche de prêt passe dans le fichier, une seule fois', () => {
+  setState({ classes: {}, eleves: {}, salles: {} });
+  ev(`localStorage.setItem('iprint-prof', '  M. Dupont  '); postLoadHook()`);
+  assert.equal(get('S.profile.nom'), 'M. Dupont');
+  assert.equal(ev(`localStorage.getItem('iprint-prof')`), null);
+  // Un nom déjà dans le fichier n'est pas remplacé par une clé locale résiduelle.
+  ev(`localStorage.setItem('iprint-prof', 'Mme Autre'); postLoadHook()`);
+  assert.equal(get('S.profile.nom'), 'M. Dupont');
+  // Valeur absurde → chaîne vide, pas d'exception.
+  setState({ classes: {}, eleves: {}, salles: {}, profile: { nom: 42 } });
+  ev('postLoadHook()');
+  assert.equal(get('S.profile.nom'), '');
+  assert.equal(ev(`_validateImport({ classes: {}, eleves: {}, profile: { nom: 'X' } })`), null);
+});
+test('aménagement exclusif : la clé retirée est renvoyée et annoncée', () => {
+  assert.deepEqual(get(`(() => { const s = { ppre: true, pai: true }; return _setStudentStatusExclusive(s, 'pap'); })()`), ['ppre']);
+  assert.deepEqual(get(`(() => { const s = { pai: true }; return _setStudentStatusExclusive(s, 'pap'); })()`), []);
+  assert.equal(ev(`_statusRemovedNote(['ppre'])`), ' (PPRE retiré)');
+  assert.equal(ev(`_statusRemovedNote([])`), '');
+});
+test('liste des devoirs : diagnostique, facultative et notes ajustées sont signalés', () => {
+  const h = ev(`_evalListFlagsHTML({ countsForMean: false, facultative: { active: true, mode: 'bonus' },
+    notes: { a: { adjust: [{ op: 'add', v: -2, label: 'retard' }] }, b: { adjust: [] }, z: { adjust: [{ op: 'set', v: 0 }] } } },
+    { eleves: ['a', 'b'] })`);
+  assert.match(h, /diagnostique/);
+  assert.match(h, /★ facultative/);
+  assert.match(h, /⚖ 1 note ajustée/);          // z n'est pas dans la classe
+  assert.equal(ev(`_evalListFlagsHTML({ notes: {} }, { eleves: [] })`), '');
+});

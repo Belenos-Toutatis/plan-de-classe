@@ -378,6 +378,18 @@ Trois façons de présenter l'aide selon l'onglet :
 >
 > **Non retenu :** couleurs de groupe en Vue Élève.
 >
+> **Lot H — fait en v2.147.0 (15 octobre 2026), après inventaire de ce qui restait :**
+> - liste des Devoirs : pastilles « diagnostique », « ★ facultative », « ⚖ N notes ajustées » (§ 2.4) ;
+> - renommer une salle prévient du changement des identifiants QCMcam (§ 2.3) ;
+> - activer un aménagement exclusif dit lequel est retiré (§ 1.10) ;
+> - échelle des niveaux suivant le réglage, plus de « 1–4 » / « /4 » en dur (§ 2.4) ;
+> - nom de l'enseignant dans le fichier et dans ⚙ Réglages (§ 3.2) ;
+> - « ＋ Nouvelle compétence » dans le choix des compétences (§ 2.4) ;
+> - niveau d'une classe recomposée réglable (reste du lot D).
+> - Réglages d'un devoir : toutes les classes proposées en modification, groupées par niveau (§ 2.4).
+>
+> **Reste ouvert après le lot H :** impression et journal multi-classes du journal de séance ; places exclues QCMcam et ordres de ramassage visibles depuis Config Salle / le tri du tableur (§ 3.2) ; légende visible des mentions F E AT AC (§ 6.5).
+>
 > **Non traité dans ce lot :** la dispense (§ 1.4, demande une nouvelle interface : lot C), `meval-edit` en brouillon (§ 1.6, lot B), le retour des bibliothèques (§ 1.10, lot B), la casse QCMCam / QCMcam et la table des raccourcis (lot F).
 
 | Lot | Contenu | Risque | Taille |
