@@ -3096,3 +3096,23 @@ test('liste des devoirs : diagnostique, facultative et notes ajustées sont sign
   assert.match(h, /⚖ 1 note ajustée/);          // z n'est pas dans la classe
   assert.equal(ev(`_evalListFlagsHTML({ notes: {} }, { eleves: [] })`), '');
 });
+
+// v2.149.0 — croix de saisie en cases pleines : couleur pâlie (jeu intense) ou avivée (jeu pastel).
+test('croix de saisie : pâlir un jeu intense, aviver un jeu pastel', () => {
+  ev(`S.evalPrefs = Object.assign({}, S.evalPrefs || {}, { nbLevels: 4, colorSet: 'classic', noteColorSet: 'levels' })`);
+  assert.equal(ev(`_crossPaletteIsPastel('levels')`), false);
+  const soft = get(`_crossColor('rgb(37, 99, 235)', 'levels')`);
+  assert.ok(_lumOf(soft.bg) > 0.4, 'une couleur intense est pâlie');
+  ev(`S.evalPrefs.colorSet = 'classic-pastel'`);
+  assert.equal(ev(`_crossPaletteIsPastel('levels')`), true);
+  const strong = get(`_crossColor('#a9c8ef', 'levels')`);
+  assert.ok(_lumOf(strong.bg) < 0.25, 'une couleur pastel est avivée');
+  // Encre choisie par contraste réel : au moins 4,5:1 sur la couleur obtenue.
+  for (const x of [soft, strong]) assert.ok(_contrast(x.bg, x.ink) >= 4.5, x.bg + ' / ' + x.ink);
+  assert.equal(ev(`_crossColor('transparent', 'levels')`), null);
+});
+function _lumOf(hex) {
+  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function _contrast(a, b) { b = b === '#fff' ? '#ffffff' : b; const x = _lumOf(a), y = _lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
