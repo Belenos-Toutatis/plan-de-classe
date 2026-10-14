@@ -127,10 +127,12 @@ il reste ~100 ms de mise en page pour 504 lignes.
 2. **CSS mort** `.ipovf-*` (~25 lignes, ancienne grille de « Pas assez de tablettes »,
    « conservées pour mémoire » depuis la v2.132.0) : **supprimé** (arbitrage de l'utilisateur).
    Seule la règle sombre de `#mipovf-grid-wrap`, toujours utilisé, est gardée.
-3. **Champs sans nom accessible restants** : ~50, surtout des champs générés (tableurs, cases
-   de couleur) ou des `<select>` cachés qui servent de support de valeur. Sans enjeu pour une
-   app qui n'est pas prévue pour le tout-clavier (arbitrage de l'utilisateur), mais un lecteur
-   d'écran les annoncerait sans nom.
+3. **Champs sans nom accessible restants** : le compte de ~50 incluait les `<select>` cachés
+   (support de valeur, hors de l'arbre d'accessibilité). Mesurés sur les champs VISIBLES de tous
+   les onglets, sous-états et ~130 fenêtres : **23 champs** (tris des devoirs, sons du sonomètre
+   et du minuteur, dates et créneaux des fenêtres d'évaluation et d'appel, heure de retard, nom
+   d'un instantané, discipline, longueur maximale d'une remarque, créneau par classe, colonnes
+   de l'import d'élèves, saisie générique). **Tous nommés en v2.146.1** ; balayage final : 0.
 4. **Vue d'ensemble** : ~100 ms de mise en page pour 504 lignes. Imperceptible à l'ouverture ;
    une pagination ou un rendu progressif ne se justifierait qu'au-delà de ~1 500 élèves.
 

@@ -119,6 +119,15 @@ sélecteur `.pl-seg` non stylé dans ⚙ Compétences. ⚠️ **`.pl-seg` n'est 
 (`#tab-plan`, `#tab-svue`, `#msettings`, `#mcompmgr`) : tout nouvel usage ailleurs doit ajouter le sien,
 sinon il s'affiche en boutons natifs gris.
 
+💡 **Champs de formulaire : tous ont un nom accessible** (v2.146.1). Un balayage des onglets, sous-états et ~130
+fenêtres ouvertes par leur vrai ouvreur ne trouve plus aucun `input`/`select`/`textarea` VISIBLE sans nom
+(`labels`, `aria-label`, `aria-labelledby`, `title` ou `placeholder`). Règle pour tout champ nouveau : une
+`<label for>` si le libellé est juste avant, sinon un `aria-label` — y compris dans les gabarits générés
+(créneau par classe : `aria-label="Créneau — ${classe}"`, colonnes de l'import). Les `<select>` cachés qui
+ne servent que de support de valeur (`cls-sel`, `tg-color-mode`, `ipm-pool`…) n'en ont pas besoin : un
+`display:none` les retire aussi de l'arbre d'accessibilité. `_uiPrompt` sans `label` donne son titre comme
+`aria-label` au champ.
+
 7. ⚠️ **Le panneau d'aperçu MASQUÉ fausse les tests d'interaction** : `document.hasFocus()` est faux,
    donc `focus()`/`blur()` programmés ne déclenchent pas `onblur` (la mini-calculatrice du tableur
    paraissait en panne) ; les captures d'écran arrivent avec un temps de retard ; les minuteurs sont
