@@ -109,6 +109,22 @@ menus « Distinguer par groupe », `colorMap` littéral + blanc figé → tokens
 l'encre est dérivée par `_contrastTextColor`). Après correction : **0 écart** dans les deux
 thèmes sur 11 onglets, 25 sous-états et les modales ouvertes par leur vrai ouvreur.
 
+Passe du **2026-10-14** (cf. `docs/audit-complet-2026-10-14.md`, corrigée en 2.146.0) : 3 écarts écran
+(compteurs des listes d'évacuation à 2,22:1 — `.lst-use` dans une `.clf-pill` cochée, la convention y est
+`.n` ; ligne **sélectionnée** de l'onglet Élèves à 4,34:1, et **sélection invisible en sombre** → token
+`--row-sel-bg` + liseré gauche), 3 à l'impression en mode nuit (cf. *Le thème sombre doit être
+neutralisé*), et 3 incohérences du thème sombre : `color-scheme: dark` manquait (calendriers, curseurs,
+défilement restaient clairs ; icône calendrier invisible), étiquettes « Civ »/« Grp » de la barre en lot,
+sélecteur `.pl-seg` non stylé dans ⚙ Compétences. ⚠️ **`.pl-seg` n'est stylé que par conteneur**
+(`#tab-plan`, `#tab-svue`, `#msettings`, `#mcompmgr`) : tout nouvel usage ailleurs doit ajouter le sien,
+sinon il s'affiche en boutons natifs gris.
+
+7. ⚠️ **Le panneau d'aperçu MASQUÉ fausse les tests d'interaction** : `document.hasFocus()` est faux,
+   donc `focus()`/`blur()` programmés ne déclenchent pas `onblur` (la mini-calculatrice du tableur
+   paraissait en panne) ; les captures d'écran arrivent avec un temps de retard ; les minuteurs sont
+   ralentis (découper les batteries longues, lire le résultat dans un second appel). Et un élément
+   retiré du DOM garde un `display` calculé : tester sa présence par `getElementById`.
+
 Score de référence après la passe du **2026-09-07** : **0 écart**, en clair comme en sombre, sur 25 écrans + 95 modales statiques + ~42 modales dynamiques + 4 tableurs. La passe précédente (2026-07-30) annonçait 13 / 9 sur 11 onglets sans données ; à périmètre et données réels, le point de départ du 2026-09-07 était de **~23 familles de défauts**, dont 8 sous 2:1 en thème sombre.
 
 ### Polices embarquées (base64 woff2, sous-set Latin)
@@ -137,6 +153,13 @@ Le filet rouge et les lignes Seyès sont **cachés à l'impression** via `@media
 **Le papier est toujours blanc — le thème sombre n'a donc rien à y faire.** Défaut mesuré le 2026-07-30 : `body { color: var(--ink-deep) }` valait `#e8d9b8` (ambre) en thème sombre, `#pa` en **héritait**, et le bloc `@media print` ne remettait la couleur à zéro nulle part (il ne forçait que `background:#fff`). Imprimer en mode nuit posait donc de l'ambre sur blanc à **1,40:1** sur tout le texte sans couleur explicite — noms d'élèves, cellules de tableau, titres. **244 écarts** relevés sur 4 chemins.
 
 Corrigé par un bloc **`@media print { html[data-theme="dark"] { … } }`** (juste après la définition du thème sombre) qui rétablit les valeurs du thème clair pour les **40 tokens** que le mode nuit redéfinit. Agir sur les tokens plutôt que sur des sélecteurs couvre d'un coup tout ce qui passe par `var(--…)`, y compris les règles qu'on n'aurait pas songé à énumérer. Les 7 tokens qui n'existent QUE dans le bloc sombre (`--cell-occupied*`, `--cell-drop-ok*`, `--warn-bg/-bd`) sont remis à `initial` : le custom property devient invalide, donc le repli `var(--x, littéral)` reprend la main — exactement le comportement du thème clair. **Si un token est ajouté au thème sombre, l'ajouter aussi à ce bloc.**
+
+⚠️ **Ce bloc n'atteint PAS les surcharges sombres écrites en LITTÉRAL** (`html[data-theme="dark"] .spec-ppre { color:#fff }`,
+`.eval-type-C { background:#3b5a8c }`) : le token redevient clair, le littéral reste — blanc sur l'orange PPRE
+redevenu clair à 2,85:1 dans la Vue d'ensemble et le Tableau de la classe imprimés en mode nuit (audit du
+2026-10-14). Des blocs `@media print` dédiés rétablissent les `.spec-*` et `.eval-type-*` du clair, et
+`color-scheme` y est remis à `light`. **Toute nouvelle surcharge sombre littérale sur une surface qui
+s'imprime (pages recopiées de l'écran par `_printConsultation`) doit avoir sa remise au clair.**
 
 #### Convention : les constructeurs d'impression écrivent des couleurs LITTÉRALES
 
@@ -186,7 +209,7 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - `outils/analyse-mbn.html` — outil annexe : deux favoris actifs (🔎 Analyser MBN, 👁 Observer MBN) qui décrivent la page de saisie des notes de MBN et observent une saisie, en rapport **anonymisé** (textes remplacés par leur forme, mots d'interface en clair, noms techniques contenant un mot affiché → Ⓧ). Sert à adapter le favori « Remplir MBN » si MBN change. ⚠️ Pas de commentaire `//` dans les fonctions converties en favori.
 - `outils/diagnostic-pdf.html` — outil annexe (non lié à l'app) : rapport anonymisé de la mise en page d'un PDF de thrombinoscope, cf. section *📷 Photos des élèves*.
 - `docs/format-import-evaluation.md` — format du fichier d'import d'une évaluation Type C ou D, à donner à une IA (copie exacte embarquée dans la page, cf. section *Import de la structure d'une évaluation*).
-- `docs/` — audits et notes de conception, **versionnés** : `audit-complet-2026-10-06.md` (audit multi-axes de la v2.78.1 : contraste écran et impression, a11y des modales, responsive, perf, code mort — ses conclusions sont corrigées en 2.79.0), `audit-ergonomie-2026-07-29.md` (catalogue Top 12 / six axes / lots A–F sur la v2.20.0 — l'essentiel réalisé depuis, projection et accessibilité clavier écartées ; restent ouverts : saisie de rentrée, couleurs de groupe en Vue Élève — le `thead` sticky de l'onglet Élèves est fait en v2.63.5), `audit-type-d-2026-08-02.md`, `audit-ergonomie-2026-10-03.md` (audit n° 2, architecture de l'information : où trouver / où régler / comment comprendre, sur la v2.68.0 — 15 priorités, plan d'action en lots A–G, rien de codé à sa rédaction), `screenshots/`. Toute note d'audit va là, pas dans un worktree.
+- `docs/` — audits et notes de conception, **versionnés** : `audit-complet-2026-10-14.md` (audit multi-axes de la v2.144.3 : contraste écran/impression dans les deux thèmes, cohérence du thème sombre, modales, responsive, perf à 522 élèves, statique — corrigé en 2.146.0), `audit-complet-2026-10-06.md` (audit multi-axes de la v2.78.1 : contraste écran et impression, a11y des modales, responsive, perf, code mort — ses conclusions sont corrigées en 2.79.0), `audit-ergonomie-2026-07-29.md` (catalogue Top 12 / six axes / lots A–F sur la v2.20.0 — l'essentiel réalisé depuis, projection et accessibilité clavier écartées ; restent ouverts : saisie de rentrée, couleurs de groupe en Vue Élève — le `thead` sticky de l'onglet Élèves est fait en v2.63.5), `audit-type-d-2026-08-02.md`, `audit-ergonomie-2026-10-03.md` (audit n° 2, architecture de l'information : où trouver / où régler / comment comprendre, sur la v2.68.0 — 15 priorités, plan d'action en lots A–G, rien de codé à sa rédaction), `screenshots/`. Toute note d'audit va là, pas dans un worktree.
 ⚠️ **Les fichiers de données ne sont PAS dans ce dossier** — ils vivent dans le dossier
 VOISIN `../Plan de classe json/` (88 fichiers au 2026-09-10). La distinction n'est pas
 cosmétique : c'est elle qui rend possible l'exclusion Nextcloud ci-dessous. Le code est
@@ -1240,6 +1263,7 @@ Le pendant **collectif** des rappels par élève : ce que le prof doit dire à *
 - **Pastille « Sans les ULIS / UPE2A hors inclusion »** (`_ovF.incl`, **active par défaut**, v2.117.0, demande de l'utilisateur) : pré-marqués absents à chaque appel, ces élèves occupaient le haut du classement des absences sans raison.
 - **Bouton « 📊 Vue d'ensemble » dans la barre de l'onglet Élèves** (groupe « Suivi », v2.117.0), sorti du menu ⋯ Plus. Valeurs au-delà du seuil en `--danger-fg`. **Clic sur une ligne = fiche** (hors boutons). En-tête collant.
 - Mode confidentiel : seuils indisponibles, tri classe puis nom (comme avant). Export CSV et impression lisent `_overviewRows()` (sous-titre = période).
+- **Perf (v2.146.0)** : absences / retards comptés par **`_attTallyForClass(classId, range)`**, un passage par classe (avant : `getStudentAttendanceStats` élève par élève, chaque appel reparcourant tous les appels — 200 ms à 522 élèves) ; `renderOverview` passe les lignes du bandeau au tableau (`_overviewRows({ base })`) au lieu de tout recompter.
 - Audit : 0 écart en clair et en sombre ; 363 px à 375.
 
 
@@ -3402,6 +3426,7 @@ Défini juste après la déclaration de `let drag` (~ligne 5430). État global `
 
 ## Conventions de développement
 - **Barre du Plan (Prof) en trois rangées (v2.97.0, maquette validée le 2026-10-07)** : ① contexte `.pl-row1` (`#tg-salle-row`) — 📍 Salle + « ＋ », 📱 Tablettes, et à droite le compteur `#tg-count` en **pastilles** `.tgc-pill` (les deux sites qui l'écrivent posent `parts.map(…tgc-pill…)`, plus `parts.join(' · ')`) ; ② actions `.pl-row2` — Séance : **🔄 Vue Élève** puis **🎲 Interroger** en tête (v2.97.1, demande de l'utilisateur), puis **🙋 Faire l'appel** en bouton principal (`btn-p`), 📅 Appels passés en icône, 📣 Message · Placement : menu **🪑 Placer ▾** (v2.97.3, choisi parmi six propositions : la chaise = la place de l'élève ; 🔀 reste dans le menu, devant « Mélanger tout » et « Placer les non placés ») (non placés, mélanger, retirer toutes les positions), ⛓ Contraintes, 🔖 Instantanés en icône, ↩ ↪ · à droite 🖨 ▾, et **⋯ pour les tablettes** (affecter / désaffecter, `.ff-tablettes`) ; (le ⋯ des tablettes et le sélecteur 📱 Tablettes de la rangée 1 ont été retirés en v2.100.4) ; ③ affichage `.pl-row3`, **toujours visible** — Tous/G1/G2/G3, tags, 📄 ⏱ 📷, 💡, puis à droite Couleur en sélecteur `#tg-color-seg` (le `<select id="tg-color-mode">` est gardé caché : `renderTeacherGrid` le synchronise et pose `.on` sur le bouton du mode) et le zoom. ⚠️ **Appel en cours** : le code pose un fond en ligne `#3b82f6` que le `!important` de `.btn-p` écrase ; l'état se voit par un anneau `--highlighter`, ciblé sur l'attribut **sérialisé** `[style*="59, 130, 246"]` (le navigateur réécrit `#3b82f6` en `rgb(59, 130, 246)` — un sélecteur sur la valeur hexadécimale ne matche jamais), avec `!important` (une règle de thème annule le `box-shadow` des boutons). Audit : 0 écart en clair et en sombre (menus ouverts, mode appel, 4 modes de couleur) ; pas de débordement à 375 ni à 768 px.
+  - **« 🔄 Vue Élève » / « 🔄 Vue prof » sont des boutons SECONDAIRES** (`btn-g`, v2.146.0) : avec `btn-p`, ils faisaient deux boutons principaux côte à côte avec « Faire l'appel », qui reste la seule action principale de la Séance.
   - ⚠️ **« 🔄 Vue Élève » (Plan) et « 🔄 Vue prof » (Vue Élève) sont au MÊME pixel**, suivis de 🎲 Interroger (v2.97.1) : on passe de l'un à l'autre sans bouger la souris. La Vue Élève reprend le même gabarit — rangée 1 `.pl-row1` (`min-height:40px` sur les deux, sinon la rangée du Plan, plus chargée, est 2 px plus haute), puis un groupe « Séance » qui commence par le bouton `.pl-vtoggle` (largeur minimale commune, les deux libellés n'ont pas la même longueur). Mesuré : (122, 145) dans les deux vues. ⚠️ Tout ajout AVANT ce bouton dans l'une des deux barres le décale : le faire dans les deux.
   - **Même menu 🖨 ▾ au même endroit** dans la Vue Élève (v2.97.2, à la place de « 🖨 Imprimer Vue Élève ») : copie du menu du Plan, à droite (`.pl-right`), avec « (Ctrl+P) » sur Plan Élève puisque c'est ce que Ctrl+P imprime là. Un **⋯ invisible** (`visibility:hidden`, classe `ff-tablettes` comme le vrai) tient la place du menu des tablettes du Plan, pour que 🖨 tombe au même pixel. ⚠️ Les deux menus sont des COPIES : une entrée d'impression ajoutée à l'un s'ajoute à l'autre.
   - **Largeur réduite (≤ 1280 px, écran en portrait)** (v2.98.1) : les mots secondaires sont dans des `<span class="pl-txt">` masqués (Message, Contraintes, Couleur, Salle, Tablettes) et les intitulés de groupe (`.tb-grp-lbl`) aussi ; l'icône et l'infobulle restent. Puces d'aménagement TOUJOURS courtes, comme dans l'onglet Élèves : **📄-A** (agrandissement) et **⏱+⅓** (tiers-temps) ; photos : **📷** / « 📷 Vign. » / « 📷 Trombi » (`_PLAN_PHOTO_LABELS`, infobulle par état `_PLAN_PHOTO_TIPS`). Mesuré à 1 080 px : rangées 2 et 3 sur une ligne ; la rangée 1 (compteur en pastilles) peut passer sur deux lignes, et alors « Vue Élève » / « Vue prof » ne sont plus au même pixel (sans effet dans la fenêtre de projection, qui n'a pas cette rangée).
