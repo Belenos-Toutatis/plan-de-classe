@@ -2842,6 +2842,14 @@ html[data-theme="dark"] .bilan-show-chip:hover { background: #3b5a8c !important;
 .rw-muted { color: var(--pencil); }
 .rw-badges { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
 .rw-head #fiche-photo { float: none; margin: 0; flex: 0 0 auto; }
+.rw-plans { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: flex-end; align-items: flex-end; font-size: .78em; color: var(--ink-deep); }
+.rw-plans .rw-plan { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 3px 4px; border-radius: var(--radius-sm, 3px); }
+.rw-plans .rw-plan + .rw-plan { border-left: 1px solid var(--rule-line); padding-left: 12px; }
+.rw-plans .rw-plan.fiche-click:hover { background: var(--paper-warm); }
+.rw-plans .mnp-lbl { color: var(--pencil); }
+.stbl th.el-nameh { cursor: default; }
+.stbl th.el-nameh > span { cursor: pointer; }
+.stbl th.el-nameh > span:hover { text-decoration: underline; }
 .rw-head #fiche-photo img, .rw-head .fiche-photo-add { width: 92px; height: 92px; }
 .rw-kv { border-collapse: collapse; width: 100%; font-size: .9em; }
 .rw-kv-k { text-align: left; padding: 3px 14px 3px 0; color: var(--pencil); font-weight: 600; white-space: nowrap; width: 1%; vertical-align: top; }
@@ -9784,11 +9792,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.150.1';
+const APP_VERSION    = '2.150.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-29T08:28:16Z';
+const APP_BUILD_DATE = '2026-10-29T09:57:23Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21930,7 +21938,7 @@ function getPos(sid, cls) {
 }
 
 // État onglet Élèves : tri + sélection
-let eleveSort = _loadPersistedSort('eleves', { col: 'nom', dir: 1 }); // 'nom' | 'pos' | 'oublis' | 'nt' | 'abs' | 'ret'
+let eleveSort = _loadPersistedSort('eleves', { col: 'nom', dir: 1 }); // 'nom' | 'prenom' | 'pos' | 'oublis' | 'nt' | 'abs' | 'ret'
 
 // Calcule pour un élève d'une classe ses cumuls absents/retards sur tous les appels enregistrés
 function getStudentAttendanceStats(classId, sid) {
@@ -22111,6 +22119,7 @@ function renderStudents() {
   const cmp = (a, b) => {
     const dir = eleveSort.dir;
     if (eleveSort.col === 'nom')    return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr', { sensitivity: 'base' }) * dir;
+    if (eleveSort.col === 'prenom') return ((a.prenom || '') + ' ' + (a.nom || '')).localeCompare((b.prenom || '') + ' ' + (b.nom || ''), 'fr', { sensitivity: 'base' }) * dir;
     if (eleveSort.col === 'pos')    return (_posOrder[a.id] - _posOrder[b.id]) * dir || a.nom.localeCompare(b.nom);
     if (eleveSort.col === 'oublis') return ((a.oublis||0) - (b.oublis||0)) * dir || a.nom.localeCompare(b.nom);
     if (eleveSort.col === 'nt')     return ((a.non_travail||0) - (b.non_travail||0)) * dir || a.nom.localeCompare(b.nom);
@@ -22265,7 +22274,7 @@ function renderStudents() {
   el.innerHTML = `
     <table class="stbl">
       <thead><tr>
-        <th onclick="sortEleves('nom')">Élève${arrow('nom')}</th>
+        <th class="el-nameh"><span onclick="sortEleves('nom')" title="Trier par nom de famille">Nom${arrow('nom')}</span> <span onclick="sortEleves('prenom')" title="Trier par prénom">Prénom${arrow('prenom')}</span></th>
         <th onclick="sortEleves('pos')" title="Tri par position dans la salle (non placés en fin de liste)">📍 Position${arrow('pos')} ${posHint}</th>
         <th>Grp</th>
         <th class="el-num" onclick="sortEleves('oublis')" title="Matériel oublié — cliquer pour trier">Oublis${arrow('oublis')}</th>
@@ -22299,7 +22308,7 @@ function sortEleves(col) {
   else {
     eleveSort.col = col;
     // nom et pos : ascendant par défaut ; compteurs (oublis/nt/abs/ret) : descendant par défaut
-    eleveSort.dir = (col === 'nom' || col === 'pos') ? 1 : -1;
+    eleveSort.dir = (col === 'nom' || col === 'prenom' || col === 'pos') ? 1 : -1;
   }
   _persistSort('eleves', eleveSort);
   renderStudents();
@@ -22329,6 +22338,7 @@ function renderStudentsFromSnapshot() {
   const cmp = (a, b) => {
     const dir = eleveSort.dir;
     if (eleveSort.col === 'nom')    return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr', { sensitivity: 'base' }) * dir;
+    if (eleveSort.col === 'prenom') return ((a.prenom || '') + ' ' + (a.nom || '')).localeCompare((b.prenom || '') + ' ' + (b.nom || ''), 'fr', { sensitivity: 'base' }) * dir;
     if (eleveSort.col === 'oublis') return ((a.oublis||0) - (b.oublis||0)) * dir || a.nom.localeCompare(b.nom);
     if (eleveSort.col === 'nt')     return ((a.non_travail||0) - (b.non_travail||0)) * dir || a.nom.localeCompare(b.nom);
     return 0;
@@ -22353,7 +22363,7 @@ function renderStudentsFromSnapshot() {
   el.innerHTML = `
     <table class="stbl">
       <thead><tr>
-        <th onclick="sortEleves('nom')">Élève${arrow('nom')}</th>
+        <th class="el-nameh"><span onclick="sortEleves('nom')" title="Trier par nom de famille">Nom${arrow('nom')}</span> <span onclick="sortEleves('prenom')" title="Trier par prénom">Prénom${arrow('prenom')}</span></th>
         <th>Grp</th>
         <th onclick="sortEleves('oublis')">📦 Matériel oublié${arrow('oublis')}</th>
         <th onclick="sortEleves('nt')">📝 Travail non fait${arrow('nt')}</th>
@@ -34135,6 +34145,7 @@ function printElevesList() {
   const cmp = (a, b) => {
     const dir = eleveSort.dir;
     if (eleveSort.col === 'nom')    return (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr', { sensitivity: 'base' }) * dir;
+    if (eleveSort.col === 'prenom') return ((a.prenom || '') + ' ' + (a.nom || '')).localeCompare((b.prenom || '') + ' ' + (b.nom || ''), 'fr', { sensitivity: 'base' }) * dir;
     if (eleveSort.col === 'oublis') return ((a.oublis||0) - (b.oublis||0)) * dir || a.nom.localeCompare(b.nom);
     if (eleveSort.col === 'nt')     return ((a.non_travail||0) - (b.non_travail||0)) * dir || a.nom.localeCompare(b.nom);
     return 0;
@@ -42535,6 +42546,9 @@ document.addEventListener('click', e => {
     // `offsetParent === null` couvre aussi le cas où la cible est dans une
     // modale fermée (display:none) — le target reste dans le DOM mais invisible.
     if (!target || !target.isConnected || target.offsetParent === null) return;
+    // Pastille « ? » cliquée : sa bulle d'aide est déjà ouverte, pas d'infobulle de survol en plus.
+    const hb = document.getElementById('help-bubble');
+    if (hb && hb._for === target && hb.style.display === 'block') return;
     const txt = target.getAttribute('data-tip');
     if (!txt) return;
     tip.textContent = txt;
@@ -42603,6 +42617,7 @@ document.addEventListener('click', e => {
     hide();
   });
   window.addEventListener('scroll', hide, true);
+  window._gtipHide = () => { clearTimeout(timer); hide(); };
 })();
 
 // ═══════════════ Bandeau de contexte des onglets (audit 2026-10-03, § 4) ═══════════════
@@ -42810,6 +42825,7 @@ function _helpBubble(target) {
   if (!b.textContent) return;
   b._for = target;
   b.style.display = 'block';
+  if (typeof window._gtipHide === 'function') window._gtipHide();   // l'infobulle de survol s'efface
   const r = target.getBoundingClientRect(), bw = b.offsetWidth, bh = b.offsetHeight;
   let left = Math.min(Math.max(8, r.left + r.width / 2 - bw / 2), innerWidth - bw - 8);
   let top = r.bottom + 6; if (top + bh > innerHeight - 8) top = Math.max(8, r.top - bh - 6);
@@ -57223,6 +57239,17 @@ function _fichePlaceHTML(s, cls) {
 }
 var _rwPlaceOpen = false; // bloc Place & matériel déplié (mémoire de session)
 
+// Fiche élève : un mini-plan par salle de la classe (salle affichée d'abord), à droite de
+// l'en-tête — comme la bulle photo. Clic = choisir sa place dans cette salle (_ficheSeatIn).
+function _ficheHeadPlans(cls, sid) {
+  const ids = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id]);
+  if (!ids.length) return '';
+  ids.sort((a, b) => (b === cls.activeRoom) - (a === cls.activeRoom));
+  const plans = ids.map(id => ({ id, m: _mnpBuild(null, cls, sid, 170, id) })).filter(x => x.m);
+  if (!plans.length) return '';
+  const click = !_isReadOnlyWin() && cls.id === S.cur;
+  return `<div class="rw-plans">${plans.map(({ id, m }) => `<div class="rw-plan${click ? ' fiche-click' : ''}"${click ? ` onclick="_ficheSeatIn('${_escJsAttr(id)}')" title="${_escAttr(m.label)} — clic pour choisir sa place dans cette salle"` : ` title="${_escAttr(m.label)}"`}>${m.html}<div class="mnp-lbl">${_esc(m.label)}</div></div>`).join('')}</div>`;
+}
 function renderRemarkWriter(focusText) {
   const body = document.getElementById('mrw-body');
   if (!_rw || !body) return;
@@ -57301,6 +57328,7 @@ function renderRemarkWriter(focusText) {
         <div class="rw-meta">${meta.join(' · ')}</div>
         <div class="rw-badges">${badges || ''}${edit('es-tags', tags || '<span class="rw-muted">🏷 aucun tag</span>', 'Modifier les tags')}</div>
       </div>
+      ${_ficheHeadPlans(cls, sid)}
     </div>`;
 
   // ── Résultats
