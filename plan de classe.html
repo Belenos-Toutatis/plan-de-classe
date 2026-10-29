@@ -7484,7 +7484,8 @@ body.topbar-free #topbar { position: static !important; }
         <div class="set-quick">
           <div class="set-q" data-k="theme sombre clair nuit apparence"><span>Thème</span><span class="pl-seg" id="set-theme-seg"><button type="button" data-v="light" onclick="_settingsSetTheme('light')">◐ Clair</button><button type="button" data-v="dark" onclick="_settingsSetTheme('dark')">☾ Sombre</button></span></div>
           <div class="set-q" data-k="impression couleurs noir blanc nb imprimer"><span title="Vaut pour toutes les impressions : plans, listes, fiche de prêt, bilans…">Impression</span><span class="pl-seg" id="set-print-seg"><button type="button" data-v="1" onclick="_settingsSetPrint(true)">🎨 Couleurs</button><button type="button" data-v="0" onclick="_settingsSetPrint(false)">N&amp;B</button></span></div>
-          <div class="set-q" id="set-printfmt" data-k="impression format grand plan a3 deux pages redemander" style="display:none"><span>Grands plans</span><span><span class="clf-note" id="set-printfmt-txt" style="margin:0"></span> <button type="button" class="btn btn-g btn-sm" onclick="_printFmtForget()">Redemander</button></span></div>
+          <div class="set-q" id="set-printfmt" data-k="impression format grand plan a3 deux pages redemander" style="display:none"><span>Grands plans <span class="tb-hint">Quand un plan ne tient pas sur une page, l'impression te demande comment l'imprimer : une page en paysage (plan réduit), deux pages en paysage, ou A3 portrait. Si tu as coché « Ne plus demander pour cette salle », ton choix est retenu sur cet ordinateur et affiché ici, salle par salle.
+Redemander : efface ces choix, la question reviendra à la prochaine impression.</span></span><span><span class="clf-note" id="set-printfmt-txt" style="margin:0"></span> <button type="button" class="btn btn-g btn-sm" onclick="_printFmtForget()" title="Efface les formats retenus : la question « une page, deux pages ou A3 » reviendra à la prochaine impression d'un grand plan">Redemander</button></span></div>
           <div class="set-q" data-k="nom plan grand taille lisible apparence"><span title="Taille du prénom dans les cases du Plan — réglage de cet ordinateur">Nom sur le Plan</span><span class="pl-seg" id="set-plan-name" role="group" aria-label="Taille du nom sur le Plan"><button type="button" data-v="normal" onclick="_setPlanNameSize('normal')">Normal</button><button type="button" data-v="grand" onclick="_setPlanNameSize('grand')">Grand</button></span></div>
           <div class="set-q" data-k="icone classe recomposee emoji apparence alambic panier" style="grid-column:1/-1"><span title="Icône qui signale les classes recomposées partout dans l'application — réglage de cet ordinateur">Icône des classes recomposées</span><span class="pl-seg" id="set-recomp-icon" role="group" aria-label="Icône des classes recomposées" style="flex-wrap:wrap"></span></div>
           <div class="set-q" data-k="synchronisation sync auto sauvegarde nextcloud"><span title="Écrit automatiquement le fichier plan-classe-auto.json dans ton dossier de sauvegarde">Synchronisation auto</span><button type="button" class="set-sw" id="set-sync-sw" role="switch" onclick="toggleAutoSync();setTimeout(_settingsRender,300)"></button></div>
@@ -9783,11 +9784,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.150.0';
+const APP_VERSION    = '2.150.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-29T08:03:54Z';
+const APP_BUILD_DATE = '2026-10-29T08:28:16Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -42573,9 +42574,22 @@ document.addEventListener('click', e => {
     tip.classList.remove('show');
     setTimeout(() => { if (!tip.classList.contains('show')) tip.style.display = 'none'; }, 200);
   }
+  // Les infobulles natives (attribut title) sont dessinées par le navigateur d'après le thème
+  // du SYSTÈME : avec un système en sombre et l'app en clair, texte blanc sur fond clair
+  // (signalé sous Linux). Au survol, le title passe dans data-tip et s'affiche dans cette
+  // bulle, lisible dans les deux thèmes. Un title reposé ensuite par le code reprend la main.
+  // Un champ ou un bouton-icône qui n'avait que son title pour nom le garde en aria-label.
   document.addEventListener('mouseover', e => {
-    const t = e.target?.closest?.('[data-tip]');
-    if (!t || t === current) return;
+    const t = e.target?.closest?.('[title],[data-tip]');
+    if (t && t.hasAttribute('title')) {
+      const tt = t.getAttribute('title');
+      t.removeAttribute('title');
+      if (tt) {
+        t.setAttribute('data-tip', tt);
+        if (!t.hasAttribute('aria-label') && !t.hasAttribute('aria-labelledby') && t.textContent.trim().length <= 2) t.setAttribute('aria-label', tt);
+      }
+    }
+    if (!t || t === current || !t.hasAttribute('data-tip')) return;
     current = t;
     clearTimeout(timer);
     timer = setTimeout(() => show(t), 500);
