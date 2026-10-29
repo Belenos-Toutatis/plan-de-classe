@@ -710,6 +710,18 @@ body.proj-mode .proj-only{display:inline-flex !important}
 body.proj-mode #topbar, body.proj-mode #nav, body.proj-mode #conf-banner, body.proj-mode .proj-hide,
 body.proj-mode #app-version-tag, body.proj-mode #noise-widget, body.proj-mode #timer-widget{display:none !important}
 body.proj-mode::before{display:none}
+/* Fiche élève détachée (?fiche=1) : la fenêtre ne montre que la fiche, en pleine page */
+.fw-only{display:none !important}
+body.fiche-win .fw-only{display:inline-flex !important}
+body.fiche-win .fw-hide{display:none !important}
+body.fiche-win #topbar, body.fiche-win #nav, body.fiche-win #conf-banner, body.fiche-win .tab, body.fiche-win #main,
+body.fiche-win #app-version-tag, body.fiche-win #noise-widget, body.fiche-win #timer-widget{display:none !important}
+body.fiche-win::before{display:none}
+body.fiche-win #mrw.on{position:static;background:none;padding:0;display:block}
+body.fiche-win #mrw-mb{max-width:none;width:100%;max-height:none;height:100vh;border-radius:0;box-shadow:none}
+body.fiche-win #fiche-photo .fiche-photo-acts, body.fiche-win #fiche-photo .fiche-photo-add{display:none !important}
+body.fiche-win #mrw-body textarea[readonly]{cursor:pointer;background:var(--paper-warm) !important}
+.fw-orphan{margin:40px auto;max-width:520px;padding:18px;border:1px dashed var(--rule-line);border-radius:8px;background:var(--paper-warm);color:var(--ink-deep);text-align:center}
 /* Barre du Plan en largeur réduite (portrait) : libellés secondaires retirés, l'icône reste (v2.98.1) */
 @media (max-width: 1280px){ #tab-plan .pl-txt, #tab-svue .pl-txt, #tab-qcmcam .pl-txt, #tab-eleves .pl-txt{display:none} #tab-plan .tb-grp-lbl, #tab-svue .tb-grp-lbl{display:none} }
 #tab-plan .pl-vtoggle,#tab-svue .pl-vtoggle{min-width:7.6em;justify-content:center;text-align:center}
@@ -5538,7 +5550,10 @@ body.topbar-free #topbar { position: static !important; }
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <h2 style="margin:0;font-size:1.15em">🪪 Fiche élève</h2>
       <button class="btn btn-g btn-sm" onclick="printFiche()" title="Imprimer la fiche telle qu'affichée (portrait) — pour un rendez-vous avec les parents" style="margin-left:auto">🖨 Imprimer</button>
-      <button class="btn btn-g btn-sm" onclick="_rwToggleFs()" title="Plein écran / fenêtre" aria-label="Plein écran ou fenêtre" style="padding:4px 7px">⛶</button>
+      <button class="btn btn-g btn-sm fw-only" id="fw-pin" onclick="_ficheWinTogglePin()" title="La fiche suit l'élève que tu sélectionnes dans la fenêtre principale — clic pour la figer sur cet élève">🔗 Suit la sélection</button>
+      <button class="btn btn-g btn-sm fw-only" onclick="_ficheWinForward('', '')" title="Ouvrir cette fiche dans la fenêtre principale pour y écrire (remarque, mini bilan, mentions…)">✏️ Écrire dans la fenêtre principale</button>
+      <button class="btn btn-g btn-sm fw-hide" onclick="_rwToggleFs()" title="Plein écran / fenêtre" aria-label="Plein écran ou fenêtre" style="padding:4px 7px">⛶</button>
+      <button class="btn btn-g btn-sm fw-hide" onclick="_rwDetach()" title="Détacher la fiche dans une fenêtre à part (à glisser sur un autre écran) : tu continues à parcourir le logiciel, et elle suit l'élève que tu sélectionnes" aria-label="Détacher la fiche dans une fenêtre" style="padding:4px 7px">🗗</button>
       <button class="btn btn-g btn-sm" onclick="closeMod2('mrw')" aria-label="Fermer" style="padding:4px 8px">✕</button>
     </div>
     <div id="mrw-nav" class="rw-nav"></div>
@@ -9768,11 +9783,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.149.1';
+const APP_VERSION    = '2.150.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-14T23:50:46Z';
+const APP_BUILD_DATE = '2026-10-29T08:03:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12449,8 +12464,9 @@ function _clockCompare(a, b) {
 
 function save() {
   // Fenêtre de projection (Vue Élève, ?projection=1) : lecture seule, elle ne doit JAMAIS
-  // écrire — elle écraserait les modifications faites dans la fenêtre prof.
-  if (_isProj()) return;
+  // écrire — elle écraserait les modifications faites dans la fenêtre prof. Idem pour la
+  // fiche détachée (?fiche=1).
+  if (_isReadOnlyWin()) return;
   try {
     // Horodatage interne de la version des données : voyage DANS le JSON (localStorage,
     // sync auto, backups). Permet, à l'ouverture sur une autre machine, de détecter qu'un
@@ -13306,6 +13322,7 @@ try {
   if (v && v.on) _conf = { on: true, sid: typeof v.sid === 'string' ? v.sid : null };
 } catch (e) {}
 function _confSave() {
+  if (_isReadOnlyWin()) return;   // fiche détachée : elle suit le mode de la fenêtre principale
   try { localStorage.setItem(CONF_LS_KEY, JSON.stringify(_conf)); } catch (e) {}
 }
 // true si les informations de cet élève doivent être masquées.
@@ -13345,14 +13362,25 @@ function _confReveal(sid) {
   _conf.sid = sid || null;
   _confSave();
   _confRefresh();
+  if (sid) _ficheWinPush({ sid });   // la fiche détachée suit l'élève affiché
 }
 function toggleConfMode() {
   _conf.on = !_conf.on;
-  _conf.sid = null;
+  // À l'activation, l'élève affiché est celui dont on s'occupe : fiche ouverte, sinon le
+  // rendez-vous sélectionné dans « Ce soir » de la réunion parents-professeurs.
+  _conf.sid = _conf.on ? _confCurrentFocusSid() : null;
   _confSave();
   _confRefresh();
   toast(_conf.on ? '🔒 Mode confidentiel activé — clique sur un nom pour afficher ses informations'
                  : '🔓 Mode confidentiel désactivé');
+}
+function _confCurrentFocusSid() {
+  if (_rw?.sid && document.getElementById('mrw')?.classList.contains('on')) return _rw.sid;
+  if (document.getElementById('tab-reunions')?.classList.contains('on') && _reu?.view === 'soir') {
+    const r = _reuGet(_reu.id), sid = r?.slots?.[_reu.cur]?.sid;
+    if (sid && S.eleves[sid]) return sid;
+  }
+  return null;
 }
 function _confUpdateStyle() {
   let st = document.getElementById('conf-dyn-style');
@@ -17194,7 +17222,7 @@ function showTab(name, btn) {
   const tab = document.getElementById('tab-' + name);
   if (tab) tab.classList.add('on');
   if (btn) btn.classList.add('on');
-  if (!_isProj()) localStorage.setItem('planClasse_tab', name);
+  if (!_isReadOnlyWin()) localStorage.setItem('planClasse_tab', name);
   if (name === 'config') _cfgSyncedCls = null;
   renderTab(name);
   _confRenderBanner();
@@ -17236,6 +17264,9 @@ function _setRecompIcon(v) {
   _settingsRender();
 }
 function _isProj() { try { return /[?&]projection=1(&|$)/.test(location.search); } catch (e) { return false; } }
+function _isFicheWin() { try { return /[?&]fiche=1(&|$)/.test(location.search); } catch (e) { return false; } }
+// Fenêtres secondaires (Vue Élève projetée, fiche détachée) : lecture seule, elles n'écrivent jamais.
+function _isReadOnlyWin() { return _isProj() || _isFicheWin(); }
 var _projWin = null;
 function openStudentWindow() {
   if (_projWin && !_projWin.closed) { try { _projWin.focus(); } catch (e) {} return; }
@@ -17452,6 +17483,7 @@ function _defaultSchoolYear() {
 }
 function closeMod(overlay, e) {
   if (e.target === overlay) {
+    if (overlay.id === 'mrw' && _isFicheWin()) return;   // fiche détachée : pas de fond à cliquer
     if (overlay.id === 'mrendu' && document.body.classList.contains('rendu-projecting')) _renduExitProject();
     overlay.classList.remove('on');
     overlay.style.zIndex = '';  // reset le bump éventuel (stack modal)
@@ -17460,6 +17492,7 @@ function closeMod(overlay, e) {
   }
 }
 function closeMod2(id) {
+  if (id === 'mrw' && _isFicheWin()) { try { window.close(); } catch (e) {} return; }
   if (id === 'mrendu' && document.body.classList.contains('rendu-projecting')) _renduExitProject();
   const el = document.getElementById(id);
   if (el) { el.classList.remove('on'); el.style.zIndex = ''; _modalTeardownA11y(el); }
@@ -17854,7 +17887,8 @@ function deleteClass(id) {
   });
 }
 
-function switchClass(id) {
+// opts.noRender : ne pas redessiner l'onglet affiché (l'appelant s'en charge, ou n'en a pas besoin).
+function switchClass(id, opts) {
   if (!id || !S.classes[id]) return;
   // Si on consulte un snapshot et qu'on change de classe : on quitte la consultation
   if (_viewingSnapshot && _viewingSnapshot.classId !== id) _viewingSnapshot = null;
@@ -17899,7 +17933,7 @@ function switchClass(id) {
   save();
   // Re-render active tab
   const at = document.querySelector('.tab.on');
-  if (at) renderTab(at.id.replace('tab-',''));
+  if (at && !opts?.noRender) renderTab(at.id.replace('tab-',''));
   _confRenderBanner();
 }
 
@@ -29210,10 +29244,10 @@ function renderReunions() {
   _navBadgeRender();
 }
 function _reuOpen(id, view) {
-  _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.parent = false; _reu.f = 'all'; _reu.none = false; _reu.inv = false; _reu.q = '';
+  _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.focused = null; _reu.parent = false; _reu.f = 'all'; _reu.none = false; _reu.inv = false; _reu.q = '';
   renderReunions();
 }
-function _reuSetView(v) { _reu.view = v; _reu.edit = null; if (v !== 'soir') _reu.parent = false; renderReunions(); }
+function _reuSetView(v) { _reu.view = v; _reu.edit = null; _reu.focused = null; if (v !== 'soir') _reu.parent = false; renderReunions(); }
 
 function _reuListHTML() {
   const all = _reuList(), today = todayKey();
@@ -29463,6 +29497,7 @@ function _reuOpenSheet(sid, reuId) {
   const r = _reuGet(reuId || _reu.id); if (!r || !S.eleves?.[sid]) return;
   const list = [..._reuBooked(r).keys()].filter(x => S.eleves[x]);
   if (!list.includes(sid)) list.push(sid);
+  _reuFocusStudent(r, sid, { noPush: true });   // classe et élève affiché ; la fiche enverra son état à la fiche détachée
   openStudentSheet(sid, { classId: _reuClsOf(r, sid), list, reuId: r.id,
     onClose: () => { if (document.getElementById('tab-reunions')?.classList.contains('on')) renderReunions(); } });
 }
@@ -29585,6 +29620,20 @@ function _reuNav(d) {
   const n = times[i + d];
   if (n) { _reu.cur = n; renderReunions(); }
 }
+// Un élève est sélectionné dans la réunion (rendez-vous de « Ce soir », fiche ouverte ou
+// parcourue depuis la réunion) : le reste du logiciel se place sur lui — sa classe devient
+// la classe affichée, il devient l'élève affiché du mode confidentiel, et la fiche détachée
+// (🗗) passe sur lui. Sans redessiner l'onglet Réunions (l'appelant l'a fait ou va le faire).
+function _reuFocusStudent(r, sid, opts) {
+  if (_isReadOnlyWin() || !r || !sid || !S.eleves[sid]) return;
+  const cid = _reuClsOf(r, sid);
+  if (cid && cid !== S.cur && S.classes[cid]) switchClass(cid, { noRender: true });
+  if (_conf.on && _conf.sid !== sid) { _conf.sid = sid; _confSave(); _confRefresh(); }
+  if (!opts?.noPush) {
+    const list = _reuTimes(r).map(t => r.slots?.[t]?.sid).filter((x, i, a) => x && S.eleves[x] && a.indexOf(x) === i);
+    _ficheWinPush({ sid, classId: cid || undefined, list, reuId: r.id });
+  }
+}
 function _reuToggleParent() { _reu.parent = !_reu.parent; renderReunions(); }
 function _reuSoirHTML(r) {
   const times = _reuTimes(r);
@@ -29703,6 +29752,11 @@ function _reuDetailHTML(r, t) {
     </div>`;
 }
 function _reuSoirAfter(r) {
+  // Rendez-vous sélectionné (clic, ◀ ▶, ou celui choisi d'office à l'ouverture) : seulement
+  // quand il CHANGE, pour ne pas reprendre la main si l'on change ensuite de classe à côté.
+  const curSid = r.slots?.[_reu.cur]?.sid;
+  const fk = r.id + '|' + _reu.cur + '|' + curSid;
+  if (curSid && _reu.focused !== fk) { _reu.focused = fk; _reuFocusStudent(r, curSid); }
   const times = _reuTimes(r);
   times.forEach((t, i) => {
     const s = r.slots?.[t];
@@ -31639,7 +31693,7 @@ function _absencesAutoReset() {
 const _ATT_TRANSIENT_KEY = 'planClasse_attTransient';
 
 function _saveAttTransient() {
-  if (_isProj()) return;   // fenêtre de projection : lecture seule
+  if (_isReadOnlyWin()) return;   // fenêtre de projection ou fiche détachée : lecture seule
   try {
     const data = {
       absentDate: _absentDate,
@@ -35539,6 +35593,8 @@ function _photosChanged() {
   if (document.getElementById('tab-plan')?.classList.contains('on') && typeof renderTeacherGrid === 'function') renderTeacherGrid();
 }
 async function _photoUrl(sid) {
+  // Fiche détachée : pas de dossier ici, la fenêtre principale fournit l'URL (blob: même origine).
+  if (_isFicheWin()) { try { return await window.opener._photoUrl(sid); } catch (e) { return null; } }
   if (!_photos.sids.has(sid)) return null;
   if (_photos.urls.has(sid)) return _photos.urls.get(sid);
   const d = await _photosDir(false, false);
@@ -42275,6 +42331,7 @@ function init() {
   _applyPlanNameSize();
   _applyRecompIcon();
   if (_isProj()) { _projInit(); return; }
+  if (_isFicheWin()) { _ficheWinInit(); return; }
 
   // Restaurer l'onglet actif (svue n'a plus de bouton de nav, on retombe sur 'plan')
   let savedTab = localStorage.getItem('planClasse_tab') || 'classes';
@@ -56817,6 +56874,7 @@ function _rwSyncReuClass() {
   if (!_rw?.reuId) return;
   const r = _reuGet(_rw.reuId), c = r ? _reuClsOf(r, _rw.sid) : null;
   if (c && c !== _rw.classId) { _rw.classId = c; _rw.did = _currentDiscipline(c); }
+  if (r) _reuFocusStudent(r, _rw.sid, { noPush: true });   // la fiche elle-même renverra son état
 }
 function _rwOpen(focusText) {
   _modalReturnTo['mrw'] = _rw.hook;
@@ -56894,6 +56952,170 @@ function _rwToggleFs() {
   const fs = mb.classList.toggle('rw-fs');
   try { localStorage.setItem('planClasse_rwFs', fs ? '1' : '0'); } catch (e) {}
 }
+
+// ── 🗗 Fiche détachée (?fiche=1) ─────────────────────────────────────────────
+// Une seconde instance de l'app, en LECTURE SEULE comme la Vue Élève projetée (save()
+// n'y écrit rien) : elle relit S à chaque enregistrement de la fenêtre principale
+// (événement storage) et SUIT l'élève qu'on sélectionne ici — fiche ouverte, rendez-vous
+// de la réunion, élève affiché du mode confidentiel — sauf si on l'a figée (📌).
+// Tout ce qui écrit (remarque, mini bilan, mentions, ✏️…) est renvoyé à la fenêtre
+// principale : la fiche s'y ouvre et l'action s'y joue.
+var _ficheWin = null;          // fenêtre principale : la fenêtre détachée
+var _ficheDetachLast = null;   // fenêtre principale : dernier état envoyé (relu par la fenêtre détachée à son chargement)
+function _ficheWinAlive() { try { return !!(_ficheWin && !_ficheWin.closed); } catch (e) { return false; } }
+function _rwStateOf(rw) {
+  return rw ? { sid: rw.sid, classId: rw.classId, periode: rw.periode, did: rw.did, list: (rw.list || []).slice(), reuId: rw.reuId || null } : null;
+}
+function _rwDetach() {
+  if (!_rw || _isReadOnlyWin()) return;
+  _ficheDetachLast = _rwStateOf(_rw);
+  if (_ficheWinAlive()) {
+    _ficheWinPush(_ficheDetachLast, true);
+    try { _ficheWin.focus(); } catch (e) {}
+    closeMod2('mrw');
+    return;
+  }
+  let w = null;
+  try { w = window.open(location.pathname + '?fiche=1', 'planClasse_fiche', 'popup,width=1000,height=900'); } catch (e) {}
+  if (!w) { toast('⚠️ Le navigateur a bloqué la fenêtre. Autorise les fenêtres pour ce site, puis recommence.', 'warn'); return; }
+  _ficheWin = w;
+  closeMod2('mrw');
+  toast('🗗 Fiche détachée — glisse-la sur un autre écran. Elle suit l\'élève que tu sélectionnes ici (📌 pour la figer).');
+}
+// Fenêtre principale → fenêtre détachée. st.periode / st.list / st.classId peuvent manquer :
+// la fenêtre détachée garde alors les siens. force : même figée (nouveau détachement).
+function _ficheWinPush(st, force) {
+  if (_isReadOnlyWin() || !st || !st.sid) return;
+  if (force || !_ficheDetachLast) _ficheDetachLast = Object.assign({}, st);
+  if (!_ficheWinAlive()) return;
+  _ficheDetachLast = Object.assign({}, _ficheDetachLast, st);
+  try { if (typeof _ficheWin._ficheWinShow === 'function') _ficheWin._ficheWinShow(JSON.stringify(st), !!force); } catch (e) {}
+}
+function _ficheWinInitState() { return JSON.stringify(_ficheDetachLast || null); }
+function _photoSidList() { return [..._photos.sids]; }
+// Fenêtre détachée → fenêtre principale : ouvre la fiche ici dans le même état, puis y joue
+// l'action cliquée là-bas (code de son onclick, compilé par le navigateur dans CETTE page)
+// ou y place le curseur (focusId).
+function _ficheFromDetached(json, code, focusId) {
+  let st = null; try { st = JSON.parse(json); } catch (e) { return; }
+  if (!st || !S.eleves[st.sid]) return;
+  const open = document.getElementById('mrw')?.classList.contains('on');
+  if (!(open && _rw && _rw.sid === st.sid)) {
+    if (open) { delete _modalReturnTo['mrw']; closeMod2('mrw'); _rw = null; }
+    const reuId = st.reuId || null;
+    openStudentSheet(st.sid, { classId: st.classId, periode: st.periode, did: st.did, list: st.list, reuId,
+      onClose: reuId ? () => { if (document.getElementById('tab-reunions')?.classList.contains('on')) renderReunions(); } : null });
+  } else if (st.periode !== _rw.periode) _rwSetPeriode(st.periode);
+  if (code) {
+    const host = document.getElementById('mrw-body');
+    if (host) { const tmp = document.createElement('span'); tmp.hidden = true; tmp.setAttribute('onclick', code); host.appendChild(tmp); try { tmp.click(); } finally { tmp.remove(); } }
+  }
+  if (focusId) setTimeout(() => { const el = document.getElementById(focusId); if (el) { el.focus(); try { const l = el.value.length; el.setSelectionRange(l, l); } catch (_) {} } }, 80);
+  try { window.focus(); } catch (e) {}
+}
+// ── Côté fenêtre détachée
+var _ficheWinPinned = false;
+function _ficheWinCurState() { return _rwStateOf(_rw); }
+function _ficheWinInit() {
+  document.body.classList.add('fiche-win');
+  document.title = '🪪 Fiche élève — Plan de Classe';
+  // init() tourne avant la fin du script : la fiche se construit une fois tout déclaré.
+  setTimeout(_ficheWinStart, 0);
+}
+function _ficheWinStart() {
+  const o = window.opener;
+  let st = null;
+  try { st = JSON.parse(o._ficheWinInitState()); } catch (e) {}
+  _ficheWinPhotoSync();
+  if (!st || !S.eleves[st.sid]) {
+    document.body.insertAdjacentHTML('beforeend', '<div class="fw-orphan">Cette fenêtre s\'ouvre depuis une fiche élève (bouton 🗗). Tu peux la fermer.</div>');
+    return;
+  }
+  _ficheWinShow(JSON.stringify(st), true);
+  window.addEventListener('storage', e => {
+    if (e.key === LS_KEY && e.newValue) {
+      try { S = JSON.parse(e.newValue); postLoadHook(); } catch (err) { return; }
+      _ficheWinRerender();
+    } else if (e.key === CONF_LS_KEY) {
+      try { const v = JSON.parse(e.newValue || 'null'); _conf = (v && v.on) ? { on: true, sid: typeof v.sid === 'string' ? v.sid : null } : { on: false, sid: null }; } catch (err) {}
+      _confUpdateStyle(); _ficheWinRerender();
+    }
+  });
+  // Ce qui écrit est renvoyé à la fenêtre principale ; la navigation reste ici.
+  document.addEventListener('click', e => {
+    const body = document.getElementById('mrw-body');
+    if (!body || !body.contains(e.target)) return;
+    const fld = e.target.closest('textarea, input:not([type="checkbox"]):not([type="radio"])');
+    const el = e.target.closest('[onclick]');
+    const code = el && body.contains(el) ? el.getAttribute('onclick') || '' : '';
+    if (!fld && (!code || _FW_ALLOW.test(code))) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    _ficheWinForward(fld ? '' : code, fld ? fld.id : '');
+  }, true);
+  // La fenêtre principale se ferme (ou se recharge) : la fiche n'a plus de source.
+  setInterval(() => { try { if (!window.opener || window.opener.closed) window.close(); } catch (e) {} }, 2000);
+}
+// Actions de consultation, jouées dans la fenêtre détachée elle-même.
+const _FW_ALLOW = /^\s*(_rwGo|_rwPick|_rwSetPeriode|_rwNextEmpty|_rwShowVieTip|_rwShowTip|_rwHideTip|printFiche)\(/;
+function _ficheWinPhotoSync() {
+  try { _photos.sids = new Set(window.opener._photoSidList()); _photos.ready = true; } catch (e) {}
+}
+function _ficheWinShow(json, force) {
+  let st = null; try { st = JSON.parse(json); } catch (e) { return; }
+  if (!st || !S.eleves[st.sid]) return;
+  if (_ficheWinPinned && !force) return;
+  const cur = _rw;
+  if (cur && !force && cur.sid === st.sid && (st.periode === undefined || st.periode === cur.periode)
+      && (st.reuId === undefined || (st.reuId || null) === cur.reuId)) return;
+  _ficheWinPhotoSync();
+  // Champs absents : on garde ceux de la fiche affichée (ex. élève révélé en mode confidentiel).
+  const keepList = !st.list && cur && cur.list.includes(st.sid);
+  openStudentSheet(st.sid, {
+    classId: st.classId || (keepList ? cur.classId : undefined),
+    periode: st.periode !== undefined ? st.periode : cur?.periode,
+    did: st.did || (keepList ? cur.did : undefined),
+    list: st.list || (keepList ? cur.list : undefined),
+    reuId: st.reuId !== undefined ? st.reuId : (keepList ? cur.reuId : null),
+  });
+  if (keepList || st.reuId) _rwSyncReuClass();
+}
+function _ficheWinRerender() {
+  if (!_rw) return;
+  if (!S.eleves[_rw.sid]) { _rw = null; document.getElementById('mrw-body').innerHTML = '<p class="rw-hint">Cet élève n\'existe plus.</p>'; return; }
+  const sc = document.getElementById('mrw-body'), y = sc ? sc.scrollTop : 0;
+  renderRemarkWriter();
+  if (sc) sc.scrollTop = y;
+}
+function _ficheWinAfterRender() {
+  document.querySelectorAll('#mrw-body textarea, #mrw-body input:not([type="checkbox"]):not([type="radio"])').forEach(t => {
+    t.readOnly = true;
+    t.title = 'Consultation — clique pour écrire dans la fenêtre principale';
+  });
+  const b = document.getElementById('fw-pin');
+  if (b) {
+    b.textContent = _ficheWinPinned ? '📌 Figée' : '🔗 Suit la sélection';
+    b.classList.toggle('btn-p', _ficheWinPinned); b.classList.toggle('btn-g', !_ficheWinPinned);
+    b.title = _ficheWinPinned ? 'La fiche reste sur cet élève — clic pour qu\'elle suive de nouveau l\'élève sélectionné dans la fenêtre principale'
+      : 'La fiche suit l\'élève que tu sélectionnes dans la fenêtre principale — clic pour la figer sur cet élève';
+  }
+  const nm = _rw && S.eleves[_rw.sid];
+  if (nm) document.title = `🪪 ${nm.prenom} ${nm.nom} — Fiche élève`;
+}
+function _ficheWinTogglePin() {
+  _ficheWinPinned = !_ficheWinPinned;
+  if (!_ficheWinPinned) { try { _ficheWinShow(window.opener._ficheWinInitState()); } catch (e) {} }
+  _ficheWinAfterRender();
+}
+function _ficheWinForward(code, focusId) {
+  const o = window.opener;
+  let ok = false;
+  try { ok = !!(o && !o.closed && typeof o._ficheFromDetached === 'function'); } catch (e) {}
+  if (!ok || !_rw) { toast('⚠️ Fenêtre principale introuvable — rouvre la fiche depuis le logiciel.', 'warn'); return; }
+  try { o._ficheFromDetached(JSON.stringify(_ficheWinCurState()), code || '', focusId || ''); } catch (e) { return; }
+  toast('✏️ Fiche ouverte dans la fenêtre principale — c\'est là qu\'on écrit.');
+}
+// Fenêtre principale : fermer la fiche détachée avec elle (sinon elle resterait figée, sans source).
+window.addEventListener('beforeunload', () => { try { if (_ficheWinAlive()) _ficheWin.close(); } catch (e) {} });
 function _rwOnInput(ta) {
   if (!_rw) return;
   const per = ta.getAttribute('data-per');
@@ -57216,6 +57438,8 @@ function renderRemarkWriter(focusText) {
   </div>`;
   for (const p of perCodes) { const t = document.getElementById('mrw-rem-' + p); if (t) _rwCounter(p, t.value.length); }
   if (typeof _fichePhotoFill === 'function') _fichePhotoFill(sid);
+  if (_isFicheWin()) { _ficheWinAfterRender(); return; }
+  _ficheWinPush({ sid, classId: _rw.classId, periode, did, list: _rw.list, reuId: _rw.reuId });
   // Ouverte depuis une réunion : le curseur va dans le mini bilan.
   if (_rw.reuId && !focusText) { const ta = document.getElementById('rw-reu-ta'); if (ta && document.activeElement?.tagName !== 'TEXTAREA') { ta.focus({ preventScroll: true }); ta.selectionStart = ta.selectionEnd = ta.value.length; } }
   if (focusText && evalOn) setTimeout(() => {
