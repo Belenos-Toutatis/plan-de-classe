@@ -671,6 +671,10 @@ html[data-theme="dark"] .memo-choice.good{background:#16301f;border-color:#3f8f5
 .cl-recap summary::before{content:"▸";color:var(--pencil)}
 .cl-recap[open] summary::before{content:"▾"}
 .cl-recap-tot{margin-left:auto;font-size:.85em;color:var(--pencil);font-family:var(--font-mono)}
+.cl-rp-pick{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin-top:8px;font-size:.85em}
+.cl-rp-pick-lbl{color:var(--pencil);font-family:var(--font-mono);font-size:.9em;text-transform:uppercase;letter-spacing:.04em}
+.cl-rp-pick-lv{display:inline-flex;flex-wrap:wrap;gap:2px 10px;padding-left:10px;border-left:1px solid var(--rule-line)}
+.cl-rp-pick label{display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
 /* Barre du Plan (v2.97.0) */
 #tab-plan .pl-row1,#tab-svue .pl-row1{min-height:40px;background:var(--paper-warm);border-bottom:1px solid var(--rule-line);align-items:center}
 #tab-plan .pl-lbl,#tab-svue .pl-lbl{font-size:.82em;color:var(--pencil);align-self:center;white-space:nowrap}
@@ -9792,11 +9796,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.150.2';
+const APP_VERSION    = '2.151.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-10-29T09:57:23Z';
+const APP_BUILD_DATE = '2026-11-01T21:57:19Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -18191,6 +18195,17 @@ function virtualClasses() { return sortedClasses().filter(c => c.virtual); }
 // diluer), délégués / disciplines en infobulle, menu ⋯, récap photocopies replié,
 // clic sur une carte = choisir la classe ET ouvrir l'onglet Élèves.
 var _clsRecapOpen = false;
+// Classes comptées dans le récap photocopies (écran et « 🖨 Effectifs ») : toutes par défaut ;
+// `cls.noPhotocopies` écarte une classe qu'on n'a qu'exceptionnellement (remplacement ponctuel…).
+function _clsInPhotocopies(cls) { return !cls.noPhotocopies; }
+function _clsSetPhotocopies(id, on) {
+  const cls = S.classes[id];
+  if (!cls || _clsInPhotocopies(cls) === !!on) return;
+  pushUndo();
+  if (on) delete cls.noPhotocopies; else cls.noPhotocopies = true;
+  save();
+  renderClasses();
+}
 function _clsOpenEleves(id) { switchClass(id); showTab('eleves'); }
 function _clsUnplaced(cls) {
   const placed = new Set(Object.values(cls.seating || {}));
@@ -18212,6 +18227,7 @@ function renderClasses() {
   const levelCount = {};
   const byLevel = {}; // order -> agrégats du récap photocopies + cartes
   let totPresent = 0, totAm = 0, totTotal = 0, totUlisOut = 0, totUpe2aOut = 0, totM = 0, totF = 0, totCivUnk = 0, totAgr = 0, totDocStd = 0, totTT = 0, totMsg = 0, totUnpl = 0;
+  let rpPresent = 0, rpAm = 0, rpTotal = 0, rpAgr = 0;   // totaux du récap photocopies (classes comptées)
   const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
 
   const _card = (cls, c, bg, accent, virtual) => {
@@ -18252,7 +18268,8 @@ function renderClasses() {
     const chips = (c.agrandissement ? `<span class="cc-chip cc-chip-a" title="Élèves à photocopies agrandies">📄 ${c.agrandissement}</span>` : '')
       + (c.tiersTemps ? `<span class="cc-chip cc-chip-a" title="Élèves à tiers-temps">⏱ ${c.tiersTemps}</span>` : '')
       + (unpl ? `<span class="cc-chip" title="Élèves présents sans place dans la salle affichée">🪑 ${unpl} à placer</span>` : '')
-      + (nMsg ? `<span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(_vMsg.map(m => '• ' + m.text).join('\n'))}">📣 ${plural(nMsg, 'message')}</span>` : '');
+      + (nMsg ? `<span class="cc-chip" style="background:var(--highlighter);color:#1a252f" title="${_escAttr(_vMsg.map(m => '• ' + m.text).join('\n'))}">📣 ${plural(nMsg, 'message')}</span>` : '')
+      + (!virtual && !_clsInPhotocopies(cls) ? `<span class="cc-chip" title="Classe non comptée dans le récap photocopies (case à cocher dans le récap, en bas de l'onglet)">📄 hors récap</span>` : '');
     const origin = virtual ? (() => {
       const by = {};
       for (const sid of (cls.eleves || [])) { const st = S.eleves[sid]; if (st) by[st.classe_id] = (by[st.classe_id] || 0) + 1; }
@@ -18292,15 +18309,21 @@ function renderClasses() {
     levelCount[order] = secIdx + 1;
     const bg = levelBgColor(order, secIdx);
     const c = _classCounts(cls);
-    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[], cards:[] };
+    if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[], cards:[], all:[], allTotal:0 };
     const L = byLevel[order];
-    L.present += c.present; L.amenagement += c.amenagement; L.agrandissement += c.agrandissement; L.docStd += c.docStd;
-    L.total += c.total; L.ulisOut += c.ulisOut; L.upe2aOut += c.upe2aOut; L.outClass += c.outClass;
-    L.m += c.m; L.f += c.f; L.civUnk += c.civUnk; L.classes.push(cls.nom);
+    L.all.push(cls); L.allTotal += c.total;
     L.cards.push(_card(cls, c, bg, levelAccentColor(order), false));
     totPresent += c.present; totAm += c.amenagement; totTotal += c.total;
-    totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; totAgr += c.agrandissement; totDocStd += c.docStd;
-    totM += c.m; totF += c.f; totCivUnk += c.civUnk; totTT += c.tiersTemps;
+    totAgr += c.agrandissement; totTT += c.tiersTemps;
+    // Récap photocopies : seulement les classes cochées (cf. _clsInPhotocopies)
+    if (_clsInPhotocopies(cls)) {
+      L.present += c.present; L.amenagement += c.amenagement; L.agrandissement += c.agrandissement; L.docStd += c.docStd;
+      L.total += c.total; L.ulisOut += c.ulisOut; L.upe2aOut += c.upe2aOut; L.outClass += c.outClass;
+      L.m += c.m; L.f += c.f; L.civUnk += c.civUnk; L.classes.push(cls.nom);
+      rpPresent += c.present; rpAm += c.amenagement; rpTotal += c.total;
+      totUlisOut += c.ulisOut; totUpe2aOut += c.upe2aOut; rpAgr += c.agrandissement; totDocStd += c.docStd;
+      totM += c.m; totF += c.f; totCivUnk += c.civUnk;
+    }
     totMsg += _clsMsgVisible(cls).length;
     totUnpl += _clsUnplaced(cls);
   }
@@ -18317,7 +18340,7 @@ function renderClasses() {
 
   const groups = orders.map(o => {
     const r = byLevel[o];
-    return `<div class="cl-lv">${_esc(_levelLabel(o))} · ${plural(r.classes.length, 'classe')} · ${plural(r.total, 'élève')}</div>
+    return `<div class="cl-lv">${_esc(_levelLabel(o))} · ${plural(r.all.length, 'classe')} · ${plural(r.allTotal, 'élève')}</div>
       <div class="cl-grid">${r.cards.join('')}</div>`;
   }).join('');
 
@@ -18336,7 +18359,7 @@ function renderClasses() {
     const unkPart = unk > 0 ? ` <span style="color:var(--pencil);font-size:.85em" title="${unk} sans civilité">+${unk}?</span>` : '';
     return `<span style="color:var(--civ-m)">♂${m}</span> <span style="color:var(--civ-f)">♀${f}</span>${unkPart}`;
   };
-  const recapRows = orders.map(o => {
+  const recapRows = orders.filter(o => byLevel[o].classes.length).map(o => {
     const r = byLevel[o];
     const nonAm = r.present - r.amenagement;
     return `<tr>
@@ -18350,12 +18373,17 @@ function renderClasses() {
       <td style="${tdNum}${r.agrandissement>0?';color:var(--agr-fg);font-weight:700':''}">${r.agrandissement>0?'📄 '+r.agrandissement:'<span style="color:var(--pencil-soft)">—</span>'}</td>
     </tr>`;
   }).join('');
-  const totNonAm = totPresent - totAm;
+  const totNonAm = rpPresent - rpAm;
+  // Choix des classes comptées : une case par classe réelle, rangées par niveau
+  const nExcl = arr.filter(c => !_clsInPhotocopies(c)).length;
+  const picker = `<div class="cl-rp-pick"><span class="cl-rp-pick-lbl">Classes comptées</span>${orders.map(o =>
+    `<span class="cl-rp-pick-lv">${byLevel[o].all.map(cls => `<label title="${_clsInPhotocopies(cls) ? 'Décocher pour ne pas compter cette classe (classe prise exceptionnellement, remplacement…)' : 'Cocher pour compter cette classe'}"><input type="checkbox"${_clsInPhotocopies(cls) ? ' checked' : ''} onchange="_clsSetPhotocopies('${cls.id}',this.checked)"> ${_escName(cls.nom)}</label>`).join('')}</span>`).join('')}</div>`;
   const tfNum = 'padding:6px 10px;border-top:2px solid var(--rule-line);text-align:right;font-variant-numeric:tabular-nums';
   const th = (lbl, tip, left) => `<th style="text-align:${left ? 'left' : 'right'};padding:5px 10px;border-bottom:2px solid var(--rule-line)"${tip ? ` title="${tip}"` : ''}>${lbl}</th>`;
   const recap = arr.length ? `
     <details class="recap-photocopies cl-recap"${_clsRecapOpen ? ' open' : ''} ontoggle="_clsRecapOpen=this.open">
-      <summary><strong>📄 Récap photocopies par niveau</strong><span class="cl-recap-tot">${totTotal} inscrits · ${totDocStd} docs non aménagés · ${totAgr} aménagés</span></summary>
+      <summary><strong>📄 Récap photocopies par niveau</strong><span class="cl-recap-tot">${nExcl ? `${plural(nExcl, 'classe')} non comptée${nExcl > 1 ? 's' : ''} · ` : ''}${rpTotal} inscrits · ${totDocStd} docs non aménagés · ${rpAgr} aménagés</span></summary>
+      ${picker}
       <table style="width:100%;border-collapse:collapse;font-size:.9em;margin-top:8px">
         <thead><tr class="rp-head">
           ${th('Niveau', '', true)}
@@ -18370,17 +18398,18 @@ function renderClasses() {
         <tbody>${recapRows}</tbody>
         <tfoot><tr class="rp-foot" style="font-weight:700">
           <td style="padding:6px 10px;border-top:2px solid var(--rule-line)">Total</td>
-          <td style="${tfNum}">${totTotal}</td>
+          <td style="${tfNum}">${rpTotal}</td>
           <td style="${tfNum}">${_civCell(totM, totF, totCivUnk)}</td>
-          <td style="${tfNum}">${totPresent}${_outHint(totUlisOut, totUpe2aOut)}</td>
+          <td style="${tfNum}">${rpPresent}${_outHint(totUlisOut, totUpe2aOut)}</td>
           <td style="${tfNum}">${totNonAm}</td>
-          <td style="${tfNum}">${totAm}</td>
+          <td style="${tfNum}">${rpAm}</td>
           <td style="${tfNum}">${totDocStd}</td>
-          <td style="${tfNum}${totAgr>0?';color:var(--agr-fg)':''}">${totAgr>0?'📄 '+totAgr:'—'}</td>
+          <td style="${tfNum}${rpAgr>0?';color:var(--agr-fg)':''}">${rpAgr>0?'📄 '+rpAgr:'—'}</td>
         </tr></tfoot>
       </table>
       <div class="rp-hint" style="font-size:.78em;margin-top:6px;line-height:1.5">
-        💡 <strong>Inscrits</strong> = total des élèves dans la classe.
+        💡 Seules les <strong>classes cochées</strong> sont comptées (décoche une classe que tu n'as qu'exceptionnellement, pour un remplacement par exemple) ; l'impression « 🖨 Effectifs » suit le même choix.
+        <strong>Inscrits</strong> = total des élèves dans la classe.
         <strong>Normalement présents</strong> = inscrits moins les ULIS et UPE2A hors-inclusion (jamais en classe).
         <strong>Aménagés</strong> = présents avec PPRE, PAP, PPS (Gevasco), ULIS+, UPE2A+ ou PAI — copies souvent adaptées.
         <strong>📄 Docs non aménagés</strong> = documents au format standard à tirer (présents sans agrandissement).
@@ -34284,10 +34313,20 @@ function printClassesBilan() {
   };
 
   // Tableau détaillé par classe
+  // Classes décochées dans le récap (cf. _clsInPhotocopies) : listées dans le détail, hors totaux et récap
+  const excl = arr.filter(c => !_clsInPhotocopies(c));
   const classesRows = arr.map(cls => {
     const order = clsLevel(cls);
     const np = Object.keys(cls.seating).length;
     const c = _classCounts(cls);
+    if (!_clsInPhotocopies(cls)) {
+      return `<tr style="color:#56697f;font-style:italic">
+      <td style="${tdC}">${_escAttr(cls.nom)}</td>
+      <td style="${tdC}">${cls.année}–${cls.année+1}</td>
+      <td style="${tdN}">${c.total}</td>
+      <td style="${tdC}" colspan="7">non comptée dans les photocopies</td>
+    </tr>`;
+    }
     if (!byLevel[order]) byLevel[order] = { present:0, amenagement:0, total:0, ulisOut:0, upe2aOut:0, outClass:0, agrandissement:0, docStd:0, m:0, f:0, civUnk:0, classes:[] };
     byLevel[order].present     += c.present;
     byLevel[order].amenagement += c.amenagement;
@@ -34369,7 +34408,7 @@ function printClassesBilan() {
         </tr></thead>
         <tbody>${classesRows}</tbody>
         <tfoot><tr>
-          <td style="${tfN};text-align:left" colspan="2">Total</td>
+          <td style="${tfN};text-align:left" colspan="2">Total${excl.length ? ' (classes comptées)' : ''}</td>
           <td style="${tfN}">${totTotal}</td>
           <td style="${tfN};white-space:nowrap">${_civCellPrint(totM, totF, totCivUnk)}</td>
           <td style="${tfN}">${totPlaced}</td>
@@ -34404,6 +34443,7 @@ function printClassesBilan() {
         <strong>Aménagés</strong> = présents avec PPRE, PAP, PPS (Gevasco), ULIS+, UPE2A+ ou PAI — copies souvent adaptées.
         <strong>📄 Docs non amén.</strong> = documents au format standard à tirer (présents sans agrandissement).
         <strong>📄 Docs amén.</strong> = documents agrandis à tirer (élèves avec agrandissement, y compris hors-inclusion quand ils viennent).
+        ${excl.length ? `<br><strong>Non comptée${excl.length > 1 ? 's' : ''}</strong> dans les totaux et le récap : ${excl.map(c => _escAttr(c.nom)).join(', ')}.` : ''}
       </div>
     </div>
   `;
