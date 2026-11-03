@@ -326,7 +326,14 @@ window.__subRun = async function () {
   if (empty) { switchClass(empty.id); for (const t of ['eleves', 'plan', 'notes', 'bilan', 'comp', 'ipads', 'qcmcam']) { switchTab(t); await sleep(150); A('classe-sans-devoir-' + t); } switchClass(cur); }
   const vc = Object.values(S.classes).find(c => c.virtual);
   if (vc) { switchClass(vc.id); for (const t of ['eleves', 'plan', 'bilan']) { switchTab(t); await sleep(150); A('recomposee-' + t); } switchClass(cur); }
-  try { switchTab('reunions'); _reu.id = Object.keys(S.reunions)[0]; for (const v of ['prep', 'soir']) { _reu.view = v; renderReunions(); await sleep(150); A('reunion-' + v); } _reu.view = 'list'; renderReunions(); } catch (e) { out.reuErr = e.message; }
+  try { switchTab('reunions'); _reu.id = Object.keys(S.reunions)[0]; for (const v of ['prep', 'soir']) { _reu.view = v; renderReunions(); await sleep(150); A('reunion-' + v); }
+    // Soir (v2.153.0) : suggestions de la saisie « parent sans rendez-vous », bulle de détail d'une note, écran parent.
+    { const wk = document.getElementById('reu-wk'); wk.value = 'a'; _reuWkRender(); await sleep(100); A('reunion-soir-sansrdv'); wk.value = ''; _reuWkRender(); }
+    { const tr = document.querySelector('#reu-det .rw-evrow'); if (tr) { _reuEvTip(tr); await sleep(100); A('reunion-soir-bulle'); _rwHideTip(); } }
+    _reu.parent = true; renderReunions(); await sleep(150); A('reunion-soir-parent'); _reu.parent = false;
+    _reu.view = 'list'; renderReunions(); } catch (e) { out.reuErr = e.message; }
+  // Historique (v2.153.0) : formulaire de correction d'une entrée, créneaux du jour compris.
+  try { const st = Object.values(S.eleves).find(x => (x.history || []).some(h => h.type !== 'rappel_fait')); if (st) { openHist(st.id, 'vie'); _histEditStart(st.history.findIndex(h => h.type !== 'rappel_fait')); await sleep(150); A('historique-correction'); _histEditCancel(); closeMod2('mhist'); } } catch (e) { out.histErr = e.message; }
   try { switchTab('ipads'); _ipadSetView('list'); await sleep(150); A('tablettes-liste'); _ipadSetView('plan'); } catch (e) { out.ipErr = e.message; }
   try { switchTab('qcmcam'); _qcmSetView('list'); await sleep(150); A('qcmcam-liste'); _qcmSetView('plan'); } catch (e) { out.qcmErr = e.message; }
   closeAll();

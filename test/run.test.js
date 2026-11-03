@@ -3019,6 +3019,47 @@ test('Réunions parents-profs : créneaux, purge d\'un élève et d\'une classe,
   assert.deepEqual(JSON.parse(ev(`JSON.stringify(S.reunions.r1.classIds)`)), ['c1']);
 });
 
+test('Réunions parents-profs : parent sans rendez-vous intercalé entre deux créneaux', () => {
+  ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2', 'e3'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' }, e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c1' } };
+      S.reunions = { r1: { id: 'r1', date: '2026-11-03', first: '17:00', last: '17:20', step: 5, classIds: ['c1'], pauses: ['17:15'],
+        slots: { '17:00': { sid: 'e1' }, '17:05': { sid: 'e2' } } } };`);
+  const key = t => JSON.parse(ev(`JSON.stringify(_reuWalkKey(S.reunions.r1, '${t}'))`));
+  assert.deepEqual(key('17:10'), { t: '17:10', x: false }, 'créneau libre de la grille : rendez-vous ordinaire');
+  assert.deepEqual(key('17:15'), { t: '17:15', x: false }, 'la pause cède');
+  assert.deepEqual(key('17:03'), { t: '17:03', x: true }, 'entre deux rendez-vous : heure intercalée');
+  assert.deepEqual(key('17:05'), { t: '17:06', x: true }, 'créneau pris : minute libre suivante');
+  assert.equal(key('25:00'), null);
+  ev(`S.reunions.r1.slots['17:03'] = { sid: 'e3', note: '', st: '', x: true }`);
+  assert.deepEqual(JSON.parse(ev(`JSON.stringify(_reuAllTimes(S.reunions.r1))`)), ['17:00', '17:03', '17:05', '17:10', '17:15', '17:20']);
+  assert.deepEqual(JSON.parse(ev(`JSON.stringify(_reuTimes(S.reunions.r1))`)), ['17:00', '17:05', '17:10', '17:15', '17:20'], 'la feuille imprimée garde sa grille');
+});
+
+test('Historique : corriger une entrée (oubli ↔ travail non fait, date) suit les compteurs', () => {
+  ev(`S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1', oublis: 2, non_travail: 1,
+        history: [{ ts: 1000, type: 'oubli' }, { ts: 2000, type: 'oubli' }, { ts: 3000, type: 'nt' }, { ts: 4000, type: 'rappel_fait', label: 'carnet' }] } };`);
+  const st = () => JSON.parse(ev(`JSON.stringify({ o: S.eleves.e1.oublis, n: S.eleves.e1.non_travail, h: S.eleves.e1.history.map(h => h.type + '@' + h.ts) })`));
+  assert.equal(ev(`_histApplyEdit(S.eleves.e1, 0, 'nt', 5000)`), true);
+  assert.deepEqual(st(), { o: 1, n: 2, h: ['nt@5000', 'oubli@2000', 'nt@3000', 'rappel_fait@4000'] });
+  assert.equal(ev(`_histApplyEdit(S.eleves.e1, 3, 'oubli', 4000)`), false, 'un rappel traité ne devient pas un oubli');
+  assert.equal(ev(`_histApplyEdit(S.eleves.e1, 3, 'rappel_fait', 6000)`), true, 'mais sa date se corrige');
+  assert.equal(ev(`_histApplyEdit(S.eleves.e1, 'new', 'oubli', 7000)`), true);
+  assert.deepEqual(st(), { o: 2, n: 2, h: ['nt@5000', 'oubli@2000', 'nt@3000', 'rappel_fait@6000', 'oubli@7000'] });
+  assert.equal(ev(`_histApplyEdit(S.eleves.e1, 1, 'oubli', NaN)`), false);
+});
+
+test('Moyenne affichée : arrondie comme le Bilan des notes (Arrondi de la moyenne)', () => {
+  ev(`S.evalPrefs.meanGranularity = 0.5`);
+  assert.equal(ev(`_fmtMean(12.3)`), '12,5');
+  assert.equal(ev(`_fmtMean(12.2)`), '12');
+  ev(`S.evalPrefs.meanGranularity = 1`);
+  assert.equal(ev(`_fmtMean(12.6)`), '13');
+  ev(`S.evalPrefs.meanGranularity = 0`);
+  assert.equal(ev(`_fmtMean(12.345)`), '12,35', 'toutes décimales : deux chiffres, comme _fmtNote');
+  assert.equal(ev(`_fmtMean(null)`), '—');
+  ev(`S.evalPrefs.meanGranularity = 0.01`);
+});
+
 test('Réunions parents-profs : toute fonction appelée depuis les gestionnaires du module existe', () => {
   // Régression v2.135.2 : un bloc retiré trop largement avait emporté _reuTogglePause,
   // appelée par le clic droit (pause) — ReferenceError au clic, rien ne le signalait avant.
