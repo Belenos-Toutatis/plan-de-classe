@@ -9841,11 +9841,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.153.0';
+const APP_VERSION    = '2.154.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-03T20:26:57Z';
+const APP_BUILD_DATE = '2026-11-03T20:35:03Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30144,7 +30144,7 @@ function _reuDetailHTML(r, t) {
   _reu.vie = { vie: _rwVieEvents(stu, from, to), year: all.length ? _rwVieEvents(stu, _periodStartDate(all[0]), _periodEndDate(all[all.length - 1])) : null, range: { from, to } };
   const chip = (kind, icon, lbl, warnAt) => {
     const n = _reu.vie.vie[kind].length;
-    return `<span class="rw-chip${n >= warnAt ? ' warn' : ''}${n ? ' has' : ''}" tabindex="0" onmouseenter="_reuVieTip(this,'${kind}')" onmouseleave="_rwHideTip()" onfocus="_reuVieTip(this,'${kind}')" onblur="_rwHideTip()" onclick="_reuVieTip(this,'${kind}')">${icon} ${lbl} : <strong>${n}</strong></span>`;
+    return `<span class="rw-chip${n >= warnAt ? ' warn' : ''}${n ? ' has' : ''}" role="button" tabindex="0" onmouseenter="_reuVieTip(this,'${kind}')" onmouseleave="_rwHideTip()" onfocus="_reuVieTip(this,'${kind}')" onblur="_rwHideTip()" onclick="_reuHist('${jsid}','${kind}')" onkeydown="if(event.key==='Enter')_reuHist('${jsid}','${kind}')">${icon} ${lbl} : <strong>${n}</strong></span>`;
   };
   const vie = `<div style="display:flex;gap:6px;flex-wrap:wrap">${chip('oubli', '📦', 'Oublis', 3)}${chip('nt', '📝', 'Travail non fait', 3)}${_featureEnabled('appel') ? chip('abs', '🚫', 'Absences', 4) + chip('ret', '⏰', 'Retards', 3) : ''}</div>`;
   const rem = evalOn ? _getBulletinRemarque(cid, sid, per, did) : '';
@@ -30158,7 +30158,7 @@ function _reuDetailHTML(r, t) {
       <div style="flex:1;min-width:180px"><div class="reu-name">${_escName((stu.nom || '').toUpperCase())} ${_escName(stu.prenom || '')}</div>
         <div class="reu-mt">${_esc(cls?.nom || '')}${grp ? ' · G' + grp : ''} · rendez-vous ${mine.map(_reuFmtT).join(' et ')}${s.x ? ' (intercalé)' : ''}</div>
         <div style="margin-top:3px">${_ficheSpecBadges(stu)}${tags ? ' ' + tags : ''}</div></div>
-      ${cls ? _ficheHeadPlans(cls, sid, true) : ''}
+      ${cls ? _ficheHeadPlans(cls, sid, id => `_reuSeatIn('${jsid}','${_escJsAttr(id)}')`) : ''}
       <span style="display:flex;gap:4px"><button class="btn btn-g btn-sm" onclick="_reuNav(-1)" title="Rendez-vous précédent" aria-label="Rendez-vous précédent">◀</button><button class="btn btn-g btn-sm" onclick="_reuNav(1)" title="Rendez-vous suivant" aria-label="Rendez-vous suivant">▶</button></span>
     </div>
     <div class="reu-dgrid">
@@ -30197,6 +30197,23 @@ function _reuEvDetail(tr) {
   _rwHideTip();
   const id = tr.getAttribute('data-evid'), sid = tr.getAttribute('data-sid');
   if (S.evaluations?.[id] && S.eleves?.[sid]) _evalShowNoteDetail(id, sid);
+}
+// Clic sur un mini-plan : choisir la place de l'élève dans cette salle (comme la fiche).
+function _reuSeatIn(sid, roomId) {
+  const r = _reuGet(_reu.id); if (!r || !S.eleves?.[sid]) return;
+  const cid = _reuClsOf(r, sid);
+  if (cid && cid !== S.cur && S.classes[cid]) switchClass(cid, { noRender: true });
+  const cls = getCls();
+  if (cls && roomId && cls.rooms?.[roomId] && cls.activeRoom !== roomId) setActiveRoom(roomId);
+  _modalReturnTo['mseatpick'] = () => { if (document.getElementById('tab-reunions')?.classList.contains('on')) renderReunions(); };
+  openSeatPicker(null, sid);
+}
+// Clic sur une pastille de vie de classe : l'historique de l'élève, pour corriger ou ajouter.
+function _reuHist(sid, kind) {
+  _rwHideTip();
+  if (!S.eleves?.[sid]) return;
+  _modalReturnTo['mhist'] = () => { if (document.getElementById('tab-reunions')?.classList.contains('on')) renderReunions(); };
+  openHist(sid, _RW_VIE_HIST[kind] || 'vie', _currentPeriode());
 }
 function _reuVieTip(el, kind) {
   if (_reu.vie) _rwPlaceTip(el, _rwVieTipHTML(_reu.vie.vie, _reu.vie.year, _reu.vie.range, kind), 'reu-tip');
@@ -57699,14 +57716,16 @@ var _rwPlaceOpen = false; // bloc Place & matériel déplié (mémoire de sessio
 
 // Fiche élève : un mini-plan par salle de la classe (salle affichée d'abord), à droite de
 // l'en-tête — comme la bulle photo. Clic = choisir sa place dans cette salle (_ficheSeatIn).
-function _ficheHeadPlans(cls, sid, noClick) {
+// clickOf (facultatif) : true = pas de clic ; fonction(id salle) → code du onclick (vue du soir).
+function _ficheHeadPlans(cls, sid, clickOf) {
   const ids = Object.keys(cls.rooms || {}).filter(id => S.salles?.[id]);
   if (!ids.length) return '';
   ids.sort((a, b) => (b === cls.activeRoom) - (a === cls.activeRoom));
   const plans = ids.map(id => ({ id, m: _mnpBuild(null, cls, sid, 170, id) })).filter(x => x.m);
   if (!plans.length) return '';
-  const click = !noClick && !_isReadOnlyWin() && cls.id === S.cur;
-  return `<div class="rw-plans">${plans.map(({ id, m }) => `<div class="rw-plan${click ? ' fiche-click' : ''}"${click ? ` onclick="_ficheSeatIn('${_escJsAttr(id)}')" title="${_escAttr(m.label)} — clic pour choisir sa place dans cette salle"` : ` title="${_escAttr(m.label)}"`}>${m.html}<div class="mnp-lbl">${_esc(m.label)}</div></div>`).join('')}</div>`;
+  const custom = typeof clickOf === 'function';
+  const click = clickOf !== true && !_isReadOnlyWin() && (custom || cls.id === S.cur);
+  return `<div class="rw-plans">${plans.map(({ id, m }) => `<div class="rw-plan${click ? ' fiche-click' : ''}"${click ? ` onclick="${custom ? clickOf(id) : `_ficheSeatIn('${_escJsAttr(id)}')`}" title="${_escAttr(m.label)} — clic pour choisir sa place dans cette salle"` : ` title="${_escAttr(m.label)}"`}>${m.html}<div class="mnp-lbl">${_esc(m.label)}</div></div>`).join('')}</div>`;
 }
 // Évolution depuis la période précédente, sur les moyennes ARRONDIES (celles qu'on affiche).
 function _rwEvoHTML(m, pm, prevPer) {
@@ -57884,7 +57903,7 @@ function renderRemarkWriter(focusText) {
   _rw.vieRange = { from, to };
   const chip = (kind, icon, lbl, warnAt) => {
     const n = ev_[kind].length;
-    return `<span class="rw-chip${n >= warnAt ? ' warn' : ''}${n ? ' has' : ''}" tabindex="0" onmouseenter="_rwShowVieTip(this,'${kind}')" onmouseleave="_rwHideTip()" onfocus="_rwShowVieTip(this,'${kind}')" onblur="_rwHideTip()" onclick="_rwShowVieTip(this,'${kind}')">${icon} ${lbl} : <strong>${n}</strong></span>`;
+    return `<span class="rw-chip${n >= warnAt ? ' warn' : ''}${n ? ' has' : ''}" role="button" tabindex="0" onmouseenter="_rwShowVieTip(this,'${kind}')" onmouseleave="_rwHideTip()" onfocus="_rwShowVieTip(this,'${kind}')" onblur="_rwHideTip()" onclick="_rwHideTip();_ficheGo('hist','${_RW_VIE_HIST[kind]}','${periode}')" onkeydown="if(event.key==='Enter'){_rwHideTip();_ficheGo('hist','${_RW_VIE_HIST[kind]}','${periode}')}">${icon} ${lbl} : <strong>${n}</strong></span>`;
   };
   const vie = `<div style="display:flex;gap:6px;flex-wrap:wrap">
       ${chip('oubli', '📦', 'Oublis', 3)}${chip('nt', '📝', 'Travail non fait', 3)}
@@ -58055,6 +58074,7 @@ function _rwVieEvents(stu, from, to) {
   return out;
 }
 var _RW_VIE_LBL = { oubli: '📦 Matériel oublié', nt: '📝 Travail non fait', abs: '🚫 Absences', ret: '⏰ Retards', rem: '🔔 Rappels traités' };
+var _RW_VIE_HIST = { oubli: 'vie', nt: 'vie', rem: 'vie', abs: 'abs', ret: 'abs' };   // filtre de l'historique ouvert au clic
 function _rwShowVieTip(el, kind) {
   if (!_rw?.vie) return;
   _rwPlaceTip(el, _rwVieTipHTML(_rw.vie, _rw.vieYear, _rw.vieRange || { from: _periodStartDate(_rw.periode), to: _periodEndDate(_rw.periode) }, kind));
@@ -58067,7 +58087,8 @@ function _rwVieTipHTML(vie, vieYear, range, kind) {
   const rows = list.map(e => `<tr><td class="rw-tip-d" style="white-space:nowrap">${_esc(fmt(e.d))}</td><td style="text-align:left">${_esc(e.txt || '')}</td></tr>`).join('');
   const html = `<div class="rw-tip-t">${_RW_VIE_LBL[kind] || ''} — ${list.length}</div>
     <div class="rw-tip-s">du ${_fmtDateFr(from)} au ${_fmtDateFr(to)}${vieYear ? ` · <strong>${(vieYear[kind] || []).length}</strong> sur l'année` : ''}</div>
-    ${list.length ? `<table class="rw-tip-tbl">${rows}</table>` : '<div class="rw-tip-s">Rien sur la période.</div>'}`;
+    ${list.length ? `<table class="rw-tip-tbl">${rows}</table>` : '<div class="rw-tip-s">Rien sur la période.</div>'}
+    <div class="rw-tip-s"><em>${_RW_VIE_HIST[kind] === 'vie' ? 'Clic : l\'historique, pour corriger (✏️) ou ajouter une entrée.' : 'Clic : l\'historique (à corriger dans 📅 Appels passés).'}</em></div>`;
   return html;
 }
 function _rwPlaceTip(el, html, tipId) {
