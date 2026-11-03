@@ -922,6 +922,40 @@ test('Copie annulée : les compétences tombent au minimum, pas la note seule', 
   assert.equal(ev("_evalStudentLevelForComp(S.evaluations.evd, 's1', 'cmp_rai')"), 1);
 });
 
+test('Copie annulée : les exports d\'un devoir (MBN, ENT) sortent aussi le minimum — Type C', () => {
+  seedTypeD();
+  // Bug signalé : 0 pour triche en Type C → bilan au minimum, mais l'export vers MBN prenait
+  // le niveau d'avant la triche (_evalStudentCompetenceLevel n'appliquait pas voidComps).
+  ev(`S.evaluations.evc = { id:'evc', type:'C', nomCourt:'C1', periode:'S1', classIds:['c1'],
+      noteMax:20, coef:1, countsForMean:true, exercices:[{id:'x1',label:'Ex1'}],
+      miniNotes:[{id:'m1',label:'Q1',exerciceId:'x1',max:10,competenceIds:['cmp_rai']}],
+      notes:{ s1:{ values:{m1:10} } } }`);
+  const avant = ev("_evalStudentCompetenceLevel(S.evaluations.evc, 's1', 'cmp_rai')");
+  assert.ok(avant > 1, 'le cas part d\'un niveau > 1');
+  ev(`S.evaluations.evc.notes.s1.adjust = [{ id:'a1', op:'set', v:0, label:'Triche', voidComps:true }]`);
+  assert.equal(ev("_evalStudentCompetenceLevel(S.evaluations.evc, 's1', 'cmp_rai')"), 1);
+  assert.equal(ev("_evalCompetenceLevel(S.evaluations.evc, 's1', 'cmp_rai')"), 1);
+  assert.equal(ev("_evalStudentLevelForComp(S.evaluations.evc, 's1', 'cmp_rai')"), 1);
+  // Type A : même règle
+  ev(`S.evaluations.evc.type = 'A'; delete S.evaluations.evc.exercices;`);
+  assert.equal(ev("_evalStudentCompetenceLevel(S.evaluations.evc, 's1', 'cmp_rai')"), 1);
+  // Sans le drapeau, l'export garde le niveau démontré
+  ev(`S.evaluations.evc.type = 'C'; S.evaluations.evc.notes.s1.adjust = [{ id:'a1', op:'add', v:-99, label:'Retard' }]`);
+  assert.equal(ev("_evalStudentCompetenceLevel(S.evaluations.evc, 's1', 'cmp_rai')"), avant);
+});
+
+test('Copie annulée : toute fonction de niveau par éval applique le drapeau', () => {
+  // Garde-fou : quatre fonctions calculent un niveau par éval ; la quatrième (exports) avait été
+  // oubliée (elle ne l'appliquait qu'au Type D, par délégation). Chacune doit l'appeler elle-même.
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  for (const fn of ['_evalStudentCompetenceLevel', '_evalCompetenceLevel', '_evalStudentLevelForComp', '_typeDCompLevel']) {
+    const i = html.indexOf('function ' + fn + '(');
+    assert.ok(i >= 0, fn + ' introuvable');
+    const body = html.slice(i, html.indexOf('\n}\n', i));
+    assert.ok(body.includes('_evalCompsVoided('), fn + ' n\'applique pas la copie annulée');
+  }
+});
+
 test('Copie annulée : sans le drapeau, les niveaux ne bougent pas', () => {
   seedTypeD();
   const nivAvant = ev("_typeDCompLevel(S.evaluations.evd, 's1', 'cmp_rai')");

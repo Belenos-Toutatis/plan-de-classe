@@ -9796,11 +9796,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.151.0';
+const APP_VERSION    = '2.151.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-01T21:57:19Z';
+const APP_BUILD_DATE = '2026-11-03T00:14:40Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -58945,8 +58945,14 @@ function _evalCompetencesEvaluated(ev, classId) {
 // Niveau d'un élève sur une compétence dans le contexte d'une éval donnée.
 // Type B : déjà implémenté via _computeStudentCompetenceLevel.
 // Type C : agrège les questions évaluées sur cette compétence (chacune convertie en niveau via _noteToLevel) et moyenne arithmétique (règle simple ; affinements possibles plus tard).
+// ⚠️ Copie annulée (voidComps) : appliquée ici AUSSI — ce niveau alimente tous les exports
+// d'un devoir (Vers MBN, ENT, CSV, copie) ; sans elle, ils sortaient le niveau d'avant la triche
+// alors que le bilan affichait le minimum.
 function _evalStudentCompetenceLevel(ev, sid, cid) {
-  if (ev.type === 'B') return _computeStudentCompetenceLevel(ev, sid, cid);
+  if (ev.type === 'B') {
+    const niv = _computeStudentCompetenceLevel(ev, sid, cid);
+    return (niv > 0 && _evalCompsVoided(ev, sid)) ? _voidedCompLevel() : niv;
+  }
   // Type D : niveaux saisis directement — délègue (annulation de copie déjà appliquée).
   if (ev.type === 'D') return _typeDCompLevel(ev, sid, cid);
   // Type A/C : passe par les questions
@@ -58963,11 +58969,13 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
     if (v === 'NN' || v === 'A' || v == null || v === '') continue;
     const n = parseFloat(v);
     if (!Number.isFinite(n)) continue;
-    const eff = _applyCommentsToValue(n, comments[mn.id] || [], mn.max);
+    // Bonus/malus déduit du texte : Type A seulement (cf. _evalCompetenceLevel).
+    const eff = (ev.type === 'A') ? _applyCommentsToValue(n, comments[mn.id] || [], mn.max) : n;
     const niv = _noteToLevel(eff, mn.max);
     if (niv > 0) niveaux.push(niv);
   }
   if (niveaux.length === 0) return 0;
+  if (_evalCompsVoided(ev, sid)) return _voidedCompLevel();   // copie annulée
   // Override par éval (ev.meanRule) > règle globale
   // En Type C, l'ordre des questions = ordre des mini-notes (pas de date par question)
   // donc 'last' = dernière question évaluée, 'best' = meilleur niveau atteint.
