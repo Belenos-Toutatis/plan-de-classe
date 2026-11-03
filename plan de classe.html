@@ -3036,6 +3036,27 @@ html[data-theme="dark"] #stl .stbl tbody tr.el-alt:not(.selected):not(:hover) td
 .el-pop-t { font-family:var(--font-serif); font-weight:600; color:var(--ink-blue); margin-bottom:6px; font-size:.95em; }
 .el-pop-btns { display:flex; flex-wrap:wrap; gap:4px; }
 .el-pop-foot { display:flex; gap:6px; margin-top:8px; padding-top:6px; border-top:1px dashed var(--rule-line); }
+/* Recherche d'un élève dans toutes les classes (bande « 📍 Salle » de l'onglet Élèves, v2.152.0) */
+.el-find { margin-left:auto; position:relative; display:inline-flex; }
+#el-find { width:240px; }
+.el-find-res { position:absolute; top:calc(100% + 3px); right:0; z-index:300; width:min(420px, 92vw); max-height:60vh; overflow:auto; background:var(--paper); border:1px solid var(--rule-line); border-radius:var(--radius-md); box-shadow:var(--shadow-pop); padding:4px 0; }
+.el-find-res[hidden] { display:none; }
+.el-find-it { display:flex; align-items:center; gap:8px; padding:5px 8px; cursor:pointer; color:var(--ink-deep); }
+.el-find-it:hover, .el-find-it.on { background:var(--row-sel-bg); }
+.el-find-it.gone .el-find-nm { font-style:italic; }
+.el-find-av { width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:var(--paper-warm); border:1px solid var(--rule-line); color:var(--ink-blue); display:flex; align-items:center; justify-content:center; font-size:.68em; font-weight:600; overflow:hidden; }
+.el-find-av img { width:100%; height:100%; object-fit:cover; }
+.el-find-nm { flex:1 1 auto; min-width:0; font-size:.9em; }
+.el-find-cl { font-size:.78em; color:var(--pencil); font-family:var(--font-mono); white-space:nowrap; }
+.el-find-gone { font-size:.88em; font-style:normal; color:var(--alert-fg); white-space:nowrap; }
+.el-find-fiche { background:transparent; border:1px solid transparent; border-radius:4px; cursor:pointer; padding:1px 4px; font-size:1em; line-height:1.2; }
+.el-find-fiche:hover { background:var(--paper-warm); border-color:var(--rule-line); }
+.el-find-more { padding:5px 10px; font-size:.8em; font-style:italic; color:var(--pencil); }
+/* Ligne trouvée : liseré jaune en haut et en bas, qui clignote trois fois (aucun fond : contraste intact). */
+#stl tr.el-find-flash > td { animation: elFindFlash .8s ease-in-out 3; }
+@keyframes elFindFlash { 0%, 100% { box-shadow: inset 0 3px 0 var(--highlighter), inset 0 -3px 0 var(--highlighter); } 50% { box-shadow: none; } }
+@media (max-width: 1280px) { #el-find { width:180px; } }
+@media (max-width: 760px) { .el-find { flex:1 1 100%; margin-left:0; } #el-find { width:100%; } .el-find-res { left:0; width:auto; } }
 .el-pop-menu { display:flex; flex-direction:column; min-width:220px; margin:-4px -6px; }
 .el-pop-menu button { text-align:left; padding:7px 12px; border:none; background:none; cursor:pointer; font-size:.88em; color:var(--ink-deep); border-radius:4px; }
 .el-pop-menu button:hover { background:var(--paper-warm); }
@@ -4517,7 +4538,15 @@ body.topbar-free #topbar { position: static !important; }
       <span style="font-size:.85em;color:var(--pencil);align-self:center">📍 Salle :</span>
       <span id="el-salle-buttons" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center"></span>
       <button class="btn btn-s btn-sm" onclick="openAddSalleToClass()" title="Ajouter une salle à cette classe">➕ Ajouter une salle</button>
-      <span class="tb-hint" style="margin-left:auto;font-size:.78em">Clic droit sur une salle → la retirer de cette classe</span>
+      <span class="tb-hint" style="font-size:.78em">Clic droit sur une salle → la retirer de cette classe</span>
+      <!-- v2.152.0 : recherche d'un élève dans toutes les classes, au bout de la bande. -->
+      <span class="el-find" id="el-find-wrap">
+        <input id="el-find" type="text" autocomplete="off" spellcheck="false" placeholder="🔍 Chercher un élève…"
+               aria-label="Chercher un élève dans toutes les classes : début du nom ou du prénom, dans n'importe quel ordre"
+               aria-controls="el-find-res" aria-expanded="false"
+               oninput="_elFind.idx = 0; _elFindRender()" onfocus="_elFindRender()" onblur="_elFindClose()" onkeydown="_elFindKey(event)">
+        <div id="el-find-res" class="el-find-res" role="listbox" hidden></div>
+      </span>
     </div>
     <div class="sh">
       <h2>👥 Élèves</h2>
@@ -9796,11 +9825,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.151.1';
+const APP_VERSION    = '2.152.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-03T00:14:40Z';
+const APP_BUILD_DATE = '2026-11-03T08:32:28Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21994,6 +22023,118 @@ function _elSetFilter(f) {
   if (_conf?.on) return;
   try { localStorage.setItem('planClasse_elevesFilter', f); } catch (e) {}
   renderStudents();
+}
+// ── Recherche d'un élève dans toutes les classes (v2.152.0) ─────────────────────────
+// Chaque mot tapé doit être le début du nom ou du prénom (ordre libre, sans accents ni casse),
+// comme la saisie des réunions parents (_reuNorm). Classes réelles seulement ; les recomposées
+// dont l'élève fait partie sont rappelées à côté de sa classe.
+var _elFind = { idx: 0, sids: [] };
+var EL_FIND_MAX = 8;
+function _elFindMatches(q) {
+  const words = _reuNorm(q).split(/[\s\-'’]+/).filter(Boolean);
+  if (!words.length) return [];
+  const td = todayKey();
+  return Object.values(S.eleves || {}).filter(s => {
+    if (!s || !S.classes?.[s.classe_id] || S.classes[s.classe_id].virtual) return false;
+    const hay = (_reuNorm(s.nom) + ' ' + _reuNorm(s.prenom)).split(/[\s\-'’]+/);
+    return words.every(w => hay.some(h => h.startsWith(w)));
+  }).sort((a, b) => (_stuDepartedOn(a, td) ? 1 : 0) - (_stuDepartedOn(b, td) ? 1 : 0)
+    || (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr'))
+    .map(s => s.id);
+}
+// sid → noms des classes recomposées dont l'élève fait partie.
+function _elFindRecompMap() {
+  const m = new Map();
+  for (const c of Object.values(S.classes || {})) if (c.virtual) for (const sid of (c.eleves || [])) {
+    if (!m.has(sid)) m.set(sid, []);
+    m.get(sid).push(c.nom);
+  }
+  return m;
+}
+// Une ligne de résultat : avatar (initiales, remplacées par la photo s'il y en a une), NOM Prénom,
+// « 🚪 parti le … » le cas échéant, classe (et recomposées), bouton 🪪.
+function _elFindRowHTML(sid, i, on, recomp) {
+  const s = S.eleves[sid], cls = S.classes[s.classe_id];
+  const gone = _stuDepartedOn(s, todayKey());
+  const ini = ((s.prenom || '').charAt(0) + (s.nom || '').charAt(0)).toUpperCase();
+  const rc = recomp?.get(sid) || [];
+  const clsTxt = _esc(cls.nom) + (rc.length ? ` · ${_recompIcon()} ${rc.map(_esc).join(', ')}` : '');
+  return `<div class="el-find-it${on ? ' on' : ''}${gone ? ' gone' : ''}" role="option" aria-selected="${on}"
+      data-photo-sid="${_escAttr(sid)}" onmousedown="event.preventDefault()" onclick="_elFindGo('${_escJsAttr(sid)}')">
+    <span class="el-find-av" id="elf-av-${i}">${_esc(ini)}</span>
+    <span class="el-find-nm"><b>${_esc((s.nom || '').toUpperCase())}</b> ${_esc(s.prenom || '')}${gone ? ` <span class="el-find-gone">🚪 parti le ${_esc(_fmtDateFr(s.departureDate))}</span>` : ''}</span>
+    <span class="el-find-cl">${clsTxt}</span>
+    <button type="button" class="el-find-fiche" tabindex="-1" onmousedown="event.preventDefault()" onclick="event.stopPropagation();_elFindFiche('${_escJsAttr(sid)}')" title="Ouvrir la fiche de l'élève" aria-label="Ouvrir la fiche de ${_escAttr(s.prenom)} ${_escAttr(s.nom)}">🪪</button>
+  </div>`;
+}
+function _elFindRender() {
+  const inp = document.getElementById('el-find'), box = document.getElementById('el-find-res');
+  if (!inp || !box) return;
+  const q = inp.value.trim();
+  if (!q) { box.hidden = true; inp.setAttribute('aria-expanded', 'false'); _elFind.sids = []; return; }
+  const all = _elFindMatches(q);
+  _elFind.sids = all.slice(0, EL_FIND_MAX);
+  _elFind.idx = Math.max(0, Math.min(_elFind.idx, _elFind.sids.length - 1));
+  const recomp = _elFindRecompMap();
+  box.innerHTML = all.length
+    ? _elFind.sids.map((sid, i) => _elFindRowHTML(sid, i, i === _elFind.idx, recomp)).join('')
+      + (all.length > EL_FIND_MAX ? `<div class="el-find-more">et ${all.length - EL_FIND_MAX} autre${all.length - EL_FIND_MAX > 1 ? 's' : ''} — précise ta recherche</div>` : '')
+    : '<div class="el-find-more">Aucun élève ne correspond</div>';
+  box.hidden = false;
+  inp.setAttribute('aria-expanded', 'true');
+  _elFind.sids.forEach((sid, i) => {
+    if (!_photoHas(sid)) return;
+    _photoUrl(sid).then(u => { const av = document.getElementById('elf-av-' + i); if (u && av && _elFind.sids[i] === sid) av.innerHTML = `<img src="${u}" alt="">`; }).catch(() => {});
+  });
+}
+function _elFindClose() {
+  const box = document.getElementById('el-find-res'), inp = document.getElementById('el-find');
+  if (box) box.hidden = true;
+  if (inp) inp.setAttribute('aria-expanded', 'false');
+}
+function _elFindKey(e) {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!_elFind.sids.length) return;
+    _elFind.idx = (_elFind.idx + (e.key === 'ArrowDown' ? 1 : -1) + _elFind.sids.length) % _elFind.sids.length;
+    _elFindRender();
+    document.querySelector('#el-find-res .el-find-it.on')?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const sid = _elFind.sids[_elFind.idx];
+    if (sid) _elFindGo(sid);
+  } else if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    e.target.value = ''; _elFindClose(); e.target.blur();
+  }
+}
+// Aller à la ligne de l'élève : sa classe (sauf si la classe affichée — réelle ou recomposée —
+// le compte déjà), filtre du bandeau retiré s'il le cache, ligne qui défile et clignote.
+// En mode confidentiel, il devient l'élève affiché.
+function _elFindGo(sid) {
+  const s = S.eleves[sid]; if (!s) return;
+  const inp = document.getElementById('el-find');
+  if (inp) { inp.value = ''; inp.blur(); }
+  _elFindClose();
+  const cur = getCls();
+  if (!cur || !(cur.eleves || []).includes(sid)) {
+    if (!S.classes[s.classe_id]) return;
+    switchClass(s.classe_id);
+  }
+  if (_conf?.on) _confReveal(sid);
+  const rowOf = () => document.querySelector(`#stl tr[data-sid="${CSS.escape(sid)}"]`);
+  if (rowOf()?.classList.contains('bf-hide')) _elSetFilter('all');
+  const tr = rowOf();
+  if (!tr) return;
+  tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  tr.classList.remove('el-find-flash'); void tr.offsetWidth; tr.classList.add('el-find-flash');
+  setTimeout(() => tr.classList.remove('el-find-flash'), 2600);
+}
+function _elFindFiche(sid) {
+  const inp = document.getElementById('el-find');
+  if (inp) { inp.value = ''; inp.blur(); }
+  _elFindClose();
+  _confOpenFiche(sid);
 }
 function _elAmenMode() { try { return localStorage.getItem('planClasse_elevesAmenMode') === 'all' ? 'all' : 'active'; } catch (e) { return 'active'; } }
 function _elSetAmenMode(m) { try { localStorage.setItem('planClasse_elevesAmenMode', m); } catch (e) {} _elPopClose(); renderStudents(); }

@@ -3156,3 +3156,47 @@ test('croix de saisie : aviver garde l\'ordre des niveaux d\'un dégradé d\'une
   const l = out.map(_lumOf);
   for (let i = 1; i < l.length; i++) assert.ok(l[i] < l[i - 1] - 0.01, 'niveau ' + (i + 1) + ' plus sombre que le ' + i + ' : ' + out.join(' '));
 });
+
+// v2.152.0 — recherche d'un élève dans toutes les classes (onglet Élèves).
+test('recherche d\'un élève : mots dans n\'importe quel ordre, sans accents, classes réelles, partis en dernier', () => {
+  setState({
+    classes: {
+      '5A': { id: '5A', nom: '5e A', eleves: ['a', 'b'], rooms: {} },
+      '6B': { id: '6B', nom: '6e B', eleves: ['c', 'd'], rooms: {} },
+      'DNL': { id: 'DNL', nom: 'DNL', virtual: true, eleves: ['a', 'c'], rooms: {} },
+    },
+    eleves: {
+      a: { id: 'a', nom: 'MARTIN', prenom: 'Léo', classe_id: '5A' },
+      b: { id: 'b', nom: 'LEBLANC', prenom: 'Mathis', classe_id: '5A' },
+      c: { id: 'c', nom: 'MARCHAND', prenom: 'Léa', classe_id: '6B', departureDate: '2000-01-10' },
+      d: { id: 'd', nom: 'DE LA TOUR-DUVAL', prenom: 'Anne-Sophie', classe_id: '6B' },
+      x: { id: 'x', nom: 'ORPHELIN', prenom: 'Zoé', classe_id: 'ABSENTE' },
+    },
+  });
+  // « lé ma » : Léo MARTIN, Mathis LEBLANC, et Léa MARCHAND (partie, donc en dernier).
+  assert.deepEqual(get(`_elFindMatches('lé ma')`), ['b', 'a', 'c']);
+  assert.deepEqual(get(`_elFindMatches('LEO')`), ['a']);                 // accents et casse ignorés
+  assert.deepEqual(get(`_elFindMatches('tour sophie')`), ['d']);         // nom et prénom composés
+  assert.deepEqual(get(`_elFindMatches('artin')`), []);                  // début de mot seulement
+  assert.deepEqual(get(`_elFindMatches('zoé')`), []);                    // classe inexistante : écarté
+  assert.deepEqual(get(`_elFindMatches('   ')`), []);
+});
+test('recherche d\'un élève : une ligne de résultat (parti, recomposée, nom échappé)', () => {
+  setState({
+    classes: {
+      '6B': { id: '6B', nom: '6e B', eleves: ['c', 'z'], rooms: {} },
+      'DNL': { id: 'DNL', nom: 'DNL', virtual: true, eleves: ['c'], rooms: {} },
+    },
+    eleves: {
+      c: { id: 'c', nom: 'MARCHAND', prenom: 'Léa', classe_id: '6B', departureDate: '2000-01-10' },
+      z: { id: 'z', nom: '<img src=x onerror=alert(1)>', prenom: 'Zoé', classe_id: '6B' },
+    },
+  });
+  const h = ev(`_elFindRowHTML('c', 0, true, _elFindRecompMap())`);
+  assert.match(h, /🚪 parti le 10\/01\/2000/);
+  assert.match(h, /6e B · .+ DNL/);                      // classe réelle, puis la recomposée
+  assert.match(h, /class="el-find-it on gone"/);
+  const z = ev(`_elFindRowHTML('z', 1, false, _elFindRecompMap())`);
+  assert.doesNotMatch(z, /<img src=x/);                  // le nom est échappé
+  assert.doesNotMatch(z, / gone/);
+});

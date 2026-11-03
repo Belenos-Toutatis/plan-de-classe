@@ -320,6 +320,8 @@ window.__subRun = async function () {
   switchTab('bilan');
   for (const p of ['S1', 'S2', '']) { const sel = document.getElementById('bilan-period-filter'); if (sel && [...sel.options].some(o => o.value === p)) { sel.value = p; sel.dispatchEvent(new Event('change')); await sleep(200); A('bilan-' + (p || 'toutes')); } }
   try { switchTab('eleves'); const cls = getCls(); selectedEleves = new Set(cls.eleves.slice(0, 4)); renderStudents(); updateEleveBulkBar(); await sleep(150); A('eleves-selection'); selectedEleves = new Set(); renderStudents(); updateEleveBulkBar(); } catch (e) { out.selErr = e.message; }
+  // Recherche d'un élève (v2.152.0) : la liste n'existe qu'après une frappe.
+  try { switchTab('eleves'); const fi = document.getElementById('el-find'); fi.value = 'a'; _elFind.idx = 1; _elFindRender(); await sleep(150); A('eleves-recherche'); fi.value = ''; _elFindClose(); } catch (e) { out.findErr = e.message; }
   const empty = Object.values(S.classes).find(c => !c.virtual && !Object.values(S.evaluations).some(ev => _evalIncludesClass(ev, c.id)));   // 3e A dans la démo
   if (empty) { switchClass(empty.id); for (const t of ['eleves', 'plan', 'notes', 'bilan', 'comp', 'ipads', 'qcmcam']) { switchTab(t); await sleep(150); A('classe-sans-devoir-' + t); } switchClass(cur); }
   const vc = Object.values(S.classes).find(c => c.virtual);
