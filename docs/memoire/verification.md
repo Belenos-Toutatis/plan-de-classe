@@ -63,6 +63,12 @@ ne servent que de support de valeur (`cls-sel`, `tg-color-mode`, `ipm-pool`…) 
    paraissait en panne) ; les captures d'écran arrivent avec un temps de retard ; les minuteurs sont
    ralentis (découper les batteries longues, lire le résultat dans un second appel). Et un élément
    retiré du DOM garde un `display` calculé : tester sa présence par `getElementById`.
+   ⚠️ **Un clic à coordonnées fixes ne vaut qu'à défilement constant** (2026-11-03) : `scrollIntoView`
+   d'un test précédent avait fait défiler la page de 47 px, et le clic « dans la recherche d'élève »
+   a ouvert le Journal de séance, le bouton qui se trouvait désormais là — puis la frappe est partie
+   ailleurs. Remettre `scrollTo(0, 0)` (ou recalculer les coordonnées par `getBoundingClientRect`)
+   avant chaque clic, et lire l'état par `javascript_tool` plutôt que sur une capture, qui peut être
+   en retard d'une action.
 
 Score de référence après la passe du **2026-09-07** : **0 écart**, en clair comme en sombre, sur 25 écrans + 95 modales statiques + ~42 modales dynamiques + 4 tableurs. La passe précédente (2026-07-30) annonçait 13 / 9 sur 11 onglets sans données ; à périmètre et données réels, le point de départ du 2026-09-07 était de **~23 familles de défauts**, dont 8 sous 2:1 en thème sombre.
 
