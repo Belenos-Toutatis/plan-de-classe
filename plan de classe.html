@@ -9913,11 +9913,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.157.2';
+const APP_VERSION    = '2.157.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-04T21:55:12Z';
+const APP_BUILD_DATE = '2026-11-04T22:14:13Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -48398,6 +48398,7 @@ function _evalOpenTableur(forcedId) {
     const hidden = localStorage.getItem('planClasse_evalTableurHelpHidden') === '1';
     _evalTableurApplyHelpState(hidden);
   } catch (e) {}
+  _evalTableurSyncAbsents(ev, initCls?.id);
   _evalTableurRender();
   _modalReturnTo['meval-tableur'] = _evalTableurCloseHook;
   openMod('meval-tableur');
@@ -48466,6 +48467,7 @@ function _evalTableurSwitchClass(classId) {
   const ev = S.evaluations?.[evalId];
   if (!ev || !_evalIncludesClass(ev, classId)) return;
   document.getElementById('meval-tableur').dataset.classid = classId;
+  _evalTableurSyncAbsents(ev, classId);
   _evalTableurRender();
 }
 
@@ -54358,6 +54360,20 @@ function _evalToastAbsentsFilled(filled) {
   if (filled > 0) {
     toast(`🚫 ${filled} cellule${filled > 1 ? 's' : ''} pré-remplie${filled > 1 ? 's' : ''} avec « ${_codeA()} » (élève${filled > 1 ? 's' : ''} absent${filled > 1 ? 's' : ''} à l'appel)`);
   }
+}
+
+// À l'affichage d'une classe dans le tableur : reprend les appels faits APRÈS le réglage de
+// la date du devoir (date réglée la veille, appel en séance, saisie plus tard) — changer la
+// date n'est alors plus le seul moyen d'obtenir les « A ». L'essai sur une copie évite une
+// entrée d'annulation et une sauvegarde à chaque ouverture quand il n'y a rien à poser.
+function _evalTableurSyncAbsents(ev, classId) {
+  if (!ev || !classId) return;
+  if (!_evalAutoFillAbsentsForEvalClass(JSON.parse(JSON.stringify(ev)), classId)) return;
+  pushUndo();
+  const filled = _evalAutoFillAbsentsForEvalClass(ev, classId);
+  ev.updatedAt = Date.now();
+  save();
+  _evalToastAbsentsFilled(filled);
 }
 
 // Classe active dans le tableur — lit dataset.classid sur #meval-tableur,

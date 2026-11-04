@@ -3379,3 +3379,48 @@ test('tableur : la case active sort de sous le pied figé, barres de défilement
   assert.deepEqual(run([200, 235, 700, 810]), { top: 100, left: 63 });   // droite : 810 ramené à 801 - 4
   assert.deepEqual(run([200, 235, 100, 190]), { top: 100, left: 25 });   // gauche : 100 ramené à 1 + 120 + 4
 });
+
+test('tableur : un appel fait après le réglage de la date pose les « A » à l\'ouverture', () => {
+  const etat = () => setState({
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2', 's3'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'B', prenom: 'b', classe_id: 'c1' }, s3: { id: 's3', nom: 'C', prenom: 'c', classe_id: 'c1' } },
+    evaluations: { e1: { id: 'e1', type: 'C', classId: 'c1', date: '2026-01-10', dates: { c1: '2026-01-10' }, slotIds: { c1: 'M1' },
+      miniNotes: [{ id: 'q1', max: 5 }, { id: 'q2', max: 5 }], notes: { s2: { values: { q1: 3 } } } } },
+    attendance: {},
+  });
+  const sync = () => get(`(() => {
+    let undos = 0, saves = 0;
+    const pu = pushUndo, sv = save;
+    pushUndo = () => { undos++; }; save = () => { saves++; };
+    try { _evalTableurSyncAbsents(S.evaluations.e1, 'c1'); } finally { pushUndo = pu; save = sv; }
+    return { undos, saves };
+  })()`);
+  const appel = (slotId) => ev(`S.attendance = { c1: { r1: { id: 'r1', date: '2026-01-10', slotId: '${slotId}', absents: ['s1', 's2'], retards: {} } } }`);
+
+  // Pas encore d'appel : rien à poser, donc ni annulation ni sauvegarde.
+  etat();
+  assert.deepEqual(sync(), { undos: 0, saves: 0 });
+  assert.equal(get('S.evaluations.e1.notes.s1'), null);
+
+  // Appel d'un autre créneau : ce n'est pas cette séance.
+  appel('M2');
+  assert.deepEqual(sync(), { undos: 0, saves: 0 });
+  assert.equal(get('S.evaluations.e1.notes.s1'), null);
+
+  // Appel de la séance : les cases vides des absents reçoivent A, une seule annulation.
+  appel('M1');
+  assert.deepEqual(sync(), { undos: 1, saves: 1 });
+  assert.deepEqual(get('S.evaluations.e1.notes.s1.values'), { q1: 'A', q2: 'A' });
+  assert.deepEqual(get('S.evaluations.e1.notes.s2.values'), { q1: 3, q2: 'A' }, 'une note saisie n\'est pas écrasée');
+  assert.equal(get('S.evaluations.e1.notes.s3'), null, 'un élève présent n\'est pas touché');
+
+  // Ouverture suivante : plus rien à poser.
+  assert.deepEqual(sync(), { undos: 0, saves: 0 });
+
+  // Les deux chemins d'affichage d'une classe passent par là, AVANT le rendu.
+  for (const fn of ['_evalOpenTableur', '_evalTableurSwitchClass']) {
+    const src = ev(`${fn}.toString()`);
+    const i = src.indexOf('_evalTableurSyncAbsents('), j = src.lastIndexOf('_evalTableurRender()');
+    assert.ok(i >= 0 && i < j, `${fn} doit reprendre les absents avant de dessiner le tableur`);
+  }
+});

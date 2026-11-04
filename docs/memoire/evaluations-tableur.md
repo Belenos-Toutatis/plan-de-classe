@@ -48,6 +48,9 @@ Quand l'enseignant change la date ou le créneau d'une évaluation, le système 
 
 Aussi déclenché lors de l'**import CSV QCMcam** quand la date OU le créneau détectés sont appliqués (cf. section *Import CSV QCMcam*).
 
+**Et à l'affichage d'une classe dans le tableur** (v2.157.3, `_evalTableurSyncAbsents`, appelée par `_evalOpenTableur` et `_evalTableurSwitchClass`) : signalé par l'utilisateur, qui règle la date du devoir la veille, fait l'appel en séance et saisit plus tard. Le pré-remplissage ne partait que d'un changement de date : il fallait changer la date puis la remettre pour voir les « A ». L'essai se fait sur une copie de l'éval, donc **ni entrée d'annulation ni sauvegarde quand il n'y a rien à poser** ; sinon `pushUndo` (Ctrl+Z retire les « A » posés), `save` et le toast habituel. Une classe à la fois : celle qu'on affiche. Les notes ne bougent pas : une case vide et un « A » sont ignorés de la même façon dans le calcul (vérifié sur toute la démo).
+⚠️ **Conséquence assumée** : un « A » vidé à la main revient à l'ouverture suivante tant que l'appel dit absent. Pour qu'il reste enlevé : saisir une note ou NN, ou corriger l'appel.
+
 Quand `filled > 0`, le tableur est re-rendu via `_evalTableurRender()` pour faire apparaître les A immédiatement.
 
 ### Clic sur le nom → fiche complète, partout (v2.69.0)
