@@ -40,7 +40,7 @@
      __staticModalsRun()     toutes les .mo forcées ouvertes (contraste + champs)
      __dynRun(only?)         ~95 fenêtres par leur VRAI ouvreur (contraste, ARIA, focus, largeur, champs)
      __subRun()              ~30 sous-états (appel, contraintes, confidentiel, menus, Config Salle…)
-     __printRun()            ~22 chemins d'impression, mesurés dans window.print() bouchonné
+     __printRun()            ~23 chemins d'impression, mesurés dans window.print() bouchonné
      __respRun()             débordements à la taille courante (redimensionner la fenêtre avant)
      __metaTest()            vérifie que l'auditeur détecte bien un texte #ccc sur blanc
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -365,7 +365,7 @@ window.__printRun = async function () {
     ['Bilan des compétences', () => { switchTab('comp'); printBilanComp(); }], ['Fiche élève', () => { openFiche(sid); printFiche(); }],
     ["Vue d'ensemble", () => { openOverviewModal(); printOverview(); }], ['Tableau de la classe', () => { switchTab('export-pos'); printPositions(); }],
     ['RDV remplie', () => { switchTab('reunions'); _reu.id = Object.keys(S.reunions)[0]; _reu.view = 'prep'; renderReunions(); printReunion('filled'); }],
-    ['RDV alphabétique', () => printReunion('alpha')], ['RDV vierge', () => printReunion('blank')], ['RDV mini bilans', () => printReunionBilans()],
+    ['RDV alphabétique', () => printReunion('alpha')], ['RDV vierge', () => printReunion('blank')], ['RDV mini bilans', () => printReunionBilans()], ['RDV compte rendu', () => printReunionCompteRendu()],
     ['Trombinoscope', () => { openTrombiView(); printTrombi(false); }], ['Évacuation', () => { openEvacPrint(); printEvac(); }],
     ['Résultats projetés', () => { _evalOpenRendu(evC.id, 'proj'); _renduPrint(); }],
   ];

@@ -3111,6 +3111,37 @@ test('Fichier pour un collègue : parent sans rendez-vous, mêmes règles que le
   assert.ok(/if \(!x\.prof\) x\.prof = nr\.prof;/.test(js), 'le nom, lui, est repris');
 });
 
+test('Réunions : un parent sans rendez-vous est coché Vu d\'office ; le compte rendu reprend les rendez-vous et les notes', () => {
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html)[1];
+  ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2', 'e3', 'e4', 'e5'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' }, e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c1' },
+                   e4: { id: 'e4', nom: 'Quatre', prenom: 'D', classe_id: 'c1' }, e5: { id: 'e5', nom: 'Cinq', prenom: 'E', classe_id: 'c1' } };
+      S.reunions = { r1: { id: 'r1', titre: 'Niveau 3ème', date: '2026-11-03', first: '17:00', last: '17:20', step: 5, classIds: ['c1'], pauses: [], bilans: {},
+        slots: { '17:00': { sid: 'e1', note: ' Note un ', st: 'vu' }, '17:05': { sid: 'e1', note: 'Suite', st: '' }, '17:10': { sid: 'e2', note: '', st: 'absent' }, '17:20': { sid: 'e4', note: '', st: '' } } } };
+      const _gebi = document.getElementById; document.getElementById = () => ({ value: '', innerHTML: '', textContent: '', style: {}, dataset: {}, focus() {}, remove() {}, setAttribute() {}, getAttribute() { return null; }, querySelector() { return null; }, querySelectorAll() { return []; }, classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} } });
+      try { _reu.id = 'r1'; _reu.wkT = '17:03'; _reuWkPick('e3');
+            _reu.wkT = '17:15'; _reuWkPick('e5'); } finally { document.getElementById = _gebi; }`);
+  const slot = t => JSON.parse(ev(`JSON.stringify(S.reunions.r1.slots['${t}'])`));
+  assert.deepEqual([slot('17:03').st, slot('17:03').x], ['vu', true], 'intercalé : Vu d\'office');
+  assert.deepEqual([slot('17:15').st, slot('17:15').x], ['vu', undefined], 'sur un créneau libre de la grille : Vu d\'office aussi');
+  assert.ok((js.match(/st: 'vu'/g) || []).length === 2, 'le fichier des collègues aussi, dans ses deux branches');
+  const rows = JSON.parse(ev('JSON.stringify(_reuReportRows(S.reunions.r1))'));
+  assert.deepEqual(rows, [
+    { sid: 'e1', ts: ['17:00', '17:05'], st: 'vu', x: false, note: 'Note un\nSuite' },
+    { sid: 'e3', ts: ['17:03'], st: 'vu', x: true, note: '' },
+    { sid: 'e2', ts: ['17:10'], st: 'absent', x: false, note: '' },
+    { sid: 'e5', ts: ['17:15'], st: 'vu', x: false, note: '' },
+    { sid: 'e4', ts: ['17:20'], st: '', x: false, note: '' },
+  ], 'un élève par ligne, dans l\'ordre, créneaux réunis et toutes ses notes reprises');
+  // Même résultat dans le fichier des collègues, à partir des mêmes données.
+  const fn = n => { const m = new RegExp('^function ' + n + '\\(.*$', 'm').exec(js); assert.ok(m, n + ' doit exister, sur une ligne'); return m[0]; };
+  const box = { D: { eleves: JSON.parse(ev('JSON.stringify(S.eleves)')) }, r: JSON.parse(ev('JSON.stringify(S.reunions.r1)')) };
+  vm.runInNewContext(['stu', 'booked', 'reportRows'].map(fn).join('\n') + '\nthis.out = JSON.stringify(reportRows(r));', box);
+  assert.deepEqual(JSON.parse(box.out), rows, 'le fichier des collègues doit donner le même compte rendu');
+});
+
 test('Fichier pour un collègue : plusieurs réunions de départ, grilles vides, classes qui suivent la sélection', () => {
   ev(`S.classes = { c1: { id: 'c1', nom: '6A', eleves: [], rooms: {} }, c2: { id: 'c2', nom: '6B', eleves: [], rooms: {} }, c3: { id: 'c3', nom: '5A', eleves: [], rooms: {} },
                     v1: { id: 'v1', nom: 'Latin', eleves: [], rooms: {}, virtual: true } };
