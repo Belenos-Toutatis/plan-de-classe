@@ -3081,10 +3081,61 @@ test('Fichier pour un collègue : code autonome valide, sans </script>, et donn�
       S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1', ppre: true, notes: 'santé', oublis: 4 },
                    e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1', departureDate: '2000-01-01' },
                    e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c2' } };
-      _rex = { cls: new Set(['c1']), photos: false, reu: '' };`);
+      _rex = { cls: new Set(['c1']), photos: false, reus: new Set(), added: {} };`);
   const st = JSON.parse(ev('JSON.stringify(_rexStudents())'));
   assert.deepEqual(Object.keys(st), ['e1'], 'seulement les élèves présents des classes cochées');
   assert.deepEqual(Object.keys(st.e1).sort(), ['cls', 'nom', 'prenom'], 'rien d\'autre que nom, prénom, classe');
+});
+
+test('Fichier pour un collègue : plusieurs réunions de départ, grilles vides, classes qui suivent la sélection', () => {
+  ev(`S.classes = { c1: { id: 'c1', nom: '6A', eleves: [], rooms: {} }, c2: { id: 'c2', nom: '6B', eleves: [], rooms: {} }, c3: { id: 'c3', nom: '5A', eleves: [], rooms: {} },
+                    v1: { id: 'v1', nom: 'Latin', eleves: [], rooms: {}, virtual: true } };
+      S.reunions = {
+        a: { id: 'a', titre: 'Niveau 6ème', date: '2026-12-01', first: '16:30', last: '19:00', step: 5, classIds: ['c1', 'c2'], prof: 'M. Secret', discipline: 'SVT',
+             pauses: ['17:00'], slots: { '16:30': { sid: 'e1', note: 'privé' } }, bilans: { e1: 'privé' } },
+        b: { id: 'b', titre: 'Niveau 5ème', date: '2026-11-10', first: '17:00', last: '18:00', step: 10, classIds: ['c3'], pauses: [], slots: {}, bilans: {} },
+        l: { id: 'l', titre: 'Latin', date: '2026-11-20', first: '17:00', last: '18:00', step: 10, classIds: ['v1'], pauses: [], slots: {}, bilans: {} } };
+      _rex = { cls: new Set(['c1']), photos: false, reus: new Set(), added: {} };`);
+  const cls = () => JSON.parse(ev('JSON.stringify([..._rex.cls].sort())'));
+  const reus = () => JSON.parse(ev('JSON.stringify([..._rex.reus].sort())'));
+  // Une partie de ses classes est cochée : le choix est gardé, la réunion ne porte que celles-là.
+  ev(`_rexToggleReu('a')`);
+  assert.deepEqual(cls(), ['c1'], 'une réunion partiellement cochée ne rajoute pas de classe');
+  // Aucune de ses classes n'est cochée : la cocher les ajoute…
+  ev(`_rexToggleReu('b')`);
+  assert.deepEqual(cls(), ['c1', 'c3'], 'une réunion sans aucune classe cochée ajoute les siennes');
+  const m = JSON.parse(ev('JSON.stringify(_rexReunions())'));
+  assert.deepEqual(Object.keys(m), ['r1', 'r2']);
+  assert.equal(m.r1.titre, 'Niveau 5ème', 'dans l\'ordre des dates');
+  assert.equal(m.r2.titre, 'Niveau 6ème');
+  assert.deepEqual(m.r2.classIds, ['c1'], 'seulement les classes du fichier');
+  for (const [k, r] of Object.entries(m)) {
+    assert.equal(r.id, k, 'la clé et l\'identifiant concordent');
+    assert.deepEqual([r.slots, r.pauses, r.bilans, r.prof, r.discipline], [{}, [], {}, '', ''], 'grille entièrement vide, rien de personnel');
+  }
+  assert.ok(!/Secret|privé/.test(JSON.stringify(m)), 'ni le nom du prof, ni les rendez-vous, ni les mini bilans ne partent');
+  // … et un second clic défait le premier.
+  ev(`_rexToggleReu('b')`);
+  assert.deepEqual(cls(), ['c1'], 'décocher la réunion retire les classes qu\'elle avait ajoutées');
+  assert.deepEqual(reus(), ['a']);
+  ev(`_rexToggleReu('a')`);
+  assert.deepEqual(cls(), ['c1'], 'une classe cochée à la main reste');
+  // Décocher la dernière classe d'une réunion la retire ; une réunion en classes recomposées reste.
+  ev(`_rexToggleReu('a'); _rexToggleReu('l'); _rexToggleCls('c1');`);
+  assert.deepEqual(reus(), ['l'], 'plus aucune classe de la réunion dans le fichier : elle est décochée');
+  ev(`_rexToggleCls('c3')`);
+  assert.deepEqual(JSON.parse(ev('JSON.stringify(_rexReunions())')).r1.classIds, ['c3'], 'réunion en classes recomposées : les classes cochées');
+  // Le mail passe au pluriel et nomme les réunions.
+  ev(`_rex = { cls: new Set(['c1', 'c3']), photos: false, reus: new Set(['a', 'b']), added: {} };`);
+  const several = JSON.parse(ev('JSON.stringify(_rexMailText(_rexMailCtx(null)))'));
+  assert.ok(several.subject.startsWith('📅 Réunions parents-professeurs :'), several.subject);
+  assert.ok(several.text.includes('« Niveau 5ème »') && several.text.includes('« Niveau 6ème »'), 'les réunions sont nommées');
+  ev(`_rex.reus = new Set(['b']);`);
+  const one = JSON.parse(ev('JSON.stringify(_rexMailText(_rexMailCtx(null)))'));
+  assert.ok(/^📅 Réunion parents-professeurs du /.test(one.subject), one.subject);
+  assert.ok(one.text.includes('Cliquez sur la réunion « Niveau 5ème »'));
+  ev(`_rex.reus = new Set();`);
+  assert.ok(JSON.parse(ev('JSON.stringify(_rexMailText(_rexMailCtx(null)))')).text.includes('Nouvelle réunion'));
 });
 
 test('Vers MBN : favori embarqué valide, niveaux ramenés sur 4, résultats d\'un devoir', () => {

@@ -7853,9 +7853,9 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
         <div class="ev-h">Ce qui part dans le fichier</div>
         <label class="hm-sw"><input type="checkbox" class="sw-chk" id="rex-photos" checked onchange="_rex.photos=this.checked;_rexRender()"> Photos (300 × 300 pixels au plus)</label>
         <p class="clf-note">Nom, prénom et classe de chaque élève. Rien d'autre : ni notes, ni aménagements, ni informations, ni absences.</p>
-        <div class="ev-h">Réunion déjà préparée (facultatif)</div>
+        <div class="ev-h">Réunions déjà préparées (facultatif)</div>
         <div id="rex-reu"></div>
-        <p class="clf-note">Il retrouve tes date, horaires et durée des rendez-vous, avec une grille entièrement vide (ni rendez-vous, ni pauses, ni notes, ni mini bilans) ; il met son nom et sa discipline.</p>
+        <p class="clf-note">Clique sur toutes celles que tu veux donner. Il retrouve pour chacune tes date, horaires et durée des rendez-vous, avec une grille entièrement vide (ni rendez-vous, ni pauses, ni notes, ni mini bilans) ; il met son nom et sa discipline une seule fois. Si aucune classe d'une réunion n'est cochée, cocher la réunion les ajoute au fichier.</p>
       </div>
       <div>
         <div id="rex-sum" class="rex-sum"></div>
@@ -9485,6 +9485,8 @@ function settings(id) {
       nr.titreAuto = !F.titre.trim(); nr.titre = F.titre.trim() || autoTitle(F.cls); nr.prof = F.prof.trim(); nr.discipline = F.disc.trim();
       lost.forEach(function (t) { delete nr.slots[t]; }); nr.pauses = nr.pauses.filter(function (t) { return ts.indexOf(t) >= 0; });
       D.reunions[nr.id] = nr; D.prefs = { prof: nr.prof, discipline: nr.discipline };
+      // Plusieurs réunions fournies (v2.155.0) : nom et discipline repris là où ils manquent encore.
+      Object.values(D.reunions).forEach(function (x) { if (!x.prof) x.prof = nr.prof; if (!x.discipline) x.discipline = nr.discipline; });
       touched(); close(); V.id = nr.id; V.view = 'prep'; V.edit = null; render();
     };
     if (lost.length) confirmBox('Des rendez-vous ne tombent plus sur un créneau', lost.length + ' rendez-vous ne correspondent à aucun créneau de la nouvelle grille : ils seront retirés. Ctrl+Z pour revenir en arrière.', 'Enregistrer quand même', apply); else apply();
@@ -9841,11 +9843,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.154.0';
+const APP_VERSION    = '2.155.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-03T20:35:03Z';
+const APP_BUILD_DATE = '2026-11-04T08:58:15Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -30456,25 +30458,65 @@ function printReunionBilans() {
 }
 
 // ── Fichier pour un collègue (v2.136.0) : page HTML autonome — élèves (nom, prénom, classe,
-// photo 300 × 300 au plus), réunion de départ facultative (sans rendez-vous) ; le collègue y crée
+// photo 300 × 300 au plus), réunions de départ facultatives (sans rendez-vous) ; le collègue y crée
 // ses réunions, prend ses rendez-vous, imprime la feuille et enregistre dans le fichier lui-même.
 // Le code et les styles de la page sont dans <script type="text/plain" id="rdv-standalone-js|css">.
-var _rex = { cls: new Set(), photos: true, reu: '' };
+var _rex = { cls: new Set(), photos: true, reus: new Set(), added: {} };
 function openReuExport() {
   const r = _reuGet(_reu.id);
   let ids = r ? (r.classIds || []).filter(id => S.classes?.[id] && !S.classes[id].virtual) : [];
   if (!ids.length) { const c = getCls(); const lv = c && !c.virtual ? clsLevel(c) : null; ids = lv != null ? realClasses().filter(x => clsLevel(x) === lv).map(x => x.id) : []; }
-  _rex = { cls: new Set(ids), photos: true, reu: r ? r.id : '' };
+  _rex = { cls: new Set(ids), photos: true, reus: new Set(r ? [r.id] : []), added: {} };
   const ph = document.getElementById('rex-photos'); if (ph) ph.checked = true;
   document.getElementById('rex-prog').textContent = '';
   _rexRender();
   openMod('mreuexport');
 }
-function _rexToggleCls(id) { _rex.cls.has(id) ? _rex.cls.delete(id) : _rex.cls.add(id); _rexRender(); }
+function _rexToggleCls(id) { _rex.cls.has(id) ? _rex.cls.delete(id) : _rex.cls.add(id); _rexSyncReus(); _rexRender(); }
 function _rexToggleLevel(n) {
   const cs = realClasses().filter(c => clsLevel(c) === n), all = cs.every(c => _rex.cls.has(c.id));
-  cs.forEach(c => all ? _rex.cls.delete(c.id) : _rex.cls.add(c.id)); _rexRender();
+  cs.forEach(c => all ? _rex.cls.delete(c.id) : _rex.cls.add(c.id)); _rexSyncReus(); _rexRender();
 }
+// Plusieurs réunions de départ (v2.155.0). Classes RÉELLES d'une réunion : elle peut porter des classes
+// recomposées, qui n'existent pas dans le fichier.
+function _rexReuClasses(r) { return (r?.classIds || []).filter(id => S.classes?.[id] && !S.classes[id].virtual); }
+function _rexSelReus() { return [..._rex.reus].map(id => _reuGet(id)).filter(Boolean).sort((a, b) => (a.date || '').localeCompare(b.date || '')); }
+// Une réunion sans aucune de ses classes dans le fichier serait une grille sans élèves : la cocher ajoute
+// ses classes. Un second clic défait le premier, sauf pour une classe dont une autre réunion cochée a besoin.
+// Une réunion dont une partie des classes est cochée garde ce choix (le fichier ne porte que celles-là).
+function _rexToggleReu(id) {
+  if (_rex.reus.has(id)) {
+    _rex.reus.delete(id);
+    const kept = new Set(_rexSelReus().flatMap(_rexReuClasses));
+    (_rex.added[id] || []).forEach(c => { if (!kept.has(c)) _rex.cls.delete(c); });
+    delete _rex.added[id];
+  } else {
+    _rex.reus.add(id);
+    const cs = _rexReuClasses(_reuGet(id)), add = cs.some(c => _rex.cls.has(c)) ? [] : cs;
+    _rex.added[id] = add;
+    add.forEach(c => _rex.cls.add(c));
+  }
+  _rexRender();
+}
+// Décocher la dernière classe d'une réunion la retire du fichier (une réunion uniquement en classes recomposées reste).
+function _rexSyncReus() {
+  for (const id of [..._rex.reus]) {
+    const cs = _rexReuClasses(_reuGet(id));
+    if (cs.length && !cs.some(c => _rex.cls.has(c))) { _rex.reus.delete(id); delete _rex.added[id]; }
+  }
+}
+// Copies des réunions cochées, grilles entièrement vides, dans l'ordre des dates. Identifiants r1, r2… : le
+// fichier du collègue nomme les siennes 'r' + Date.now(), sans collision possible.
+function _rexReunions() {
+  const out = {};
+  _rexSelReus().forEach((r, i) => {
+    const id = 'r' + (i + 1), ids = (r.classIds || []).filter(c => _rex.cls.has(c));
+    out[id] = { id, titre: r.titre || _reuAutoTitle(ids), titreAuto: r.titreAuto !== false, date: r.date, first: r.first, last: r.last, step: r.step,
+      classIds: ids.length ? ids : [..._rex.cls], prof: '', discipline: '', pauses: [], slots: {}, bilans: {} };
+  });
+  return out;
+}
+function _rexBy() { return (_rexSelReus().find(r => r.prof)?.prof || _reuList().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]?.prof || '').trim(); }
 function _rexStudents() {
   const out = {};
   for (const c of realClasses().filter(c => _rex.cls.has(c.id)))
@@ -30506,12 +30548,12 @@ function _rexRender() {
     return `<div class="reu-lvrow">${pill(k === cs.length, `_rexToggleLevel(${n})`, _esc(_levelLabel(n)), ' mvc-lvl' + (k && k < cs.length ? ' part' : ''))}${cs.map(c => pill(_rex.cls.has(c.id), `_rexToggleCls('${_escJsAttr(c.id)}')`, _esc(c.nom))).join('')}</div>`;
   }).join('') || '<p class="clf-note">Aucune classe.</p>';
   const reus = _reuList().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  document.getElementById('rex-reu').innerHTML = `<div class="reu-lvrow">${pill(!_rex.reu, `_rex.reu='';_rexRender()`, 'aucune')}${reus.map(r => pill(_rex.reu === r.id, `_rex.reu='${_escJsAttr(r.id)}';_rexRender()`, _esc(r.titre || 'Réunion') + ' — ' + _esc(_reuDateShort(r.date)))).join('')}</div>`;
+  document.getElementById('rex-reu').innerHTML = `<div class="reu-lvrow">${pill(!_rex.reus.size, `[..._rex.reus].forEach(_rexToggleReu)`, 'aucune')}${reus.map(r => pill(_rex.reus.has(r.id), `_rexToggleReu('${_escJsAttr(r.id)}')`, _esc(r.titre || 'Réunion') + ' — ' + _esc(_reuDateShort(r.date)))).join('')}</div>`;
   const st = _rexStudents(), n = Object.keys(st).length;
   const nph = Object.keys(st).filter(sid => _photoHas(sid)).length;
   const kb = 30 + (_rex.photos ? nph * 14 : 0);
   document.getElementById('rex-sum').innerHTML = `<b>${_esc(_rexTitle().replace(/[\\/:*?"<>|]/g, ''))}.html</b>
-    <div class="reu-mt">${n} élève${n > 1 ? 's' : ''} · ${_rex.cls.size} classe${_rex.cls.size > 1 ? 's' : ''} · ${_rex.photos ? (_photos.ready ? `${nph} photo${nph > 1 ? 's' : ''}` : 'photos lues dans ton dossier de sauvegarde à la création') : 'sans photos'} · ≈ ${kb >= 1000 ? (kb / 1000).toFixed(1).replace('.', ',') + ' Mo' : kb + ' Ko'}</div>`;
+    <div class="reu-mt">${n} élève${n > 1 ? 's' : ''} · ${_rex.cls.size} classe${_rex.cls.size > 1 ? 's' : ''}${_rex.reus.size ? ` · ${_rex.reus.size} réunion${_rex.reus.size > 1 ? 's' : ''}` : ''} · ${_rex.photos ? (_photos.ready ? `${nph} photo${nph > 1 ? 's' : ''}` : 'photos lues dans ton dossier de sauvegarde à la création') : 'sans photos'} · ≈ ${kb >= 1000 ? (kb / 1000).toFixed(1).replace('.', ',') + ' Mo' : kb + ' Ko'}</div>`;
   document.getElementById('rex-go').disabled = !n;
 }
 // Photo ramenée à 300 × 300 au plus (jamais agrandie), en WebP qualité 0,8 dans le fichier (v2.136.3 :
@@ -30554,13 +30596,7 @@ async function _rexBuild() {
         try { const u = await _photoUrl(sid); if (u) photos[sid] = await _rexPhoto(u); } catch (e) { console.warn('Photo non reprise', sid, e); }
       }
     }
-    const r = _reuGet(_rex.reu), reunions = {};
-    if (r) {
-      const ids = (r.classIds || []).filter(id => _rex.cls.has(id));
-      reunions.r1 = { id: 'r1', titre: r.titre || _reuAutoTitle(ids), titreAuto: r.titreAuto !== false, date: r.date, first: r.first, last: r.last, step: r.step,
-        classIds: ids.length ? ids : [..._rex.cls], prof: '', discipline: '', pauses: [], slots: {}, bilans: {} };
-    }
-    const by = (r?.prof || _reuList().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]?.prof || '').trim();
+    const reunions = _rexReunions(), by = _rexBy();
     const classes = realClasses().filter(c => _rex.cls.has(c.id)).map(c => ({ id: c.id, nom: c.nom, lvl: clsLevel(c) }));
     const data = { v: 1, fileId: 'rdv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), by, createdAt: todayKey(), savedAt: 0,
       classes, eleves: st, photos, reunions, prefs: { prof: '', discipline: '' } };
@@ -30589,33 +30625,34 @@ var _rexLastHTML = null; // dernier fichier produit (vérifications)
 var _rexMail = { ctx: null };
 function _rexMailCtx(built) {
   const st = _rexStudents(), sids = Object.keys(st);
-  const r = _reuGet(_rex.reu);
   return {
     name: built?.name || _rexTitle().replace(/[\\/:*?"<>|]/g, '') + '.html',
     n: built?.n ?? sids.length,
     nph: built?.nph ?? (_rex.photos ? sids.filter(sid => _photoHas(sid)).length : 0),
     size: built?.size || '',
     cls: realClasses().filter(c => _rex.cls.has(c.id)).map(c => c.nom),
-    reu: r ? { titre: r.titre || _reuAutoTitle([..._rex.cls]), date: r.date } : null,
-    by: (r?.prof || _reuList().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]?.prof || '').trim(),
+    reus: Object.values(_rexReunions()).map(r => ({ titre: r.titre, date: r.date })),
+    by: _rexBy(),
   };
 }
 function _rexMailText(c) {
   // Mini-balisage : **gras**. Version riche (HTML, styles en ligne — les messageries ignorent les classes)
   // et version texte (copie en secours, « Ouvrir dans ma messagerie ») produites depuis la même source.
-  const quand = c.reu?.date ? ` du ${_reuDateLong(c.reu.date)}` : '';
+  const rs = c.reus || [], plur = rs.length > 1;
+  const quand = rs.length === 1 && rs[0].date ? ` du ${_reuDateLong(rs[0].date)}` : '';
   const liste = c.cls.length > 1 ? c.cls.slice(0, -1).join(', ') + ' et ' + c.cls[c.cls.length - 1] : (c.cls[0] || '');
-  const subject = `📅 Réunion parents-professeurs${quand} : votre fichier de prise de rendez-vous`;
+  const subject = `📅 Réunion${plur ? 's' : ''} parents-professeurs${quand} : votre fichier de prise de rendez-vous`;
   const blocks = [
     ['p', 'Bonjour à toutes et à tous,'],
-    ['p', `📎 Je vous envoie en pièce jointe un fichier pour préparer vos rendez-vous de la **réunion parents-professeurs**. Il contient les élèves de **${liste}**${c.nph > 0 ? ', avec leur photo' : ''}.`],
+    ['p', `📎 Je vous envoie en pièce jointe un fichier pour préparer vos rendez-vous ${plur ? 'des **réunions parents-professeurs**' : 'de la **réunion parents-professeurs**'}. Il contient les élèves de **${liste}**${c.nph > 0 ? ', avec leur photo' : ''}.`],
     ['p', `⏱️ **Un vrai gain de temps** : vous cliquez sur un créneau, vous tapez deux ou trois lettres du nom, l'élève est proposé, **Entrée**… et le créneau suivant s'ouvre aussitôt. Recopier une pile de coupons ne prend que quelques minutes. Vous pouvez aussi **faire glisser un élève** de la liste directement sur la feuille, qui s'imprime ensuite au format habituel de l'établissement.`],
     ['p', '✅ **Pour commencer**'],
     ['ol', [
       `**Enregistrez** la pièce jointe « ${c.name} » dans vos Documents, puis **ouvrez-la d'un double-clic**. Rien à installer, pas besoin d'internet.`,
       `🌐 Utilisez de préférence **Google Chrome** ou un navigateur de la même famille (Microsoft Edge, Opera, Opera GX, Vivaldi, Chromium, Arc, Yandex) : l'enregistrement se fait **directement dans le fichier, en un clic**. Avec les autres navigateurs (Firefox, Safari, Brave, DuckDuckGo, Tor…), le fichier fonctionne aussi, mais chaque enregistrement télécharge une nouvelle copie, à garder à la place de l'ancienne.`,
-      c.reu ? `Cliquez sur la réunion « ${c.reu.titre} », puis sur **⚙ Réglages** pour mettre votre nom et votre discipline.`
-            : `Cliquez sur **＋ Nouvelle réunion** et choisissez la date, les horaires et vos classes.`,
+      plur ? `Les réunions sont déjà créées : ${rs.map(r => `« ${r.titre} »${r.date ? ` (${_reuDateLong(r.date)})` : ''}`).join(', ')}. Cliquez sur l'une d'elles, puis sur **⚙ Réglages** pour mettre votre nom et votre discipline : ils seront repris dans les autres. Ignorez celles qui ne vous concernent pas.`
+        : rs.length ? `Cliquez sur la réunion « ${rs[0].titre} », puis sur **⚙ Réglages** pour mettre votre nom et votre discipline.`
+        : `Cliquez sur **＋ Nouvelle réunion** et choisissez la date, les horaires et vos classes.`,
       `💾 Pensez à cliquer sur **Enregistrer** : la première fois, choisissez le fichier que vous avez ouvert et acceptez de le remplacer.`,
     ]],
     ['p', `💡 **Bon à savoir** : chaque bouton a une bulle d'aide, et **🖨 Mini bilans** imprime ce que vous voulez dire à chaque famille, avec de la place pour noter pendant l'entretien.`],
