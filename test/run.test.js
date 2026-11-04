@@ -3087,6 +3087,30 @@ test('Fichier pour un collègue : code autonome valide, sans </script>, et donn�
   assert.deepEqual(Object.keys(st.e1).sort(), ['cls', 'nom', 'prenom'], 'rien d\'autre que nom, prénom, classe');
 });
 
+test('Fichier pour un collègue : parent sans rendez-vous, mêmes règles que le logiciel ; la discipline ne se recopie pas', () => {
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html)[1];
+  const fn = n => { const m = new RegExp('^function ' + n + '\\(.*$', 'm').exec(js); assert.ok(m, n + ' doit exister, sur une ligne, dans le code autonome'); return m[0]; };
+  const box = {};
+  vm.runInNewContext(['mins', 'tOf', 'times', 'allTimes', 'walkKey'].map(fn).join('\n') + '\nthis.times = times; this.allTimes = allTimes; this.walkKey = walkKey;', box);
+  const r = { first: '17:00', last: '17:20', step: 5, pauses: ['17:15'], slots: { '17:00': { sid: 'e1' }, '17:05': { sid: 'e2' } } };
+  const key = t => JSON.parse(JSON.stringify(box.walkKey(r, t)));
+  assert.deepEqual(key('17:10'), { t: '17:10', x: false }, 'créneau libre de la grille : rendez-vous ordinaire');
+  assert.deepEqual(key('17:15'), { t: '17:15', x: false }, 'la pause cède');
+  assert.deepEqual(key('17:03'), { t: '17:03', x: true }, 'entre deux rendez-vous : heure intercalée');
+  assert.deepEqual(key('17:05'), { t: '17:06', x: true }, 'créneau pris : minute libre suivante');
+  assert.equal(box.walkKey(r, '25:00'), null);
+  assert.equal(box.walkKey(r, ''), null);
+  r.slots['17:03'] = { sid: 'e3', note: '', st: '', x: true };
+  assert.deepEqual([...box.allTimes(r)], ['17:00', '17:03', '17:05', '17:10', '17:15', '17:20'], 'la soirée compte les intercalés, dans l\'ordre');
+  assert.deepEqual([...box.times(r)], ['17:00', '17:05', '17:10', '17:15', '17:20'], 'la feuille imprimée garde sa grille');
+  assert.ok(/var lost = r \? Object\.keys\(r\.slots\)\.filter\(function \(t\) \{ return ts\.indexOf\(t\) < 0 && !r\.slots\[t\]\.x; \}\)/.test(js), 'changer les horaires ne doit pas effacer les parents intercalés');
+  // Un professeur peut enseigner le français à un niveau et les LCA à un autre : la discipline d'une réunion n'est jamais écrite dans une autre.
+  assert.ok(!/x\.discipline\s*=/.test(js), 'la discipline ne se recopie pas d\'une réunion à l\'autre');
+  assert.ok(/if \(!x\.prof\) x\.prof = nr\.prof;/.test(js), 'le nom, lui, est repris');
+});
+
 test('Fichier pour un collègue : plusieurs réunions de départ, grilles vides, classes qui suivent la sélection', () => {
   ev(`S.classes = { c1: { id: 'c1', nom: '6A', eleves: [], rooms: {} }, c2: { id: 'c2', nom: '6B', eleves: [], rooms: {} }, c3: { id: 'c3', nom: '5A', eleves: [], rooms: {} },
                     v1: { id: 'v1', nom: 'Latin', eleves: [], rooms: {}, virtual: true } };
@@ -3130,6 +3154,7 @@ test('Fichier pour un collègue : plusieurs réunions de départ, grilles vides,
   const several = JSON.parse(ev('JSON.stringify(_rexMailText(_rexMailCtx(null)))'));
   assert.ok(several.subject.startsWith('📅 Réunions parents-professeurs :'), several.subject);
   assert.ok(several.text.includes('« Niveau 5ème »') && several.text.includes('« Niveau 6ème »'), 'les réunions sont nommées');
+  assert.ok(several.text.includes('peut changer d\'une réunion à l\'autre'), 'le mail ne promet pas de reprendre la discipline');
   ev(`_rex.reus = new Set(['b']);`);
   const one = JSON.parse(ev('JSON.stringify(_rexMailText(_rexMailCtx(null)))'));
   assert.ok(/^📅 Réunion parents-professeurs du /.test(one.subject), one.subject);
