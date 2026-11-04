@@ -3135,6 +3135,13 @@ test('Réunions : un parent sans rendez-vous est coché Vu d\'office ; le compte
     { sid: 'e5', ts: ['17:15'], st: 'vu', x: false, note: '' },
     { sid: 'e4', ts: ['17:20'], st: '', x: false, note: '' },
   ], 'un élève par ligne, dans l\'ordre, créneaux réunis et toutes ses notes reprises');
+  // Mini bilans imprimés : la note de chaque créneau de l'élève, pas seulement celle du premier.
+  ev(`globalThis.__pa = { innerHTML: '', style: {} }; window.print = () => {};
+      { const _g = document.getElementById; document.getElementById = id => id === 'pa' ? globalThis.__pa : _g.call(document, id);
+        try { printReunionBilans(); } finally { document.getElementById = _g; } }`);
+  const paBil = ev('globalThis.__pa.innerHTML');
+  assert.ok(paBil.includes('Note un') && paBil.includes('Suite'), 'mini bilans : les notes des deux créneaux de l\'élève');
+  assert.ok(!/r\.slots\[ts\[0\]\]/.test(js), 'mini bilans du fichier des collègues : pas seulement le premier créneau');
   // Même résultat dans le fichier des collègues, à partir des mêmes données.
   const fn = n => { const m = new RegExp('^function ' + n + '\\(.*$', 'm').exec(js); assert.ok(m, n + ' doit exister, sur une ligne'); return m[0]; };
   const box = { D: { eleves: JSON.parse(ev('JSON.stringify(S.eleves)')) }, r: JSON.parse(ev('JSON.stringify(S.reunions.r1)')) };
