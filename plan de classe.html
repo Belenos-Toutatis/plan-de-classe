@@ -9913,11 +9913,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.157.1';
+const APP_VERSION    = '2.157.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-04T10:09:38Z';
+const APP_BUILD_DATE = '2026-11-04T21:55:12Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -50310,22 +50310,30 @@ function _evalTableurEnsureInputVisible(inputEl) {
     if (sticky) leftW = sticky.getBoundingClientRect().width;
   }
   const wrapRect = wrap.getBoundingClientRect();
-  const inpRect  = inputEl.getBoundingClientRect();
+  // La cellule entière, pas seulement son champ : c'est la ligne qu'on veut voir.
+  const inpRect  = (inputEl.closest('td, th') || inputEl).getBoundingClientRect();
   const PAD = 4;
+  // ⚠️ Zone CLIENT du conteneur, pas son getBoundingClientRect : celui-ci compte les barres
+  // de défilement, or le pied sticky se cale AU-DESSUS de la barre horizontale. Calculer
+  // depuis le bord extérieur laissait 17 px de la ligne sous le pied (champ à moitié caché).
+  const viewTop    = wrapRect.top + wrap.clientTop;
+  const viewBottom = viewTop + wrap.clientHeight;
+  const viewLeft   = wrapRect.left + wrap.clientLeft;
+  const viewRight  = viewLeft + wrap.clientWidth;
   // Vertical : décale le scroll si la cellule est masquée par le thead/tfoot sticky.
-  const topCovered = wrapRect.top + theadH;
-  const botCovered = wrapRect.bottom - tfootH;
+  const topCovered = viewTop + theadH;
+  const botCovered = viewBottom - tfootH;
   if (inpRect.top < topCovered + PAD) {
     wrap.scrollTop -= (topCovered + PAD - inpRect.top);
   } else if (inpRect.bottom > botCovered - PAD) {
     wrap.scrollTop += (inpRect.bottom - (botCovered - PAD));
   }
   // Horizontal : pareil pour la colonne « Élève » sticky-left (et le bord droit).
-  const leftCovered = wrapRect.left + leftW;
+  const leftCovered = viewLeft + leftW;
   if (inpRect.left < leftCovered + PAD) {
     wrap.scrollLeft -= (leftCovered + PAD - inpRect.left);
-  } else if (inpRect.right > wrapRect.right - PAD) {
-    wrap.scrollLeft += (inpRect.right - (wrapRect.right - PAD));
+  } else if (inpRect.right > viewRight - PAD) {
+    wrap.scrollLeft += (inpRect.right - (viewRight - PAD));
   }
 }
 

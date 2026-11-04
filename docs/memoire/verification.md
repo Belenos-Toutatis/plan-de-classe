@@ -100,3 +100,5 @@ Score de référence après la passe du 2026-07-30 : **1 écart sur les 10 chemi
 - **Impression** : 7 chemins audités en contraste (Prof, Élève, Plan vide, Liste élèves, Bilan des classes, Plans QCMCam, Marqueurs ArUco) → **0 écart** < 4,5:1. Non couverts par l'automate : `printSuiviPret`, `doPrintEmptyConfigSalle` (impriment via un état de modale), `printAllClasses`, `_renduPrint`.
 - **Clavier des modales** : 90/90 focalisées à l'ouverture, 90/90 fermées à Échap, 90/90 avec `role=dialog` + `aria-modal`.
 - **Responsive** et **rétrocompatibilité** : cf. sections dédiées ; **fuzz** et **sync** : cf. tests.
+
+💡 **Tester ce qui passe par `focusin` : vérifier `document.hasFocus()`.** Une page sans le focus système (panneau d'aperçu, ou après un rechargement) change bien `activeElement` à `.focus()`, mais **n'émet ni `focus` ni `focusin`**. Le gestionnaire ne joue donc pas et c'est le défilement natif du navigateur qu'on mesure (vécu le 2026-11-04 sur `_evalTableurEnsureInputVisible`). Donner le focus par un vrai clic, puis compter les `focusin`.

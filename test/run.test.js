@@ -3355,3 +3355,27 @@ test('recherche d\'un élève : une ligne de résultat (parti, recomposée, nom 
   assert.doesNotMatch(z, /<img src=x/);                  // le nom est échappé
   assert.doesNotMatch(z, / gone/);
 });
+
+test('tableur : la case active sort de sous le pied figé, barres de défilement comprises', () => {
+  // Conteneur : bordure 1 + 400 de zone client + barre horizontale 17 + bordure 1 ; pied de 46.
+  // Le pied se cale au-dessus de la barre : il commence à 401 - 46 = 355, pas à 419 - 46 = 373.
+  const run = (cell) => get(`(() => {
+    const rect = (top, bottom, left, right) => ({ top, bottom, left, right, width: right - left, height: bottom - top });
+    const wrap = { scrollTop: 100, scrollLeft: 50, clientTop: 1, clientLeft: 1, clientHeight: 400, clientWidth: 800,
+      getBoundingClientRect: () => rect(0, 419, 0, 819) };
+    const sticky = { getBoundingClientRect: () => rect(0, 0, 0, 120) };
+    const row = { querySelector: () => sticky };
+    const table = { tHead: { getBoundingClientRect: () => rect(0, 60, 0, 0) }, tFoot: { getBoundingClientRect: () => rect(0, 46, 0, 0) } };
+    const td = { getBoundingClientRect: () => rect(${cell.join(',')}) };
+    const input = { closest: sel => sel === 'tr' ? row : sel === 'td, th' ? td : table };
+    const orig = document.getElementById;
+    document.getElementById = id => id === 'meval-tableur-wrap' ? wrap : orig(id);
+    try { _evalTableurEnsureInputVisible(input); } finally { document.getElementById = orig; }
+    return { top: wrap.scrollTop, left: wrap.scrollLeft };
+  })()`);
+  assert.deepEqual(run([340, 375, 200, 300]), { top: 124, left: 50 });   // bas : 375 ramené à 355 - 4
+  assert.deepEqual(run([300, 335, 200, 300]), { top: 100, left: 50 });   // déjà visible : rien ne bouge
+  assert.deepEqual(run([50, 85, 200, 300]),   { top: 85,  left: 50 });   // haut : 50 ramené à 1 + 60 + 4
+  assert.deepEqual(run([200, 235, 700, 810]), { top: 100, left: 63 });   // droite : 810 ramené à 801 - 4
+  assert.deepEqual(run([200, 235, 100, 190]), { top: 100, left: 25 });   // gauche : 100 ramené à 1 + 120 + 4
+});
