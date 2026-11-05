@@ -2628,6 +2628,7 @@ html[data-theme="dark"] .pair-row { background: #3a1f1f !important; border-color
 .evp-cell-vide { background: var(--paper); border: 1px dashed var(--rule-line-soft); }
 .evp-cell-stu { background: var(--paper); border: 1px solid var(--rule-line); }
 .evp-name { font-family: var(--font-serif); font-size: .92em; line-height: 1.1; text-align: center; color: var(--ink-deep); margin-bottom: 4px; }
+.evp-cell-stu:not(.brushable) .evp-name { cursor: context-menu; }   /* clic droit = commentaire ; avec le pinceau, le curseur dit ce que fait le clic */
 /* Prénom et nom à la largeur de la case : taille calculée par _evpFitNames (une par ligne) */
 .evp-fit { white-space: nowrap; overflow: hidden; line-height: 1.12; width: 0; min-width: 100%; }   /* width:0 + min-width:100% : remplit la case sans peser dans la largeur de la grille */
 .evp-fit > * { display: inline-block; }
@@ -6787,6 +6788,7 @@ body.topbar-free #topbar { position: static !important; }
       </span>
     </div>
     <input type="hidden" id="meval-comments-mnid">
+    <div id="meval-comments-cases" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
     <div class="ev-h" id="meval-comments-count">Sur cette case</div>
     <div class="lst-box">
       <div id="meval-comments-list"></div>
@@ -7320,7 +7322,7 @@ body.topbar-free #topbar { position: static !important; }
     </div>
     <div id="meval-plan-overlay-brush" class="evp-brush"></div>
     <div id="meval-plan-overlay-grid" style="flex:1;overflow:auto;background:var(--paper);border:1px solid var(--rule-line);border-radius:4px;padding:14px"></div>
-    <p class="lst-intro" style="margin:8px 0 0">Tableau en bas, vue prof. Clic sur une pastille = niveau ; re-clic sur le niveau actif = retirer. Enregistré au fil de l'eau (Ctrl+Z annule).</p>
+    <p class="lst-intro" style="margin:8px 0 0">Tableau en bas, vue prof. Clic sur une pastille = niveau ; re-clic sur le niveau actif = retirer ; clic droit sur un nom = 💬 justifier une compétence. Enregistré au fil de l'eau (Ctrl+Z annule).</p>
   </div>
 </div>
 <!-- ── MODAL Saisie mode tableur (élèves × mini-notes) ── -->
@@ -9913,11 +9915,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.157.3';
+const APP_VERSION    = '2.158.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-04T22:14:13Z';
+const APP_BUILD_DATE = '2026-11-05T11:01:59Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12722,6 +12724,7 @@ function _refreshOpenEvalModals() {
   }
   if (on('meval-comments')) { try { _cmEditIdx = null; _evalCommentsRender(); } catch (_) {} }
   if (on('meval-adjust')) { try { _evalAdjustRender(); } catch (_) {} }
+  if (on('meval-plan-overlay')) { try { _evalPlanOverlayRender(); } catch (_) {} }   // pastilles et repère ⚖ du plan du type B
 }
 
 // true si la cible du clavier est un champ de SAISIE (texte, nombre, date, zone de texte, éditable) —
@@ -50943,6 +50946,7 @@ function _evalPlanOverlayRender() {
     grid.innerHTML = _emptyStateHTML('🎯', 'Aucune compétence sur cette passation', 'Ajoute des compétences à la passation (🏗 Structure) pour pouvoir saisir les niveaux.');
     return;
   }
+  _evpPairsNow = pairs;
   const rows = salle.rows, cols = salle.cols;
   const colors = _maitriseColors();
   const _gPlan = _evalTableurGroup(cls);
@@ -51017,13 +51021,17 @@ function _evalPlanOverlayRender() {
         // Si plusieurs passations à cette date, préfixe la compétence par son code de passation
         const compLabel = multiPass ? `${pass.code}/${c.code}` : c.code;
         const compTip = multiPass ? `${pass.code} — ${c.name || c.code}` : (c.name || '');
+        // Commentaires de cette case : le coin rouge et l'infobulle du tableur
+        const comList = ev.notes?.[sid]?.comments?.[_cellComKey(pass.id, cid)];
+        const nbCom = Array.isArray(comList) ? comList.length : 0;
+        const comMark = nbCom ? `<span aria-hidden="true" class="tcom-corner" style="position:absolute;top:0;right:0;border-top:9px solid var(--margin-red);border-left:9px solid transparent;pointer-events:none"></span>` : '';
         compsHTML += `<div style="display:flex;align-items:center;gap:5px;margin-top:4px">
-          <span style="font-family:var(--font-mono);font-weight:600;font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);padding:1px 5px;border-radius:3px;min-width:24px;text-align:center" title="${_esc(compTip)}">${_esc(compLabel)}</span>
+          <span style="position:relative;font-family:var(--font-mono);font-weight:600;font-size:.78em;color:var(--ink-blue);background:var(--paper-warm);padding:1px 5px;border-radius:3px;min-width:24px;text-align:center" title="${_escAttr(compTip + (nbCom ? `\n💬 ${comList.join(' · ')}` : ''))}">${_esc(compLabel)}${comMark}</span>
           <div style="display:flex;gap:3px;flex:1">${pills}</div>
         </div>`;
       }
       html += `<div class="evp-cell evp-cell-stu${_evpBrushReady() ? ' brushable' : ''}" style="min-height:${cellMinH}px" onclick="_evpCellClick(event,'${_escJsAttr(sid)}')">
-        <div class="evp-name"><div class="evp-fit"><strong>${_esc(stu.prenom)}</strong></div><div class="evp-fit"><span>${_esc(stu.nom?.toUpperCase() || '')}</span></div></div>
+        <div class="evp-name" oncontextmenu="event.preventDefault();_evpCommentsOpen('${_escJsAttr(sid)}')"><div class="evp-fit"><strong>${_esc(stu.prenom)}</strong></div><div class="evp-fit"><span>${_esc(stu.nom?.toUpperCase() || '')}</span></div></div>
         ${compsHTML}
       </div>`;
     }
@@ -51140,6 +51148,28 @@ function _evpCellClick(e, sid) {
   save();
   _evalPlanOverlayRender();
 }
+// Clic droit sur le prénom ou le nom : la fenêtre des commentaires du tableur, pour justifier
+// le niveau d'une compétence. Une case du plan en porte souvent plusieurs : on ouvre sur celle
+// du pinceau, sinon sur la dernière évaluée pour cet élève, sinon sur la première — et la
+// fenêtre permet d'en changer (`cases`). Le plan se redessine à la fermeture pour son coin rouge.
+var _evpPairsNow = [];     // (passation, compétence) affichées par le dernier rendu
+var _evpLastPill = null;   // { sid, key } : dernière pastille cliquée
+function _evpCommentCase(sid, keys) {
+  if (_evpBrush.pair && keys.includes(_evpBrush.pair)) return _evpBrush.pair;
+  if (_evpLastPill?.sid === sid && keys.includes(_evpLastPill.key)) return _evpLastPill.key;
+  return keys[0];
+}
+function _evpCommentsOpen(sid) {
+  const multiPass = new Set(_evpPairsNow.map(x => x.pass.id)).size > 1;
+  const cases = _evpPairsNow.filter(x => S.competences?.[x.cid]).map(({ pass, cid }) => {
+    const c = S.competences[cid];
+    return { key: _cellComKey(pass.id, cid), label: multiPass ? `${pass.code}/${c.code}` : c.code, tip: c.name || '' };
+  });
+  if (!cases.length) return;
+  _evalCommentsOpen(_evpCommentCase(sid, cases.map(c => c.key)), sid, null, cases);
+  const prev = _modalReturnTo['meval-comments'];
+  _modalReturnTo['meval-comments'] = () => { if (prev) prev(); if (document.getElementById('meval-plan-overlay')?.classList.contains('on')) _evalPlanOverlayRender(); };
+}
 // Filtre de groupe : le même que celui du tableur
 function _evpGroupRender(cls) {
   const box = document.getElementById('meval-plan-overlay-grp');
@@ -51170,6 +51200,7 @@ function _evalPlanOverlayPill(btn) {
   pass.niveaux = pass.niveaux || {};
   pass.niveaux[sid] = pass.niveaux[sid] || {};
   pass.niveaux[sid][cid] = val;   // 0 = « non évalué » explicite, conservé (comme au tableur)
+  _evpLastPill = { sid, key: _cellComKey(passId, cid) };
   ev.updatedAt = Date.now();
   save();
   // Met à jour visuellement les 6 pastilles A/0/1/2/3/4 dans la cellule.
@@ -61342,7 +61373,7 @@ function _qcmcamNextMnLabel(ev, baseMn) {
 // Bibliothèque globale : S.evalCommentLibrary = { positive: [str,...], negative: [str,...] }
 
 // Contexte courant des commentaires (set par les callers — fiche supprimée, tableur uniquement maintenant)
-const _commentsCtx = { evalId: null, sid: null, mnId: null };
+const _commentsCtx = { evalId: null, sid: null, mnId: null, cases: null };
 function _evalCommentsToggleDisp(on) {
   const { evalId, sid, mnId } = _commentsCtx;
   const ev = S.evaluations?.[evalId];
@@ -61540,7 +61571,7 @@ function _evalNoteAdjustExtra(ev, sid) {
   };
 }
 
-function _evalCommentsOpen(mnId, sid, evalId) {
+function _evalCommentsOpen(mnId, sid, evalId, cases) {
   // Compat : si appelé sans sid/evalId (signature historique), on tente l'éval courante du tableur
   evalId = evalId || document.getElementById('meval-tableur-evalid')?.value;
   sid    = sid    || document.getElementById('meval-saisie-sid')?.value;
@@ -61548,6 +61579,7 @@ function _evalCommentsOpen(mnId, sid, evalId) {
   _commentsCtx.evalId = evalId;
   _commentsCtx.sid    = sid;
   _commentsCtx.mnId   = mnId;
+  _commentsCtx.cases  = cases || null;   // plan du type B : les compétences entre lesquelles choisir
   document.getElementById('meval-comments-mnid').value = mnId;
   _cmEditIdx = null;
   _evalCommentsRender();
@@ -61602,6 +61634,25 @@ function _evalCommentsHead(ctx) {
   const pv = document.getElementById('meval-comments-prev'), nx = document.getElementById('meval-comments-next');
   if (pv) { pv.disabled = k <= 0; pv.style.display = order.length > 1 ? '' : 'none'; }
   if (nx) { nx.disabled = k < 0 || k >= order.length - 1; nx.style.display = order.length > 1 ? '' : 'none'; }
+  // Ouverte depuis le plan du type B : le nom d'un élève porte plusieurs compétences
+  const cs = document.getElementById('meval-comments-cases');
+  if (cs) {
+    const cases = _commentsCtx.cases || [];
+    cs.style.display = cases.length > 1 ? 'flex' : 'none';
+    cs.innerHTML = cases.length > 1
+      ? `<span class="lst-count">Compétence à justifier :</span><span class="ip-seg">${cases.map(c => {
+          const n = ev?.notes?.[sid]?.comments?.[c.key]?.length || 0;
+          return `<button type="button" class="${c.key === mnId ? 'on' : ''}" onclick="_evalCommentsSetCase('${_escJsAttr(c.key)}')" title="${_escAttr(c.tip)}">${_esc(c.label)}${n ? ` · ${n}` : ''}</button>`;
+        }).join('')}</span>`
+      : '';
+  }
+}
+function _evalCommentsSetCase(key) {
+  _commentsCtx.mnId = key;
+  document.getElementById('meval-comments-mnid').value = key;
+  _cmEditIdx = null;
+  _evalCommentsRender();
+  document.getElementById('meval-comments-newinput')?.focus();
 }
 function _evalCommentsOrder() {
   return [...document.querySelectorAll('#meval-tableur tbody tr[data-sid]:not(.bf-hide)')].map(tr => tr.dataset.sid);

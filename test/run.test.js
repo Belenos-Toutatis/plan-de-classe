@@ -3424,3 +3424,93 @@ test('tableur : un appel fait après le réglage de la date pose les « A » à 
     assert.ok(i >= 0 && i < j, `${fn} doit reprendre les absents avant de dessiner le tableur`);
   }
 });
+
+test('plan du type B : clic droit sur le nom = commentaires de la compétence évaluée', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2'], activeRoom: 'r1', rooms: { r1: { seating: { '0,0': 's1', '0,1': 's2' } } } } },
+    eleves: { s1: { id: 's1', nom: 'Un', prenom: 'Ana', classe_id: 'c1' }, s2: { id: 's2', nom: 'Deux', prenom: 'Bea', classe_id: 'c1' } },
+    salles: { r1: { nom: 'A', rows: 1, cols: 2, positions_vides: [] } },
+    competences: { k1: { id: 'k1', code: 'C2', name: 'Démarche' }, k2: { id: 'k2', code: 'C5', name: 'Sécurité' } },
+    evaluations: { e1: { id: 'e1', type: 'B', classId: 'c1', date: '2026-01-10',
+      passations: [{ id: 'p1', code: 'TP1', date: '2026-01-10', competenceIds: ['k1', 'k2'], niveaux: {} }],
+      notes: { s2: { comments: { 'p1|k2': ['Blouse non fermée'] } } } } },
+  });
+  // DOM minimal et fonctions d'affichage neutralisées, remis en place à la fin.
+  const avecDom = code => ev(`(() => {
+    const sav = { gebi: document.getElementById, fit: _evpFit, brush: _evpBrushRender, grp: _evpGroupRender, open: _evalCommentsOpen, render: _evalPlanOverlayRender, cRender: _evalCommentsRender };
+    const el = o => ({ value: '', innerHTML: '', style: {}, dataset: {}, classList: { contains: () => false }, focus() {}, ...o });
+    const grid = el({});
+    const els = {
+      'meval-tableur-evalid': el({ value: 'e1' }),
+      'meval-tableur': el({ dataset: { classid: 'c1' } }),
+      'meval-plan-overlay': el({ dataset: { passDate: '2026-01-10' }, classList: { contains: () => true } }),
+      'meval-plan-overlay-grid': grid,
+    };
+    document.getElementById = id => els[id] || (els[id] = el({}));
+    _evpFit = () => {}; _evpBrushRender = () => {}; _evpGroupRender = () => {};
+    try { ${code} } finally {
+      document.getElementById = sav.gebi; _evpFit = sav.fit; _evpBrushRender = sav.brush; _evpGroupRender = sav.grp;
+      _evalCommentsOpen = sav.open; _evalPlanOverlayRender = sav.render; _evalCommentsRender = sav.cRender;
+    }
+  })()`);
+
+  // Le geste est posé sur le prénom et le nom de chaque élève ; le coin rouge ne marque que
+  // la compétence commentée, et l'infobulle reprend le commentaire.
+  const html = avecDom(`_evalPlanOverlayRender(); return grid.innerHTML;`);
+  for (const sid of ['s1', 's2']) assert.ok(html.includes(`class="evp-name" oncontextmenu="event.preventDefault();_evpCommentsOpen('${sid}')"`), sid);
+  assert.equal(html.split('tcom-corner').length - 1, 1, 'un seul coin rouge : la case commentée');
+  assert.ok(html.includes('💬 Blouse non fermée'));
+
+  // Quelle compétence ouvrir : celle du pinceau, sinon la dernière évaluée pour CET élève, sinon la première.
+  const cas = (sid, brush, last) => ev(`(() => {
+    const b = _evpBrush, l = _evpLastPill;
+    _evpBrush = { pair: ${JSON.stringify(brush)}, v: null }; _evpLastPill = ${JSON.stringify(last)};
+    try { return _evpCommentCase('${sid}', ['p1|k1', 'p1|k2']); } finally { _evpBrush = b; _evpLastPill = l; }
+  })()`);
+  assert.equal(cas('s1', null, null), 'p1|k1');
+  assert.equal(cas('s1', null, { sid: 's1', key: 'p1|k2' }), 'p1|k2', 'la dernière pastille cliquée pour cet élève');
+  assert.equal(cas('s2', null, { sid: 's1', key: 'p1|k2' }), 'p1|k1', 'celle d\'un autre élève ne compte pas');
+  assert.equal(cas('s1', 'p1|k2', { sid: 's1', key: 'p1|k1' }), 'p1|k2', 'le pinceau passe avant');
+  assert.equal(cas('s1', 'p9|k9', null), 'p1|k1', 'un pinceau d\'une autre passation est ignoré');
+
+  // Une pastille cliquée est retenue comme compétence évaluée.
+  const last = avecDom(`
+    _evalArmUndo = () => {};
+    _evalPlanOverlayPill({ parentElement: null, getAttribute: k => ({ 'data-passid': 'p1', 'data-sid': 's1', 'data-cid': 'k2', 'data-niveau': '3' })[k] });
+    return JSON.stringify(_evpLastPill);`);
+  assert.deepEqual(JSON.parse(last), { sid: 's1', key: 'p1|k2' });
+  assert.equal(get('S.evaluations.e1.passations[0].niveaux.s1.k2'), 3);
+
+  // Ouverture : la fenêtre reçoit les compétences au choix, et sa fermeture redessine le tableur ET le plan.
+  const ouvre = JSON.parse(avecDom(`
+    _evalPlanOverlayRender();
+    let args = null, tableur = 0, plan = 0;
+    _evalCommentsOpen = (...a) => { args = a; _modalReturnTo['meval-comments'] = () => { tableur++; }; };
+    _evalPlanOverlayRender = () => { plan++; };
+    _evpLastPill = null;
+    _evpCommentsOpen('s2');
+    _afterModalClose('meval-comments');
+    return JSON.stringify({ args, tableur, plan, reste: typeof _modalReturnTo['meval-comments'] });`));
+  assert.equal(ouvre.args[0], 'p1|k1');
+  assert.equal(ouvre.args[1], 's2');
+  assert.deepEqual(ouvre.args[3].map(c => c.label), ['C2', 'C5']);
+  assert.deepEqual([ouvre.tableur, ouvre.plan, ouvre.reste], [1, 1, 'undefined']);
+
+  // Le sélecteur n'apparaît que depuis le plan : une ouverture du tableur (sans « cases ») l'efface.
+  const ctx = JSON.parse(avecDom(`
+    _evalCommentsRender = () => {};
+    const openMod0 = openMod, st0 = globalThis.setTimeout; openMod = () => {}; globalThis.setTimeout = () => 0;   // le focus différé viendrait après la remise en place du DOM
+    try {
+      _evalCommentsOpen('p1|k1', 's1', 'e1', [{ key: 'p1|k1', label: 'C2', tip: '' }, { key: 'p1|k2', label: 'C5', tip: '' }]);
+      const avec = _commentsCtx.cases.length;
+      _evalCommentsSetCase('p1|k2');
+      const apres = _commentsCtx.mnId;
+      _evalCommentsOpen('p1|k1', 's1', 'e1');
+      return JSON.stringify({ avec, apres, sans: _commentsCtx.cases });
+    } finally { openMod = openMod0; globalThis.setTimeout = st0; delete _modalReturnTo['meval-comments']; }`));
+  assert.deepEqual(ctx, { avec: 2, apres: 'p1|k2', sans: null });
+
+  // Ctrl+Z redessine le plan : son pied le promet, et le modèle revenait sans que l'écran suive.
+  assert.ok(ev('_refreshOpenEvalModals.toString()').includes('_evalPlanOverlayRender()'));
+});
