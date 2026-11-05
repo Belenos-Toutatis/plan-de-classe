@@ -381,12 +381,13 @@ _uiConfirm({
   onOk,             // callback exécuté à la validation
   onCancel,         // callback exécuté si fermeture sans valider (Annuler / Échap / clic fond)
   closeFirst,       // id d'une modale à fermer d'abord (ex. 'mreset') avant d'afficher mconfirm2
+  defaultCancel,    // true : Annuler est le choix par défaut (mis en avant, focus, Entrée l'exécute)
 });
 ```
 
 **Pourquoi** : un `confirm()` natif bloqué par l'anti-popup du navigateur (case « empêcher cette page d'ouvrir des boîtes de dialogue ») renvoie `false` silencieusement → l'action ne se déclenche jamais, le bouton paraît cassé. La modale interne n'est jamais bloquée.
 
-**Clavier** : `_uiConfirm` pose le focus sur le bouton principal (`#mconfirm2-ok`) 60 ms après ouverture → **Entrée confirme** (parité avec `confirm()` natif), Échap annule, et le focus trap de la modale devient effectif (il exige un focus initial à l'intérieur de la modale pour intercepter Tab).
+**Clavier** : `_uiConfirm` pose le focus sur le bouton principal (`#mconfirm2-ok`) 60 ms après ouverture → **Entrée confirme** (parité avec `confirm()` natif), Échap annule, et le focus trap de la modale devient effectif (il exige un focus initial à l'intérieur de la modale pour intercepter Tab). Avec `defaultCancel`, c'est `#mconfirm2-cancel` qui reçoit le focus et l'allure du bouton principal : Entrée annule. La modale étant partagée, l'option est remise à zéro à chaque appel.
 
 ⚠️ **Une modale s'ouvre par `openMod(id)`, JAMAIS par `classList.add('on')`** — c'est `openMod`
 qui pose `role="dialog"`, `aria-modal="true"`, le piège de focus et l'autofocus. Deux ouvreurs
@@ -464,4 +465,4 @@ Audit du 2026-09-05 sur 4 gabarits (375×812, 812×375, 768×1024, 1024×768), v
 - Confirmation avec branche `else` (ex. rechargement fichier qui note un timestamp au refus) → utiliser `onCancel`.
 - `_uiConfirm` n'est PAS bloquant au sens JS (pas de valeur de retour) : tout ce qui suivait le `confirm()` doit passer dans `onOk`/`onCancel`, pas après l'appel.
 
-**Cas particulier — note hors barème** (`_evalTableurConfirmIfOutOfRange`, tableur d'éval) : utilise `_uiConfirm` avec **Conserver** (`onOk`, garde la valeur) / **Annuler** (`onCancel`, restaure la valeur précédente capturée au focus + recolore). Fenêtre bloquante voulue (choix explicite de l'enseignant).
+**Cas particulier — note hors barème** (`_evalTableurConfirmIfOutOfRange`, tableur d'éval) : utilise `_uiConfirm` avec **Conserver** (`onOk`, garde la valeur) / **Annuler**, le choix par défaut (`defaultCancel`, `onCancel` : la note revient à la valeur précédente, et on retourne sur la case avec la valeur refusée sélectionnée — détail dans `docs/memoire/evaluations-calculs.md`). Fenêtre bloquante voulue (choix explicite de l'enseignant).

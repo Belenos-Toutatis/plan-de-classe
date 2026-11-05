@@ -3514,3 +3514,64 @@ test('plan du type B : clic droit sur le nom = commentaires de la compétence é
   // Ctrl+Z redessine le plan : son pied le promet, et le modèle revenait sans que l'écran suive.
   assert.ok(ev('_refreshOpenEvalModals.toString()').includes('_evalPlanOverlayRender()'));
 });
+
+test('note hors barème : Annuler par défaut, retour sur la case avec la valeur refusée sélectionnée', () => {
+  // Un faux champ et le journal de ce qui lui arrive, dans l'ordre.
+  const scenario = code => JSON.parse(ev(`(() => {
+    const sav = { conf: _uiConfirm, upd: _evalTableurUpdate, expr: _evalTableurMaybeApplyExpr };
+    const log = []; let opts = null;
+    _evalTableurMaybeApplyExpr = () => {};
+    _uiConfirm = o => { opts = o; log.push('fenêtre'); };
+    _evalTableurUpdate = e => { log.push('note=' + e.value); };
+    const el = { value: '4', dataset: { prevValue: '2' }, style: {}, title: '',
+      getAttribute: k => (k === 'data-mnmax' ? '3' : null),
+      focus() { log.push('focus:' + this.value); this.dataset.prevValue = this.value; },   // comme le onfocus de la case
+      select() { log.push('sélection:' + this.value); } };
+    const blur = () => _evalTableurConfirmIfOutOfRange(el);
+    try { ${code} } finally { _uiConfirm = sav.conf; _evalTableurUpdate = sav.upd; _evalTableurMaybeApplyExpr = sav.expr; }
+    return JSON.stringify({ log, value: el.value, prev: el.dataset.prevValue, refusee: el.dataset.oorRefused ?? null, defaut: !!opts?.defaultCancel });
+  })()`));
+
+  // Annuler : la note revient à la valeur précédente AVANT le focus (qui capture prevValue), puis
+  // la valeur refusée revient à l'écran, sélectionnée.
+  const annule = scenario(`blur(); opts.onCancel();`);
+  assert.equal(annule.defaut, true, 'Annuler est le choix par défaut');
+  assert.deepEqual(annule.log, ['fenêtre', 'note=2', 'focus:2', 'sélection:4']);
+  assert.deepEqual([annule.value, annule.prev, annule.refusee], ['4', '2', '4']);
+
+  // Quitter la case sans rien taper : l'ancienne valeur réapparaît, sans seconde fenêtre.
+  const quitte = scenario(`blur(); opts.onCancel(); log.length = 0; blur();`);
+  assert.deepEqual(quitte.log, []);
+  assert.deepEqual([quitte.value, quitte.refusee], ['2', null]);
+
+  // Taper une valeur correcte : elle reste, sans fenêtre.
+  const corrige = scenario(`blur(); opts.onCancel(); log.length = 0; el.value = '1'; delete el.dataset.oorRefused; blur();`);
+  assert.deepEqual(corrige.log, []);
+  assert.equal(corrige.value, '1');
+
+  // Retaper la même valeur hors barème : c'est une frappe, la fenêtre revient (la saisie efface le repère).
+  const retape = scenario(`blur(); opts.onCancel(); log.length = 0; delete el.dataset.oorRefused; blur();`);
+  assert.deepEqual(retape.log, ['fenêtre']);
+  assert.ok(ev('_evalTableurUpdate.toString()').includes('delete inputEl.dataset.oorRefused'), 'la saisie efface le repère');
+
+  // Conserver garde la valeur et ne revient pas sur la case.
+  const garde = scenario(`blur(); opts.onOk();`);
+  assert.deepEqual(garde.log, ['fenêtre']);
+  assert.deepEqual([garde.value, garde.refusee], ['4', null]);
+
+  // Le vrai _uiConfirm (neutralisé en tête de ce fichier, d'où une seconde instance) : le choix par
+  // défaut ne vaut que pour la fenêtre qui le demande, et ne déteint pas sur la suivante.
+  const app2 = loadApp();
+  const ouvre = o => JSON.parse(app2.__TESTEVAL(`(() => {
+    let focus = null;
+    const el = id => ({ textContent: '', className: '', style: {}, focus() { focus = id; } });
+    const els = { 'mconfirm2-ok': el('ok'), 'mconfirm2-cancel': el('cancel') };
+    const gebi = document.getElementById, om = openMod, st = globalThis.setTimeout;
+    document.getElementById = id => els[id] || el(id);
+    openMod = () => {}; globalThis.setTimeout = f => { f(); return 0; };
+    try { _uiConfirm(${JSON.stringify(o)}); } finally { document.getElementById = gebi; openMod = om; globalThis.setTimeout = st; }
+    return JSON.stringify({ focus, annuler: els['mconfirm2-cancel'].className });
+  })()`));
+  assert.deepEqual(ouvre({ defaultCancel: true }), { focus: 'cancel', annuler: 'btn btn-p' });
+  assert.deepEqual(ouvre({}), { focus: 'ok', annuler: 'btn btn-g' });
+});

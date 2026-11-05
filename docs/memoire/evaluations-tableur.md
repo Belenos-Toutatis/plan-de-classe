@@ -265,7 +265,7 @@ Puces `#meval-tableur-gfilter` dans la barre du tableur (rendues par `_evalTable
 - **Frontière entre exercices** (Type C) : la 1re colonne de chaque nouvel exo (header + cellule de saisie + footer stats) reçoit un `border-left:2px solid var(--ink-blue-soft)`. Set d'indices via `exoBoundarySet` calculé à partir de `exoGroups.colStart`.
 - **Type C en-tête vertical** : code / barème / pastille compétence empilés sur 3 lignes (au lieu de code + max côte à côte) → colonnes peuvent rester serrées à 70px.
 - **Saisie en temps réel** : `_evalTableurUpdate` met à jour la couleur de fond de la cellule + la couleur du texte à chaque frappe (plus besoin de refresh). Helpers `_evalTableurRefreshFooterStats`, `_evalTableurRefreshRowDerived`, `_evalTableurRefreshFooterStatsB` recalculent toutes les stats footer + colonnes dérivées (Σ exo, brut, comps inline) en place sans toucher au focus.
-- **Confirmation hors barème** : `_evalTableurConfirmIfOutOfRange` (au blur) → `_uiConfirm` si la note finale est hors `[0, mn.max]`. Annuler = restaure la valeur d'avant focus (capturée dans `dataset.prevValue` à l'`onfocus`).
+- **Confirmation hors barème** : `_evalTableurConfirmIfOutOfRange` (au blur) → `_uiConfirm` si la note finale est hors `[0, mn.max]`. Annuler, choix par défaut = restaure la valeur d'avant focus (capturée dans `dataset.prevValue` à l'`onfocus`) et revient sur la case, la valeur refusée sélectionnée (v2.158.1, détail dans `evaluations-calculs.md`).
 - **Code/barème serrés** Type A : `maxlength="5"` sur le code, `max=99` + largeur réduite (54px / 40px) pour le barème. Type C garde les dimensions historiques (60px / 40px, max=100).
 
 ### Affectation de compétences en lot (Type C)

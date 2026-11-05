@@ -7458,7 +7458,7 @@ body.topbar-free #topbar { position: static !important; }
     <h2 id="mconfirm2-title">Confirmer</h2>
     <p id="mconfirm2-msg" style="white-space:pre-line;font-size:.9em;color:var(--ink-deep);line-height:1.5;margin:6px 0 14px"></p>
     <div class="ma" style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-g" onclick="closeMod2('mconfirm2')">Annuler</button>
+      <button class="btn btn-g" id="mconfirm2-cancel" onclick="closeMod2('mconfirm2')">Annuler</button>
       <button class="btn btn-p" id="mconfirm2-ok">Confirmer</button>
     </div>
   </div>
@@ -9915,11 +9915,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.158.0';
+const APP_VERSION    = '2.158.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-05T11:01:59Z';
+const APP_BUILD_DATE = '2026-11-05T11:12:26Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -24618,11 +24618,15 @@ function _uiConfirm(opts) {
       delete _modalReturnTo['mconfirm2'];
     }
   }
+  // defaultCancel : c'est Annuler le choix par défaut (mis en avant, et Entrée le déclenche).
+  const cancel = document.getElementById('mconfirm2-cancel');
+  if (cancel) cancel.className = 'btn ' + (opts.defaultCancel ? 'btn-p' : 'btn-g');
   openMod('mconfirm2');
   // Focus sur le bouton principal : Entrée confirme (parité avec confirm() natif),
   // Échap annule, et le focus trap de la modale devient effectif (il exige un
   // focus initial à l'intérieur pour intercepter Tab).
-  if (ok) setTimeout(() => { try { ok.focus(); } catch (_) {} }, 60);
+  const first = (opts.defaultCancel && cancel) || ok;
+  if (first) setTimeout(() => { try { first.focus(); } catch (_) {} }, 60);
 }
 
 // ─── Saisie de texte in-app (remplace prompt() natif — même raison que _uiConfirm) ───
@@ -49828,6 +49832,7 @@ function _evalTableurUpdate(inputEl) {
   if (!sid) return;
   const parsed = _parseMiniNoteInput(inputEl.value);
   _evalArmUndo();
+  delete inputEl.dataset.oorRefused;   // une frappe : ce n'est plus la valeur refusée, cf. _evalTableurConfirmIfOutOfRange
 
   const outOfRange = (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax));
   if (outOfRange) {
@@ -50062,6 +50067,11 @@ function _evalTableurMaybeApplyExpr(inputEl) {
 
 function _evalTableurConfirmIfOutOfRange(inputEl) {
   if (!inputEl) return;
+  // Annuler a laissé la valeur refusée à l'écran, sélectionnée pour être retapée ; la note, elle,
+  // est déjà revenue à la valeur précédente. Quitter la case sans rien taper la remet aussi à l'écran.
+  const refused = inputEl.dataset.oorRefused;
+  delete inputEl.dataset.oorRefused;
+  if (refused != null && inputEl.value === refused) { inputEl.value = inputEl.dataset.prevValue || ''; return; }
   // Étape 1 — mini-calculatrice (si la cellule contient un opérateur)
   _evalTableurMaybeApplyExpr(inputEl);
   // Étape 2 — détection hors barème sur la valeur finale
@@ -50070,13 +50080,15 @@ function _evalTableurConfirmIfOutOfRange(inputEl) {
   const outOfRange = (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax));
   if (!outOfRange) return;
   // Fenêtre bloquante (modale mconfirm2, non contournable par l'anti-popup du navigateur) :
-  // l'enseignant choisit de conserver la valeur hors barème ou de restaurer la précédente.
+  // l'enseignant choisit de conserver la valeur hors barème ou de la corriger. Annuler est le
+  // choix par défaut : une faute de frappe est bien plus fréquente qu'un bonus voulu.
   _uiConfirm({
     title: '⚠️ Note hors barème',
-    okLabel: 'Conserver', okClass: 'btn-w',
-    message: `Note hors barème : ${parsed} (attendu entre 0 et ${mnMax}).\n\nConserver cette valeur ?\n\nConserver = garder la note telle quelle · Annuler = restaurer la valeur précédente.`,
+    okLabel: 'Conserver', okClass: 'btn-g', defaultCancel: true,
+    message: `Note hors barème : ${parsed} (attendu entre 0 et ${mnMax}).\n\nConserver cette valeur ?\n\nConserver = garder la note telle quelle · Annuler = la corriger (si tu ne tapes rien, la valeur précédente revient).`,
     onOk: () => { /* garde la valeur saisie (déjà persistée par _evalTableurUpdate) */ },
     onCancel: () => {
+      const typed = inputEl.value;
       // Refus : on restaure la valeur précédente (capturée au focus)
       const prev = inputEl.dataset.prevValue || '';
       inputEl.value = prev;
@@ -50086,6 +50098,12 @@ function _evalTableurConfirmIfOutOfRange(inputEl) {
       // Re-déclenche le pipeline standard pour repropager la couleur de fond,
       // recalculer total + stats + colonnes dérivées.
       _evalTableurUpdate(inputEl);
+      // Retour sur la case, la valeur refusée sélectionnée : taper la remplace. Le focus d'abord,
+      // car `onfocus` capture la valeur précédente dans prevValue, et il faut que ce soit la bonne.
+      inputEl.focus();
+      inputEl.value = typed;
+      inputEl.dataset.oorRefused = typed;
+      inputEl.select();
     },
   });
 }
