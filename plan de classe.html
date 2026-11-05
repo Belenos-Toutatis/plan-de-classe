@@ -9915,11 +9915,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.158.1';
+const APP_VERSION    = '2.158.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-05T11:12:26Z';
+const APP_BUILD_DATE = '2026-11-05T11:17:27Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -49326,7 +49326,7 @@ function _evalTableurRender() {
         ? `🧮 ${_storedExpr} = ${_esc(dispVal)}\n${_comHint}`
         : _comHint;
       const _titleAttr  = _escAttr(_cellTitle);
-      html += `<td class="meval-cell-note" style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${(cellBg && cellColor) ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
+      html += `<td class="meval-cell-note" style="padding:1px 1px;border-bottom:1px solid var(--rule-line-soft);text-align:center;position:relative;${exoBdr}${cellBg ? `background:${cellBg};` : ''}" title="${_titleAttr}" oncontextmenu="event.preventDefault();_evalCommentsOpen('${_esc(mn.id)}','${_esc(sid)}','${_esc(evalId)}')"><input type="text" value="${_esc(dispVal)}" data-mnid="${_esc(mn.id)}" data-mnmax="${mn.max}" data-ri="${ri}" data-ci="${ci}" maxlength="40" oninput="_evalTableurUpdate(this)" onfocus="this.dataset.prevValue=this.value" onblur="_evalTableurConfirmIfOutOfRange(this,event)" onkeydown="_evalTableurKey(event,this)" title="${_titleAttr}" aria-label="${_escAttr(ariaLbl)}" class="meval-niveau-input" style="${cellInpStyle}padding:2px 2px;font-family:var(--font-mono);font-size:.88em;text-align:center;border:1px solid transparent;${(cellBg && cellColor) ? `color:${cellColor};font-weight:700;` : ''}">${badge}</td>`;
     });
     // Type C avec exos : cellules Σ par exo, REGROUPÉES après toutes les questions
     // (même ordre personnalisé que le sous-en-tête : exoTotalsGroups)
@@ -50065,7 +50065,7 @@ function _evalTableurMaybeApplyExpr(inputEl) {
   return true;
 }
 
-function _evalTableurConfirmIfOutOfRange(inputEl) {
+function _evalTableurConfirmIfOutOfRange(inputEl, e) {
   if (!inputEl) return;
   // Annuler a laissé la valeur refusée à l'écran, sélectionnée pour être retapée ; la note, elle,
   // est déjà revenue à la valeur précédente. Quitter la case sans rien taper la remet aussi à l'écran.
@@ -50074,11 +50074,16 @@ function _evalTableurConfirmIfOutOfRange(inputEl) {
   if (refused != null && inputEl.value === refused) { inputEl.value = inputEl.dataset.prevValue || ''; return; }
   // Étape 1 — mini-calculatrice (si la cellule contient un opérateur)
   _evalTableurMaybeApplyExpr(inputEl);
+  // Valeur inchangée depuis l'arrivée sur la case : déjà tranchée. Sans ce garde, traverser une note
+  // conservée reposerait la question, et remplacerait la fenêtre ouverte pour la case qu'on vient de quitter.
+  if (inputEl.value === inputEl.dataset.prevValue) return;
   // Étape 2 — détection hors barème sur la valeur finale
   const mnMax = parseFloat(inputEl.getAttribute('data-mnmax')) || 0;
   const parsed = _parseMiniNoteInput(inputEl.value);
   const outOfRange = (typeof parsed === 'number' && (parsed < 0 || parsed > mnMax));
   if (!outOfRange) return;
+  // Là où allait la saisie : la fenêtre va lui prendre le focus, Conserver le lui rendra.
+  const next = e?.relatedTarget;
   // Fenêtre bloquante (modale mconfirm2, non contournable par l'anti-popup du navigateur) :
   // l'enseignant choisit de conserver la valeur hors barème ou de la corriger. Annuler est le
   // choix par défaut : une faute de frappe est bien plus fréquente qu'un bonus voulu.
@@ -50086,7 +50091,10 @@ function _evalTableurConfirmIfOutOfRange(inputEl) {
     title: '⚠️ Note hors barème',
     okLabel: 'Conserver', okClass: 'btn-g', defaultCancel: true,
     message: `Note hors barème : ${parsed} (attendu entre 0 et ${mnMax}).\n\nConserver cette valeur ?\n\nConserver = garder la note telle quelle · Annuler = la corriger (si tu ne tapes rien, la valeur précédente revient).`,
-    onOk: () => { /* garde la valeur saisie (déjà persistée par _evalTableurUpdate) */ },
+    onOk: () => {
+      // Garde la valeur saisie (déjà persistée par _evalTableurUpdate) ; la saisie continue sur la case suivante.
+      if (next?.isConnected) { next.focus(); next.select?.(); }
+    },
     onCancel: () => {
       const typed = inputEl.value;
       // Refus : on restaure la valeur précédente (capturée au focus)

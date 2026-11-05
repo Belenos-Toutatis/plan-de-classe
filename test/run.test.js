@@ -3527,7 +3527,8 @@ test('note hors barème : Annuler par défaut, retour sur la case avec la valeur
       getAttribute: k => (k === 'data-mnmax' ? '3' : null),
       focus() { log.push('focus:' + this.value); this.dataset.prevValue = this.value; },   // comme le onfocus de la case
       select() { log.push('sélection:' + this.value); } };
-    const blur = () => _evalTableurConfirmIfOutOfRange(el);
+    const suivante = { isConnected: true, focus() { log.push('suivante:focus'); }, select() { log.push('suivante:sélection'); } };
+    const blur = next => _evalTableurConfirmIfOutOfRange(el, { relatedTarget: next });
     try { ${code} } finally { _uiConfirm = sav.conf; _evalTableurUpdate = sav.upd; _evalTableurMaybeApplyExpr = sav.expr; }
     return JSON.stringify({ log, value: el.value, prev: el.dataset.prevValue, refusee: el.dataset.oorRefused ?? null, defaut: !!opts?.defaultCancel });
   })()`));
@@ -3554,10 +3555,19 @@ test('note hors barème : Annuler par défaut, retour sur la case avec la valeur
   assert.deepEqual(retape.log, ['fenêtre']);
   assert.ok(ev('_evalTableurUpdate.toString()').includes('delete inputEl.dataset.oorRefused'), 'la saisie efface le repère');
 
-  // Conserver garde la valeur et ne revient pas sur la case.
-  const garde = scenario(`blur(); opts.onOk();`);
-  assert.deepEqual(garde.log, ['fenêtre']);
+  // Conserver garde la valeur, ne revient pas sur la case, et la saisie continue là où elle allait.
+  const garde = scenario(`blur(suivante); opts.onOk();`);
+  assert.deepEqual(garde.log, ['fenêtre', 'suivante:focus', 'suivante:sélection']);
   assert.deepEqual([garde.value, garde.refusee], ['4', null]);
+  // Rien à reprendre : sortie vers une zone sans focus, ou case disparue entre-temps. Un bouton n'a pas de select().
+  assert.deepEqual(scenario(`blur(null); opts.onOk();`).log, ['fenêtre']);
+  assert.deepEqual(scenario(`blur({ ...suivante, isConnected: false }); opts.onOk();`).log, ['fenêtre']);
+  assert.deepEqual(scenario(`blur({ isConnected: true, focus() { log.push('bouton:focus'); } }); opts.onOk();`).log, ['fenêtre', 'bouton:focus']);
+  // Annuler, lui, revient sur la case et n'y va pas.
+  assert.ok(!scenario(`blur(suivante); opts.onCancel();`).log.some(l => l.startsWith('suivante')));
+
+  // Valeur inchangée depuis l'arrivée sur la case : pas de question, même hors barème (déjà conservée).
+  assert.deepEqual(scenario(`el.dataset.prevValue = '4'; blur(suivante);`).log, []);
 
   // Le vrai _uiConfirm (neutralisé en tête de ce fichier, d'où une seconde instance) : le choix par
   // défaut ne vaut que pour la fenêtre qui le demande, et ne déteint pas sur la suivante.
