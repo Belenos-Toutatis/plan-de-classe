@@ -3115,6 +3115,8 @@ test('Réunions, vue du soir : l\'horloge ne tourne que sur cette vue ; « proch
   const fs = require('fs'), path = require('path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
   assert.ok(/<h2>🤝 Réunions parents-professeurs<\/h2><span id="reu-clock"[^>]* hidden>/.test(html), 'à côté du titre de l\'onglet, hors de #reu-wrap, masquée au départ');
+  // Centrée entre le titre et les boutons : trois marges automatiques la décaleraient au premier tiers.
+  assert.ok(/\.reu-clock\{margin:0 auto;/.test(html) && /\.reu-clock:not\(\[hidden\]\) \+ #reu-sh-right\{margin-left:0\}/.test(html), 'centrée dans l\'espace vide, deux marges automatiques seulement');
   ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2'], rooms: {} } };
       S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' } };
       S.reunions = { r1: { id: 'r1', titre: 'Niveau 3ème', date: todayKey(), first: '17:00', last: '17:20', step: 5, classIds: ['c1'], pauses: [], bilans: {},
@@ -3152,7 +3154,8 @@ test('Réunions, fichier du collègue : la même horloge, et le même « prochai
   const fs = require('fs'), path = require('path'), vm = require('vm');
   const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
   const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html)[1];
-  assert.ok(/<h1>🤝 Réunions parents-professeurs<\/h1>' \+ \(V\.view === 'soir' && cur\(\) \? '<span class="clock" id="clock"/.test(js), 'à côté du titre, sur la vue du soir seulement');
+  assert.ok(/\+ \(V\.view === 'soir' && cur\(\) \? '<span class="clock" id="clock".*: '<span style="margin-left:auto"><\/span>'\)/.test(js), 'dans l\'espace vide de l\'en-tête, sur la vue du soir seulement');
+  assert.ok(/\.clock\{margin:0 auto;/.test(html), 'centrée dans cet espace');
   assert.ok(/\n  clockTick\(\);\n\}\n/.test(js), 'render relance l\'horloge');
   assert.ok(!/'il est '/.test(js), 'plus de « il est » figé : l\'heure est dans l\'horloge');
   const fn = n => { const m = new RegExp('^function ' + n + '\\(.*$', 'm').exec(js); assert.ok(m, n + ' doit exister, sur une ligne'); return m[0]; };
