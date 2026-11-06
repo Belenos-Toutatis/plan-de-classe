@@ -19,7 +19,7 @@ Ce fichier ne garde que ce qui vaut partout (design system, contraste, conventio
 - `docs/memoire/evaluations-calculs.md` — **Évaluations — modèle et calculs** : types A/B/C/D, calcul des notes et des niveaux, catalogues (commentaires, motifs d’ajustement), agrégation des compétences, multi-classes, jeux de couleurs, ajustement de la note, codes A/NN, « non faite par cette classe », modèle des dates.
 - `docs/memoire/evaluations-tableur.md` — **Évaluations — tableurs de saisie** : tableurs A/B/C/D, absents pré-remplis, calculatrice, import QCMcam des résultats, touche Entrée, ordre de ramassage, mini-plan, plan du type B, croix de saisie, pastilles, filtres, fenêtres de correction.
 - `docs/memoire/evaluations-bilans.md` — **Évaluations — création, devoirs, bilans** : projection, export tableur des notes, bilan des notes (photo, mini-plan), vers MBN, fenêtres de consultation (détail de la note, résultats, comparer), disciplines, import d’une évaluation, nouvelle évaluation, liste des devoirs, bilans des notes et des compétences, conseil de classe, exports.
-- `docs/memoire/verification.md` — **Vérification : audits et tests** : méthode de vérification du contraste et ses pièges, passes d’audit, méthode d’audit des impressions, scores de référence, détail des suites de tests.
+- `docs/memoire/verification.md` — **Vérification : audits et tests** : méthode de vérification du contraste et ses pièges, passes d’audit, méthode d’audit des impressions, scores de référence, détail des suites de tests, mesure d’une animation et test du fichier du collègue.
 
 ## Design system (Carnet du prof)
 
