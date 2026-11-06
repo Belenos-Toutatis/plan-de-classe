@@ -3133,17 +3133,33 @@ test('Réunions, vue du soir : l\'horloge ne tourne que sur cette vue ; « proch
   assert.equal(ev(`_reuSlotIsNow(S.reunions.r1, '17:10', 17 * 60 + 14)`), true);
   assert.equal(ev(`_reuSlotIsNow(S.reunions.r1, '17:10', 17 * 60 + 15)`), false, 'le créneau s\'arrête à la fin de sa durée');
   const clock = JSON.parse(ev(`(() => {
-    const el = { hidden: true, textContent: '' }, g = document.getElementById, out = {};
+    const el = { hidden: true, innerHTML: '', dataset: {}, children: [], setAttribute() {} }, g = document.getElementById, out = {};
     document.getElementById = id => id === 'reu-clock' ? el : id === 'tab-reunions' ? { classList: { contains: () => true } } : g.call(document, id);
     try {
-      _reu.id = 'r1'; _reu.view = 'soir'; _reuClockTick(); out.soir = [el.hidden, el.textContent];
-      _reu.view = 'prep'; _reuClockTick(); out.prep = el.hidden;   // ce second appel annule aussi le minuteur du premier
+      _reu.id = 'r1'; _reu.view = 'soir'; _reuClockTick(); out.soir = [el.hidden, el.innerHTML.replace(/<[^>]+>/g, '')];
+      _reu.view = 'prep'; _reuClockTick(); out.prep = [el.hidden, el.dataset.txt === undefined];   // ce second appel annule aussi le minuteur du premier
     } finally { document.getElementById = g; _reu.id = null; _reu.view = 'list'; }
     return JSON.stringify(out);
   })()`));
   assert.equal(clock.soir[0], false, 'visible sur la vue du soir');
   assert.match(clock.soir[1], /^\d\d:\d\d:\d\d$/, 'heures, minutes, secondes');
-  assert.equal(clock.prep, true, 'masquée sur les autres vues');
+  assert.deepEqual(clock.prep, [true, true], 'masquée sur les autres vues, et au retour l\'heure se pose sans rouler');
+  // Rouleau : seuls les chiffres qui changent roulent, et l'animation ne touche que transform.
+  const rolled = JSON.parse(ev(`(() => {
+    const el = { innerHTML: '', dataset: { txt: '08:17:59' }, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, children: Array.from({ length: 8 }, () => ({ innerHTML: '' })) };
+    _reuClockPaint(el, '08:18:00');
+    const once = el.children.map(c => c.innerHTML), label = el.attrs['aria-label'];
+    el.children.forEach(c => { c.innerHTML = 'inchangé'; });
+    _reuClockPaint(el, '08:18:00');
+    return JSON.stringify({ once, label, again: el.children.every(c => c.innerHTML === 'inchangé') });
+  })()`));
+  assert.deepEqual(rolled.once.map((h, i) => h ? i : -1).filter(i => i >= 0), [4, 6, 7], '08:17:59 → 08:18:00 : trois chiffres roulent, pas les autres');
+  assert.equal(rolled.once[4], '<span class="out">7</span><span class="in">8</span>', 'l\'ancien part, le nouveau arrive');
+  assert.equal(rolled.label, 'Heure actuelle : 08:18:00', 'le nom accessible suit l\'heure');
+  assert.equal(rolled.again, true, 'même heure : rien n\'est réécrit, donc rien ne rejoue');
+  assert.ok(/@keyframes reuRollIn\{from\{transform:translateY\(100%\)\}\}/.test(html) && /@keyframes reuRollOut\{to\{transform:translateY\(-100%\)\}\}/.test(html), 'rien que du transform : aucun recalcul de la page');
+  assert.ok(/@media \(prefers-reduced-motion:reduce\)\{\.reu-d>\.in\{animation:none\}/.test(html), 'coupé si le système demande de réduire les animations');
+  assert.ok(/\.reu-clock\[hidden\]\{display:none\}/.test(html), 'display:inline-flex ne doit pas faire réapparaître l\'horloge masquée');
   // La date, les autres jours.
   ev(`S.reunions.r1.date = '2020-01-06'`);
   assert.match(txt('17:07'), /janvier 2020/);
@@ -3154,7 +3170,7 @@ test('Réunions, fichier du collègue : la même horloge, et le même « prochai
   const fs = require('fs'), path = require('path'), vm = require('vm');
   const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
   const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html)[1];
-  assert.ok(/\+ \(V\.view === 'soir' && cur\(\) \? '<span class="clock" id="clock".*: '<span style="margin-left:auto"><\/span>'\)/.test(js), 'dans l\'espace vide de l\'en-tête, sur la vue du soir seulement');
+  assert.ok(/\+ \(V\.view === 'soir' && cur\(\) \? clockSpan\(\) : '<span style="margin-left:auto"><\/span>'\)/.test(js), 'dans l\'espace vide de l\'en-tête, sur la vue du soir seulement');
   assert.ok(/\.clock\{margin:0 auto;/.test(html), 'centrée dans cet espace');
   assert.ok(/\n  clockTick\(\);\n\}\n/.test(js), 'render relance l\'horloge');
   assert.ok(!/'il est '/.test(js), 'plus de « il est » figé : l\'heure est dans l\'horloge');
@@ -3185,6 +3201,18 @@ test('Réunions, fichier du collègue : la même horloge, et le même « prochai
   const box = {};
   vm.runInNewContext(fn('hhmm') + '\n' + fn('clockTxt') + `\nthis.out = clockTxt(new Date(2026, 10, 20, 7, 5, 9));`, box);
   assert.equal(box.out, '07:05:09', 'heures, minutes, secondes, sur deux chiffres');
+  // Rouleau : les mêmes chiffres roulent que dans le logiciel.
+  const paint = { };
+  vm.runInNewContext(fn('clockPaint') + `
+    var attrs = { 'data-txt': '08:17:59' }, el = { getAttribute: function (k) { return attrs[k]; }, setAttribute: function (k, v) { attrs[k] = v; }, children: [] };
+    for (var i = 0; i < 8; i++) el.children.push({ innerHTML: '' });
+    clockPaint(el, '08:18:00');
+    this.out = JSON.stringify({ cells: el.children.map(function (c) { return c.innerHTML; }), label: attrs['aria-label'] });`, paint);
+  const logicielPaint = ev(`(() => { const el = { dataset: { txt: '08:17:59' }, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, children: Array.from({ length: 8 }, () => ({ innerHTML: '' })) };
+    _reuClockPaint(el, '08:18:00'); return JSON.stringify({ cells: el.children.map(c => c.innerHTML), label: el.attrs['aria-label'] }); })()`);
+  assert.deepEqual(JSON.parse(paint.out), JSON.parse(logicielPaint), 'mêmes chiffres, même nom accessible');
+  assert.ok(/@keyframes clkIn\{from\{transform:translateY\(100%\)\}\}/.test(html) && /@keyframes clkOut\{to\{transform:translateY\(-100%\)\}\}/.test(html), 'rien que du transform');
+  assert.ok(/@media \(prefers-reduced-motion:reduce\)\{\.clk-d>\.in\{animation:none\}/.test(html), 'coupé si le système demande de réduire les animations');
 });
 
 test('Réunions : un parent sans rendez-vous est coché Vu d\'office ; le compte rendu reprend les rendez-vous et les notes', () => {

@@ -2020,7 +2020,17 @@ body.ff-no-reunions #nb-reunions, body.ff-no-reunions .reu-plan-hint { display:n
 .reu-new{display:flex;align-items:center;justify-content:center;min-height:90px;color:var(--pencil);border-style:dashed}
 .reu-badge{display:inline-block;border-radius:999px;padding:0 7px;margin-left:6px;font-size:.75em;font-weight:700;background:var(--highlighter);color:#1a252f;vertical-align:2px}
 .reu-cpill{display:inline-block;border:1px solid var(--rule-line);border-radius:999px;padding:0 7px;margin:0 3px 3px 0;font-size:.8em;color:var(--ink-deep)}
-.reu-clock{margin:0 auto;font:600 1.5em/1 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-blue);white-space:nowrap}
+.reu-clock{margin:0 auto;flex:none;display:inline-flex;font:600 1.5em/1.15 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-blue);white-space:nowrap}
+.reu-clock[hidden]{display:none}
+.reu-clock>*{pointer-events:none}
+.reu-d{position:relative;overflow:hidden}
+.reu-d::before{content:"0";visibility:hidden}
+.reu-d>span{position:absolute;left:0;right:0;top:0;text-align:center}
+.reu-d>.in{animation:reuRollIn .28s cubic-bezier(.2,.8,.2,1)}
+.reu-d>.out{animation:reuRollOut .28s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes reuRollIn{from{transform:translateY(100%)}}
+@keyframes reuRollOut{to{transform:translateY(-100%)}}
+@media (prefers-reduced-motion:reduce){.reu-d>.in{animation:none}.reu-d>.out{display:none}}
 #reu-sh-right{margin-left:auto;display:flex;gap:6px}
 .reu-clock:not([hidden]) + #reu-sh-right{margin-left:0}
 .reu-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:0 0 4px}
@@ -9001,7 +9011,16 @@ textarea{width:100%;resize:vertical}
 .mt{font-size:.85em;color:var(--pencil)}
 .hd{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
 .top{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--rule)}
-.clock{margin:0 auto;font:600 1.3em/1 ui-monospace,Consolas,"Cascadia Mono",Menlo,monospace;font-variant-numeric:tabular-nums;color:var(--ink-blue);white-space:nowrap}
+.clock{margin:0 auto;flex:none;display:inline-flex;font:600 1.3em/1.15 ui-monospace,Consolas,"Cascadia Mono",Menlo,monospace;font-variant-numeric:tabular-nums;color:var(--ink-blue);white-space:nowrap}
+.clock>*{pointer-events:none}
+.clk-d{position:relative;overflow:hidden}
+.clk-d::before{content:"0";visibility:hidden}
+.clk-d>span{position:absolute;left:0;right:0;top:0;text-align:center}
+.clk-d>.in{animation:clkIn .28s cubic-bezier(.2,.8,.2,1)}
+.clk-d>.out{animation:clkOut .28s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes clkIn{from{transform:translateY(100%)}}
+@keyframes clkOut{to{transform:translateY(-100%)}}
+@media (prefers-reduced-motion:reduce){.clk-d>.in{animation:none}.clk-d>.out{display:none}}
 .st{border-radius:999px;padding:2px 10px;font-size:.85em;font-weight:600}
 .st.ok{background:var(--ok-bg);color:var(--ok)}
 .st.dirty{background:var(--warn-bg);color:var(--warn)}
@@ -9206,7 +9225,7 @@ function renderTop(how) {
   var st = dirty ? '<span class="st dirty">● Modifications non enregistrées</span>'
     : savedAt ? '<span class="st ok">✓ ' + (lastHow === 'copy' ? 'Copie téléchargée' : 'Enregistré dans le fichier') + ' à ' + _esc(fmt(hhmm(new Date(savedAt)))) + '</span>' : '';
   el.innerHTML = '<h1>🤝 Réunions parents-professeurs</h1><span class="mt">fichier préparé' + (D.by ? ' par ' + _esc(D.by) : '') + ' le ' + _esc(fmtDate(D.createdAt)) + ' · ' + D.classes.map(function (c) { return _esc(c.nom); }).join(', ') + '</span>'
-    + (V.view === 'soir' && cur() ? '<span class="clock" id="clock" role="timer" aria-label="Heure actuelle" title="L\'heure de cet ordinateur">' + clockTxt(new Date()) + '</span>' : '<span style="margin-left:auto"></span>') + st
+    + (V.view === 'soir' && cur() ? clockSpan() : '<span style="margin-left:auto"></span>') + st
     + '<span class="zb" role="group" aria-label="Taille de l\'affichage"><button data-a="zoom" data-v="-1" title="Rapetisser l\'affichage" aria-label="Rapetisser"' + (zoom <= ZOOMS[0] ? ' disabled' : '') + '>−</button><button class="zp" data-a="zoom" data-v="0" title="Revenir à la taille normale (100 %)">' + Math.round(zoom * 100) + ' %</button><button data-a="zoom" data-v="1" title="Agrandir l\'affichage" aria-label="Agrandir"' + (zoom >= ZOOMS[ZOOMS.length - 1] ? ' disabled' : '') + '>+</button></span>'
     + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"' + (undo.length ? '' : ' disabled') + '>↩ Annuler</button><button data-a="redo" title="Rétablir ce qui vient d\'être annulé (Ctrl+Y)" aria-label="Rétablir"' + (redo.length ? '' : ' disabled') + '>↪ Rétablir</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
 }
@@ -9229,12 +9248,17 @@ function render() {
 // d'entretien est peut-être en cours d'écriture. renderTop la recrée à chaque modification.
 var clockTimer = null, clockHm = null;
 function clockTxt(d) { return hhmm(d) + ':' + String(d.getSeconds()).padStart(2, '0'); }
+// Effet de rouleau : une case par chiffre, et seul celui qui change roule. renderTop recrée la case
+// sans animation : une frappe pendant un roulement pose le chiffre tout de suite, sans rien rejouer.
+function clockCells(txt) { return txt.split('').map(function (ch) { return ch === ':' ? '<span aria-hidden="true">:</span>' : '<span class="clk-d" aria-hidden="true"><span>' + ch + '</span></span>'; }).join(''); }
+function clockSpan() { var t = clockTxt(new Date()); return '<span class="clock" id="clock" data-txt="' + t + '" role="timer" aria-label="Heure actuelle : ' + t + '" title="L\'heure de cet ordinateur">' + clockCells(t) + '</span>'; }
+function clockPaint(el, txt) { var prev = el.getAttribute('data-txt'); if (prev === txt) return; el.setAttribute('data-txt', txt); el.setAttribute('aria-label', 'Heure actuelle : ' + txt); txt.split('').forEach(function (ch, i) { if (ch !== prev[i]) el.children[i].innerHTML = '<span class="out">' + prev[i] + '</span><span class="in">' + ch + '</span>'; }); }
 function clockTick() {
   clearTimeout(clockTimer);
   var el = document.getElementById('clock'), r = V.view === 'soir' ? cur() : null;
   if (!el || !r) { clockHm = null; return; }
   var d = new Date(), hm = hhmm(d);
-  el.textContent = clockTxt(d);
+  clockPaint(el, clockTxt(d));
   if (hm !== clockHm) { clockHm = hm; soirNowRefresh(r); }
   clockTimer = setTimeout(clockTick, 1000 - d.getMilliseconds());
 }
@@ -9940,11 +9964,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.160.1';
+const APP_VERSION    = '2.161.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-06T07:35:27Z';
+const APP_BUILD_DATE = '2026-11-06T07:46:38Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29652,11 +29676,25 @@ function _reuClockTick() {
   const r = _reu.view === 'soir' ? _reuGet(_reu.id) : null;
   const on = !!r && !!document.getElementById('tab-reunions')?.classList.contains('on');
   if (el) el.hidden = !on;
-  if (!el || !on) { _reuClockHm = null; return; }
+  if (!el || !on) { _reuClockHm = null; if (el) delete el.dataset.txt; return; }
   const d = new Date(), hm = _hhmmOf(d);
-  el.textContent = hm + ':' + String(d.getSeconds()).padStart(2, '0');
+  _reuClockPaint(el, hm + ':' + String(d.getSeconds()).padStart(2, '0'));
   if (hm !== _reuClockHm) { _reuClockHm = hm; _reuSoirNowRefresh(r); }
   _reuClockTimer = setTimeout(_reuClockTick, 1000 - d.getMilliseconds());
+}
+// Effet de rouleau (v2.161.0) : une case par chiffre, et seul celui qui change roule — le nouveau
+// monte et pousse l'ancien. Rien que du transform, donc aucun recalcul de la page, et rien ne
+// tourne entre deux changements. Au retour sur la vue (dataset.txt vidé), l'heure se pose sans rouler.
+function _reuClockPaint(el, txt) {
+  const prev = el.dataset.txt;
+  if (prev === txt) return;
+  el.dataset.txt = txt;
+  el.setAttribute('aria-label', 'Heure actuelle : ' + txt);
+  if (!prev || el.children.length !== txt.length) {
+    el.innerHTML = [...txt].map(ch => ch === ':' ? '<span aria-hidden="true">:</span>' : `<span class="reu-d" aria-hidden="true"><span>${ch}</span></span>`).join('');
+    return;
+  }
+  [...txt].forEach((ch, i) => { if (ch !== prev[i]) el.children[i].innerHTML = `<span class="out">${prev[i]}</span><span class="in">${ch}</span>`; });
 }
 function _reuSlotIsNow(r, t, nowM) {
   const m = _reuMin(t);
