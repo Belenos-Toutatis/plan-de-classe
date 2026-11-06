@@ -3111,6 +3111,43 @@ test('Fichier pour un collègue : parent sans rendez-vous, mêmes règles que le
   assert.ok(/if \(!x\.prof\) x\.prof = nr\.prof;/.test(js), 'le nom, lui, est repris');
 });
 
+test('Réunions, vue du soir : l\'horloge ne tourne que sur cette vue ; « prochain » et le créneau en cours suivent l\'heure', () => {
+  const fs = require('fs'), path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  assert.ok(/<h2>🤝 Réunions parents-professeurs<\/h2><span id="reu-clock"[^>]* hidden>/.test(html), 'à côté du titre de l\'onglet, hors de #reu-wrap, masquée au départ');
+  ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' } };
+      S.reunions = { r1: { id: 'r1', titre: 'Niveau 3ème', date: todayKey(), first: '17:00', last: '17:20', step: 5, classIds: ['c1'], pauses: [], bilans: {},
+        slots: { '17:00': { sid: 'e1', note: '', st: 'vu' }, '17:10': { sid: 'e2', note: '', st: '' } } } };
+      _reu.parent = false;`);
+  const txt = hm => ev(`(() => { const o = _hhmmOf; _hhmmOf = () => '${hm}'; try { return _reuSoirNowTxt(S.reunions.r1); } finally { _hhmmOf = o; } })()`);
+  assert.equal(txt('17:07'), 'prochain : 17h10 DEUX B (dans 3 min)', 'plus de « il est » : l\'heure est dans l\'horloge');
+  assert.equal(txt('17:10'), 'prochain : 17h10 DEUX B');
+  assert.equal(txt('17:12'), 'prochain : 17h10 DEUX B (en retard de 2 min)');
+  assert.equal(txt('17:15'), '', 'créneau passé : plus de prochain');
+  ev(`_reu.parent = true`);
+  assert.equal(txt('17:07'), '', 'Écran parent : le nom du prochain ne s\'affiche pas');
+  ev(`_reu.parent = false`);
+  assert.equal(ev(`_reuSlotIsNow(S.reunions.r1, '17:10', 17 * 60 + 14)`), true);
+  assert.equal(ev(`_reuSlotIsNow(S.reunions.r1, '17:10', 17 * 60 + 15)`), false, 'le créneau s\'arrête à la fin de sa durée');
+  const clock = JSON.parse(ev(`(() => {
+    const el = { hidden: true, textContent: '' }, g = document.getElementById, out = {};
+    document.getElementById = id => id === 'reu-clock' ? el : id === 'tab-reunions' ? { classList: { contains: () => true } } : g.call(document, id);
+    try {
+      _reu.id = 'r1'; _reu.view = 'soir'; _reuClockTick(); out.soir = [el.hidden, el.textContent];
+      _reu.view = 'prep'; _reuClockTick(); out.prep = el.hidden;   // ce second appel annule aussi le minuteur du premier
+    } finally { document.getElementById = g; _reu.id = null; _reu.view = 'list'; }
+    return JSON.stringify(out);
+  })()`));
+  assert.equal(clock.soir[0], false, 'visible sur la vue du soir');
+  assert.match(clock.soir[1], /^\d\d:\d\d:\d\d$/, 'heures, minutes, secondes');
+  assert.equal(clock.prep, true, 'masquée sur les autres vues');
+  // La date, les autres jours.
+  ev(`S.reunions.r1.date = '2020-01-06'`);
+  assert.match(txt('17:07'), /janvier 2020/);
+  assert.equal(ev(`_reuSlotIsNow(S.reunions.r1, '17:10', 17 * 60 + 12)`), false, 'pas de créneau en cours un autre jour');
+});
+
 test('Réunions : un parent sans rendez-vous est coché Vu d\'office ; le compte rendu reprend les rendez-vous et les notes', () => {
   const fs = require('fs'), path = require('path'), vm = require('vm');
   const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');

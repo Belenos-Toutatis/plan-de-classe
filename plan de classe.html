@@ -2020,6 +2020,7 @@ body.ff-no-reunions #nb-reunions, body.ff-no-reunions .reu-plan-hint { display:n
 .reu-new{display:flex;align-items:center;justify-content:center;min-height:90px;color:var(--pencil);border-style:dashed}
 .reu-badge{display:inline-block;border-radius:999px;padding:0 7px;margin-left:6px;font-size:.75em;font-weight:700;background:var(--highlighter);color:#1a252f;vertical-align:2px}
 .reu-cpill{display:inline-block;border:1px solid var(--rule-line);border-radius:999px;padding:0 7px;margin:0 3px 3px 0;font-size:.8em;color:var(--ink-deep)}
+.reu-clock{font:600 1.5em/1 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-blue);white-space:nowrap}
 .reu-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:0 0 4px}
 .reu-head h3{margin:0;font-family:var(--font-serif);font-size:1.25em;color:var(--ink-blue)}
 .reu-prep{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,1fr);gap:16px;align-items:start}
@@ -5240,7 +5241,7 @@ body.topbar-free #topbar { position: static !important; }
 
   <!-- ── TAB: Réunions parents-professeurs (v2.135.0) ── -->
   <div id="tab-reunions" class="tab">
-    <div class="sh"><h2>🤝 Réunions parents-professeurs</h2><span id="reu-sh-right" style="margin-left:auto;display:flex;gap:6px"></span></div>
+    <div class="sh"><h2>🤝 Réunions parents-professeurs</h2><span id="reu-clock" class="reu-clock" role="timer" aria-label="Heure actuelle" title="L'heure de cet ordinateur" hidden></span><span id="reu-sh-right" style="margin-left:auto;display:flex;gap:6px"></span></div>
     <div id="reu-wrap"></div>
     <div id="reu-tip" class="rw-tip" role="tooltip"></div>
   </div>
@@ -9915,11 +9916,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.158.2';
+const APP_VERSION    = '2.159.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-05T11:17:27Z';
+const APP_BUILD_DATE = '2026-11-06T07:19:30Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29614,6 +29615,45 @@ function renderReunions() {
     else { _reuInvMap = _reuInvite(r); wrap.innerHTML = _reuPrepHTML(r); _reuRenderSide(); _reuAfterPrep(); }
   }
   _navBadgeRender();
+  _reuClockTick();
+}
+// Horloge de la vue du soir, à côté du titre de l'onglet : heures, minutes, secondes.
+// Calée sur le changement de seconde ; elle s'arrête d'elle-même dès qu'on quitte la vue, et
+// renderReunions la relance au retour. Chaque minute, « prochain : … » et le créneau en rouge
+// suivent, SANS redessiner la vue (une note d'entretien est peut-être en cours d'écriture).
+let _reuClockTimer = null, _reuClockHm = null;
+function _reuClockTick() {
+  clearTimeout(_reuClockTimer);
+  const el = document.getElementById('reu-clock');
+  const r = _reu.view === 'soir' ? _reuGet(_reu.id) : null;
+  const on = !!r && !!document.getElementById('tab-reunions')?.classList.contains('on');
+  if (el) el.hidden = !on;
+  if (!el || !on) { _reuClockHm = null; return; }
+  const d = new Date(), hm = _hhmmOf(d);
+  el.textContent = hm + ':' + String(d.getSeconds()).padStart(2, '0');
+  if (hm !== _reuClockHm) { _reuClockHm = hm; _reuSoirNowRefresh(r); }
+  _reuClockTimer = setTimeout(_reuClockTick, 1000 - d.getMilliseconds());
+}
+function _reuSlotIsNow(r, t, nowM) {
+  const m = _reuMin(t);
+  return _reuIsToday(r) && nowM >= m && nowM < m + (+r.step || 5);
+}
+// À côté du titre « Ce soir » : le prochain rendez-vous le jour J (l'heure est dans l'horloge),
+// la date les autres jours. Le nom du prochain ne s'affiche pas en Écran parent.
+function _reuSoirNowTxt(r) {
+  if (!_reuIsToday(r)) return _reuDateLong(r.date);
+  if (_reu.parent) return '';
+  const step = +r.step || 5, nowM = _reuMin(_hhmmOf(new Date()));
+  const next = _reuAllTimes(r).find(t => { const s = r.slots?.[t]; return s?.sid && S.eleves[s.sid] && !s.st && _reuMin(t) + step > nowM; });
+  if (!next) return '';
+  const d = _reuMin(next) - nowM;
+  return `prochain : ${_reuFmtT(next)} ${_reuNameTxt(r.slots[next].sid)}${d > 0 ? ` (dans ${d} min)` : d < 0 ? ` (en retard de ${-d} min)` : ''}`;
+}
+function _reuSoirNowRefresh(r) {
+  const el = document.getElementById('reu-soir-now');
+  if (el) el.textContent = _reuSoirNowTxt(r);
+  const nowM = _reuMin(_hhmmOf(new Date()));
+  document.querySelectorAll('#reu-wrap .reu-row[data-t]').forEach(row => row.classList.toggle('now', _reuSlotIsNow(r, row.dataset.t, nowM)));
 }
 function _reuOpen(id, view) {
   _reu.id = id; _reu.view = id ? (view || 'prep') : 'list'; _reu.edit = null; _reu.cur = null; _reu.focused = null; _reu.parent = false; _reu.f = 'all'; _reu.none = false; _reu.inv = false; _reu.q = ''; _reu.wkQ = ''; _reu.wkT = null;
@@ -30104,27 +30144,21 @@ function _reuSoirHTML(r) {
   const times = _reuAllTimes(r);
   const booked = times.filter(t => r.slots?.[t]?.sid && S.eleves[r.slots[t].sid]);
   if (!_reu.cur || !booked.includes(_reu.cur)) _reu.cur = _reuDefaultCur(r);
-  const isT = _reuIsToday(r), step = +r.step || 5;
+  const isT = _reuIsToday(r);
   const nowM = _reuMin(_hhmmOf(new Date()));
   const vus = booked.filter(t => r.slots[t].st === 'vu').length, abs = booked.filter(t => r.slots[t].st === 'absent').length;
-  const next = booked.find(t => !r.slots[t].st && (!isT || _reuMin(t) + step > nowM));
-  let nowTxt = '';
-  if (isT) {
-    nowTxt = `il est ${_reuFmtT(_hhmmOf(new Date()))}`;
-    if (next && !_reu.parent) { const d = _reuMin(next) - nowM; nowTxt += ` · prochain : ${_reuFmtT(next)} ${_reuNameTxt(r.slots[next].sid)}${d > 0 ? ` (dans ${d} min)` : d < 0 ? ` (en retard de ${-d} min)` : ''}`; }
-  }
   const rows = times.map((t, i) => {
     const s = r.slots?.[t];
     const pause = (r.pauses || []).includes(t);
-    const isNow = isT && nowM >= _reuMin(t) && nowM < _reuMin(t) + step;
-    if (!s?.sid || !S.eleves[s.sid]) return `<div class="reu-row mini${isNow ? ' now' : ''}" onclick="_reuWkAt('${_escJsAttr(t)}')" title="Un parent se présente à ${_escAttr(_reuFmtT(t))} : clic, puis tape le nom de l'élève"><span class="reu-t">${_esc(_reuFmtT(t))}</span><span>${pause ? 'pause' : 'libre'}</span></div>`;
+    const isNow = _reuSlotIsNow(r, t, nowM);
+    if (!s?.sid || !S.eleves[s.sid]) return `<div class="reu-row mini${isNow ? ' now' : ''}" data-t="${_escAttr(t)}" onclick="_reuWkAt('${_escJsAttr(t)}')" title="Un parent se présente à ${_escAttr(_reuFmtT(t))} : clic, puis tape le nom de l'élève"><span class="reu-t">${_esc(_reuFmtT(t))}</span><span>${pause ? 'pause' : 'libre'}</span></div>`;
     const suite = i > 0 && r.slots?.[times[i - 1]]?.sid === s.sid;
     const cid = _reuClsOf(r, s.sid);
     const m = _featureEnabled('evaluation') && cid ? _computeStudentMeanForPeriod(cid, s.sid, _currentPeriode(), _currentDiscipline(cid)) : null;
     const stu = S.eleves[s.sid];
     const brief = [m != null ? _fmtMean(m) + '/20' : '', stu.oublis ? stu.oublis + ' oubli' + (stu.oublis > 1 ? 's' : '') : '', stu.non_travail ? stu.non_travail + ' non fait' + (stu.non_travail > 1 ? 's' : '') : ''].filter(Boolean).join(' · ');
     const stIco = s.st === 'vu' ? '<span class="reu-ok" title="Vu">✓</span>' : s.st === 'absent' ? '<span class="reu-why" title="Absent">✗</span>' : s.note ? '<span title="Note d\'entretien">📝</span>' : '';
-    return `<div class="reu-row${t === _reu.cur ? ' sel' : ''}${isNow ? ' now' : ''}${s.st ? ' done' : ''}${s.x ? ' extra' : ''}" onclick="_reuSel('${_escJsAttr(t)}')" data-photo-sid="${_escAttr(s.sid)}">
+    return `<div class="reu-row${t === _reu.cur ? ' sel' : ''}${isNow ? ' now' : ''}${s.st ? ' done' : ''}${s.x ? ' extra' : ''}" data-t="${_escAttr(t)}" onclick="_reuSel('${_escJsAttr(t)}')" data-photo-sid="${_escAttr(s.sid)}">
       <span class="reu-t">${_esc(_reuFmtT(t))}</span><span class="reu-av" id="reu-av-${i}">${suite ? '↳' : ''}</span>
       <span>${_reuNameHTML(s.sid)} <span class="reu-cls">${_esc(S.classes?.[cid]?.nom || '')}</span>${suite ? ' <span class="reu-cls">(suite)</span>' : ''}${s.x ? ' <span class="reu-xtag" title="Parent venu sans rendez-vous, reçu entre deux créneaux">intercalé</span>' : ''}${brief && !suite ? `<br><span class="reu-mt">${_esc(brief)}</span>` : ''}</span>${stIco}</div>`;
   }).join('');
@@ -30138,7 +30172,7 @@ function _reuSoirHTML(r) {
     </div>`;
   return `<div class="reu-head">
       <h3>${isT ? 'Ce soir' : 'Le soir de la réunion'} · ${_esc(r.titre || '')}</h3>
-      <span class="reu-mt">${isT ? _esc(nowTxt) : _esc(_reuDateLong(r.date))}</span>
+      <span class="reu-mt" id="reu-soir-now">${_esc(_reuSoirNowTxt(r))}</span>
       <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <span class="reu-mt">${booked.length - vus - abs} à venir · ${vus} vu${vus > 1 ? 's' : ''} · ${abs} absent${abs > 1 ? 's' : ''}</span>
         <button class="btn ${_reu.parent ? 'btn-p' : 'btn-g'} btn-sm" onclick="_reuToggleParent()" title="Quand le parent regarde l'écran : seule la fiche de son enfant reste visible (liste des autres rendez-vous, Informations, rappels, rang et mini bilan masqués)">🔒 Écran parent</button>
