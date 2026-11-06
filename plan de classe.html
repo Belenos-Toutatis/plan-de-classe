@@ -8999,6 +8999,7 @@ textarea{width:100%;resize:vertical}
 .mt{font-size:.85em;color:var(--pencil)}
 .hd{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
 .top{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--rule)}
+.clock{font:600 1.3em/1 ui-monospace,Consolas,"Cascadia Mono",Menlo,monospace;font-variant-numeric:tabular-nums;color:var(--ink-blue);white-space:nowrap}
 .st{border-radius:999px;padding:2px 10px;font-size:.85em;font-weight:600}
 .st.ok{background:var(--ok-bg);color:var(--ok)}
 .st.dirty{background:var(--warn-bg);color:var(--warn)}
@@ -9202,7 +9203,7 @@ function renderTop(how) {
   var el = document.getElementById('top'); if (!el) return;
   var st = dirty ? '<span class="st dirty">● Modifications non enregistrées</span>'
     : savedAt ? '<span class="st ok">✓ ' + (lastHow === 'copy' ? 'Copie téléchargée' : 'Enregistré dans le fichier') + ' à ' + _esc(fmt(hhmm(new Date(savedAt)))) + '</span>' : '';
-  el.innerHTML = '<h1>🤝 Réunions parents-professeurs</h1><span class="mt">fichier préparé' + (D.by ? ' par ' + _esc(D.by) : '') + ' le ' + _esc(fmtDate(D.createdAt)) + ' · ' + D.classes.map(function (c) { return _esc(c.nom); }).join(', ') + '</span>'
+  el.innerHTML = '<h1>🤝 Réunions parents-professeurs</h1>' + (V.view === 'soir' && cur() ? '<span class="clock" id="clock" role="timer" aria-label="Heure actuelle" title="L\'heure de cet ordinateur">' + clockTxt(new Date()) + '</span>' : '') + '<span class="mt">fichier préparé' + (D.by ? ' par ' + _esc(D.by) : '') + ' le ' + _esc(fmtDate(D.createdAt)) + ' · ' + D.classes.map(function (c) { return _esc(c.nom); }).join(', ') + '</span>'
     + '<span style="margin-left:auto"></span>' + st
     + '<span class="zb" role="group" aria-label="Taille de l\'affichage"><button data-a="zoom" data-v="-1" title="Rapetisser l\'affichage" aria-label="Rapetisser"' + (zoom <= ZOOMS[0] ? ' disabled' : '') + '>−</button><button class="zp" data-a="zoom" data-v="0" title="Revenir à la taille normale (100 %)">' + Math.round(zoom * 100) + ' %</button><button data-a="zoom" data-v="1" title="Agrandir l\'affichage" aria-label="Agrandir"' + (zoom >= ZOOMS[ZOOMS.length - 1] ? ' disabled' : '') + '>+</button></span>'
     + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"' + (undo.length ? '' : ' disabled') + '>↩ Annuler</button><button data-a="redo" title="Rétablir ce qui vient d\'être annulé (Ctrl+Y)" aria-label="Rétablir"' + (redo.length ? '' : ' disabled') + '>↪ Rétablir</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
@@ -9218,6 +9219,29 @@ function render() {
   if (V.view === 'list') m.innerHTML = listHTML();
   else if (V.view === 'soir') { m.innerHTML = soirHTML(cur()); var sel = document.querySelector('.row.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' }); }
   else { m.innerHTML = prepHTML(cur()); renderSide(); if (V.edit) { var inp = document.getElementById('ed'); if (inp) { inp.focus(); acRender(); } } }
+  clockTick();
+}
+// Horloge de la vue du soir, à côté du titre : heures, minutes, secondes. Calée sur le changement
+// de seconde ; elle s'arrête d'elle-même quand on quitte la vue, et render la relance au retour.
+// Chaque minute, « prochain : … » et le créneau en rouge suivent, SANS redessiner : une note
+// d'entretien est peut-être en cours d'écriture. renderTop la recrée à chaque modification.
+var clockTimer = null, clockHm = null;
+function clockTxt(d) { return hhmm(d) + ':' + String(d.getSeconds()).padStart(2, '0'); }
+function clockTick() {
+  clearTimeout(clockTimer);
+  var el = document.getElementById('clock'), r = V.view === 'soir' ? cur() : null;
+  if (!el || !r) { clockHm = null; return; }
+  var d = new Date(), hm = hhmm(d);
+  el.textContent = clockTxt(d);
+  if (hm !== clockHm) { clockHm = hm; soirNowRefresh(r); }
+  clockTimer = setTimeout(clockTick, 1000 - d.getMilliseconds());
+}
+function slotIsNow(r, t, now) { var m = mins(t); return r.date === today() && now >= m && now < m + (+r.step || 5); }
+function soirNowTxt(r) { if (r.date !== today()) return dateLong(r.date); var step = +r.step || 5, now = mins(hhmm(new Date())), next = allTimes(r).find(function (t) { var s = r.slots[t]; return s && stu(s.sid) && !s.st && mins(t) + step > now; }); if (!next) return ''; var d = mins(next) - now; return 'prochain : ' + fmt(next) + ' ' + nameTxt(r.slots[next].sid) + (d > 0 ? ' (dans ' + d + ' min)' : d < 0 ? ' (en retard de ' + (-d) + ' min)' : ''); }
+function soirNowRefresh(r) {
+  var el = document.getElementById('soir-now'); if (el) el.textContent = soirNowTxt(r);
+  var now = mins(hhmm(new Date()));
+  document.querySelectorAll('#main .row[data-t]').forEach(function (row) { row.classList.toggle('now', slotIsNow(r, row.getAttribute('data-t'), now)); });
 }
 function listHTML() {
   var all = Object.values(D.reunions), td = today();
@@ -9453,10 +9477,8 @@ function soirHTML(r) {
   var ts = allTimes(r), bk = ts.filter(function (t) { return r.slots[t] && stu(r.slots[t].sid); }), isT = r.date === today(), step = +r.step || 5, now = mins(hhmm(new Date()));
   if (!V.cur || bk.indexOf(V.cur) < 0) { V.cur = (isT && bk.find(function (t) { return !r.slots[t].st && mins(t) + step > now; })) || bk.find(function (t) { return !r.slots[t].st; }) || bk[0] || null; }
   var vus = bk.filter(function (t) { return r.slots[t].st === 'vu'; }).length, abs = bk.filter(function (t) { return r.slots[t].st === 'absent'; }).length;
-  var next = bk.find(function (t) { return !r.slots[t].st && (!isT || mins(t) + step > now); });
-  var nowTxt = isT ? 'il est ' + fmt(hhmm(new Date())) + (next ? ' · prochain : ' + fmt(next) + ' ' + nameTxt(r.slots[next].sid) + (mins(next) - now > 0 ? ' (dans ' + (mins(next) - now) + ' min)' : mins(next) - now < 0 ? ' (en retard de ' + (now - mins(next)) + ' min)' : '') : '') : dateLong(r.date);
   var rows = ts.map(function (t, i) {
-    var s = r.slots[t], isNow = isT && now >= mins(t) && now < mins(t) + step;
+    var s = r.slots[t], isNow = slotIsNow(r, t, now);
     if (!s || !stu(s.sid)) return '<div class="row mini' + (isNow ? ' now' : '') + '" data-a="wkat" data-t="' + t + '" title="Un parent se présente à ' + fmt(t) + ' : clic, puis tape le nom de l\'élève"><span class="t">' + fmt(t) + '</span><span>' + ((r.pauses || []).indexOf(t) >= 0 ? 'pause' : 'libre') + '</span></div>';
     var suite = i > 0 && r.slots[ts[i - 1]] && r.slots[ts[i - 1]].sid === s.sid;
     var ic = s.st === 'vu' ? '<span class="ok-t">✓</span>' : s.st === 'absent' ? '<span class="ab-t">✗</span>' : s.note ? '📝' : '';
@@ -9475,7 +9497,7 @@ function soirHTML(r) {
       + '<div class="gh">Note d\'entretien</div><textarea id="note" title="Ce qui s\'est dit pendant l\'entretien" rows="6" maxlength="2000" placeholder="Qui est venu, ce qui a été dit, ce qui est convenu…">' + _esc(s.note || '') + '</textarea>'
       + '<div class="acts"><span class="seg">' + stb('', 'À venir') + stb('vu', '✓ Vu') + stb('absent', 'Absent') + '</span></div>';
   }
-  return '<div class="hd"><h2>' + (isT ? 'Ce soir' : 'Le soir de la réunion') + ' · ' + _esc(r.titre) + '</h2><span class="mt">' + _esc(nowTxt) + '</span><span style="margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="mt">' + (bk.length - vus - abs) + ' à venir · ' + vus + ' vu' + (vus > 1 ? 's' : '') + ' · ' + abs + ' absent' + (abs > 1 ? 's' : '') + '</span><button data-a="printbil" title="Imprimer ce que tu veux dire à chaque famille, dans l\'ordre des rendez-vous, avec de la place pour écrire à la main">🖨 Mini bilans</button><button data-a="printrep" title="Imprimer tous les rendez-vous dans l\'ordre, avec ce que tu as noté pendant l\'entretien : la trace de la réunion, à imprimer après coup">🖨 Compte rendu</button><button data-a="view" data-v="prep" title="Revenir à la grille des créneaux">✍ Préparer</button><button data-a="list" title="Revenir à la liste de tes réunions">↩ Réunions</button></span></div>'
+  return '<div class="hd"><h2>' + (isT ? 'Ce soir' : 'Le soir de la réunion') + ' · ' + _esc(r.titre) + '</h2><span class="mt" id="soir-now">' + _esc(soirNowTxt(r)) + '</span><span style="margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="mt">' + (bk.length - vus - abs) + ' à venir · ' + vus + ' vu' + (vus > 1 ? 's' : '') + ' · ' + abs + ' absent' + (abs > 1 ? 's' : '') + '</span><button data-a="printbil" title="Imprimer ce que tu veux dire à chaque famille, dans l\'ordre des rendez-vous, avec de la place pour écrire à la main">🖨 Mini bilans</button><button data-a="printrep" title="Imprimer tous les rendez-vous dans l\'ordre, avec ce que tu as noté pendant l\'entretien : la trace de la réunion, à imprimer après coup">🖨 Compte rendu</button><button data-a="view" data-v="prep" title="Revenir à la grille des créneaux">✍ Préparer</button><button data-a="list" title="Revenir à la liste de tes réunions">↩ Réunions</button></span></div>'
     + '<div class="soir"><div class="slist">' + walk + rows + '</div><div class="det">' + det + '</div></div>';
 }
 
@@ -9916,11 +9938,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.159.0';
+const APP_VERSION    = '2.160.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-06T07:19:30Z';
+const APP_BUILD_DATE = '2026-11-06T07:26:05Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »

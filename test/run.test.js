@@ -3148,6 +3148,42 @@ test('Réunions, vue du soir : l\'horloge ne tourne que sur cette vue ; « proch
   assert.equal(ev(`_reuSlotIsNow(S.reunions.r1, '17:10', 17 * 60 + 12)`), false, 'pas de créneau en cours un autre jour');
 });
 
+test('Réunions, fichier du collègue : la même horloge, et le même « prochain » que dans le logiciel', () => {
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html)[1];
+  assert.ok(/<h1>🤝 Réunions parents-professeurs<\/h1>' \+ \(V\.view === 'soir' && cur\(\) \? '<span class="clock" id="clock"/.test(js), 'à côté du titre, sur la vue du soir seulement');
+  assert.ok(/\n  clockTick\(\);\n\}\n/.test(js), 'render relance l\'horloge');
+  assert.ok(!/'il est '/.test(js), 'plus de « il est » figé : l\'heure est dans l\'horloge');
+  const fn = n => { const m = new RegExp('^function ' + n + '\\(.*$', 'm').exec(js); assert.ok(m, n + ' doit exister, sur une ligne'); return m[0]; };
+  const code = ['mins', 'tOf', 'fmt', 'times', 'allTimes', 'dateLong', 'stu', 'nameTxt', 'today', 'clockTxt', 'slotIsNow', 'soirNowTxt'].map(fn).join('\n');
+  ev(`S.classes = { c1: { id: 'c1', nom: '3A', eleves: ['e1', 'e2', 'e3'], rooms: {} } };
+      S.eleves = { e1: { id: 'e1', nom: 'Un', prenom: 'A', classe_id: 'c1' }, e2: { id: 'e2', nom: 'Deux', prenom: 'B', classe_id: 'c1' }, e3: { id: 'e3', nom: 'Trois', prenom: 'C', classe_id: 'c1' } };
+      S.reunions = { r1: { id: 'r1', titre: 'Niveau 3ème', date: todayKey(), first: '17:00', last: '17:20', step: 5, classIds: ['c1'], pauses: [], bilans: {},
+        slots: { '17:00': { sid: 'e1', note: '', st: 'vu' }, '17:03': { sid: 'e3', note: '', st: '', x: true }, '17:10': { sid: 'e2', note: '', st: '' } } } };
+      _reu.parent = false;`);
+  const D = { eleves: JSON.parse(ev('JSON.stringify(S.eleves)')) };
+  const compare = hm => {
+    const r = JSON.parse(ev('JSON.stringify(S.reunions.r1)')), box = { D, r, hm };
+    vm.runInNewContext(code + `\nfunction hhmm() { return hm; }\nthis.out = soirNowTxt(r);\nthis.now = ['17:03', '17:05', '17:10'].filter(function (t) { return slotIsNow(r, t, mins(hm)); });`, box);
+    const logiciel = ev(`(() => { const o = _hhmmOf; _hhmmOf = () => '${hm}'; try { return _reuSoirNowTxt(S.reunions.r1); } finally { _hhmmOf = o; } })()`);
+    assert.equal(box.out, logiciel, `à ${hm} : même texte que le logiciel`);
+    const nowM = +hm.slice(0, 2) * 60 + +hm.slice(3);
+    const logicielNow = JSON.parse(ev(`JSON.stringify(['17:03', '17:05', '17:10'].filter(t => _reuSlotIsNow(S.reunions.r1, t, ${nowM})))`));
+    assert.deepEqual(JSON.parse(JSON.stringify(box.now)), logicielNow, `à ${hm} : même créneau en cours que le logiciel`);
+    return box.out;
+  };
+  assert.equal(compare('16:50'), 'prochain : 17h03 TROIS C (dans 13 min)');
+  assert.equal(compare('17:06'), 'prochain : 17h03 TROIS C (en retard de 3 min)');
+  assert.equal(compare('17:10'), 'prochain : 17h10 DEUX B');
+  assert.equal(compare('17:15'), '');
+  ev(`S.reunions.r1.date = '2020-01-06'`);
+  assert.match(compare('17:07'), /janvier 2020/, 'un autre jour : la date');
+  const box = {};
+  vm.runInNewContext(fn('hhmm') + '\n' + fn('clockTxt') + `\nthis.out = clockTxt(new Date(2026, 10, 20, 7, 5, 9));`, box);
+  assert.equal(box.out, '07:05:09', 'heures, minutes, secondes, sur deux chiffres');
+});
+
 test('Réunions : un parent sans rendez-vous est coché Vu d\'office ; le compte rendu reprend les rendez-vous et les notes', () => {
   const fs = require('fs'), path = require('path'), vm = require('vm');
   const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
