@@ -2974,26 +2974,53 @@ test('AESH : un élève n\'a qu\'une AESH ; suppression = positions décalées ;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Export ENT (fenêtre « Résultats du devoir », v2.131.0) : une compétence sans niveau
-// part VIDE, plus « 0 » (l'ENT y lisait un niveau zéro).
+// Export ENT (fenêtre « Résultats du devoir », v2.131.0) : une compétence JAMAIS remplie
+// part VIDE, plus « 0 » (l'ENT y lisait un niveau zéro). Mais une compétence « non évaluée »
+// — 0 tapé ou élève absent — part en « 0 », le code de MBN (v2.162.1 / v2.162.2, demande de
+// l'utilisateur), et le favori « Vers MBN » reçoit 0.
 // ─────────────────────────────────────────────────────────────────────────────
-test('Export ENT : compétence sans niveau = case vide, élève absent = A', () => {
+test('Export ENT : jamais rempli = case vide ; absent ou 0 tapé = « 0 » (non évalué)', () => {
   setState({
     cur: 'c1',
-    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1', 's2'], rooms: {} } },
-    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'Beta', prenom: 'b', classe_id: 'c1' } },
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1', 's2', 's3', 's4'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'Beta', prenom: 'b', classe_id: 'c1' },
+              s3: { id: 's3', nom: 'Gamma', prenom: 'c', classe_id: 'c1' }, s4: { id: 's4', nom: 'Delta', prenom: 'd', classe_id: 'c1' } },
     salles: {}, competences: { k1: { id: 'k1', code: 'K1' } },
     evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
     evaluations: { e1: { id: 'e1', type: 'B', nomCourt: 'E', classIds: ['c1'], noteMax: 20, weighting: 'equal',
-      passations: [{ id: 'p1', code: 'P1', date: '2026-01-05', competenceIds: ['k1'], niveaux: { s1: { k1: 3 }, s2: { k1: 'A' } } }] } },
+      passations: [{ id: 'p1', code: 'P1', date: '2026-01-05', competenceIds: ['k1'], niveaux: { s1: { k1: 3 }, s2: { k1: 'A' }, s4: { k1: 0 } } }] } },
   });
   ev(`_renduState.evalId = 'e1'; _renduState.classId = 'c1'; _evalExportColsState = { note: true, comps: true, remarque: false };`);
-  const lines = get(`_evalExportToTSV(S.evaluations.e1).split('\\n')`);
-  assert.equal(lines.length, 3);
-  assert.equal(lines[1].split('\t')[2], '3', 'niveau saisi');
-  const beta = lines[2].split('\t');
-  assert.equal(beta[0], 'BETA b');
-  assert.equal(beta[2], '', 'pas de niveau → case vide, pas 0');
+  const rows = get(`_evalExportToTSV(S.evaluations.e1).split('\\n')`).slice(1).map(l => l.split('\t'));
+  const by = Object.fromEntries(rows.map(r => [r[0], r]));
+  assert.equal(rows.length, 4);
+  assert.equal(by['ALPHA a'][2], '3', 'niveau saisi');
+  assert.equal(by['BETA b'][1], 'A', 'absent : note A');
+  assert.equal(by['BETA b'][2], '0', 'absent → non évalué « 0 »');
+  assert.equal(by['DELTA d'][2], '0', '0 tapé → « 0 »');
+  assert.equal(by['GAMMA c'][2], '', 'jamais rempli → case vide, pas 0');
+  const mbn = JSON.parse(ev(`JSON.stringify(_mbnPayload(S.evaluations.e1).eleves.map(e => [e.nom, e.comps]))`));
+  const m = Object.fromEntries(mbn);
+  assert.deepEqual(m.Alpha, { K1: 3 });
+  assert.deepEqual(m.Beta, { K1: 0 });
+  assert.deepEqual(m.Delta, { K1: 0 });
+  assert.deepEqual(m.Gamma, {}, 'jamais rempli : rien envoyé à MBN');
+});
+
+test('Non évalué (MBN 0) : absence dans une question de type C, niveau ≥ 1 ailleurs l\'emporte', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' } },
+    salles: {}, competences: { k1: { id: 'k1', code: 'K1' }, k2: { id: 'k2', code: 'K2' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
+    evaluations: { e1: { id: 'e1', type: 'C', nomCourt: 'E', classIds: ['c1'], noteMax: 20,
+      miniNotes: [{ id: 'm1', max: 4, competenceIds: ['k1'] }, { id: 'm2', max: 4, competenceIds: ['k2'] }],
+      notes: { s1: { values: { m1: 'A', m2: 3 } } } } },
+  });
+  assert.equal(ev(`_evalCompExplicitZero(S.evaluations.e1, 's1', 'k1')`), true, 'question absente → non évalué');
+  assert.equal(ev(`_evalCompExplicitZero(S.evaluations.e1, 's1', 'k2')`), false, 'pas d\'absence sur K2');
+  assert.ok(ev(`_evalStudentCompetenceLevel(S.evaluations.e1, 's1', 'k2')`) > 0, 'K2 a un niveau');
 });
 
 test('Réunions parents-profs : créneaux, purge d\'un élève et d\'une classe, nettoyage au chargement', () => {

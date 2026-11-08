@@ -8563,7 +8563,10 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
           for (var k = 0; k < a.comps.length; k++) {
             var sel = document.getElementById(a.comps[k].sel.id);
             var v = String(a.comps[k].v), okv = false;
-            if (sel && v === '0') v = zeroVal(sel);
+            if (sel && v === '0') {
+              if (sel.disabled || sel.readOnly) continue;   /* « non évalué » (0 tapé ou absent) : seulement si MBN laisse la case modifiable */
+              v = zeroVal(sel);
+            }
             if (sel) for (var q = 0; q < sel.options.length; q++) if (sel.options[q].value === v) okv = true;
             if (!okv) { probs.push(who + ' : niveau « ' + v + ' » impossible pour ' + a.comps[k].code); continue; }
             if (await setField(sel, v)) c++;
@@ -9978,11 +9981,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.162.1';
+const APP_VERSION    = '2.162.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T17:16:48Z';
+const APP_BUILD_DATE = '2026-11-08T17:24:01Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21182,7 +21185,7 @@ function _renduRender() {
     body.style.display = 'none'; entWrap.style.display = '';
     synth.style.display = 'none';
     _evalExportRender();
-    foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Pour une partie seulement : sélectionne des cellules à la souris puis Ctrl+C. Une compétence sans niveau reste vide ; un « ${_esc(_zeroCode())} » (non évalué) saisi est repris.</span>
+    foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Pour une partie seulement : sélectionne des cellules à la souris puis Ctrl+C. Une compétence sans niveau reste vide ; un « ${_esc(_zeroCode())} » (non évalué) saisi ou une absence donnent « ${_esc(_zeroCode())} ».</span>
       <span><button class="btn btn-g" onclick="_mbnOpen()" title="Saisir ces résultats directement dans MBN, avec le favori « MBN · Notes du devoir »">🏫 Vers MBN…</button><button class="btn btn-g" onclick="_evalExportDownloadCsv()">💾 CSV</button><button class="btn btn-p" onclick="_evalExportCopyAll()">⧉ Copier tout</button></span>`;
     return;
   }
@@ -59891,21 +59894,26 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
   return niveaux.reduce((s, x) => s + x, 0) / niveaux.length;
 }
 
-// Niveau 0 « non évalué » SAISI (Types B et D) : l'élève a au moins une case de cette
-// compétence à 0, et aucune à un niveau ≥ 1 (sinon il a un niveau). Distingue le « 0 » tapé
-// (« vu, non évalué » — MBN a ce code : 0) d'une case jamais remplie. Types A/C : pas de
-// niveau saisi par compétence, donc jamais.
+// Compétence « non évaluée » pour un élève, au sens de MBN (code 0) : aucune case de cette
+// compétence à un niveau ≥ 1 (appelé seulement quand le niveau est nul), et au moins une
+// case à 0 tapé (« vu, non évalué », B et D) ou à A (absent, les quatre types — demande de
+// l'utilisateur, v2.162.2 : un absent est non évalué). Une case jamais remplie ne compte
+// pas : sans rien de saisi, la compétence reste vide.
 function _evalCompExplicitZero(ev, sid, cid) {
   if (!ev) return false;
+  const nz = v => v === 0 || v === 'A';
+  const skc = _evalStuClassId(ev, sid);
   if (ev.type === 'B') {
-    const skc = _evalStuClassId(ev, sid);
-    return (ev.passations || []).some(p => p.competenceIds?.includes(cid) && !_passCompSkipped(p, skc, cid) && p.niveaux?.[sid]?.[cid] === 0);
+    return (ev.passations || []).some(p => p.competenceIds?.includes(cid) && !_subSkippedFor(p, skc) && !_passCompSkipped(p, skc, cid) && nz(p.niveaux?.[sid]?.[cid]));
   }
   if (ev.type === 'D') {
     const levels = ev.notes?.[sid]?.levels || {};
-    return (ev.miniNotes || []).some(mn => (mn.competenceIds || []).includes(cid) && levels[mn.id]?.[cid] === 0);
+    return (ev.miniNotes || []).some(mn => (mn.competenceIds || []).includes(cid) && nz(levels[mn.id]?.[cid]));
   }
-  return false;
+  // Types A / C : la note de la question porte le A ; la compétence suit ses questions.
+  const values = ev.notes?.[sid]?.values || {};
+  const excluded = new Set(ev.notes?.[sid]?.excluded || []);
+  return (ev.miniNotes || []).some(mn => mn.competenceIds?.includes(cid) && !excluded.has(mn.id) && !_subSkippedFor(mn, skc) && values[mn.id] === 'A');
 }
 
 // Construit les données de l'export sous forme d'un tableau de lignes [{ name, note, comps:[{cid, level}], remarque }]
@@ -60305,7 +60313,7 @@ function _evalExportRender() {
       for (const c of r.comps) {
         const lvl = c.level;
         // Niveau formaté avec le label personnalisé de l'utilisateur (S.evalPrefs.niveauLabels).
-        // Pas de niveau : vide, sauf un 0 « non évalué » SAISI (B/D) → code du niveau 0
+        // Pas de niveau : vide, sauf un 0 « non évalué » saisi ou une absence → code du niveau 0
         // (« 0 » par défaut, celui de MBN) — signalé par l'utilisateur, la case restait vide.
         const cell = (lvl == null) ? (c.zero ? _esc(_zeroCode()) : '') : _formatNiveau(Math.round(lvl));
         html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono)">${cell}</td>`;
