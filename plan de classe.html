@@ -5711,7 +5711,7 @@ body.topbar-free #topbar { position: static !important; }
        bandeau, filtre de groupe / sans photo, ordre, taille, ajout de photo depuis une case vide,
        options d'impression (photos par ligne, prénom seul). -->
   <div class="mb" style="width:min(1060px,97vw);max-width:1060px">
-    <div class="lst-head"><h2 style="margin:0">🖼 Trombinoscope</h2><span id="mtrombiview-cls" class="mvc-fp-chips" style="flex:1;justify-content:flex-end"></span><button type="button" class="btn btn-g btn-sm" id="tv-full-btn" onclick="_tvFullToggle()" title="Plein écran (Échap pour revenir)" aria-pressed="false">⛶</button></div>
+    <div class="lst-head"><h2 style="margin:0">🖼 Trombinoscope</h2><span id="mtrombiview-cls" class="mvc-fp-chips" style="flex:1;justify-content:flex-end"></span><button type="button" class="btn btn-g btn-sm" id="tv-max-btn" onclick="_tvMaxToggle()" title="Agrandir la fenêtre à toute la page" aria-pressed="false">🗖</button><button type="button" class="btn btn-g btn-sm" id="tv-full-btn" onclick="_tvFullToggle()" title="Plein écran (Échap pour revenir)" aria-pressed="false">⛶</button></div>
     <div id="mtrombiview-count" class="tv-syn"></div>
     <div id="mtrombiview-opts" class="tv-opts"></div>
     <div id="mtrombiview-body" style="max-height:60vh;overflow-y:auto;padding-right:4px"></div>
@@ -9988,11 +9988,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.163.0';
+const APP_VERSION    = '2.164.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T23:49:47Z';
+const APP_BUILD_DATE = '2026-11-08T23:55:29Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -37123,27 +37123,39 @@ async function printTrombiCurrent() {
 var _tvOpt = (() => { try { return Object.assign({ grp: 0, sort: 'nom', size: 'M', cols: 6, name: 'full' }, JSON.parse(localStorage.getItem('planClasse_trombiView') || '{}')); } catch (e) { return { grp: 0, sort: 'nom', size: 'M', cols: 6, name: 'full' }; } })();
 function _tvSet(k, v) { _tvOpt[k] = v; try { localStorage.setItem('planClasse_trombiView', JSON.stringify(_tvOpt)); } catch (e) {} renderTrombiView(); }
 var _tvTarget = null;   // élève sans photo visé (dernière case vide cliquée ou survolée) — pour Ctrl+V
-// Plein écran du trombinoscope (v2.163.0, demande de l'utilisateur)
-function _tvFullSet(on) {
+// Plein écran (v2.163.0) et fenêtre agrandie (v2.164.0) du trombinoscope — demandes de l'utilisateur.
+// Agrandie : la fenêtre occupe toute la page (choix retenu, planClasse_trombiMax). Plein écran :
+// en plus, le navigateur passe en plein écran (le DOCUMENT, cf. CSS .tv-full).
+var _tvFs = false;
+function _tvMaxOn() { try { return localStorage.getItem('planClasse_trombiMax') === '1'; } catch (e) { return false; } }
+function _tvApplySize() {
   const m = document.getElementById('mtrombiview'); if (!m) return;
-  m.classList.toggle('tv-full', !!on);
-  const b = document.getElementById('tv-full-btn');
-  if (b) { b.setAttribute('aria-pressed', String(!!on)); b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Quitter le plein écran (Échap)' : 'Plein écran (Échap pour revenir)'; }
+  const max = _tvMaxOn();
+  m.classList.toggle('tv-full', max || _tvFs);
+  const bm = document.getElementById('tv-max-btn');
+  if (bm) { bm.setAttribute('aria-pressed', String(max)); bm.textContent = max ? '🗗' : '🗖'; bm.title = max ? 'Rétablir la taille de la fenêtre' : 'Agrandir la fenêtre à toute la page'; }
+  const bf = document.getElementById('tv-full-btn');
+  if (bf) { bf.setAttribute('aria-pressed', String(_tvFs)); bf.title = _tvFs ? 'Quitter le plein écran (Échap)' : 'Plein écran (Échap pour revenir)'; }
+}
+function _tvMaxToggle() {
+  try { localStorage.setItem('planClasse_trombiMax', _tvMaxOn() ? '0' : '1'); } catch (e) {}
+  _tvApplySize();
 }
 function _tvFullToggle() {
-  const on = !document.getElementById('mtrombiview')?.classList.contains('tv-full');
-  _tvFullSet(on);
+  _tvFs = !_tvFs;
   try {
-    if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
-    else if (!on && document.fullscreenElement) document.exitFullscreen();
+    if (_tvFs && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    else if (!_tvFs && document.fullscreenElement) document.exitFullscreen();
   } catch (e) {}
+  _tvApplySize();
 }
 document.addEventListener('fullscreenchange', () => {
-  // Échap (ou F11) sort du plein écran du navigateur : la fenêtre reprend sa taille.
-  if (!document.fullscreenElement && document.getElementById('mtrombiview')?.classList.contains('tv-full')) _tvFullSet(false);
+  // Échap (ou F11) sort du plein écran du navigateur : la fenêtre reprend sa taille (agrandie ou non).
+  if (!document.fullscreenElement && _tvFs) { _tvFs = false; _tvApplySize(); }
 });
 function openTrombiView() {
-  _modalReturnTo['mtrombiview'] = () => { if (document.getElementById('mtrombiview')?.classList.contains('tv-full')) _tvFullToggle(); };
+  _modalReturnTo['mtrombiview'] = () => { if (_tvFs) _tvFullToggle(); };
+  _tvFs = false; _tvApplySize();
   _tvClassId = getCls()?.id || _memoRealClasses()[0]?.id || null;
   if (_tvClassId && S.classes[_tvClassId]?.virtual) _tvClassId = _memoRealClasses()[0]?.id || null;
   if (!_photos.ready && dirHandle) _photosRefresh(true).then(() => renderTrombiView());

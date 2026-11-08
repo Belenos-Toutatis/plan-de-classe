@@ -308,6 +308,7 @@ Bouton **🖼 Trombinoscope** de l'onglet Élèves (`#btn-trombiview`, visible s
 
 ### Plein écran et touche P (v2.163.0, demandes de l'utilisateur)
 - **⛶ Plein écran** (`#tv-full-btn`, `_tvFullToggle`) : classe `.tv-full` sur la modale (boîte à 100 % de l'écran, liste sans limite de hauteur) **et** plein écran du navigateur sur le **document**, pas sur la boîte : la fiche élève, les toasts et le choix de fichier ouverts depuis le trombinoscope doivent rester visibles par-dessus. Échap ou F11 sortent du plein écran du navigateur → `fullscreenchange` remet la fenêtre à sa taille ; fermer la fenêtre en sort aussi (`_modalReturnTo['mtrombiview']`). 💡 Le panneau d'aperçu refuse `requestFullscreen` : on n'y voit que la boîte agrandie.
+- **🗖 Agrandir / 🗗 Rétablir** (`#tv-max-btn`, `_tvMaxToggle`, v2.164.0) : même classe `.tv-full`, sans le plein écran du navigateur ; choix **retenu** d'une ouverture à l'autre (`planClasse_trombiMax`). `_tvApplySize` pose `.tv-full` = agrandie OU plein écran (`_tvFs`) ; sortir du plein écran rend la taille agrandie si elle était choisie.
 - **Touche `P`** (P comme Photos ; `T` était demandé mais sert au tiers-temps sur le Plan) : ouvre le trombinoscope de la classe du bandeau depuis n'importe quel onglet, hors fenêtre ouverte et hors saisie ; s'il n'y a aucune photo, un toast renvoie vers 📷 Photos. Même gestionnaire que `H` (📅 Appels passés), dans le `keydown` global.
 
 ## 🧠 Mémoriser les élèves — jeu photo → nom (modale `mmemo`, v2.67.0)
