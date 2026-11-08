@@ -505,6 +505,14 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 #meval-miniplan .mnp-txt small{color:var(--pencil)}
 #meval-miniplan .mnp-x{border:none;background:none;cursor:pointer;color:var(--pencil);padding:0 2px;font-size:1em;align-self:flex-start}
 #meval-miniplan.folded{padding:0;border:none;background:none;min-height:0}
+#mnp-big{display:none;position:fixed;z-index:5;background:var(--paper);border:1px solid var(--rule-line);border-radius:10px;padding:8px;box-shadow:var(--shadow-pop,0 4px 16px rgba(0,0,0,.18));text-align:center;cursor:grab;box-sizing:content-box;touch-action:none;user-select:none;font-size:.9em}
+#mnp-big.dragging{cursor:grabbing;opacity:.94}
+#mnp-big img,#mnp-big .mnpb-av{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1;height:auto;border-radius:8px;object-fit:cover;pointer-events:none}
+#mnp-big .mnpb-av{background:var(--paper-deep);color:var(--ink-blue);font-weight:600;font-family:var(--font-serif);font-size:2.4em}
+#mnp-big b{display:block;font-family:var(--font-serif);color:var(--ink-blue);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mnp-big small{display:block;color:var(--pencil);font-size:.82em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mnp-big .mnpb-x{position:absolute;top:2px;right:4px;border:0;background:transparent;color:var(--pencil);cursor:pointer;font-size:.95em;padding:2px 4px;line-height:1}
+#mnp-big .mnpb-rs{position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:nwse-resize;touch-action:none;border-bottom-right-radius:10px;background:linear-gradient(135deg,transparent 50%,var(--pencil-soft) 50%,var(--pencil-soft) 58%,transparent 58%,transparent 70%,var(--pencil-soft) 70%,var(--pencil-soft) 78%,transparent 78%)}
 #fiche-photo{float:right;margin:0 0 8px 12px}
 /* Le tableau d'identité (largeur 100 %) passerait SOUS la photo flottante au lieu de l'entourer. */
 #fiche-photo + .about-section table{width:auto !important}
@@ -7381,7 +7389,7 @@ body.topbar-free #topbar { position: static !important; }
       <p id="meval-tableur-help" style="margin:0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5;position:relative;padding-right:24px">
         <button onclick="_evalTableurToggleHelp()" title="Masquer le mode d'emploi" style="position:absolute;top:-2px;right:-2px;border:none;background:transparent;color:var(--pencil);font-size:1em;cursor:pointer;padding:2px 6px">✕</button>
         <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
-        <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total).
+        <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total ; Tab et Entrée sautent ces cases, les flèches s'y arrêtent).
         <span id="meval-tableur-help-paste"><br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.</span>
         <!-- Toujours réécrit par _evalTableurUpdateHelpForType (un texte par type) : cette
              version décrit le Type A, elle sert de repli si le script n'a pas encore tourné. -->
@@ -9964,11 +9972,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.161.0';
+const APP_VERSION    = '2.162.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-06T07:46:38Z';
+const APP_BUILD_DATE = '2026-11-08T16:43:25Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -43483,31 +43491,133 @@ async function _mnpRender() {
   const box = document.getElementById('meval-miniplan');
   if (!box) return;
   const ctx = _mnpCtx();
-  if (!ctx) { box.style.display = 'none'; return; }
+  if (!ctx) { box.style.display = 'none'; _mnpBigRender(null); return; }
   if (ctx.ev.id !== _mnpEvId) { _mnpEvId = ctx.ev.id; _mnpSid = null; }   // autre devoir : on repart de zéro
   box.style.display = '';
+  const sid = _mnpSid;
+  const stu = sid && S.eleves[sid];
+  const ok = !!stu && !!ctx.cls.eleves?.includes(sid) && !_confHides(sid);
+  const m = ok ? _mnpBuild(ctx.ev, ctx.cls, sid, 110) : null;
+  _mnpBigRender(ok ? sid : null, m ? m.label : '');
+  box.onclick = null; box.onmousedown = null; box.style.cursor = '';
   if (_mnpFolded()) {
     box.className = 'folded';
     box.innerHTML = `<button class="btn btn-g btn-sm" style="padding:4px 6px" onclick="_mnpToggle(true)" title="Afficher le mini-plan : où est assis l'élève que tu corriges">🗺</button>`;
     return;
   }
   box.className = '';
-  const x = `<button class="mnp-x" onclick="_mnpToggle(false)" title="Masquer le mini-plan" aria-label="Masquer le mini-plan">✕</button>`;
-  const sid = _mnpSid;
-  const stu = sid && S.eleves[sid];
-  if (!stu || !ctx.cls.eleves?.includes(sid) || _confHides(sid)) {
+  const x = `<button class="mnp-x" onclick="event.stopPropagation();_mnpToggle(false)" title="Masquer le mini-plan" aria-label="Masquer le mini-plan">✕</button>`;
+  if (!ok) {
     box.innerHTML = `<span class="mnp-txt"><small>🗺 Place de l'élève : clique dans sa ligne</small></span>${x}`;
     return;
   }
-  const m = _mnpBuild(ctx.ev, ctx.cls, sid, 110);
   const txt = `<span class="mnp-txt"><b>${_escName(stu.prenom)}</b> ${_escName(stu.nom)}<br><small>${m ? _esc(m.label) : 'aucune salle'}</small></span>`;
   box.innerHTML = `<span class="mnp-ph"></span>${m ? m.html : ''}${txt}${x}`;
-  box.title = 'Plan du jour du devoir, vu du bureau (bureau en bas). En vert : la place de l\'élève dont la ligne a le curseur.';
+  box.title = 'Plan du jour du devoir, vu du bureau (bureau en bas). En vert : la place de l\'élève dont la ligne a le curseur.\nClic : sa photo en grand, dans une fenêtre que tu places où tu veux.';
+  box.style.cursor = 'zoom-in';
+  box.onmousedown = e => e.preventDefault();   // le curseur reste dans la case
+  box.onclick = () => _mnpBigToggle(!_mnpBigOn());
   if (_photos.ready && _photoHas(sid)) {
     const url = await _photoUrl(sid);
     if (url && _mnpSid === sid) { const ph = box.querySelector('.mnp-ph'); if (ph) ph.innerHTML = `<img src="${url}" alt="">`; }
   }
 }
+// Grande photo de l'élève corrigé (v2.162.0, demande de l'utilisateur) : un clic sur l'encart
+// l'ouvre dans une fenêtre flottante qui SUIT la ligne qui a le curseur, comme l'encart.
+// Même geste que la grande photo des bilans (_bilanWhoBigDrag) : glisser = déplacer, coin en bas
+// à droite = taille, ✕ = fermer. Ouverte/fermée, position et taille retenues sur la machine
+// (planClasse_evalPhotoBig, planClasse_evalPhotoGeo = {x, y, w} ; x/y absents = sous l'encart).
+// Enfant de #meval-tableur (le fond) et non de la boîte : elle se ferme avec le tableur et passe
+// sous une fenêtre ouverte par-dessus. Masquée pour un élève caché en mode confidentiel.
+var MNPB_W_MIN = 80, MNPB_W_MAX = 600, MNPB_W_DEF = 170;
+function _mnpBigOn() { try { return localStorage.getItem('planClasse_evalPhotoBig') === '1'; } catch (e) { return false; } }
+function _mnpBigToggle(on) {
+  try { localStorage.setItem('planClasse_evalPhotoBig', on ? '1' : '0'); } catch (e) {}
+  _mnpRender();
+}
+function _mnpBigGeo() {
+  try { const g = JSON.parse(localStorage.getItem('planClasse_evalPhotoGeo') || 'null'); return (g && typeof g === 'object') ? g : {}; } catch (e) { return {}; }
+}
+function _mnpBigSaveGeo(g) {
+  try { if (g) localStorage.setItem('planClasse_evalPhotoGeo', JSON.stringify(g)); else localStorage.removeItem('planClasse_evalPhotoGeo'); } catch (e) {}
+}
+function _mnpBigW(w) { w = +w; return isFinite(w) ? Math.max(MNPB_W_MIN, Math.min(MNPB_W_MAX, Math.round(w), innerWidth - 40)) : MNPB_W_DEF; }
+function _mnpBigClamp(big, x, y) {
+  const r = big.getBoundingClientRect();
+  return { x: Math.max(4, Math.min(x, innerWidth - r.width - 4)), y: Math.max(4, Math.min(y, innerHeight - Math.min(r.height, 60))) };
+}
+function _mnpBigPlace() {
+  const big = document.getElementById('mnp-big');
+  if (!big || big.style.display === 'none') return;
+  const g = _mnpBigGeo();
+  big.style.width = _mnpBigW(g.w ?? MNPB_W_DEF) + 'px';
+  let x = g.x, y = g.y;
+  if (!isFinite(x) || !isFinite(y)) {
+    // Par défaut : sous l'encart, aligné sur son bord droit.
+    const r = document.getElementById('meval-miniplan')?.getBoundingClientRect();
+    const w = big.getBoundingClientRect().width;
+    x = r && r.width ? r.right - w : innerWidth - w - 24; y = r && r.height ? r.bottom + 6 : 80;
+  }
+  const c = _mnpBigClamp(big, x, y);
+  big.style.left = c.x + 'px'; big.style.top = c.y + 'px';
+}
+async function _mnpBigRender(sid, label) {
+  let big = document.getElementById('mnp-big');
+  if (!sid || !_mnpBigOn()) { if (big) { big.style.display = 'none'; delete big.dataset.sid; } return; }
+  const mo = document.getElementById('meval-tableur'), s = S.eleves?.[sid];
+  if (!mo || !s) return;
+  if (!big) {
+    big = document.createElement('div');
+    big.id = 'mnp-big';
+    big.title = 'Glisser = déplacer · coin en bas à droite = agrandir / réduire';
+    big.onmousedown = e => e.preventDefault();   // le curseur reste dans la case du tableur
+    big.onpointerdown = e => _mnpBigDrag(e, big);
+    mo.appendChild(big);
+  }
+  const was = big.style.display !== 'none' && big.dataset.sid;
+  if (was === sid) { const sm = big.querySelector('small'); if (sm) sm.textContent = label || ''; return; }
+  big.dataset.sid = sid;
+  const ini = _esc(((s.prenom || '')[0] || '') + ((s.nom || '')[0] || ''));
+  big.innerHTML = `<button type="button" class="mnpb-x" title="Fermer la grande photo" aria-label="Fermer la grande photo">✕</button>`
+    + `<span class="mnpb-av">${ini}</span><b>${_escName(s.prenom)} ${_escName((s.nom || '').toUpperCase())}</b><small>${_esc(label || '')}</small>`
+    + `<span class="mnpb-rs" title="Glisser pour agrandir ou réduire la photo"></span>`;
+  big.querySelector('.mnpb-x').onclick = e => { e.stopPropagation(); _mnpBigToggle(false); };
+  big.style.display = 'block';
+  if (!was) _mnpBigPlace();
+  if (_photos.ready && _photoHas(sid)) {
+    let url = null;
+    try { url = await _photoUrl(sid); } catch (e) {}
+    if (url && big.dataset.sid === sid) { const av = big.querySelector('.mnpb-av'); if (av) av.outerHTML = `<img src="${url}" alt="">`; }
+  }
+}
+function _mnpBigDrag(e, big) {
+  if ((e.button != null && e.button !== 0) || e.target.closest('button')) return;
+  e.preventDefault(); e.stopPropagation();
+  const resize = !!e.target.closest('.mnpb-rs');
+  const r = big.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY;
+  const w0 = parseFloat(big.style.width) || MNPB_W_DEF;
+  big.classList.add('dragging');
+  const move = ev => {
+    if (resize) {
+      const d = Math.max(ev.clientX - x0, ev.clientY - y0);   /* la photo reste carrée */
+      big.style.width = _mnpBigW(w0 + d) + 'px';
+    } else {
+      const c = _mnpBigClamp(big, r.left + ev.clientX - x0, r.top + ev.clientY - y0);
+      big.style.left = c.x + 'px'; big.style.top = c.y + 'px';
+    }
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    big.classList.remove('dragging');
+    _mnpBigSaveGeo({ w: parseFloat(big.style.width), x: parseFloat(big.style.left), y: parseFloat(big.style.top) });
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
+window.addEventListener('resize', () => _mnpBigPlace());
 // ═══════════════ Aides repliables + pastilles « ? » au toucher (audit § 5.2) ═══════════════
 function _helpHidden(key) { try { return localStorage.getItem('planClasse_help_' + key) === '0'; } catch (e) { return false; } }
 function _helpSet(key, hide) {
@@ -50404,10 +50514,17 @@ function _evalTableurKey(e, inputEl) {
     return;
   }
   e.preventDefault();
+  // Code « absent » affiché (réglable dans les Réglages des évaluations, « A » par défaut).
+  const codeA = String(_codeA()).trim().toUpperCase();
   let pos = step(ri, ci), target = null, guard = 0;
   while (pos && guard++ < numCols * (numRows + 1)) {
     target = document.querySelector(`#meval-tableur-tbl input[data-ri="${pos.ri}"][data-ci="${pos.ci}"]`);
     if (target && target.closest('tr.bf-hide')) target = null;   // ligne masquée par un filtre : enjambée
+    // Case « A » (élève absent, pré-marqué depuis l'appel ou saisi — ou le code absent
+    // réglé à sa place) : Tab et Entrée
+    // l'enjambent — un élève absent n'a rien à saisir (demande de l'utilisateur). Les
+    // flèches et le clic s'y arrêtent toujours, pour pouvoir corriger.
+    if (target && (key === 'Tab' || key === 'Enter') && (target.value.trim().toUpperCase() === codeA || target.value.trim().toUpperCase() === 'A')) target = null;
     if (target) break;
     pos = step(pos.ri, pos.ci);
   }
