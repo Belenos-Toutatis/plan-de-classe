@@ -8235,6 +8235,11 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
   function tight(s) { return norm(s).replace(/ /g, ''); }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function codeKey(s) { return String(s || '').toUpperCase().replace(/\s+/g, ''); }
+  /* Niveau 0 « non évalué » : l'option dont le libellé commence par 0 (MBN : « 0 - Aucune évaluation », valeur -1), sinon la valeur -1 */
+  function zeroVal(sel) {
+    for (var i = 0; i < sel.options.length; i++) if (/^\s*0(\D|$)/.test(sel.options[i].textContent || '')) return sel.options[i].value;
+    return '-1';
+  }
   function fmtNote(n) { var r = Math.round(n * 100) / 100; return String(r).replace('.', ','); }
   function numOf(s) { var v = parseFloat(String(s || '').replace(',', '.')); return isFinite(v) ? v : null; }
 
@@ -8558,6 +8563,7 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
           for (var k = 0; k < a.comps.length; k++) {
             var sel = document.getElementById(a.comps[k].sel.id);
             var v = String(a.comps[k].v), okv = false;
+            if (sel && v === '0') v = zeroVal(sel);
             if (sel) for (var q = 0; q < sel.options.length; q++) if (sel.options[q].value === v) okv = true;
             if (!okv) { probs.push(who + ' : niveau « ' + v + ' » impossible pour ' + a.comps[k].code); continue; }
             if (await setField(sel, v)) c++;
@@ -9972,11 +9978,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.162.0';
+const APP_VERSION    = '2.162.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T16:43:25Z';
+const APP_BUILD_DATE = '2026-11-08T17:16:48Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -21176,7 +21182,7 @@ function _renduRender() {
     body.style.display = 'none'; entWrap.style.display = '';
     synth.style.display = 'none';
     _evalExportRender();
-    foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Pour une partie seulement : sélectionne des cellules à la souris puis Ctrl+C. Une compétence sans niveau reste vide.</span>
+    foot.innerHTML = `<span class="nd-dim" style="font-size:.84em">Pour une partie seulement : sélectionne des cellules à la souris puis Ctrl+C. Une compétence sans niveau reste vide ; un « ${_esc(_zeroCode())} » (non évalué) saisi est repris.</span>
       <span><button class="btn btn-g" onclick="_mbnOpen()" title="Saisir ces résultats directement dans MBN, avec le favori « MBN · Notes du devoir »">🏫 Vers MBN…</button><button class="btn btn-g" onclick="_evalExportDownloadCsv()">💾 CSV</button><button class="btn btn-p" onclick="_evalExportCopyAll()">⧉ Copier tout</button></span>`;
     return;
   }
@@ -52023,6 +52029,8 @@ function _studentNoteDisplay(ev, sid) {
 }
 
 // Renvoie le label à afficher pour un niveau (1..n, 'A', 0, null/undefined)
+// Code du niveau 0 « non évalué » (réglable, « 0 » par défaut — le code de MBN).
+function _zeroCode() { return S.evalPrefs?.zeroLabel || '0'; }
 function _formatNiveau(v) {
   const ep = S.evalPrefs || {};
   if (v === 'A') return ep.codeAbsent || 'A';
@@ -59883,6 +59891,23 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
   return niveaux.reduce((s, x) => s + x, 0) / niveaux.length;
 }
 
+// Niveau 0 « non évalué » SAISI (Types B et D) : l'élève a au moins une case de cette
+// compétence à 0, et aucune à un niveau ≥ 1 (sinon il a un niveau). Distingue le « 0 » tapé
+// (« vu, non évalué » — MBN a ce code : 0) d'une case jamais remplie. Types A/C : pas de
+// niveau saisi par compétence, donc jamais.
+function _evalCompExplicitZero(ev, sid, cid) {
+  if (!ev) return false;
+  if (ev.type === 'B') {
+    const skc = _evalStuClassId(ev, sid);
+    return (ev.passations || []).some(p => p.competenceIds?.includes(cid) && !_passCompSkipped(p, skc, cid) && p.niveaux?.[sid]?.[cid] === 0);
+  }
+  if (ev.type === 'D') {
+    const levels = ev.notes?.[sid]?.levels || {};
+    return (ev.miniNotes || []).some(mn => (mn.competenceIds || []).includes(cid) && levels[mn.id]?.[cid] === 0);
+  }
+  return false;
+}
+
 // Construit les données de l'export sous forme d'un tableau de lignes [{ name, note, comps:[{cid, level}], remarque }]
 function _evalExportBuildRows(ev) {
   const selCid = _renduState.classId;
@@ -59929,7 +59954,7 @@ function _evalExportBuildRows(ev) {
     const note = (disp.kind === 'num') ? disp.value : null;
     const compLevels = comps.map(c => {
       const niv = _evalStudentCompetenceLevel(ev, sid, c.id);
-      return { cid: c.id, code: c.code, name: c.name, level: niv > 0 ? niv : null };
+      return { cid: c.id, code: c.code, name: c.name, level: niv > 0 ? niv : null, zero: !(niv > 0) && _evalCompExplicitZero(ev, sid, c.id) };
     });
     // La remarque tableur (Type A/B/C) est dans ev.studentRemarks[sid] — fallback
     // ev.notes[sid].remarque pour les enregistrements legacy / saisie fiche Type A/C.
@@ -60129,7 +60154,9 @@ function _mbnPayload(ev) {
     const stu = S.eleves[r.sid] || {};
     const disp = _studentNoteDisplay(ev, r.sid);
     const c = {};
-    for (const x of r.comps) { const v = x.level == null ? null : _mbnLevel(x.level, nb); if (v != null && x.code) c[x.code] = v; }
+    // Niveau 0 « non évalué » saisi → 0, le code de MBN pour « aucune évaluation » (signalé
+    // par l'utilisateur : l'envoi le laissait vide). Une case jamais remplie n'envoie rien.
+    for (const x of r.comps) { const v = x.level == null ? (x.zero ? 0 : null) : _mbnLevel(x.level, nb); if (v != null && x.code) c[x.code] = v; }
     return {
       nom: stu.nom || '', prenom: stu.prenom || '',
       note: disp.kind === 'num' ? disp.value : null,
@@ -60278,8 +60305,9 @@ function _evalExportRender() {
       for (const c of r.comps) {
         const lvl = c.level;
         // Niveau formaté avec le label personnalisé de l'utilisateur (S.evalPrefs.niveauLabels).
-        // Si pas de niveau → label "0" (= non évalué), cohérent avec le bilan compétences.
-        const cell = (lvl == null) ? '' : _formatNiveau(Math.round(lvl));
+        // Pas de niveau : vide, sauf un 0 « non évalué » SAISI (B/D) → code du niveau 0
+        // (« 0 » par défaut, celui de MBN) — signalé par l'utilisateur, la case restait vide.
+        const cell = (lvl == null) ? (c.zero ? _esc(_zeroCode()) : '') : _formatNiveau(Math.round(lvl));
         html += `<td style="padding:4px 6px;border-bottom:1px solid var(--rule-line-soft);text-align:center;font-family:var(--font-mono)">${cell}</td>`;
       }
     }
@@ -60303,7 +60331,7 @@ function _evalExportToTSV(ev) {
   for (const r of rows) {
     const cells = [r.name];
     if (_evalExportColsState.note)     cells.push(r.noteCell || '');
-    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? '' : _formatNiveau(Math.round(c.level)));
+    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? (c.zero ? _zeroCode() : '') : _formatNiveau(Math.round(c.level)));
     if (_evalExportColsState.remarque) cells.push((r.remarque || '').replace(/\t|\n/g, ' '));
     lines.push(cells.join('\t'));
   }
@@ -60339,7 +60367,7 @@ function _evalExportDownloadCsv() {
   for (const r of rows) {
     const cells = [r.name];
     if (_evalExportColsState.note)     cells.push(r.noteCell || '');
-    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? '' : _formatNiveau(Math.round(c.level)));
+    if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? (c.zero ? _zeroCode() : '') : _formatNiveau(Math.round(c.level)));
     if (_evalExportColsState.remarque) cells.push(r.remarque || '');
     lines.push(cells.map(csvEsc).join(';'));
   }
