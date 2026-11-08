@@ -9981,11 +9981,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.162.2';
+const APP_VERSION    = '2.162.3';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T17:24:01Z';
+const APP_BUILD_DATE = '2026-11-08T17:28:21Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -59896,15 +59896,19 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
 
 // Compétence « non évaluée » pour un élève, au sens de MBN (code 0) : aucune case de cette
 // compétence à un niveau ≥ 1 (appelé seulement quand le niveau est nul), et au moins une
-// case à 0 tapé (« vu, non évalué », B et D) ou à A (absent, les quatre types — demande de
-// l'utilisateur, v2.162.2 : un absent est non évalué). Une case jamais remplie ne compte
-// pas : sans rien de saisi, la compétence reste vide.
+// case à 0 tapé (« vu, non évalué », B et D), à A (absent, les quatre types — demande de
+// l'utilisateur, v2.162.2 : un absent est non évalué), ou hors de sa présence dans la classe
+// (case 📅 / 🚪 des types A et B : passation ou mini-note datée avant son arrivée ou après son
+// départ — v2.162.3, élève arrivée en cours d'année). Une case jamais remplie d'un élève
+// présent ne compte pas : sans rien de saisi, la compétence reste vide.
 function _evalCompExplicitZero(ev, sid, cid) {
   if (!ev) return false;
   const nz = v => v === 0 || v === 'A';
   const skc = _evalStuClassId(ev, sid);
   if (ev.type === 'B') {
-    return (ev.passations || []).some(p => p.competenceIds?.includes(cid) && !_subSkippedFor(p, skc) && !_passCompSkipped(p, skc, cid) && nz(p.niveaux?.[sid]?.[cid]));
+    const stu = S.eleves?.[sid];
+    return (ev.passations || []).some(p => p.competenceIds?.includes(cid) && !_subSkippedFor(p, skc) && !_passCompSkipped(p, skc, cid)
+      && (nz(p.niveaux?.[sid]?.[cid]) || !!_stuOutOnSubDate(stu, p, skc, true)));
   }
   if (ev.type === 'D') {
     const levels = ev.notes?.[sid]?.levels || {};
@@ -59913,7 +59917,9 @@ function _evalCompExplicitZero(ev, sid, cid) {
   // Types A / C : la note de la question porte le A ; la compétence suit ses questions.
   const values = ev.notes?.[sid]?.values || {};
   const excluded = new Set(ev.notes?.[sid]?.excluded || []);
-  return (ev.miniNotes || []).some(mn => mn.competenceIds?.includes(cid) && !excluded.has(mn.id) && !_subSkippedFor(mn, skc) && values[mn.id] === 'A');
+  const stu = S.eleves?.[sid];
+  return (ev.miniNotes || []).some(mn => mn.competenceIds?.includes(cid) && !excluded.has(mn.id) && !_subSkippedFor(mn, skc)
+    && (values[mn.id] === 'A' || (ev.type === 'A' && !!_stuOutOnSubDate(stu, mn, skc, false))));
 }
 
 // Construit les données de l'export sous forme d'un tableau de lignes [{ name, note, comps:[{cid, level}], remarque }]

@@ -3023,6 +3023,33 @@ test('Non évalué (MBN 0) : absence dans une question de type C, niveau ≥ 1 a
   assert.ok(ev(`_evalStudentCompetenceLevel(S.evaluations.e1, 's1', 'k2')`) > 0, 'K2 a un niveau');
 });
 
+test('Non évalué (MBN 0) : élève arrivée en cours d\'année — compétences des passations d\'avant son arrivée', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1', 's2'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' },
+              s2: { id: 's2', nom: 'Beta', prenom: 'b', classe_id: 'c1', arrivalDate: '2026-01-12' } },
+    salles: {}, competences: { k1: { id: 'k1', code: 'K1' }, k2: { id: 'k2', code: 'K2' }, k3: { id: 'k3', code: 'K3' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
+    evaluations: {
+      eB: { id: 'eB', type: 'B', nomCourt: 'B', classIds: ['c1'], noteMax: 20, weighting: 'equal', passations: [
+        { id: 'p1', code: 'P1', date: '2025-10-13', competenceIds: ['k1', 'k2'], niveaux: { s1: { k1: 3, k2: 2 } } },
+        { id: 'p2', code: 'P2', date: '2026-02-02', competenceIds: ['k1', 'k3'], niveaux: { s1: { k1: 3, k3: 4 }, s2: { k1: 2 } } }] },
+      eA: { id: 'eA', type: 'A', nomCourt: 'A', classIds: ['c1'], noteMax: 20, miniNotes: [
+        { id: 'm1', max: 4, date: '2025-10-13', competenceIds: ['k2'] },
+        { id: 'm2', max: 4, date: '2026-02-02', competenceIds: ['k1'] }],
+        notes: { s1: { values: { m1: 3, m2: 3 } }, s2: { values: { m2: 2 } } } },
+    },
+  });
+  ev(`_renduState.classId = 'c1';`);
+  const comps = (id) => Object.fromEntries(JSON.parse(ev(`JSON.stringify(_mbnPayload(S.evaluations.${id}).eleves.map(e => [e.nom, e.comps]))`)));
+  const b = comps('eB');
+  assert.deepEqual(b.Beta, { K1: 2, K2: 0 }, 'K2 seulement avant son arrivée → 0 ; K3 jamais rempli après son arrivée → rien');
+  assert.deepEqual(b.Alpha, { K1: 3, K2: 2, K3: 4 });
+  const a = comps('eA');
+  assert.deepEqual(a.Beta, { K1: 2, K2: 0 }, 'type A : mini-note datée avant son arrivée → 0');
+});
+
 test('Réunions parents-profs : créneaux, purge d\'un élève et d\'une classe, nettoyage au chargement', () => {
   // Le modèle de l'établissement : 16h35 → 19h30, de 5 en 5 = 36 créneaux sur deux colonnes de 18.
   const times = JSON.parse(ev(`JSON.stringify(_reuTimes({ first: '16:35', last: '19:30', step: 5 }))`));
