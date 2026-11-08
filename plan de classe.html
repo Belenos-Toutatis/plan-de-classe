@@ -8564,7 +8564,7 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
             var sel = document.getElementById(a.comps[k].sel.id);
             var v = String(a.comps[k].v), okv = false;
             if (sel && v === '0') {
-              if (sel.disabled || sel.readOnly) continue;   /* « non évalué » (0 tapé ou absent) : seulement si MBN laisse la case modifiable */
+              if (a.motif || sel.disabled || sel.readOnly) continue;   /* « non évalué » (0 tapé ou absent) : seulement si MBN laisse la case modifiable */
               v = zeroVal(sel);
             }
             if (sel) for (var q = 0; q < sel.options.length; q++) if (sel.options[q].value === v) okv = true;
@@ -9981,11 +9981,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.162.3';
+const APP_VERSION    = '2.162.4';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T17:28:21Z';
+const APP_BUILD_DATE = '2026-11-08T19:47:43Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -60170,11 +60170,14 @@ function _mbnPayload(ev) {
     const c = {};
     // Niveau 0 « non évalué » saisi → 0, le code de MBN pour « aucune évaluation » (signalé
     // par l'utilisateur : l'envoi le laissait vide). Une case jamais remplie n'envoie rien.
-    for (const x of r.comps) { const v = x.level == null ? (x.zero ? 0 : null) : _mbnLevel(x.level, nb); if (v != null && x.code) c[x.code] = v; }
+    // Élève sous motif (absent ou non noté à TOUT le devoir) : MBN verrouille ses compétences
+    // et compte chaque « 0 » envoyé comme une erreur de saisie → pas de 0 dans ce cas.
+    const motif = disp.kind === 'A' ? 'Abs' : disp.kind === 'NN' ? 'NoN' : null;
+    for (const x of r.comps) { const v = x.level == null ? (x.zero && !motif ? 0 : null) : _mbnLevel(x.level, nb); if (v != null && x.code) c[x.code] = v; }
     return {
       nom: stu.nom || '', prenom: stu.prenom || '',
       note: disp.kind === 'num' ? disp.value : null,
-      motif: disp.kind === 'A' ? 'Abs' : disp.kind === 'NN' ? 'NoN' : null,
+      motif,
       comps: c, appr: (r.remarque || '').trim(),
     };
   });

@@ -3002,9 +3002,39 @@ test('Export ENT : jamais rempli = case vide ; absent ou 0 tapé = « 0 » (non 
   const mbn = JSON.parse(ev(`JSON.stringify(_mbnPayload(S.evaluations.e1).eleves.map(e => [e.nom, e.comps]))`));
   const m = Object.fromEntries(mbn);
   assert.deepEqual(m.Alpha, { K1: 3 });
-  assert.deepEqual(m.Beta, { K1: 0 });
+  assert.deepEqual(m.Beta, {}, 'absente à TOUT le devoir : motif Abs, MBN verrouille ses compétences → aucun 0 envoyé');
   assert.deepEqual(m.Delta, { K1: 0 });
   assert.deepEqual(m.Gamma, {}, 'jamais rempli : rien envoyé à MBN');
+});
+
+test('Vers MBN : élève sous motif (absent ou non noté à tout le devoir) — aucun 0, types C et D', () => {
+  setState({
+    cur: 'c1',
+    classes: { c1: { id: 'c1', nom: 'A', eleves: ['s1', 's2', 's3'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'Beta', prenom: 'b', classe_id: 'c1' },
+              s3: { id: 's3', nom: 'Gamma', prenom: 'c', classe_id: 'c1' } },
+    salles: {}, competences: { k1: { id: 'k1', code: 'K1' }, k2: { id: 'k2', code: 'K2' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
+    evaluations: { e1: { id: 'e1', type: 'C', nomCourt: 'E', classIds: ['c1'], noteMax: 20,
+      miniNotes: [{ id: 'm1', max: 4, competenceIds: ['k1'] }, { id: 'm2', max: 4, competenceIds: ['k2'] }],
+      notes: { s1: { values: { m1: 'A', m2: 3 } }, s2: { values: { m1: 'A', m2: 'A' } }, s3: { values: { m1: 'NN', m2: 'NN' } } } } },
+  });
+  ev(`_renduState.evalId = 'e1'; _renduState.classId = 'c1';`);
+  const P = JSON.parse(ev(`JSON.stringify(_mbnPayload(S.evaluations.e1).eleves.map(e => [e.nom, { m: e.motif, c: e.comps }]))`));
+  const m = Object.fromEntries(P);
+  assert.equal(m.Alpha.m, null); assert.equal(m.Alpha.c.K1, 0, 'absent à une seule question : 0 sur sa compétence');
+  assert.equal(m.Beta.m, 'Abs'); assert.deepEqual(m.Beta.c, {}, 'absent partout : rien');
+  assert.equal(m.Gamma.m, 'NoN'); assert.deepEqual(m.Gamma.c, {}, 'non noté partout : rien');
+  // Type D : même règle (niveaux A sur toutes les questions).
+  ev(`const e = S.evaluations.e1; e.type = 'D';
+      e.notes = { s1: { levels: { m1: { k1: 'A' }, m2: { k2: 3 } } }, s2: { levels: { m1: { k1: 'A' }, m2: { k2: 'A' } } } };`);
+  const D = Object.fromEntries(JSON.parse(ev(`JSON.stringify(_mbnPayload(S.evaluations.e1).eleves.map(e => [e.nom, { m: e.motif, c: e.comps }]))`)));
+  assert.equal(D.Alpha.c.K1, 0, 'type D, absent à une question : 0');
+  assert.equal(D.Beta.m, 'Abs', 'type D, absent partout : motif');
+  assert.deepEqual(D.Beta.c, {}, 'type D sous motif : aucun 0');
+  // Le favori ne pose pas non plus de 0 sous motif (filet pour un ancien presse-papiers).
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  assert.match(html, /if \(a\.motif \|\| sel\.disabled \|\| sel\.readOnly\) continue;/);
 });
 
 test('Non évalué (MBN 0) : absence dans une question de type C, niveau ≥ 1 ailleurs l\'emporte', () => {
