@@ -306,6 +306,10 @@ Bouton **🖼 Trombinoscope** de l'onglet Élèves (`#btn-trombiview`, visible s
 - ⚠️ Piège de test rencontré : restaurer `window.print` avant le `setTimeout(…, 200)` de `printTrombi` ouvre la VRAIE boîte d'impression et bloque l'aperçu — garder le bouchon en place.
 - Audit : 0 écart en clair et en sombre ; 363 px à 375.
 
+### Plein écran et touche P (v2.163.0, demandes de l'utilisateur)
+- **⛶ Plein écran** (`#tv-full-btn`, `_tvFullToggle`) : classe `.tv-full` sur la modale (boîte à 100 % de l'écran, liste sans limite de hauteur) **et** plein écran du navigateur sur le **document**, pas sur la boîte : la fiche élève, les toasts et le choix de fichier ouverts depuis le trombinoscope doivent rester visibles par-dessus. Échap ou F11 sortent du plein écran du navigateur → `fullscreenchange` remet la fenêtre à sa taille ; fermer la fenêtre en sort aussi (`_modalReturnTo['mtrombiview']`). 💡 Le panneau d'aperçu refuse `requestFullscreen` : on n'y voit que la boîte agrandie.
+- **Touche `P`** (P comme Photos ; `T` était demandé mais sert au tiers-temps sur le Plan) : ouvre le trombinoscope de la classe du bandeau depuis n'importe quel onglet, hors fenêtre ouverte et hors saisie ; s'il n'y a aucune photo, un toast renvoie vers 📷 Photos. Même gestionnaire que `H` (📅 Appels passés), dans le `keydown` global.
+
 ## 🧠 Mémoriser les élèves — jeu photo → nom (modale `mmemo`, v2.67.0)
 
 Bouton **🧠 Mémoriser** de l'onglet Élèves (`#btn-memo`, visible seulement s'il existe au moins une photo — `_updateMemoBtn`, appelé par `renderStudents` et `_photosChanged`). Écran de départ (`renderMemo`, `stage: 'setup'`), réglages mémorisés dans `localStorage.planClasse_memoPrefs` :

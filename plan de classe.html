@@ -547,6 +547,11 @@ html[data-theme="dark"] .td-ghost{background:rgba(30,38,48,.96);color:var(--ink-
 /* 🖼 Trombinoscope (affichage) */
 .tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tv-w,130px),1fr));gap:12px}
 .tv-card{text-align:center;cursor:pointer;border-radius:6px;padding:4px;position:relative}
+/* Plein écran (v2.163.0) : la fenêtre occupe tout l'écran (document en plein écran, pas la
+   boîte seule : la fiche élève, les toasts et le choix de fichier restent visibles par-dessus). */
+#mtrombiview.tv-full{padding:0}
+#mtrombiview.tv-full .mb{width:100% !important;max-width:none !important;height:100vh;max-height:none;border-radius:0;display:flex;flex-direction:column}
+#mtrombiview.tv-full #mtrombiview-body{max-height:none !important;flex:1;min-height:0}
 .tv-card:hover{background:var(--paper-warm)}
 .tv-card img,.tv-none{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--rule-line);background:var(--paper-deep);display:block}
 .tv-none{display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;font-size:.8em;color:var(--pencil);border:1.5px dashed var(--rule-line);background:var(--paper)}
@@ -4600,7 +4605,7 @@ body.topbar-free #topbar { position: static !important; }
       </span>
       <span class="tb-grp"><span class="tb-grp-lbl">Photos</span>
         <button class="btn btn-g btn-sm" onclick="openTrombiImport()" title="Importer les photos des élèves depuis le trombinoscope PDF exporté de MBN — elles s'affichent dans la fiche et au survol des noms">📷 Photos</button>
-        <button class="btn btn-g btn-sm" id="btn-trombiview" onclick="openTrombiView()" style="display:none" title="Afficher le trombinoscope d'une classe, et l'imprimer (cette classe ou toutes)">🖼 Trombi<span class="pl-txt">noscope</span></button>
+        <button class="btn btn-g btn-sm" id="btn-trombiview" onclick="openTrombiView()" style="display:none" title="Afficher le trombinoscope d'une classe, et l'imprimer (cette classe ou toutes) — raccourci touche P">🖼 Trombi<span class="pl-txt">noscope</span></button>
         <button class="btn btn-g btn-sm" id="btn-memo" onclick="openMemoGame()" style="display:none" title="Jeu de mémorisation : retrouver le prénom (ou le nom) de chaque élève à partir de sa photo">🧠 Mémo<span class="pl-txt">riser</span></button>
       </span>
       <span class="tb-grp"><span class="tb-grp-lbl">Suivi</span>
@@ -4668,7 +4673,7 @@ body.topbar-free #topbar { position: static !important; }
       <button class="btn btn-g btn-sm pl-vtoggle" onclick="openStudentWindow()" title="Ouvre la Vue Élève dans une NOUVELLE FENÊTRE, à glisser sur l'écran de projection et à mettre en plein écran (⛶ ou F11). Cette fenêtre-ci reste en vue prof. « Vue prof » dans la fenêtre la ferme.">🔄 Vue Élève</button>
       <button class="btn btn-g btn-sm" onclick="openPickModal()" title="Tirer un élève au hasard parmi les présents (chaque élève n'est tiré qu'une fois par cycle)">🎲 Interroger</button>
       <button class="btn btn-p btn-sm" id="btn-appel-mode" onclick="toggleAppelMode()" title="Faire l'appel : clic = absent / présent, clic droit = retard (raccourci touche A)">🙋 Faire l'appel</button>
-      <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Appels passés : consulter, modifier ou supprimer les appels enregistrés" aria-label="Appels passés">📅</button>
+      <button class="btn btn-g btn-sm" id="btn-appels-passes" onclick="openAttendanceModal()" title="Appels passés : consulter, modifier ou supprimer les appels enregistrés (raccourci touche H)" aria-label="Appels passés">📅</button>
       <button class="btn btn-g btn-sm" id="btn-class-msg" onclick="openClassMsg()" title="Message à passer à toute la classe en début de séance — affiché en évidence au-dessus du plan tant qu'il n'est pas marqué fait">📣<span class="pl-txt"> Message</span></button>
       <button class="btn btn-g btn-sm" onclick="openJournal()" title="Journal de séance : une remarque par élève pour la séance du jour (Devoirs faits, atelier…), relue dans la fiche de l'élève au moment du bulletin">📓<span class="pl-txt"> Journal</span></button>
       </span>
@@ -5706,7 +5711,7 @@ body.topbar-free #topbar { position: static !important; }
        bandeau, filtre de groupe / sans photo, ordre, taille, ajout de photo depuis une case vide,
        options d'impression (photos par ligne, prénom seul). -->
   <div class="mb" style="width:min(1060px,97vw);max-width:1060px">
-    <div class="lst-head"><h2 style="margin:0">🖼 Trombinoscope</h2><span id="mtrombiview-cls" class="mvc-fp-chips" style="flex:1;justify-content:flex-end"></span></div>
+    <div class="lst-head"><h2 style="margin:0">🖼 Trombinoscope</h2><span id="mtrombiview-cls" class="mvc-fp-chips" style="flex:1;justify-content:flex-end"></span><button type="button" class="btn btn-g btn-sm" id="tv-full-btn" onclick="_tvFullToggle()" title="Plein écran (Échap pour revenir)" aria-pressed="false">⛶</button></div>
     <div id="mtrombiview-count" class="tv-syn"></div>
     <div id="mtrombiview-opts" class="tv-opts"></div>
     <div id="mtrombiview-body" style="max-height:60vh;overflow-y:auto;padding-right:4px"></div>
@@ -6159,6 +6164,8 @@ body.topbar-free #topbar { position: static !important; }
         <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Annuler (hors saisie de texte, où c'est l'annulation de la frappe)</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Y</kbd> · <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Refaire</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Imprimer selon l'onglet : plan, Vue Élève, liste des élèves, bilan des classes, fiche de prêt, plan vide, Bilans · marqueurs sur l'onglet QCMcam</td></tr>
+        <tr><td><kbd>H</kbd></td><td>📅 Appels passés de la classe choisie</td></tr>
+        <tr><td><kbd>P</kbd></td><td>🖼 Trombinoscope de la classe choisie</td></tr>
         <tr><td colspan="2" class="about-sc-grp">Plan Prof et Vue Élève</td></tr>
         <tr><td><kbd>+</kbd> / <kbd>−</kbd> / <kbd>=</kbd></td><td>Zoom + / zoom − / 100 %</td></tr>
         <tr><td><kbd>0</kbd> / <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td><td>Filtre de groupe : Tous / G1 / G2 / G3</td></tr>
@@ -9981,11 +9988,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.162.4';
+const APP_VERSION    = '2.163.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T19:47:43Z';
+const APP_BUILD_DATE = '2026-11-08T23:49:47Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -37116,7 +37123,27 @@ async function printTrombiCurrent() {
 var _tvOpt = (() => { try { return Object.assign({ grp: 0, sort: 'nom', size: 'M', cols: 6, name: 'full' }, JSON.parse(localStorage.getItem('planClasse_trombiView') || '{}')); } catch (e) { return { grp: 0, sort: 'nom', size: 'M', cols: 6, name: 'full' }; } })();
 function _tvSet(k, v) { _tvOpt[k] = v; try { localStorage.setItem('planClasse_trombiView', JSON.stringify(_tvOpt)); } catch (e) {} renderTrombiView(); }
 var _tvTarget = null;   // élève sans photo visé (dernière case vide cliquée ou survolée) — pour Ctrl+V
+// Plein écran du trombinoscope (v2.163.0, demande de l'utilisateur)
+function _tvFullSet(on) {
+  const m = document.getElementById('mtrombiview'); if (!m) return;
+  m.classList.toggle('tv-full', !!on);
+  const b = document.getElementById('tv-full-btn');
+  if (b) { b.setAttribute('aria-pressed', String(!!on)); b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Quitter le plein écran (Échap)' : 'Plein écran (Échap pour revenir)'; }
+}
+function _tvFullToggle() {
+  const on = !document.getElementById('mtrombiview')?.classList.contains('tv-full');
+  _tvFullSet(on);
+  try {
+    if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    else if (!on && document.fullscreenElement) document.exitFullscreen();
+  } catch (e) {}
+}
+document.addEventListener('fullscreenchange', () => {
+  // Échap (ou F11) sort du plein écran du navigateur : la fenêtre reprend sa taille.
+  if (!document.fullscreenElement && document.getElementById('mtrombiview')?.classList.contains('tv-full')) _tvFullSet(false);
+});
 function openTrombiView() {
+  _modalReturnTo['mtrombiview'] = () => { if (document.getElementById('mtrombiview')?.classList.contains('tv-full')) _tvFullToggle(); };
   _tvClassId = getCls()?.id || _memoRealClasses()[0]?.id || null;
   if (_tvClassId && S.classes[_tvClassId]?.virtual) _tvClassId = _memoRealClasses()[0]?.id || null;
   if (!_photos.ready && dirHandle) _photosRefresh(true).then(() => renderTrombiView());
@@ -43002,6 +43029,20 @@ document.addEventListener('keydown', e => {
     if (curTab === 'notes')   { e.preventDefault(); toast('🖨 Pour imprimer une évaluation : menu ⋯ de sa ligne → 👀 Projeter les notes, puis 🖨. Les moyennes s\'impriment depuis le Bilan des notes (🖨 Imprimer).', 'info'); return; }
   }
 
+  // H (historique des appels) et P (trombinoscope, P comme Photos) : depuis n'importe quel
+  // onglet, sur la classe choisie dans le bandeau (v2.163.0, demande de l'utilisateur).
+  // Sans effet si une fenêtre est déjà ouverte ou avec une touche de modification
+  // (Ctrl+H est l'historique du navigateur, Ctrl+P l'impression).
+  if (!ctrl && !e.altKey && !e.repeat && (k === 'h' || k === 'p') && !document.querySelector('.mo.on')) {
+    if (k === 'h') {
+      if (!_featureEnabled('appel')) return;   // fonction Appel désactivée dans les Réglages
+      e.preventDefault(); openAttendanceModal(); return;
+    }
+    e.preventDefault();
+    if (!_photos.sids.size && !(dirHandle && !_photos.ready)) { toast('🖼 Aucune photo d\'élève : importe-les d\'abord (onglet Élèves → 📷 Photos).', 'warn'); return; }
+    openTrombiView(); return;
+  }
+
   // Zoom et filtres groupe sur Plan Prof / Vue Élève
   if (curTab === 'plan' || curTab === 'svue') {
     const isPlan = curTab === 'plan';
@@ -43283,8 +43324,9 @@ document.addEventListener('click', e => {
   const tip = document.createElement('div');
   tip.id = 'gtip';
   document.body.appendChild(tip);
-  let timer = null, current = null;
+  let timer = null, current = null, kbd = false;   // kbd : saisie au clavier en cours (cf. plus bas)
   function show(target) {
+    if (kbd) return;
     // Si la cible a été détachée du DOM ou rendue invisible pendant les 500ms
     // d'attente (ex. modale fermée, grille re-rendue), `getBoundingClientRect()`
     // renverrait 0/0/0/0 → tooltip apparaît collé en haut-gauche. Annule.
@@ -43362,6 +43404,15 @@ document.addEventListener('click', e => {
     hide();
   });
   window.addEventListener('scroll', hide, true);
+  // Saisie au clavier (v2.163.0, demande de l'utilisateur) : l'infobulle de survol s'efface
+  // et ne revient qu'après un vrai mouvement de souris (pas un frémissement de quelques px).
+  document.addEventListener('keydown', e => {
+    if (['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'].includes(e.key)) return;
+    kbd = true; current = null; clearTimeout(timer); hide();
+  }, true);
+  document.addEventListener('mousemove', e => {
+    if (kbd && Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 3) kbd = false;
+  }, true);
   window._gtipHide = () => { clearTimeout(timer); hide(); };
 })();
 
