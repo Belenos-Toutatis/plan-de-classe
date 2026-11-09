@@ -7396,7 +7396,7 @@ body.topbar-free #topbar { position: static !important; }
       <p id="meval-tableur-help" style="margin:0;font-size:.82em;color:var(--pencil);font-style:italic;line-height:1.5;position:relative;padding-right:24px">
         <button onclick="_evalTableurToggleHelp()" title="Masquer le mode d'emploi" style="position:absolute;top:-2px;right:-2px;border:none;background:transparent;color:var(--pencil);font-size:1em;cursor:pointer;padding:2px 6px">✕</button>
         <strong>Navigation :</strong> <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Tab</kbd> / <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Maj+Tab</kbd> cellule suivante/précédente · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">Entrée</kbd> selon le réglage <em>↩ Entrée</em> ci-dessus · <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.9em">↑ ↓ ← →</kbd> directions.
-        <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total ; Tab et Entrée sautent ces cases, les flèches s'y arrêtent).
+        <br><strong>Codes :</strong> <code id="meval-tableur-help-nn">NN</code> non noté, <code id="meval-tableur-help-a">A</code> absent (exclus du total ; Tab et Entrée sautent ces cases chez les autres élèves, pas sur la ligne où tu es : pour un rattrapage, tape par-dessus les A ; les flèches s'y arrêtent).
         <span id="meval-tableur-help-paste"><br><strong>Coller :</strong> sélectionne une cellule puis <kbd style="background:var(--paper-warm);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">Ctrl+V</kbd> — colle un bloc multi-colonnes × multi-lignes (TSV depuis Excel/Pronote). Le remplissage démarre à la cellule sélectionnée. Le bouton "📥 Coller des notes" reste utile pour coller une colonne dans une cellule cible précise.</span>
         <!-- Toujours réécrit par _evalTableurUpdateHelpForType (un texte par type) : cette
              version décrit le Type A, elle sert de repli si le script n'a pas encore tourné. -->
@@ -9988,11 +9988,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.164.0';
+const APP_VERSION    = '2.164.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-08T23:55:29Z';
+const APP_BUILD_DATE = '2026-11-09T23:28:04Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -50596,7 +50596,11 @@ function _evalTableurKey(e, inputEl) {
     // réglé à sa place) : Tab et Entrée
     // l'enjambent — un élève absent n'a rien à saisir (demande de l'utilisateur). Les
     // flèches et le clic s'y arrêtent toujours, pour pouvoir corriger.
-    if (target && (key === 'Tab' || key === 'Enter') && (target.value.trim().toUpperCase() === codeA || target.value.trim().toUpperCase() === 'A')) target = null;
+    // ⚠️ Seulement en passant à un AUTRE élève : sur la ligne de l'élève où l'on est, les « A »
+    // ne sont pas sautés — saisir le rattrapage d'un absent remplace ses A un par un, Entrée
+    // allant à la question suivante (v2.164.1, signalé par l'utilisateur : Entrée quittait la
+    // ligne et il fallait effacer tous les A à la main).
+    if (target && pos.ri !== ri && (key === 'Tab' || key === 'Enter') && (target.value.trim().toUpperCase() === codeA || target.value.trim().toUpperCase() === 'A')) target = null;
     if (target) break;
     pos = step(pos.ri, pos.ci);
   }
