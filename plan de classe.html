@@ -9988,11 +9988,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.164.1';
+const APP_VERSION    = '2.165.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-09T23:28:04Z';
+const APP_BUILD_DATE = '2026-11-12T12:47:56Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -23291,13 +23291,13 @@ function renderSeatPicker() {
       }
       const occ = cls.seating[key];
       if (occ === sid) {
-        html += `<div class="spk-cell spk-me" title="Place actuelle de ${_escAttr(stu.prenom + ' ' + stu.nom)}">${num}<div class="spk-hint">◉</div><div class="spk-name">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div></div>`;
+        html += `<div class="spk-cell spk-me" data-photo-sid="${_escAttr(sid)}" title="Place actuelle de ${_escAttr(stu.prenom + ' ' + stu.nom)}">${num}<div class="spk-hint">◉</div><div class="spk-name">${_escName(stu.prenom)}<br>${_escName(stu.nom)}</div></div>`;
         continue;
       }
       const other = occ ? S.eleves[occ] : null;
       if (other) {
         const tip = cur ? `↔ Échanger avec ${other.prenom} ${other.nom}` : `⚠ Prendre la place de ${other.prenom} ${other.nom} (qui devient non placé·e)`;
-        html += `<div class="spk-cell spk-occ" onclick="_spkPick('${key}')" title="${_escAttr(tip)}" data-tip="${_escAttr(tip)}">${num}<div class="spk-hint">${cur ? '↔' : '⚠'}</div><div class="spk-name">${_escName(other.prenom)}<br>${_escName(other.nom)}</div></div>`;
+        html += `<div class="spk-cell spk-occ" onclick="_spkPick('${key}')" title="${_escAttr(tip)}" data-tip="${_escAttr(tip)}" data-photo-sid="${_escAttr(occ)}">${num}<div class="spk-hint">${cur ? '↔' : '⚠'}</div><div class="spk-name">${_escName(other.prenom)}<br>${_escName(other.nom)}</div></div>`;
       } else {
         html += `<div class="spk-cell spk-free" onclick="_spkPick('${key}')" title="Placer ${_escAttr(stu.prenom)} ici" data-tip="＋ Placer ${_escAttr(stu.prenom)} ici">${num}<div class="spk-hint">＋</div><div class="spk-name"><em>vide</em></div></div>`;
       }
@@ -24081,7 +24081,7 @@ function buildSnapshotCell(salle, row, col, seating) {
     cell.innerHTML = `
       <span class="cpos">N°${seatLabel(row, col, salle.cols || 10)}</span>
       ${(stuG || archBadge) ? `<div class="spec-badges">${stuG ? `<span class="gbadge g${stuG}">G${stuG}</span>` : ''}${archBadge}</div>` : ''}
-      <div class="cn" style="${archStyle}">${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
+      <div class="cn" style="${archStyle}"${stu._archived ? '' : ` data-photo-sid="${_escAttr(sid)}"`}>${_escAttr(stu.prenom)}<br>${_escAttr(stu.nom)}</div>
     `;
     cell.title = `${stu.prenom} ${stu.nom}${stu._archived ? ' (supprimé depuis)' : ''}`;
   } else {
@@ -33967,6 +33967,7 @@ function renderMattPlan() {
           cellClass += ' mp-edit';
           cellAttrs = ` onclick="_mpToggleAbs('${_escJsAttr(sid)}')" oncontextmenu="event.preventDefault();_mpLate('${_escJsAttr(sid)}')" data-mp-sid="${_escAttr(sid)}" title="Clic = absent / présent · clic droit = retard"`;
         }
+        if (stu) cellAttrs += ` data-photo-sid="${_escAttr(sid)}"`;   // photo au survol (bulle #photo-pop)
         inner = `
           <div class="mp-name">${_escAttr(prenomShown || '')}<br><strong>${_escAttr(nomShown || '')}</strong>${archMark}</div>
           ${lateTime && !isAbsent ? `<div class="mp-time">⏰ ${_escAttr(lateTime)}</div>` : ''}
@@ -36607,7 +36608,9 @@ const _photoPop = { el: null, sid: null, timer: null, x: 0, y: 0, pinned: false,
 // Sur le Plan Prof et la Vue Élève, la salle affichée est déjà sous les yeux : pas de mini-plan pour elle.
 // Survol d'un nom SUR un plan (Plan, Vue Élève, Tablettes, QCMcam) : photo seule, sans mini-plan —
 // on a déjà le plan sous les yeux (v2.100.2, demande de l'utilisateur). '*' = aucune salle.
-function _photoPopSkipRoom(t) { return t && t.closest && t.closest('#tab-plan, #tab-svue, #tab-ipads .ip-plan, #tab-qcmcam .qcm-plan-wrap') ? '*' : null; }
+// Idem dans les fenêtres qui montrent un plan (v2.165.0) : 📍 Place de l'élève, 🖼 Plan de
+// l'appel, 🪑 Saisie sur le plan (type B).
+function _photoPopSkipRoom(t) { return t && t.closest && t.closest('#tab-plan, #tab-svue, #tab-ipads .ip-plan, #tab-qcmcam .qcm-plan-wrap, #mseatpick-grid, #mattPlan-grid, #meval-plan-overlay-grid') ? '*' : null; }
 function _photoPopHide() {
   clearTimeout(_photoPop.timer); _photoPop.timer = null; _photoPop.sid = null; _photoPop.pinned = false;
   if (_photoPop.el) _photoPop.el.style.display = 'none';
@@ -36615,10 +36618,23 @@ function _photoPopHide() {
 function _photoPopPlace() {
   const el = _photoPop.el; if (!el) return;
   const w = el.offsetWidth || 140, h = el.offsetHeight || 170;
-  let x = _photoPop.x + 18, y = _photoPop.y + 18;
-  if (x + w > innerWidth - 8) x = _photoPop.x - w - 12;
-  if (y + h > innerHeight - 8) y = innerHeight - h - 8;
-  el.style.left = Math.max(8, x) + 'px'; el.style.top = Math.max(8, y) + 'px';
+  const px = _photoPop.x, py = _photoPop.y;
+  const fit = (x, y) => [Math.max(8, Math.min(x, innerWidth - w - 8)), Math.max(8, Math.min(y, innerHeight - h - 8))];
+  let [x, y] = fit(px + 18 + w > innerWidth - 8 ? px - w - 12 : px + 18, py + 18);
+  // L'infobulle de survol (#gtip) s'affiche sous la case survolée : dans une petite case
+  // (📍 Place de l'élève, 🖼 Plan de l'appel), la photo la couvrait. On cherche alors une
+  // autre position autour du curseur — au-dessus, puis de l'autre côté (v2.165.0).
+  const g = document.getElementById('gtip');
+  if (g && g.classList.contains('show')) {
+    const r = g.getBoundingClientRect();
+    const hit = ([a, b]) => a < r.right && a + w > r.left && b < r.bottom && b + h > r.top;
+    if (hit([x, y])) {
+      const alt = [[x, py - h - 12], [px - w - 12, py + 18], [px - w - 12, py - h - 12], [px + 18, py - h - 12]]
+        .map(([a, b]) => fit(a, b)).find(p => !hit(p));
+      if (alt) [x, y] = alt;
+    }
+  }
+  el.style.left = x + 'px'; el.style.top = y + 'px';
 }
 document.addEventListener('mousemove', e => {
   _photoPop.x = e.clientX; _photoPop.y = e.clientY;
@@ -43382,6 +43398,8 @@ document.addEventListener('click', e => {
     tip.style.top  = top  + 'px';
     tip.style.left = left + 'px';
     tip.classList.add('show');
+    // Bulle photo déjà ouverte (elle part à 250 ms, celle-ci à 500) : elle s'écarte si on se chevauche.
+    if (_photoPop.el && _photoPop.el.style.display === 'block' && !_photoPop.pinned) _photoPopPlace();
   }
   function hide() {
     tip.classList.remove('show');
@@ -51346,7 +51364,7 @@ function _evalPlanOverlayRender() {
         </div>`;
       }
       html += `<div class="evp-cell evp-cell-stu${_evpBrushReady() ? ' brushable' : ''}" style="min-height:${cellMinH}px" onclick="_evpCellClick(event,'${_escJsAttr(sid)}')">
-        <div class="evp-name" oncontextmenu="event.preventDefault();_evpCommentsOpen('${_escJsAttr(sid)}')"><div class="evp-fit"><strong>${_esc(stu.prenom)}</strong></div><div class="evp-fit"><span>${_esc(stu.nom?.toUpperCase() || '')}</span></div></div>
+        <div class="evp-name" oncontextmenu="event.preventDefault();_evpCommentsOpen('${_escJsAttr(sid)}')" data-photo-sid="${_escAttr(sid)}"><div class="evp-fit"><strong>${_esc(stu.prenom)}</strong></div><div class="evp-fit"><span>${_esc(stu.nom?.toUpperCase() || '')}</span></div></div>
         ${compsHTML}
       </div>`;
     }
