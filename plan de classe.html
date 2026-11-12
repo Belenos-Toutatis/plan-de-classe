@@ -9162,6 +9162,7 @@ function setZoom(d) {
   var i = ZOOMS.indexOf(zoom); zoom = d === 0 ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + d))];
   try { localStorage.setItem('rdv_zoom', String(zoom)); } catch (e) {}
   applyZoom(); renderTop();
+  if (V.view === 'soir') soirFit();
 }
 applyZoom();
 var app = document.getElementById('app');
@@ -9252,9 +9253,15 @@ function renderTop(how) {
     + (V.view === 'soir' && cur() ? clockSpan() : '<span style="margin-left:auto"></span>') + st
     + '<span class="zb" role="group" aria-label="Taille de l\'affichage"><button data-a="zoom" data-v="-1" title="Rapetisser l\'affichage" aria-label="Rapetisser"' + (zoom <= ZOOMS[0] ? ' disabled' : '') + '>−</button><button class="zp" data-a="zoom" data-v="0" title="Revenir à la taille normale (100 %)">' + Math.round(zoom * 100) + ' %</button><button data-a="zoom" data-v="1" title="Agrandir l\'affichage" aria-label="Agrandir"' + (zoom >= ZOOMS[ZOOMS.length - 1] ? ' disabled' : '') + '>+</button></span>'
     + '<button data-a="undo" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"' + (undo.length ? '' : ' disabled') + '>↩ Annuler</button><button data-a="redo" title="Rétablir ce qui vient d\'être annulé (Ctrl+Y)" aria-label="Rétablir"' + (redo.length ? '' : ' disabled') + '>↪ Rétablir</button><button class="p" data-a="save" title="Enregistrer dans ce fichier (Ctrl+S)">💾 Enregistrer</button>';
+  // « ● Modifications non enregistrées » peut faire passer l'en-tête sur deux lignes : la vue du soir se réajuste.
+  var h = el.offsetHeight; if (h !== topH) { topH = h; if (V.view === 'soir') soirFit(); }
 }
 function render() {
   closeMenu();
+  // Défilements de la vue du soir, repris après le redessin : un clic sur un nom ne fait plus
+  // sauter la liste ; le détail ne garde le sien que pour le même rendez-vous.
+  var ol = document.querySelector('#main .slist'), od = document.querySelector('#main .det');
+  var keep = ol ? { list: ol.scrollTop, det: od ? od.scrollTop : 0, key: soirShown } : null;
   if (!cur()) { V.id = null; V.view = 'list'; }
   var b = '';
   try { var k = JSON.parse(localStorage.getItem(BK) || 'null'); if (k && k.ts > (D.savedAt || 0) && !dirty && JSON.stringify(k.reunions) !== JSON.stringify(D.reunions)) b = '<div class="banner">Ce navigateur garde une version plus récente, non enregistrée dans le fichier (' + _esc(new Date(k.ts).toLocaleString('fr-FR')) + ').<button data-a="restore" title="Reprendre les modifications que ce navigateur a gardées (elles n\'avaient pas été enregistrées dans le fichier)">Reprendre</button><button data-a="dropbk" title="Oublier cette version et garder celle qui est enregistrée dans le fichier">Ignorer</button></div>'; } catch (e) {}
@@ -9262,10 +9269,42 @@ function render() {
   renderTop();
   var m = document.getElementById('main');
   if (V.view === 'list') m.innerHTML = listHTML();
-  else if (V.view === 'soir') { m.innerHTML = soirHTML(cur()); var sel = document.querySelector('.row.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' }); }
+  else if (V.view === 'soir') { m.innerHTML = soirHTML(cur()); soirAfter(keep); }
   else { m.innerHTML = prepHTML(cur()); renderSide(); if (V.edit) { var inp = document.getElementById('ed'); if (inp) { inp.focus(); acRender(); } } }
   clockTick();
 }
+// Vue du soir : les deux colonnes prennent la hauteur qui reste sous l'en-tête et défilent chacune
+// de son côté ; la page ne défile plus, donc l'en-tête et son horloge restent à l'écran. Hauteur
+// divisée par le zoom de l'affichage (#app est zoomé, la fenêtre non). Sous 900 px (une seule
+// colonne) ou s'il reste moins de 320 px, la page défile comme avant.
+var soirShown = null, topH = -1;
+function soirFit() {
+  var soir = document.querySelector('#main .soir'); if (!soir) return;
+  var cols = [soir.querySelector('.slist'), soir.querySelector('.det')].filter(Boolean);
+  function set(h) { cols.forEach(function (c) { c.style.maxHeight = h ? h + 'px' : ''; c.style.overflowY = h ? 'auto' : ''; }); }
+  if (window.matchMedia && window.matchMedia('(max-width:900px)').matches) return set(0);
+  var z = zoom || 1, avail = Math.floor((innerHeight - (soir.getBoundingClientRect().top + scrollY) - 12) / z);
+  if (!(avail * z >= 320)) return set(0);
+  set(avail);
+  var over = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  if (over > 0 && (avail - over / z) * z >= 320) set(Math.floor(avail - over / z));
+}
+function soirAfter(keep) {
+  soirFit();
+  var ls = document.querySelector('#main .slist'), det = document.querySelector('#main .det'), key = V.id + '|' + V.cur;
+  if (keep && ls) ls.scrollTop = keep.list;
+  if (keep && det && keep.key === key) det.scrollTop = keep.det;
+  soirShown = key;
+  // Le rendez-vous choisi reste visible (◀ ▶, ouverture), en ne faisant défiler que la liste et
+  // seulement s'il est caché — sous « Parent sans rendez-vous », collé en haut de la liste.
+  var row = ls && ls.querySelector('.row.sel');
+  if (!row) return;
+  var lr = ls.getBoundingClientRect(), rr = row.getBoundingClientRect(), wk = ls.querySelector('.walk');
+  var top = lr.top + (wk ? wk.getBoundingClientRect().height : 0);
+  if (rr.top < top) ls.scrollTop -= (top - rr.top + 4) / (zoom || 1);
+  else if (rr.bottom > lr.bottom) ls.scrollTop += (rr.bottom - lr.bottom + 4) / (zoom || 1);
+}
+window.addEventListener('resize', function () { if (V.view === 'soir') soirFit(); });
 // Horloge de la vue du soir, à côté du titre : heures, minutes, secondes. Calée sur le changement
 // de seconde ; elle s'arrête d'elle-même quand on quitte la vue, et render la relance au retour.
 // Chaque minute, « prochain : … » et le créneau en rouge suivent, SANS redessiner : une note
@@ -9988,11 +10027,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.165.0';
+const APP_VERSION    = '2.165.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-12T12:47:56Z';
+const APP_BUILD_DATE = '2026-11-12T20:03:17Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29683,7 +29722,14 @@ function renderReunions() {
     wrap.innerHTML = _reuListHTML();
   } else {
     if (right) right.innerHTML = `<button class="btn btn-g btn-sm reu-undo" onclick="undoLast()"${undoStack.length ? '' : ' disabled'} title="Annuler la dernière modification (Ctrl+Z)">↩ Annuler</button><button class="btn btn-g btn-sm reu-redo" onclick="redoLast()"${redoStack.length ? '' : ' disabled'} title="Rétablir ce qui vient d'être annulé (Ctrl+Y)">↪ Rétablir</button><button class="btn btn-g btn-sm" onclick="openReuExport()" title="Créer un fichier autonome (élèves, classes, photos) pour qu'un collègue prépare ses propres rendez-vous">📤 Fichier pour un collègue</button><button class="btn btn-g btn-sm" onclick="_reuOpen(null)" title="Toutes les réunions">↩ Réunions</button>`;
-    if (_reu.view === 'soir') { wrap.innerHTML = _reuSoirHTML(r); _reuSoirAfter(r); }
+    if (_reu.view === 'soir') {
+      // Défilements de la vue du soir, repris après le redessin (v2.165.1) : un clic sur un nom
+      // ne doit pas faire sauter la liste. Le détail ne garde le sien que pour le même élève.
+      const ol = wrap.querySelector('.reu-soir-list'), od = wrap.querySelector('#reu-det');
+      const keep = ol ? { list: ol.scrollTop, det: od ? od.scrollTop : 0, key: _reuSoirShown } : null;
+      wrap.innerHTML = _reuSoirHTML(r);
+      _reuSoirAfter(r, keep);
+    }
     else { _reuInvMap = _reuInvite(r); wrap.innerHTML = _reuPrepHTML(r); _reuRenderSide(); _reuAfterPrep(); }
   }
   _navBadgeRender();
@@ -30420,7 +30466,7 @@ function _reuHist(sid, kind) {
 function _reuVieTip(el, kind) {
   if (_reu.vie) _rwPlaceTip(el, _rwVieTipHTML(_reu.vie.vie, _reu.vie.year, _reu.vie.range, kind), 'reu-tip');
 }
-function _reuSoirAfter(r) {
+function _reuSoirAfter(r, keep) {
   // Rendez-vous sélectionné (clic, ◀ ▶, ou celui choisi d'office à l'ouverture) : seulement
   // quand il CHANGE, pour ne pas reprendre la main si l'on change ensuite de classe à côté.
   _rwHideTip();
@@ -30436,8 +30482,56 @@ function _reuSoirAfter(r) {
   });
   const cur = r.slots?.[_reu.cur];
   if (cur?.sid) _stuAvatarFill('reu-dav', cur.sid);
-  document.querySelector('.reu-row.sel')?.scrollIntoView({ block: 'nearest' });
+  _reuSoirFit();
+  const ls = document.querySelector('#reu-wrap .reu-soir-list'), det = document.getElementById('reu-det');
+  const key = r.id + '|' + _reu.cur;
+  if (keep && ls) ls.scrollTop = keep.list;
+  if (keep && det && keep.key === key) det.scrollTop = keep.det;
+  _reuSoirShown = key;
+  if (det) det.addEventListener('scroll', _rwHideTip, { passive: true });   // bulle d'une note : elle ne suivrait pas
+  // Le rendez-vous choisi reste visible (◀ ▶, ouverture) — en ne faisant défiler que la liste,
+  // et seulement s'il est caché : l'ancien scrollIntoView, appliqué à une liste revenue en haut
+  // après le redessin, le collait au bas de la liste à chaque clic (signalé, v2.165.1).
+  const row = ls?.querySelector('.reu-row.sel');
+  if (ls && row) {
+    const lr = ls.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    const top = lr.top + (ls.querySelector('.reu-walk')?.offsetHeight || 0);   // « Parent sans rendez-vous » reste collé en haut
+    if (rr.top < top) ls.scrollTop -= top - rr.top + 4;
+    else if (rr.bottom > lr.bottom) ls.scrollTop += rr.bottom - lr.bottom + 4;
+  }
 }
+var _reuSoirShown = null;   // « réunion|créneau » affiché dans le détail, pour garder son défilement
+// Vue du soir : les deux colonnes prennent la hauteur qui reste sous l'en-tête et défilent chacune
+// de son côté. La page ne défile plus, donc le titre de l'onglet et son horloge restent à l'écran
+// (signalé par l'utilisateur, v2.165.1 : la colonne de droite dépassait, la page défilait et
+// emportait l'heure). Même principe que _bilanFit. Sous 900 px (une seule colonne) ou s'il reste
+// moins de 320 px, la page défile comme avant.
+function _reuSoirFit() {
+  const soir = document.querySelector('#reu-wrap .reu-soir');
+  if (!soir) return;
+  const cols = [soir.querySelector('.reu-soir-list'), soir.querySelector('.reu-det')].filter(Boolean);
+  const set = h => cols.forEach(c => { c.style.maxHeight = h ? h + 'px' : ''; c.style.overflowY = h ? 'auto' : ''; });
+  if (window.matchMedia?.('(max-width:900px)').matches) return set(0);
+  const avail = Math.floor(innerHeight - (soir.getBoundingClientRect().top + scrollY) - 12);
+  if (!(avail >= 320)) return set(0);
+  set(avail);
+  // Ce qui suit la grille (marges de l'onglet) ferait encore défiler la page : on le retire.
+  const over = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  if (over > 0 && avail - over >= 320) set(avail - over);
+}
+(function () {
+  const refit = () => { if (_reu.view === 'soir' && document.getElementById('tab-reunions')?.classList.contains('on')) _reuSoirFit(); };
+  window.addEventListener('resize', refit);
+  if (typeof ResizeObserver === 'function') {
+    // Seule la HAUTEUR du bandeau compte, et l'ajustement est différé : ajuster dans l'observateur
+    // fait disparaître la barre de défilement de la page, le bandeau s'élargit aussitôt, et le
+    // navigateur signale une boucle (« ResizeObserver loop… », relevée par le journal d'erreurs).
+    let lastH = -1, tm = 0;
+    const onRes = es => { const h = Math.round(es[0]?.contentRect?.height || 0); if (h === lastH) return; lastH = h; clearTimeout(tm); tm = setTimeout(refit, 30); };
+    const go = () => { const t = document.getElementById('topbar'); if (t) new ResizeObserver(onRes).observe(t); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  }
+})();
 function _reuSetSt(t, v) {
   const r = _reuGet(_reu.id); const s = r?.slots?.[t]; if (!s || (s.st || '') === v) return;
   pushUndo(); s.st = v; save();
