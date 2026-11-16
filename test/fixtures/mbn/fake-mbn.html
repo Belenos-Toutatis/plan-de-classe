@@ -113,7 +113,7 @@ aside{border:1px solid #888;padding:10px;width:420px}
   document.getElementById('js-saisie-eleve').addEventListener('change', function (ev) {
     if (!cur) return;
     var d = DATA[cur], t = ev.target;
-    if (t.id === 'js-saisie-eleve__non-notation') { d.motif = t.value; if (d.motif) d.valeur = null; var n = document.getElementById('js-saisie-eleve__note'); n.disabled = !!d.motif; if (d.motif) n.value = ''; }
+    if (t.id === 'js-saisie-eleve__non-notation') { d.motif = t.value; if (d.motif) d.valeur = null; var n = document.getElementById('js-saisie-eleve__note'); n.disabled = !!d.motif; if (d.motif) { n.value = ''; setTimeout(function () { var f = window.__failMotif > 0; if (f) window.__failMotif--; sauver(f); }, 120); } }   /* un motif : MBN enchaîne une 2ᵉ requête (supposé) */
     else if (t.id === 'js-saisie-eleve__note') { var v = parseFloat(t.value.replace(',', '.')); d.valeur = isFinite(v) ? v : null; }
     else if (t.classList.contains('select_competence')) d.comps[t.getAttribute('data-id-sous-competence')] = t.value;
     else if (t.id === 'js-saisie-eleve__appreciation') return;   /* comme on le suppose de MBN : appréciation enregistrée en différé, sur la frappe */
@@ -126,11 +126,15 @@ aside{border:1px solid #888;padding:10px;width:420px}
     clearTimeout(apprTimer);
     apprTimer = setTimeout(function () { DATA[uid].commentaire = t.value; sauver(); }, 600);
   });
-  function sauver() {
+  function sauver(forceFail) {
     document.forms[0].elements.NOTATIONS.value = JSON.stringify(ELEVES.map(function (e) { var d = DATA[e.uid]; return { uidEleve: e.uid, valeur: d.valeur, commentaire: d.commentaire || null }; }));
     renderList();
-    var x = new XMLHttpRequest();
-    x.open('POST', 'data:application/json,{"status":"ok","message":"","data":null}');
+    /* window.__fail = N : les N prochaines requêtes sont refusées par le « serveur » (POST vers
+       le petit serveur local de test, qui répond 501), comme les 503 vus sur MBN.
+       window.__failMotif = N : refuse les N prochaines 2ᵉˢ requêtes enchaînées après un motif. */
+    var x = new XMLHttpRequest(), fail = forceFail || window.__fail > 0;
+    if (!forceFail && window.__fail > 0) window.__fail--;
+    x.open('POST', fail ? '/refus-simule' : 'data:application/json,{"status":"ok","message":"","data":null}');
     x.onloadend = function () { saves++; document.getElementById('log').textContent = saves + ' enregistrement(s)'; };
     x.send('ACTION=SAUVER');
   }

@@ -8426,26 +8426,54 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
   }
 
   /* ── Suivi des enregistrements de MBN (requêtes envoyées par la page) ── */
-  var XS = XMLHttpRequest.prototype.send, pend = 0, saves = 0, srvErr = [];
+  /* Chaque enregistrement de MBN renvoie le champ NOTATIONS de TOUTE la classe : une requête
+     refusée (503 : trop rapprochée) est donc rattrapée par le premier enregistrement réussi
+     qui la suit. srvErr garde l'élève en cours (who) et le rang de la requête (i) ; okPost =
+     rang du dernier POST réussi. */
+  var XS = XMLHttpRequest.prototype.send, XO = XMLHttpRequest.prototype.open, pend = 0, saves = 0, srvErr = [], reqs = 0, okPost = 0, curWho = '';
   function hook() {
     if (hooked) return; hooked = true;
+    XMLHttpRequest.prototype.open = function (m) { this.__pdcPost = /^post$/i.test(String(m || '')); return XO.apply(this, arguments); };
     XMLHttpRequest.prototype.send = function () {
-      var x = this; pend++;
+      var x = this, who = curWho, n = ++reqs; pend++;
       x.addEventListener('loadend', function () {
         pend--; saves++;
-        var txt = ''; try { txt = x.responseText; } catch (e) {}
-        if (x.status && x.status !== 200) srvErr.push('réponse ' + x.status);
+        var txt = '', bad = ''; try { txt = x.responseText; } catch (e) {}
+        if (x.status && x.status !== 200) bad = 'réponse ' + x.status;
         else {
           try {
             var j = JSON.parse(txt);
-            if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status)))) srvErr.push(String(j.message || j.status));
+            if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status)))) bad = String(j.message || j.status);
           } catch (e) {}
         }
+        if (bad) srvErr.push({ who: who, msg: bad, i: n });
+        else if (x.__pdcPost && x.status === 200 && n > okPost) okPost = n;
       });
       return XS.apply(this, arguments);
     };
   }
-  function unhook() { if (hooked) { XMLHttpRequest.prototype.send = XS; hooked = false; } }
+  function unhook() { if (hooked) { XMLHttpRequest.prototype.send = XS; XMLHttpRequest.prototype.open = XO; hooked = false; } }
+  /* Laisse MBN finir les requêtes qu'il enchaîne lui-même (un motif efface la note, etc.) :
+     on attend qu'aucune nouvelle requête ne parte pendant ms. */
+  async function settle(ms) {
+    var t0 = Date.now(), s0;
+    do { s0 = reqs; await sleep(ms); await idle(); } while (reqs !== s0 && Date.now() - t0 < 6000);
+  }
+  /* Refus non rattrapé pour l'élève en cours : on renvoie son panneau (événement « change »
+     sur une case déjà remplie, valeur inchangée), jusqu'à trois fois, en patientant de plus en
+     plus longtemps. Vrai quand tous les refus sont suivis d'un enregistrement réussi. Ne sert
+     qu'en cas de refus : un remplissage sans refus n'attend rien de plus. */
+  async function resave(el) {
+    if (!el) return false;
+    for (var t = 1; t <= 3; t++) {
+      await sleep(1500 * t);
+      fire(el, ['change']);
+      await settle(500);
+      if (okPost > lastErr()) return true;
+    }
+    return false;
+  }
+  function lastErr() { return srvErr.length ? srvErr[srvErr.length - 1].i : 0; }
   async function idle() {
     await sleep(120);
     var t0 = Date.now();
@@ -8539,7 +8567,7 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
 
   /* ── Étape 3 : remplissage ── */
   async function run() {
-    running = true; stopAsked = false; srvErr = []; saves = 0;
+    running = true; stopAsked = false; srvErr = []; saves = 0; reqs = 0; okPost = 0; curWho = '';
     hook();
     var done = 0, changed = 0, probs = [];
     FOOT.innerHTML = '';
@@ -8548,7 +8576,8 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
     try {
       for (var i = 0; i < PLAN.length; i++) {
         if (stopAsked) break;
-        var a = PLAN[i], who = a.m.nom + ' ' + a.m.prenom;
+        var a = PLAN[i], who = a.m.nom + ' ' + a.m.prenom, e0 = srvErr.length;
+        curWho = who;
         BODY.innerHTML = '<p style="margin:0 0 6px">Élève <strong>' + (i + 1) + ' / ' + PLAN.length + '</strong> : ' + esc(who) + '</p>'
           + '<div style="height:8px;background:#e6ebf2;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + Math.round(i / PLAN.length * 100) + '%;background:#1a252f"></div></div>'
           + '<p style="color:#56697f;font-size:12.5px;margin:6px 0 0">Ne touche pas à la page pendant le remplissage.</p>';
@@ -8589,16 +8618,36 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
             var shown = row && $('.eleve__note', row) ? numOf($('.eleve__note', row).textContent) : null;
             if (shown == null || Math.abs(shown - a.note) > 0.005) probs.push(who + ' : MBN affiche « ' + (row && $('.eleve__note', row) ? $('.eleve__note', row).textContent.trim() : '?') + ' » au lieu de ' + fmtNote(a.note) + ' — à vérifier (' + (noteDiag || '') + ')');
           }
+          if (c && srvErr.length > e0 && lastErr() > okPost) {
+            /* Une requête de cet élève refusée sans être rattrapée : on renvoie son panneau. Rien
+               à attendre sinon — un refus enchaîné plus tard est rattrapé par l'élève suivant. */
+            var rs = a.motif ? mot : (a.note != null ? noteIn : null);
+            for (var kk = 0; kk < a.comps.length && !rs; kk++) rs = document.getElementById(a.comps[kk].sel.id);
+            await resave(rs);
+          }
           done++; if (c) changed++;
         } catch (e) { probs.push(who + ' : ' + (e && e.message || e)); if (/ne répond plus/.test(String(e && e.message))) break; }
       }
+      /* Dernier filet : un refus resté sans enregistrement réussi après lui (sur le dernier
+         élève, par exemple) — on renvoie le panneau ouvert, ce qui renvoie toute la classe. */
+      curWho = '';
+      try { await settle(700); if (lastErr() > okPost && MBN.aside) await resave($('[id$="eleve__non-notation"]', MBN.aside) || $('[id$="eleve__note"]', MBN.aside)); } catch (e) {}
     } finally {
       unhook(); running = false; compact(false);
     }
     var html = '';
-    var ok = !probs.length && !srvErr.length && !stopAsked;
+    /* Refus rattrapé = suivi d'un enregistrement réussi (qui a renvoyé toute la classe). */
+    var lost = [], fixedWho = [], lostWho = [];
+    for (var z = 0; z < srvErr.length; z++) {
+      var se = srvErr[z], lbl = se.who;   /* vide : renvoi final de la classe, pas un élève */
+      if (se.i < okPost) { if (lbl && fixedWho.indexOf(lbl) < 0) fixedWho.push(lbl); }
+      else { lost.push(se); if (lbl && lostWho.indexOf(lbl) < 0) lostWho.push(lbl); }
+    }
+    var ok = !probs.length && !lost.length && !stopAsked;
     html += note((stopAsked ? '⏹ Arrêté à ta demande. ' : '') + '<strong>' + done + ' / ' + PLAN.length + '</strong> élève(s) traité(s), dont ' + changed + ' modifié(s) · ' + saves + ' enregistrement(s) envoyé(s) par MBN.', ok ? 'ok' : 'warn');
-    if (srvErr.length) html += note('MBN a signalé ' + srvErr.length + ' problème(s) à l\'enregistrement : ' + esc(srvErr.slice(0, 5).join(' · ')), 'err');
+    if (lost.length) html += note('MBN a refusé des enregistrements, même après trois nouveaux essais (' + esc(lost[0].msg) + ') — '
+      + (lostWho.length ? 'vérifie dans MBN : ' + esc(lostWho.join(', ')) + '.' : 'recharge la page de MBN et vérifie quelques élèves.'), 'err');
+    if (srvErr.length > lost.length) html += '<p style="color:#56697f;font-size:12.5px;margin:0 0 10px">ℹ️ MBN a refusé sur le moment ' + (srvErr.length - lost.length) + ' requête(s) trop rapprochée(s)' + (fixedWho.length ? ' (' + esc(fixedWho.join(', ')) + ')' : '') + ' ; un enregistrement réussi a suivi : rien n\'est perdu.</p>';
     if (probs.length) html += note('À vérifier :<br>' + probs.map(esc).join('<br>'), 'warn');
     html += '<p>Vérifie quelques élèves dans MBN, puis termine comme d\'habitude.</p>';
     BODY.innerHTML = html;
@@ -10027,11 +10076,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.165.1';
+const APP_VERSION    = '2.165.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-12T20:03:17Z';
+const APP_BUILD_DATE = '2026-11-16T23:09:31Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
