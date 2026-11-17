@@ -3441,6 +3441,27 @@ test('Vers MBN · Bulletin : favori embarqué valide, remarques / remarque de cl
   assert.equal(ev(`_mbnBookmarkletCode('bulletin').indexOf('javascript:')`), 0);
 });
 
+test('Vers MBN : empreinte du favori — mêmes valeurs dans le lien et dans les résultats copiés', () => {
+  const fs = require('fs'), path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  for (const id of ['mbn-fill-src', 'mbn-bul-src']) {
+    const js = new RegExp('<script type="text/plain" id="' + id + '">([\\s\\S]*?)</script>').exec(html)[1];
+    // Une marque de chaque, sinon le contrôle disparaît en silence (ou le test « marque restée » se fait remplacer).
+    assert.equal(js.split('__FAV_FP__').length - 1, 1, id + ' : une seule marque __FAV_FP__');
+    assert.equal(js.split('__FAV_V__').length - 1, 1, id + ' : une seule marque __FAV_V__');
+    assert.ok(/BODY\.innerHTML = favWarn\(DATA\) \+ html;/.test(js), id + ' : l\'aperçu affiche l\'avertissement');
+  }
+  ev(`_mbnFavSrc = function (m) { return m === 'bulletin' ? "var FAV_FP = '__FAV_FP__', FAV_V = '__FAV_V__'; /*b*/" : "var FAV_FP = '__FAV_FP__', FAV_V = '__FAV_V__'; /*d*/"; };`);
+  const st = JSON.parse(ev(`JSON.stringify([_mbnFavStamp('devoir'), _mbnFavStamp('bulletin'), APP_VERSION])`));
+  assert.notEqual(st[0].fp, st[1].fp, 'une empreinte par favori');
+  assert.equal(st[0].v, st[2]);
+  const code = decodeURIComponent(ev(`_mbnBookmarkletCode('devoir')`));
+  assert.ok(code.includes(`FAV_FP = '${st[0].fp}', FAV_V = '${st[2]}'`), code);
+  assert.ok(!code.includes('__FAV_'), 'marques remplacées dans le lien');
+  assert.equal(JSON.parse(ev(`JSON.stringify(_mbnBulPayload(S.classes.c1, 'S1').fav)`)).fp, st[1].fp);
+  assert.equal(JSON.parse(ev(`JSON.stringify(_mbnPayload(S.evaluations.v1).fav)`)).fp, st[0].fp);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // v2.147.0 — profil de l'enseignant, aménagement retiré annoncé, marques des devoirs.
 // ─────────────────────────────────────────────────────────────────────────────
