@@ -234,6 +234,10 @@ window.__dynRun = async function (only) {
     ['late', () => promptLateForStudent(sid)], ['confirm', () => _uiConfirm({ title: 'Titre', message: 'Message', onOk() {} })],
     ['prompt', () => _uiPrompt({ title: 'Titre', label: 'Libellé', onOk() {} })], ['mc', () => openMod('mc')], ['ms', () => openMod('ms')],
     ['editClass', () => editClass(cls.id)], ['viol', () => showViolationsModal(cls)],
+    // 🔀 Récupérer ce qui manque (v2.167.0) : une « autre version » = l'état actuel + un appel et une remarque en plus.
+    ['merge', () => { const o = JSON.parse(JSON.stringify(S)); const r0 = Object.values(o.attendance?.[cls.id] || {})[0];
+      if (r0) o.attendance[cls.id].audit_x = { ...r0, id: 'audit_x', date: '2000-01-03', slotId: null };
+      o.bulletinClassRemarques = { [cls.id]: { audit: 'Remarque de l’audit' } }; _mergeOpen(o, 'audit'); }],
   ];
   const rec = Object.values(S.attendance?.[cls.id] || {})[0];
   if (rec) calls.push(['attPlan', () => viewAttRecordOnPlan(rec.id, cls.id)], ['attPlanEdit', () => editAttRecordOnPlan(rec.id, cls.id)]);

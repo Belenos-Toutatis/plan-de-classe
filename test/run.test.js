@@ -3824,3 +3824,83 @@ test('dossier mémorisé qui ne répond plus : délai, puis oublié (démarrage 
   })()`);
   assert.deepEqual(JSON.parse(r), { fast: 'granted', slow: true, afterRestore: null, photosDir: null, afterPhotos: null, alerts: 2 });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Récupérer ce qui manque (_mergeRun) — fusion à deux versions : on AJOUTE ce qui manque,
+// on ne remplace jamais une valeur présente, et seules les lignes cochées s'appliquent.
+// ─────────────────────────────────────────────────────────────────────────────
+const _mgBase = () => ({
+  classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2'] } },
+  eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'B', prenom: 'b', classe_id: 'c1' } },
+  attendance: { c1: { r1: { id: 'r1', date: '2026-11-18', slotId: 'm1', absents: [] } } },
+  evaluations: { e1: { id: 'e1', type: 'A', classId: 'c1', nomCourt: 'DS1', miniNotes: [{ id: 'q1', max: 5 }, { id: 'q2', max: 5 }],
+    notes: { s1: { values: { q1: 4, q2: 0 } }, s2: { values: { q1: null } } } } },
+  seatingSnapshots: {},
+});
+const _mgOther = () => ({
+  classes: { c1: { id: 'c1', nom: '6A' }, c9: { id: 'c9', nom: '5Z' } },
+  eleves: { s1: {}, s2: {}, s9: {} },
+  attendance: {
+    c1: {
+      r1: { id: 'r1', date: '2026-11-18', slotId: 'm1', absents: ['s2'] },             // même id : rien
+      r2: { id: 'r2', date: '2026-11-20', slotId: 'm2', absents: ['s1'], seatingHash: 'h1' }, // à reprendre
+      r3: { id: 'r3', date: '2026-11-18', slotId: 'm1', absents: [] },                // même créneau qu'ici : gardé ici
+    },
+    c9: { r4: { id: 'r4', date: '2026-11-20', absents: [] } },                         // classe absente ici
+  },
+  evaluations: {
+    e1: { id: 'e1', type: 'A', classId: 'c1', nomCourt: 'DS1', miniNotes: [{ id: 'q1', max: 5 }, { id: 'q2', max: 5 }, { id: 'q3', max: 2 }],
+      notes: { s1: { values: { q1: 3, q2: 5, q3: 2 } }, s2: { values: { q1: 5, q2: 1 } }, s9: { values: { q1: 1 } } } },
+    e2: { id: 'e2', type: 'A', classId: 'c1', nomCourt: 'DS2', miniNotes: [{ id: 'q1', max: 5 }], notes: { s1: { values: { q1: 2 } }, s9: { values: { q1: 1 } } } },
+    e3: { id: 'e3', type: 'A', classId: 'c9', nomCourt: 'DS3', miniNotes: [], notes: {} },
+  },
+  bulletinRemarques: { c1: { s1: { T1: 'Bon trimestre' } }, c9: { s9: { T1: 'x' } } },
+  seatingSnapshots: { h1: { 'x': 's1' } },
+  clock: { autre: 7 },
+});
+
+test('fusion : aperçu — ce qui manque, ce qui est gardé, ce qui est hors champ', () => {
+  setState(_mgBase());
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(_mgOther())}, null)`);
+  assert.deepEqual(plan.items.map(i => i.key).sort(), ['att:c1:r2', 'ev:e1', 'evnew:e2', 'rem']);
+  const e1 = plan.items.find(i => i.key === 'ev:e1');
+  // s1.q3 (2) + s2.q2 (1) + s2.q1 (null ici → 5) = 3 saisies ; q3 = 1 question ; s1.q1 et s1.q2 diffèrent (4≠3, 0≠5)
+  assert.match(e1.detail, /3 saisies/); assert.match(e1.detail, /1 question/); assert.match(e1.detail, /2 cases différentes/);
+  assert.ok(plan.info.some(t => /même créneau/.test(t)));
+  assert.ok(plan.info.some(t => /DS3/.test(t)));
+  assert.ok(plan.info.some(t => /1 élève/.test(t)) && plan.info.some(t => /1 classe/.test(t)));
+  assert.equal(get('S.evaluations.e1.notes.s2.values.q1'), null, "l'aperçu ne touche pas S");
+});
+
+test('fusion : seules les lignes cochées sont appliquées, sans rien remplacer', () => {
+  setState(_mgBase());
+  ev(`_mergeRun(S, ${JSON.stringify(_mgOther())}, new Set(['att:c1:r2', 'ev:e1']))`);
+  const s = get('S');
+  assert.deepEqual(Object.keys(s.attendance.c1).sort(), ['r1', 'r2']);
+  assert.deepEqual(s.attendance.c1.r1.absents, [], "l'appel d'ici n'est pas remplacé");
+  assert.deepEqual(s.seatingSnapshots.h1, { x: 's1' }, "le plan figé de l'appel repris suit");
+  assert.deepEqual(s.evaluations.e1.notes.s1.values, { q1: 4, q2: 0, q3: 2 }, '4 et 0 gardés, q3 ajouté');
+  assert.deepEqual(s.evaluations.e1.notes.s2.values, { q1: 5, q2: 1 });
+  assert.equal(s.evaluations.e1.notes.s9, undefined, 'élève inconnu ici : ignoré');
+  assert.deepEqual(s.evaluations.e1.miniNotes.map(q => q.id), ['q1', 'q2', 'q3']);
+  assert.equal(s.evaluations.e2, undefined, 'devoir non coché : pas ajouté');
+  assert.equal(s.bulletinRemarques, undefined, 'remarques non cochées');
+});
+
+test('fusion : devoir absent d\'ici ajouté sans les élèves inconnus ; remarques des seules classes connues', () => {
+  setState(_mgBase());
+  ev(`_mergeRun(S, ${JSON.stringify(_mgOther())}, new Set(['evnew:e2', 'rem']))`);
+  const s = get('S');
+  assert.deepEqual(Object.keys(s.evaluations.e2.notes), ['s1']);
+  assert.deepEqual(s.bulletinRemarques, { c1: { s1: { T1: 'Bon trimestre' } } });
+});
+
+test('fusion : clés piégées ignorées, rien à récupérer entre deux versions identiques', () => {
+  setState(_mgBase());
+  const evil = '{"attendance":{"__proto__":{"x":{"date":"2026-01-01"}}},"evaluations":{},"bulletinRemarques":{"c1":{"__proto__":{"p":"x"}}}}';
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), JSON.parse(${JSON.stringify(evil)}), null)`);
+  assert.deepEqual(plan.items, []);
+  assert.equal(ev('({}).x'), undefined);
+  const same = get(`_mergeRun(JSON.parse(JSON.stringify(S)), JSON.parse(JSON.stringify(S)), null)`);
+  assert.deepEqual(same, { items: [], info: [] });
+});

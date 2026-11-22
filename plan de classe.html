@@ -2291,6 +2291,13 @@ input.reu-ed{width:100%;height:27px;padding:2px 6px !important}
 .vf-name{flex:1;font-weight:600;color:var(--ink-deep);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vf-date{font-size:.82em;color:var(--pencil);white-space:nowrap}
 @media (max-width:620px){ .vf-row{flex-wrap:wrap} .vf-date{flex-basis:100%;order:3;padding-left:30px} }
+/* Récupérer ce qui manque (fusion d'une version) — v2.167.0 */
+.mg-grp{padding:6px 10px 2px;font-family:var(--font-mono);font-size:.74em;text-transform:uppercase;letter-spacing:.04em;color:var(--pencil-soft);background:var(--paper-warm);border-bottom:1px solid var(--rule-line-soft)}
+.mg-item{display:flex;gap:9px;align-items:flex-start;padding:7px 10px;border-bottom:1px solid var(--rule-line-soft);cursor:pointer;font-size:.9em;color:var(--ink-deep)}
+.mg-item input{margin-top:3px;flex:none}
+.mg-item small{display:block;color:var(--pencil);font-size:.88em;margin-top:1px}
+.mg-info{margin:10px 0 0;padding-left:18px;font-size:.84em;color:var(--pencil)}
+.mg-info li{margin:2px 0}
 
 .exn-sheets{display:flex;flex-wrap:wrap;gap:5px}
 .exn-sheets span{font-size:.82em;padding:1px 8px;border-radius:4px;background:var(--paper);border:1px solid var(--rule-line);color:var(--ink-deep)}
@@ -5553,6 +5560,21 @@ body.topbar-free #topbar { position: static !important; }
   </div>
 </div>
 
+<!-- Récupérer ce qui manque (v2.167.0) : ce qu'une version archivée contient et que la version
+     actuelle n'a pas, ligne par ligne, à cocher. Placée APRÈS mfiles : elle s'affiche par-dessus. -->
+<div id="mmerge" class="mo" onclick="closeMod(this,event)">
+  <div class="mb" style="width:min(720px,96vw);max-width:720px">
+    <div class="lst-head"><h2 style="flex:1;margin:0">🔀 Récupérer ce qui manque</h2><span id="mmerge-src" class="clf-hint"></span></div>
+    <p class="lst-intro" style="margin:6px 0 10px">Ce que cette version contient et qui n'est pas dans la version actuelle. Rien n'est remplacé : une case déjà remplie ici garde sa valeur. Décoche ce que tu avais supprimé ou vidé exprès ici.</p>
+    <div id="mmerge-list" class="vf-list"></div>
+    <ul id="mmerge-info" class="mg-info"></ul>
+    <div class="ma">
+      <button class="btn btn-g" onclick="closeMod2('mmerge')">Fermer</button>
+      <button class="btn btn-p" id="mmerge-go" onclick="_mergeApply()">✓ Récupérer la sélection</button>
+    </div>
+  </div>
+</div>
+
 <!-- Historique des incidents -->
 <!-- Projeter les notes : vue épurée projetable pour distribuer les résultats -->
 <div id="mrendu" class="mo" onclick="closeMod(this,event)">
@@ -5859,7 +5881,8 @@ body.topbar-free #topbar { position: static !important; }
       <div class="cf-card"><b>📥 Autre appareil</b><span class="clf-note" style="margin:0" id="mconflict-other-when"></span><div id="mconflict-other" class="cf-rows"></div>
         <button class="btn btn-g" onclick="_conflictTakeOther()">✓ Garder celle-ci</button></div>
     </div>
-    <p class="clf-note" id="mconflict-info">La version écartée se rouvre par Fichier → Versions et historique.</p>
+    <div style="margin-top:12px;text-align:center"><button class="btn btn-g" onclick="_conflictKeepMine(true)" title="Garde la version de cet ordinateur, puis montre ce que l'autre appareil a en plus (appels, notes, remarques), à cocher">🔀 Garder cet ordinateur et récupérer ce qui manque de l'autre</button></div>
+    <p class="clf-note" id="mconflict-info">La version écartée se rouvre par Fichier → Versions et historique, où « Récupérer » reprend ce qui lui manque.</p>
   </div>
 </div>
 
@@ -10112,11 +10135,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.166.1';
+const APP_VERSION    = '2.167.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-22T21:16:27Z';
+const APP_BUILD_DATE = '2026-11-22T21:29:54Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -38421,7 +38444,7 @@ function _openConflictModal(diskData, f) {
   _modalReturnTo['mconflict'] = () => { _conflictPending = false; _conflictCtx = null; };
   openMod('mconflict');
 }
-function _conflictKeepMine() {
+function _conflictKeepMine(thenMerge) {
   const ctx = _conflictCtx; if (!ctx) { closeMod2('mconflict'); return; }
   const other = ctx.diskData;
   _stashVersionToFile(other, 'autre').then(name => {
@@ -38441,6 +38464,7 @@ function _conflictKeepMine() {
     closeMod2('mconflict');
     save();  // persiste + planifie l'écriture (qui domine désormais le disque)
     toast(`Ta version est conservée. L'autre archivée : « ${name} ».`, 'success');
+    if (thenMerge === true) _mergeOpen(other, 'autre appareil');
   });
 }
 function _conflictTakeOther() {
@@ -38804,6 +38828,218 @@ async function _toggleVersionInfo(idx) {
   holder.innerHTML = _versionInfoHTML(data, f);
 }
 
+// ─── Récupérer ce qui manque : fusion d'une version dans la version actuelle (v2.167.0) ───
+// Demande de l'utilisateur après un conflit (le 2026-11-22 : 39 notes ici, 3 appels là-bas, et
+// il fallait choisir). Fusion à DEUX versions, sans ancêtre commun : on ne peut pas distinguer
+// « ajouté là-bas » de « supprimé ici ». D'où la règle : on n'ajoute que ce qui MANQUE (clé
+// absente, null ou ''), on ne remplace JAMAIS une valeur présente (une valeur différente est
+// seulement comptée), et chaque élément est une ligne à cocher.
+// `_mergeRun(dst, other, keys)` est l'unique chemin : `keys` null → tout, sur une COPIE (l'aperçu) ;
+// sinon seulement les clés cochées, sur S. Clés : 'att:<classe>:<appel>', 'ev:<éval>', 'evnew:<éval>', 'rem'.
+// Hors champ (signalés, pas fusionnés) : élèves et classes qui n'existent que dans l'autre version.
+const _MG_BAD_KEY = k => k === '__proto__' || k === 'constructor' || k === 'prototype';
+const _mgIsObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const _mgEmpty = v => v == null || v === '' || (Array.isArray(v) && !v.length) || (_mgIsObj(v) && !Object.keys(v).length);
+// Copie profonde qui laisse tomber les clés piégées à toute profondeur (défense en plus de _validateImport).
+const _mgClone = v => v == null ? v : JSON.parse(JSON.stringify(v), (k, x) => _MG_BAD_KEY(k) ? undefined : x);
+function _mgLeaves(v) {
+  if (_mgEmpty(v)) return 0;
+  if (Array.isArray(v)) return v.length;
+  if (_mgIsObj(v)) { let n = 0; for (const x of Object.values(v)) n += _mgLeaves(x); return n; }
+  return 1;
+}
+// Remplit dans `dst` ce qui n'existe (ou est vide) que dans `src`. `keyOk` filtre le 1er niveau
+// (élèves, classes). 0 n'est PAS vide (niveau 0 « non évalué » saisi).
+function _mgFill(dst, src, st, keyOk) {
+  if (!_mgIsObj(dst) || !_mgIsObj(src)) return;
+  for (const k of Object.keys(src)) {
+    if (_MG_BAD_KEY(k) || (keyOk && !keyOk(k))) continue;
+    const s = src[k], d = dst[k];
+    if (_mgEmpty(s)) continue;
+    if (_mgEmpty(d)) { const c = _mgClone(s); if (_mgEmpty(c)) continue; dst[k] = c; st.filled += _mgLeaves(c); }
+    else if (_mgIsObj(d) && _mgIsObj(s)) _mgFill(d, s, st);
+    else if (JSON.stringify(d) !== JSON.stringify(s)) st.differ++;
+  }
+}
+// Retire d'une éval copiée les saisies d'élèves qui n'existent pas ici.
+function _mgStripSids(ev, sidOk) {
+  for (const k of ['notes', 'studentRemarks']) if (_mgIsObj(ev[k])) for (const s of Object.keys(ev[k])) if (!sidOk(s)) delete ev[k][s];
+  for (const p of (Array.isArray(ev.passations) ? ev.passations : [])) if (_mgIsObj(p?.niveaux)) for (const s of Object.keys(p.niveaux)) if (!sidOk(s)) delete p.niveaux[s];
+}
+function _mergeRun(dst, other, keys) {
+  const items = [], info = [];
+  const want = k => !keys || keys.has(k);
+  const clsName = id => (dst.classes && dst.classes[id] && dst.classes[id].nom) || id;
+  const sidOk = s => !_MG_BAD_KEY(s) && !!(dst.eleves && dst.eleves[s]);
+  const plural = (n, w) => `${n} ${n > 1 ? w.split(' ').map(x => x + 's').join(' ') : w}`;   // « 2 cases différentes »
+  // 1. Appels
+  for (const [cid, recs] of Object.entries(other.attendance || {})) {
+    if (_MG_BAD_KEY(cid) || !_mgIsObj(recs)) continue;
+    for (const [rid, rec] of Object.entries(recs)) {
+      if (_MG_BAD_KEY(rid) || !_mgIsObj(rec)) continue;
+      const mine = (dst.attendance && dst.attendance[cid]) || {};
+      if (mine[rid]) continue;
+      const lbl = `${clsName(cid)} · ${rec.date ? _fmtDateFr(rec.date) : 'sans date'}${rec.label ? ' · ' + rec.label : ''}${rec.groupe ? ' · ' + rec.groupe : ''}`;
+      if (!dst.classes || !dst.classes[cid]) { info.push(`Appel ${lbl} : sa classe n'existe pas ici.`); continue; }
+      const twin = Object.values(mine).find(r => r && r.date === rec.date && (r.slotId || null) === (rec.slotId || null) && (r.groupe || null) === (rec.groupe || null));
+      if (twin) { info.push(`Appel ${lbl} : un appel du même créneau existe déjà ici, il est gardé.`); continue; }
+      const key = 'att:' + cid + ':' + rid;
+      const nAbs = Array.isArray(rec.absents) ? rec.absents.length : 0;
+      const nRet = _mgIsObj(rec.retards) ? Object.keys(rec.retards).length : 0;
+      items.push({ key, group: 'Appels', label: lbl, detail: (nAbs ? plural(nAbs, 'absent') : 'aucun absent') + (nRet ? ' · ' + plural(nRet, 'retard') : '') });
+      if (!want(key)) continue;
+      if (!dst.attendance) dst.attendance = {};
+      if (!dst.attendance[cid]) dst.attendance[cid] = {};
+      dst.attendance[cid][rid] = _mgClone(rec);
+    }
+  }
+  // 2. Évaluations
+  for (const [eid, oev] of Object.entries(other.evaluations || {})) {
+    if (_MG_BAD_KEY(eid) || !_mgIsObj(oev)) continue;
+    const name = oev.nomCourt || oev.nomLong || 'Évaluation';
+    const lev = dst.evaluations && dst.evaluations[eid];
+    const cids = _evalClassIds(oev);
+    const cls = cids.map(clsName).join(', ');
+    if (!lev) {
+      if (!cids.length || cids.some(c => !dst.classes || !dst.classes[c])) { info.push(`Devoir « ${name} » : une de ses classes n'existe pas ici.`); continue; }
+      const key = 'evnew:' + eid;
+      const ev = _mgClone(oev); _mgStripSids(ev, sidOk);
+      const n = _mgLeaves(ev.notes) + (Array.isArray(ev.passations) ? ev.passations.reduce((a, p) => a + _mgLeaves(p && p.niveaux), 0) : 0);
+      items.push({ key, group: 'Devoirs', label: `« ${name} »${cls ? ' · ' + cls : ''}`, detail: `absent d'ici : ajouté en entier (${plural(n, 'saisie')})` });
+      if (!want(key)) continue;
+      if (!dst.evaluations) dst.evaluations = {};
+      dst.evaluations[eid] = ev;
+      continue;
+    }
+    // Éval présente des deux côtés : on travaille sur une copie, posée seulement si cochée.
+    const tgt = _mgClone(lev);
+    const st = { filled: 0, differ: 0, added: 0 };
+    for (const arr of ['exercices', 'miniNotes', 'passations']) {
+      if (!Array.isArray(oev[arr])) continue;
+      for (const o of oev[arr]) {
+        if (!_mgIsObj(o) || !o.id) continue;
+        if (!Array.isArray(tgt[arr])) tgt[arr] = [];
+        const l = tgt[arr].find(x => x && x.id === o.id);
+        if (!l) {
+          const c = _mgClone(o);
+          if (_mgIsObj(c.niveaux)) for (const s of Object.keys(c.niveaux)) if (!sidOk(s)) delete c.niveaux[s];
+          tgt[arr].push(c); st.added++;
+          if (arr === 'passations') st.filled += _mgLeaves(c.niveaux);
+        } else if (arr === 'passations' && _mgIsObj(o.niveaux)) {
+          if (!_mgIsObj(l.niveaux)) l.niveaux = {};
+          _mgFill(l.niveaux, o.niveaux, st, sidOk);
+        }
+      }
+    }
+    for (const k of ['notes', 'studentRemarks']) {
+      if (!_mgIsObj(oev[k])) continue;
+      if (!_mgIsObj(tgt[k])) tgt[k] = {};
+      _mgFill(tgt[k], oev[k], st, sidOk);
+    }
+    const kept = st.differ ? `${plural(st.differ, 'case différente')} : la valeur d'ici est gardée` : '';
+    if (!st.filled && !st.added) { if (kept) info.push(`Devoir « ${name} »${cls ? ' (' + cls + ')' : ''} : ${kept}.`); continue; }
+    const key = 'ev:' + eid;
+    const isB = oev.type === 'B';
+    items.push({ key, group: 'Devoirs', label: `« ${name} »${cls ? ' · ' + cls : ''}`,
+      detail: [st.filled ? `${plural(st.filled, 'saisie')} à reprendre` : '', st.added ? `${plural(st.added, isB ? 'passation' : 'question')} en plus` : '', kept].filter(Boolean).join(' · ') });
+    if (want(key)) dst.evaluations[eid] = tgt;
+  }
+  // 3. Remarques de bulletin (élève et classe)
+  {
+    const st = { filled: 0, differ: 0 }, parts = {};
+    for (const k of ['bulletinRemarques', 'bulletinClassRemarques']) {
+      if (!_mgIsObj(other[k])) continue;
+      const t = _mgIsObj(dst[k]) ? _mgClone(dst[k]) : {};
+      _mgFill(t, other[k], st, c => !_MG_BAD_KEY(c) && !!(dst.classes && dst.classes[c]));
+      parts[k] = t;
+    }
+    const kept = st.differ ? `${plural(st.differ, 'remarque différente')} : celle d'ici est gardée` : '';
+    if (st.filled) {
+      items.push({ key: 'rem', group: 'Bulletin', label: 'Remarques de bulletin', detail: [`${plural(st.filled, 'remarque')} absente${st.filled > 1 ? 's' : ''} d'ici`, kept].filter(Boolean).join(' · ') });
+      if (want('rem')) Object.assign(dst, parts);
+    } else if (kept) info.push(`Remarques de bulletin : ${kept}.`);
+  }
+  // 4. Plans de classe figés référencés par ce qui vient d'être ajouté (appels, devoirs)
+  const pool = _mgIsObj(other.seatingSnapshots) ? other.seatingSnapshots : {};
+  const need = new Set();
+  for (const recs of Object.values(dst.attendance || {})) for (const r of Object.values(recs || {})) if (r && r.seatingHash) need.add(r.seatingHash);
+  for (const ev of Object.values(dst.evaluations || {})) { if (ev && ev.seatingHash) need.add(ev.seatingHash); for (const h of Object.values((ev && ev.seatingHashes) || {})) if (h) need.add(h); }
+  for (const h of need) {
+    if (_MG_BAD_KEY(h) || (dst.seatingSnapshots && dst.seatingSnapshots[h]) || !pool[h]) continue;
+    if (!_mgIsObj(dst.seatingSnapshots)) dst.seatingSnapshots = {};
+    dst.seatingSnapshots[h] = _mgClone(pool[h]);
+  }
+  // 5. Ce qui n'est pas fusionné : signalé
+  const onlyThere = k => Object.keys(other[k] || {}).filter(id => !_MG_BAD_KEY(id) && !(dst[k] && dst[k][id])).length;
+  const ne = onlyThere('eleves'), nc = onlyThere('classes');
+  if (ne) info.push(`${plural(ne, 'élève')} n'existe${ne > 1 ? 'nt' : ''} que dans cette version : non repris (à ajouter à la main si besoin).`);
+  if (nc) info.push(`${plural(nc, 'classe')} n'existe${nc > 1 ? 'nt' : ''} que dans cette version : non reprise${nc > 1 ? 's' : ''}.`);
+  return { items, info };
+}
+
+let _mgCtx = null;
+function _mergeOpen(data, srcLabel) {
+  if (!data || typeof data !== 'object' || _validateImport(data)) {
+    appAlert('Récupération impossible', 'Ce fichier ne se lit pas comme une sauvegarde valide.', 'error');
+    return;
+  }
+  if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
+  const plan = _mergeRun(JSON.parse(JSON.stringify(S)), data, null);
+  _mgCtx = { data };
+  document.getElementById('mmerge-src').textContent = srcLabel || '';
+  const list = document.getElementById('mmerge-list');
+  if (!plan.items.length) {
+    list.innerHTML = _emptyStateHTML('✓', 'Rien à récupérer', 'Tout ce que contient cette version est déjà dans la version actuelle.');
+  } else {
+    let grp = '';
+    list.innerHTML = plan.items.map(it => {
+      const head = it.group !== grp ? `<div class="mg-grp">${_esc(grp = it.group)}</div>` : '';
+      return head + `<label class="mg-item"><input type="checkbox" checked data-key="${_escAttr(it.key)}" onchange="_mergeCount()"><span>${_esc(it.label)}<small>${_esc(it.detail)}</small></span></label>`;
+    }).join('');
+  }
+  document.getElementById('mmerge-info').innerHTML = plan.info.map(t => `<li>${_esc(t)}</li>`).join('');
+  _mergeCount();
+  openMod('mmerge');
+}
+function _mergeCount() {
+  const n = document.querySelectorAll('#mmerge-list input[data-key]:checked').length;
+  const b = document.getElementById('mmerge-go');
+  if (b) { b.disabled = !n; b.textContent = n ? `✓ Récupérer ${n} élément${n > 1 ? 's' : ''}` : '✓ Récupérer la sélection'; }
+}
+function _mergeApply() {
+  if (!_mgCtx) return;
+  const keys = new Set([...document.querySelectorAll('#mmerge-list input[data-key]:checked')].map(i => i.dataset.key));
+  if (!keys.size) { toast('Coche au moins une ligne.', 'warn'); return; }
+  const data = _mgCtx.data;
+  if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
+  pushUndo();
+  _mergeRun(S, data, keys);
+  // L'horloge de la version reprise est absorbée : la synchro ne la reproposera pas en conflit.
+  if (!S.clock || typeof S.clock !== 'object') S.clock = {};
+  _clockMergeMax(S.clock, data.clock);
+  _clockBumpSelf();
+  if ([...keys].some(k => k.startsWith('evnew:') || k.startsWith('ev:'))) migrateEvalDefaults();
+  _mgCtx = null;
+  closeMod2('mmerge');
+  save();
+  refreshSelector();
+  const at = document.querySelector('.tab.on');
+  if (at) renderTab(at.id.replace('tab-', ''));
+  _refreshOpenEvalModals();
+  _refreshOpenConsultModals();
+  toast(`🔀 ${keys.size} élément${keys.size > 1 ? 's' : ''} récupéré${keys.size > 1 ? 's' : ''}. Ctrl+Z pour annuler.`, 'success');
+}
+async function _mergeFromHandle(idx) {
+  const files = document.getElementById('mfl-list')?._files;
+  const f = files && files[idx];
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await (await f.handle.getFile()).text()); }
+  catch (_) { appAlert('Récupération impossible', 'Ce fichier ne se lit pas.', 'error'); return; }
+  const k = _fileKind(f.name);
+  _mergeOpen(data, `${k.icon} ${k.label} · ${f.date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`);
+}
+
 // Copies de conflit créées par Nextcloud (≠ nos archives plan-classe-conflit-*).
 async function _findNextcloudConflictCopies() {
   if (!dirHandle) return [];
@@ -38849,6 +39085,7 @@ function _vfRender() {
       <span class="vf-ic">${kind.icon}</span><span class="vf-name">${_esc(kind.label)}</span>
       <span class="vf-date">${_esc(rel(f.date))} ${_esc(f.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))} · ${_esc(_fmtBytes(f.size))}</span>
       <button type="button" class="btn btn-g btn-sm" onclick="_toggleVersionInfo(${i})" title="Écart avec l'état actuel (classes, élèves, évaluations, salles, appels)">Comparer</button>
+      <button type="button" class="btn btn-g btn-sm" onclick="_mergeFromHandle(${i})" title="Reprendre dans la version actuelle ce que cette version a en plus (appels, notes, remarques), à cocher — rien n'est remplacé">Récupérer</button>
       <button type="button" class="btn btn-g btn-sm" onclick="loadFromHandle(${i})" title="Charger cette version (une confirmation suit)">Ouvrir</button>
     </div><div id="fli-info-${i}"></div></div>`;
   }).join('') || '<div class="clf-note" style="padding:10px">Aucun fichier de ce type.</div>';
