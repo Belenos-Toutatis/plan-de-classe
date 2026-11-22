@@ -3794,3 +3794,33 @@ test('note hors barème : Annuler par défaut, retour sur la case avec la valeur
   assert.deepEqual(ouvre({ defaultCancel: true }), { focus: 'cancel', annuler: 'btn btn-p' });
   assert.deepEqual(ouvre({}), { focus: 'ok', annuler: 'btn btn-g' });
 });
+
+// Dossier « mort » (Chrome 158, 2026-11-22) : queryPermission ne répond JAMAIS. L'app ne doit
+// plus l'attendre sans fin — délai dépassé → dossier oublié en mémoire, photos vides, pas de blocage.
+test('dossier mémorisé qui ne répond plus : délai, puis oublié (démarrage et photos)', async () => {
+  const r = await ev(`(async () => {
+    const out = {};
+    out.fast = await _fsaWithin(Promise.resolve('granted'), 50);
+    out.slow = await _fsaWithin(new Promise(() => {}), 20) === _FSA_STALL;
+    const dead = { name: 'Plan de classe json', kind: 'directory',
+      queryPermission: () => new Promise(() => {}), requestPermission: () => new Promise(() => {}),
+      getDirectoryHandle: () => new Promise(() => {}) };
+    const _fw = _fsaWithin; _fsaWithin = (p, ms) => _fw(p, 10);
+    const _al = appAlert; let alerts = 0; appAlert = () => { alerts++; };
+    const _sdp = window.showDirectoryPicker; window.showDirectoryPicker = () => {};
+    const _ld = idbLoadHandle; idbLoadHandle = async () => dead;
+    try {
+      await tryRestoreDirHandle();
+      out.afterRestore = dirHandle;
+      dirHandle = dead; _dirStalledNoticed = false;
+      out.photosDir = await _photosDir(false, false);
+      out.afterPhotos = dirHandle;
+      out.alerts = alerts;
+    } finally {
+      _fsaWithin = _fw; appAlert = _al; window.showDirectoryPicker = _sdp; idbLoadHandle = _ld;
+      dirHandle = null; _dirStalledNoticed = false;
+    }
+    return JSON.stringify(out);
+  })()`);
+  assert.deepEqual(JSON.parse(r), { fast: 'granted', slow: true, afterRestore: null, photosDir: null, afterPhotos: null, alerts: 2 });
+});

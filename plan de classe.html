@@ -10112,11 +10112,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.166.0';
+const APP_VERSION    = '2.166.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-17T22:55:00Z';
+const APP_BUILD_DATE = '2026-11-22T21:16:27Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -35860,6 +35860,35 @@ async function idbLoadHandle() {
     });
   } catch(e) { return null; }
 }
+// ─── Dossier « mort » : Chrome ne répond plus du tout à son sujet ───────────
+// Vécu le 2026-11-22 (Chrome 158 sous Linux, sur Plan de classe ET Suivi PP) : le dossier
+// mémorisé dans IndexedDB ne répond plus JAMAIS — queryPermission, requestPermission,
+// entries, getDirectoryHandle, même isSameEntry restent en attente, sans erreur, et un
+// redémarrage de Chrome n'y change rien. L'app attendait donc sans fin : « 📂 Ouvrir un
+// fichier ou une version… » n'ouvrait rien, les photos ne s'affichaient plus. Remède (le même
+// que nutstore/eo2weave#348) : ne plus attendre au-delà d'un délai, oublier ce dossier EN
+// MÉMOIRE (pas dans IndexedDB : le nouveau choix l'y remplacera) et le faire choisir de nouveau.
+const _FSA_STALL = '__stalled';
+function _fsaWithin(p, ms) {
+  let t;
+  return Promise.race([Promise.resolve(p), new Promise(r => { t = setTimeout(() => r(_FSA_STALL), ms); })])
+    .finally(() => clearTimeout(t));
+}
+let _dirStalledName = '';
+let _dirStalledNoticed = false;
+function _dirMarkStalled(h) {
+  _dirStalledName = (h && h.name) || _dirStalledName;
+  if (dirHandle === h) dirHandle = null;
+  console.warn('[dossier] Chrome ne répond plus sur le dossier mémorisé « ' + _dirStalledName + ' » : il faut le choisir de nouveau.');
+}
+function _dirStalledNotice() {
+  if (_dirStalledNoticed) return;
+  _dirStalledNoticed = true;
+  appAlert('📂 Dossier à choisir de nouveau',
+    `Chrome ne répond plus quand l'app lui demande le dossier « <b>${_esc(_dirStalledName || 'de sauvegarde')}</b> ». La synchronisation et les photos sont en pause.<br><br>`
+    + `Pour les retrouver : bouton de synchronisation en haut à droite → « 📂 Ouvrir un fichier ou une version… », puis choisis de nouveau ce même dossier.<br><br>`
+    + `Tes données ne sont pas touchées.`, 'warn');
+}
 async function tryRestoreDirHandle() {
   if (!window.showDirectoryPicker) return;
   const h = await idbLoadHandle();
@@ -35867,7 +35896,9 @@ async function tryRestoreDirHandle() {
   dirHandle = h;
   // Vérifier si la permission est encore accordée (sans prompt)
   try {
-    const perm = await h.queryPermission({ mode: 'readwrite' });
+    // Délai large au démarrage (la page est occupée) : un dossier sain répond en quelques ms.
+    const perm = await _fsaWithin(h.queryPermission({ mode: 'readwrite' }), 4000);
+    if (perm === _FSA_STALL) { _dirMarkStalled(h); _dirStalledNotice(); return; }
     if (perm === 'granted') {
       document.getElementById('last-file-info').textContent = `📂 ${h.name}`;
     }
@@ -36463,12 +36494,16 @@ function _trombiResolveClass(label) {
 const _photos = { sids: new Set(), urls: new Map(), ready: false, lastTry: 0 };
 async function _photosDir(write, ask) {
   if (!dirHandle) return null;
+  const h = dirHandle;
   const mode = write ? 'readwrite' : 'read';
   try {
-    let p = await dirHandle.queryPermission({ mode });
-    if (p !== 'granted' && ask) p = await dirHandle.requestPermission({ mode });
+    let p = await _fsaWithin(h.queryPermission({ mode }), 2500);
+    if (p === _FSA_STALL) { _dirMarkStalled(h); _dirStalledNotice(); return null; }
+    if (p !== 'granted' && ask) p = await h.requestPermission({ mode });
     if (p !== 'granted') return null;
-    return await dirHandle.getDirectoryHandle(PHOTOS_SUBDIR, { create: !!write });
+    const d = await _fsaWithin(h.getDirectoryHandle(PHOTOS_SUBDIR, { create: !!write }), 5000);
+    if (d === _FSA_STALL) { _dirMarkStalled(h); _dirStalledNotice(); return null; }
+    return d;
   } catch (e) { return null; }
 }
 async function _photosRefresh(ask) {
@@ -38609,9 +38644,16 @@ async function openFilePicker() {
   }
   if (dirHandle) {
     // Vérifier/redemander la permission si nécessaire (un clic suffit, pas de navigation)
+    const h = dirHandle;
     try {
-      const perm = await dirHandle.queryPermission({ mode: 'read' });
-      if (perm !== 'granted') await dirHandle.requestPermission({ mode: 'read' });
+      // Délai court : le sélecteur de dossier qui suit exige le clic de l'utilisateur, et Chrome
+      // ne le tient pour récent que 5 s.
+      const perm = await _fsaWithin(h.queryPermission({ mode: 'read' }), 1500);
+      if (perm === _FSA_STALL) {
+        _dirMarkStalled(h);
+        _dirStalledNoticed = true;   // le sélecteur s'ouvre tout de suite : pas de fenêtre d'alerte en plus
+        toast(`📂 Chrome ne répond plus sur le dossier « ${h.name} » : choisis-le de nouveau.`, 'warn');
+      } else if (perm !== 'granted') await h.requestPermission({ mode: 'read' });
     } catch(e) { dirHandle = null; }
   }
   if (dirHandle) {
@@ -38625,6 +38667,7 @@ async function changeDirAndList() {
   try {
     dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
     await idbSaveHandle(dirHandle);
+    _photosRefresh(false);   // nouveau dossier (ou dossier « mort » choisi de nouveau) : relire ses photos
     await listAndShowFiles();
   } catch(e) {
     if (e.name !== 'AbortError') toast('Erreur : ' + e.message);

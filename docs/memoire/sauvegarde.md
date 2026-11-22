@@ -70,6 +70,12 @@ Encart `#about-storage` en pied de la section Vie privée, rempli à chaque `ope
 
 Total max : ~80 backups sur 4 mois.
 
+### Dossier « mort » : Chrome ne répond plus du tout (v2.166.1, 2026-11-22)
+Signalé par l'utilisateur : « 📂 Ouvrir un fichier ou une version… » n'ouvrait **rien** (ni fenêtre, ni message) et les photos ne s'affichaient plus, en ligne comme en `file://`, et de même dans **Suivi PP**. Diagnostic (sur une page sans données du même site, le `manifest.json`, en relisant le handle de l'IndexedDB `PlanDeClasse_v1`) : **toute** opération sur le dossier mémorisé restait en attente sans erreur — `queryPermission`, `entries`, `getDirectoryHandle`, même `isSameEntry` — alors que l'OPFS (`navigator.storage.getDirectory`) répondait. Un redémarrage complet de Chrome n'y a rien changé. Apparu après le passage de Chrome 157 → **158** (18 novembre, Linux). Même défaut décrit dans nutstore/eo2weave#348 : un handle restauré de l'IndexedDB peut devenir « mort ».
+- **Remède** : `_fsaWithin(promesse, ms)` borne l'attente et renvoie `_FSA_STALL`. Au démarrage (`tryRestoreDirHandle`, 4 s), dans `_photosDir` (2,5 s, puis 5 s pour `getDirectoryHandle`) et dans `openFilePicker` (1,5 s — le sélecteur qui suit exige un clic de moins de 5 s), un dépassement → `_dirMarkStalled` (dossier oublié **en mémoire**, l'IndexedDB garde l'ancien jusqu'au nouveau choix) + `_dirStalledNotice` (une fenêtre par session qui dit où le rechoisir). Dans `openFilePicker`, le sélecteur de dossier s'ouvre directement. `changeDirAndList` relit ensuite les photos.
+- `requestPermission` n'est **pas** borné : il attend la réponse de l'utilisateur à la bulle de Chrome.
+- 💡 La bulle d'autorisation de Chrome liste aussi les dossiers de Suivi PP : c'est normal, les autorisations vont **au site** (`belenos-toutatis.github.io`), commun aux deux applications. Chaque application garde son propre dossier (`PlanDeClasse_v1` / `SuiviPP_v1`) : pas de collision.
+
 **Dédup des backups (étape 3)** : un nouveau backup n'est créé que si le **contenu de fond** (hors `savedAt`/`clock`, via `_contentFingerprint(S)`) diffère du dernier backup écrit (`_lastBackupContent`). Évite la prolifération de copies strictement identiques (ouverture d'app, save no-op…). `_lastBackupTs` n'est avancé QUE lors d'une écriture réelle → une vraie modif survenant dans la fenêtre est sauvegardée dès qu'elle arrive.
 
 ### Détection de conflit multi-postes (horloge vectorielle — étapes 1 & 2)
