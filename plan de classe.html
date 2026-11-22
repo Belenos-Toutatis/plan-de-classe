@@ -6440,7 +6440,7 @@ body.topbar-free #topbar { position: static !important; }
 
     <div class="about-section">
       <h3>📊 Compétence évaluée plusieurs fois</h3>
-      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Comment calculer le niveau "moyen" d'une compétence quand elle est évaluée plusieurs fois dans la même éval (ou plusieurs passations). <strong>Règle par défaut</strong> — chaque évaluation peut la <strong>surcharger individuellement</strong> dans son éditeur (<em>⚙ Options avancées → Compétence évaluée plusieurs fois</em>).</p>
+      <p style="margin:0 0 8px;font-size:.88em;color:var(--pencil)">Comment calculer le niveau d'une compétence quand elle est évaluée à plusieurs <strong>passations</strong> d'un devoir de <strong>type B</strong>. <strong>Règle par défaut</strong> — chaque devoir de type B peut la <strong>remplacer</strong> dans ses réglages (<em>⚙ Options avancées → Compétence évaluée plusieurs fois</em>). Les autres types font toujours la moyenne des questions.</p>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="arithmetic"> <strong>Moyenne arithmétique</strong> des niveaux <span style="color:var(--pencil);font-size:.85em">— défaut</span></label>
       <label style="display:block;margin:3px 0;cursor:pointer" title="Tri des niveaux saisis par date croissante (du plus ancien au plus récent), puis pondération avec poids w_i = i (i = 1 pour le plus ancien, 2 pour le suivant…). Niveau moyen = (Σ w_i × N_i) / (Σ w_i). Exemple sur 3 saisies [N2, N3, N4] : (1×2 + 2×3 + 3×4) / (1+2+3) = 20/6 ≈ 3,3."><input type="radio" name="evalprefs-meanRule" value="weightedRecency"> <strong>Pondérée par récence</strong> (plus récent = plus gros poids) <span style="color:var(--pencil);font-size:.85em;cursor:help" title="Tri par date croissante puis poids w_i = i (1 pour le plus ancien). Niveau moyen = Σ w_i × N_i / Σ w_i. Ex. [N2,N3,N4] → (1×2 + 2×3 + 3×4) / 6 = 20/6 ≈ 3,3.">ℹ</span></label>
       <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="evalprefs-meanRule" value="last"> <strong>Dernier niveau saisi</strong></label>
@@ -10183,11 +10183,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.168.0';
+const APP_VERSION    = '2.168.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-22T22:48:24Z';
+const APP_BUILD_DATE = '2026-11-22T22:53:07Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -46958,10 +46958,11 @@ function _evalNewOnTypeChange() {
   _evalImportRenderSum();
   const wW = document.getElementById('meval-new-weighting-wrap');
   if (wW) wW.style.display = (type === 'B') ? '' : 'none';
-  // Règle de moyenne : sans objet pour A (pas de compétences) ET pour D (les niveaux sont
-  // saisis une seule fois par question — il n'y a rien à départager dans le temps).
+  // Règle « Compétence évaluée plusieurs fois » : type B seulement (passations dans le temps).
+  // A et C font toujours la moyenne des questions (arbitrage du 2026-11-22), D n'a qu'un niveau
+  // par question.
   const mr = document.getElementById('meval-new-meanRule-wrap');
-  if (mr) mr.style.display = (type === 'A' || type === 'D') ? 'none' : '';
+  if (mr) mr.style.display = (type === 'B') ? '' : 'none';
   // Options propres au Type D : barème niveau → points + bilan par exercice.
   const dW = document.getElementById('meval-new-typed-wrap');
   if (dW) {
@@ -47080,7 +47081,7 @@ function _evalNewSave() {
     if (granularity != null) evObj.granularity = granularity; else delete evObj.granularity;
     evObj.countsForMean = countsForMean;
     evObj.facultative = facultativeOn ? { active: true, mode: facMode } : { active: false, mode: 'improveOnly' };
-    if (meanRule) evObj.meanRule = meanRule; else delete evObj.meanRule;
+    if (meanRule && evObj.type === 'B') evObj.meanRule = meanRule; else delete evObj.meanRule;
     if (evObj.type === 'B') evObj.weighting = weightingChoice;
     evObj.createdAt = now;
     evObj.updatedAt = now;
@@ -47121,7 +47122,7 @@ function _evalNewSave() {
       granularity: (granularity != null ? granularity : undefined),
       countsForMean,
       facultative: facultativeOn ? { active: true, mode: facMode } : { active: false, mode: 'improveOnly' },
-      meanRule: meanRule || undefined,
+      meanRule: (type === 'B' && meanRule) || undefined,
       miniNotes:  type === 'B' ? undefined : [],
       exercices:  (type === 'C' || type === 'D') ? [] : undefined,
       notes:      type === 'B' ? undefined : {},
@@ -47614,10 +47615,9 @@ function _evalOpenEditor(evalId) {
   for (const r of document.querySelectorAll('input[name="meval-edit-meanRule"]')) {
     r.checked = (r.value === (ev.meanRule || ''));
   }
-  // Règle d'agrégation des niveaux : sans objet pour Type A (pas de compétences saisies)
-  // ni pour Type D (un seul niveau par question — rien à départager dans le temps).
+  // Règle d'agrégation des niveaux : type B seulement (cf. _evalNewOnTypeChange).
   const mrWrap = document.getElementById('meval-edit-meanRule-wrap');
-  if (mrWrap) mrWrap.style.display = (ev.type === 'A' || ev.type === 'D') ? 'none' : '';
+  if (mrWrap) mrWrap.style.display = (ev.type === 'B') ? '' : 'none';
   // Type D : barème niveau → points propre à l'éval + bilan par exercice
   const dWrap = document.getElementById('meval-edit-typed-wrap');
   if (dWrap) {
@@ -49074,7 +49074,7 @@ function _evalEditSave() {
     ev.facultative = { active: false, mode: 'improveOnly' };
   }
   const ruleOverride = document.querySelector('input[name="meval-edit-meanRule"]:checked')?.value || '';
-  if (ruleOverride) ev.meanRule = ruleOverride; else delete ev.meanRule;
+  if (ruleOverride && ev.type === 'B') ev.meanRule = ruleOverride; else delete ev.meanRule;
   // Pondération Type B
   if (ev.type === 'B') {
     const w = document.querySelector('input[name="meval-edit-weighting"]:checked')?.value;
@@ -60686,17 +60686,11 @@ function _evalStudentCompetenceLevel(ev, sid, cid) {
   }
   if (niveaux.length === 0) return 0;
   if (_evalCompsVoided(ev, sid)) return _voidedCompLevel();   // copie annulée
-  // Override par éval (ev.meanRule) > règle globale
-  // En Type C, l'ordre des questions = ordre des mini-notes (pas de date par question)
-  // donc 'last' = dernière question évaluée, 'best' = meilleur niveau atteint.
-  const rule = ev.meanRule || S.evalPrefs?.meanRule || 'arithmetic';
-  if (rule === 'last') return niveaux[niveaux.length - 1];
-  if (rule === 'best') return Math.max(...niveaux);
-  if (rule === 'weightedRecency') {
-    let num = 0, den = 0;
-    niveaux.forEach((n, i) => { const w = i + 1; num += w * n; den += w; });
-    return num / den;
-  }
+  // ⚠️ Types A et C : TOUJOURS la moyenne des niveaux des questions, comme _evalCompetenceLevel
+  // (règle du 2026-07-30 ; arbitrage de l'utilisateur du 2026-11-22 : « la moyenne doit faire
+  // foi »). La règle « Compétence évaluée plusieurs fois » (Dernier / Meilleur / récence) ne
+  // vaut que pour les passations du type B : appliquée ici, elle envoyait à l'ENT et à MBN un
+  // niveau différent de celui du bilan (4/4, 4/4, 0/4 → 1 ou 4 exporté, 3 au bilan).
   return niveaux.reduce((s, x) => s + x, 0) / niveaux.length;
 }
 

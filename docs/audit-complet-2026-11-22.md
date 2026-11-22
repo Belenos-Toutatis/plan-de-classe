@@ -226,7 +226,7 @@ curseur posé) —, et chaque scénario en défaut rejoué dans l'app.
 | T5 | ✅ | classeur : copie annulée au minimum en type B |
 | M1, M2 | ◐ | réessais **bornés** et bilan en trois cas (rattrapé / enregistré puis requête enchaînée refusée / perdu). Sur simulation seulement : **à valider sur le vrai MBN**. Le favori glissé avant la 2.168.0 s'annoncera « plus à jour » (son code a changé) : le reglisser |
 | M3 | ◐ | le message d'un refus dit par MBN est montré même rattrapé. **Non corrigé** : « rien n'est perdu » repose toujours sur « un POST réussi a suivi » — à observer sur le vrai MBN (👁 Observer MBN) avant de resserrer |
-| M4 | ⏸ **à arbitrer** | deux règles se contredisent en type C : l'option « Dernier / Meilleur » des réglages du devoir (appliquée par l'Export ENT et MBN) et la règle arrêtée le 2026-07-30 (toujours la moyenne, appliquée par les bilans). Aligner l'une sur l'autre change des résultats : non touché |
+| M4 | ✅ (v2.168.1) | arbitrage de l'utilisateur : **la moyenne fait foi**. L'Export ENT et Vers MBN font la moyenne des questions en types A et C, comme les bilans ; l'option « Compétence évaluée plusieurs fois » n'est plus proposée que pour le type B. Vérifié sur la démo : 0 écart sur 954 cases, règles « Dernier » et « Meilleur » forcées |
 | M5, M6 | ✅ | copie gardée contre les formules (nom, remarque) ; nom du CSV = classe affichée |
 | § 4 | ✅ | outil d'audit : faux positif du 🔒 excepté, ouvreurs `appAlert`, tableurs avec le curseur |
 

@@ -4075,3 +4075,37 @@ test('audit 2026-11-22 : Export ENT — la copie garde nom et remarque contre le
   assert.match(src, /_csvCellGuard\(r\.name\)/);
   assert.match(src, /_csvCellGuard\(\(r\.remarque/);
 });
+
+test('types A et C : la règle « Dernier / Meilleur » ne change ni l\'export ni le bilan (la moyenne fait foi)', () => {
+  // Arbitrage de l'utilisateur (2026-11-22). Avant : 4/4, 4/4, 0/4 → l'Export ENT et MBN
+  // recevaient 1 (« dernier ») ou 4 (« meilleur ») quand le bilan affichait 3.
+  for (const type of ['A', 'C']) for (const rule of ['arithmetic', 'last', 'best', 'weightedRecency']) for (const where of ['ev', 'prefs']) {
+    setState({
+      classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1'], rooms: {} } },
+      eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' } },
+      competences: { k1: { id: 'k1', code: 'K1', name: '', domainId: '' } },
+      evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: where === 'prefs' ? rule : 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
+      evaluations: { e1: Object.assign({ id: 'e1', type, classId: 'c1', noteMax: 20,
+        miniNotes: [{ id: 'q1', max: 4, competenceIds: ['k1'] }, { id: 'q2', max: 4, competenceIds: ['k1'] }, { id: 'q3', max: 4, competenceIds: ['k1'] }],
+        notes: { s1: { values: { q1: 4, q2: 4, q3: 0 } } } }, where === 'ev' ? { meanRule: rule } : {}) },
+    });
+    ev('migrateEvalDefaults()');
+    const bilan = get(`_evalCompetenceLevel(S.evaluations.e1, 's1', 'k1')`);
+    const exp = get(`Math.round(_evalStudentCompetenceLevel(S.evaluations.e1, 's1', 'k1'))`);
+    assert.equal(exp, bilan, `type ${type}, règle ${rule} (${where}) : export ${exp}, bilan ${bilan}`);
+  }
+  // La règle reste appliquée au type B (passations dans le temps).
+  setState({
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' } },
+    competences: { k1: { id: 'k1', code: 'K1', name: '', domainId: '' } },
+    evalPrefs: { nbLevels: 4, maitrisePoints: [5, 8, 15, 20], meanRule: 'arithmetic', codeAbsent: 'A', codeNonNote: 'NN' },
+    evaluations: { e1: { id: 'e1', type: 'B', classId: 'c1', meanRule: 'best', passations: [
+      { id: 'p1', competenceIds: ['k1'], date: '2026-01-05', niveaux: { s1: { k1: 4 } } }, { id: 'p2', competenceIds: ['k1'], date: '2026-01-12', niveaux: { s1: { k1: 1 } } }] } },
+  });
+  ev('migrateEvalDefaults()');
+  assert.equal(get(`_evalStudentCompetenceLevel(S.evaluations.e1, 's1', 'k1')`), 4);
+  // Les réglages d'un devoir ne proposent la règle qu'au type B.
+  const src = ev('_evalNewOnTypeChange.toString()');
+  assert.match(src, /mr\.style\.display = \(type === 'B'\) \? '' : 'none'/);
+});
