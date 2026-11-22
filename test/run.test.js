@@ -3904,3 +3904,22 @@ test('fusion : clés piégées ignorées, rien à récupérer entre deux version
   const same = get(`_mergeRun(JSON.parse(JSON.stringify(S)), JSON.parse(JSON.stringify(S)), null)`);
   assert.deepEqual(same, { items: [], info: [] });
 });
+
+test('fusion : une note de rattrapage remplace un « A » (absent), jamais l\'inverse', () => {
+  const base = _mgBase();
+  base.evaluations.e1.notes = { s1: { values: { q1: 'A', q2: 'A' } }, s2: { values: { q1: 4 } } };
+  base.evaluations.e4 = { id: 'e4', type: 'B', classId: 'c1', nomCourt: 'Oral', passations: [{ id: 'p1', competenceIds: ['k1'], niveaux: { s1: { k1: 'A' } } }] };
+  setState(base);
+  const o = _mgOther();
+  o.evaluations.e1.notes = { s1: { values: { q1: 3, q2: 'A' } }, s2: { values: { q1: 'A' } } };
+  o.evaluations.e4 = { id: 'e4', type: 'B', classId: 'c1', nomCourt: 'Oral', passations: [{ id: 'p1', competenceIds: ['k1'], niveaux: { s1: { k1: 3 } } }] };
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(o)}, null)`);
+  const e1 = plan.items.find(i => i.key === 'ev:e1');
+  assert.match(e1.detail, /1 note de rattrapage à la place d'un « A »/);
+  assert.match(e1.detail, /1 case différente/, "la note d'ici face à un « A » là-bas est gardée");
+  assert.match(plan.items.find(i => i.key === 'ev:e4').detail, /1 note de rattrapage/);
+  ev(`_mergeRun(S, ${JSON.stringify(o)}, new Set(['ev:e1', 'ev:e4']))`);
+  assert.deepEqual(get('S.evaluations.e1.notes.s1.values'), { q1: 3, q2: 'A' });
+  assert.deepEqual(get('S.evaluations.e1.notes.s2.values'), { q1: 4 });
+  assert.equal(get('S.evaluations.e4.passations[0].niveaux.s1.k1'), 3);
+});

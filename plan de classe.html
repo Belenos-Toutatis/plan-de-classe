@@ -10135,11 +10135,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.167.0';
+const APP_VERSION    = '2.167.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-22T21:29:54Z';
+const APP_BUILD_DATE = '2026-11-22T21:40:22Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -38850,14 +38850,19 @@ function _mgLeaves(v) {
 }
 // Remplit dans `dst` ce qui n'existe (ou est vide) que dans `src`. `keyOk` filtre le 1er niveau
 // (élèves, classes). 0 n'est PAS vide (niveau 0 « non évalué » saisi).
-function _mgFill(dst, src, st, keyOk) {
+// `weak` (saisies d'évaluation seulement) : une valeur « en attente » qu'une vraie valeur de `src`
+// remplace — le code absent « A », que l'app pose d'elle-même d'après l'appel (v2.157.3). Signalé
+// par l'utilisateur (v2.167.1) : copies d'absents corrigées sur une version, « A » sur l'autre → la
+// note de rattrapage ne revenait pas. L'inverse (une note ici, « A » là-bas) garde la note.
+function _mgFill(dst, src, st, keyOk, weak) {
   if (!_mgIsObj(dst) || !_mgIsObj(src)) return;
   for (const k of Object.keys(src)) {
     if (_MG_BAD_KEY(k) || (keyOk && !keyOk(k))) continue;
     const s = src[k], d = dst[k];
     if (_mgEmpty(s)) continue;
     if (_mgEmpty(d)) { const c = _mgClone(s); if (_mgEmpty(c)) continue; dst[k] = c; st.filled += _mgLeaves(c); }
-    else if (_mgIsObj(d) && _mgIsObj(s)) _mgFill(d, s, st);
+    else if (_mgIsObj(d) && _mgIsObj(s)) _mgFill(d, s, st, null, weak);
+    else if (weak && weak(d) && !weak(s) && (typeof s === 'number' || typeof s === 'string')) { dst[k] = s; st.rattr = (st.rattr || 0) + 1; }
     else if (JSON.stringify(d) !== JSON.stringify(s)) st.differ++;
   }
 }
@@ -38872,6 +38877,9 @@ function _mergeRun(dst, other, keys) {
   const clsName = id => (dst.classes && dst.classes[id] && dst.classes[id].nom) || id;
   const sidOk = s => !_MG_BAD_KEY(s) && !!(dst.eleves && dst.eleves[s]);
   const plural = (n, w) => `${n} ${n > 1 ? w.split(' ').map(x => x + 's').join(' ') : w}`;   // « 2 cases différentes »
+  // Code absent : « A », ou le code réglé dans les deux versions (une case est « en attente » qu'il soit l'un ou l'autre).
+  const absCodes = new Set(['A', (dst.evalPrefs && dst.evalPrefs.codeAbsent) || 'A', (other.evalPrefs && other.evalPrefs.codeAbsent) || 'A']);
+  const isAbs = v => typeof v === 'string' && absCodes.has(v.trim());
   // 1. Appels
   for (const [cid, recs] of Object.entries(other.attendance || {})) {
     if (_MG_BAD_KEY(cid) || !_mgIsObj(recs)) continue;
@@ -38913,7 +38921,7 @@ function _mergeRun(dst, other, keys) {
     }
     // Éval présente des deux côtés : on travaille sur une copie, posée seulement si cochée.
     const tgt = _mgClone(lev);
-    const st = { filled: 0, differ: 0, added: 0 };
+    const st = { filled: 0, differ: 0, added: 0, rattr: 0 };
     for (const arr of ['exercices', 'miniNotes', 'passations']) {
       if (!Array.isArray(oev[arr])) continue;
       for (const o of oev[arr]) {
@@ -38927,21 +38935,21 @@ function _mergeRun(dst, other, keys) {
           if (arr === 'passations') st.filled += _mgLeaves(c.niveaux);
         } else if (arr === 'passations' && _mgIsObj(o.niveaux)) {
           if (!_mgIsObj(l.niveaux)) l.niveaux = {};
-          _mgFill(l.niveaux, o.niveaux, st, sidOk);
+          _mgFill(l.niveaux, o.niveaux, st, sidOk, isAbs);
         }
       }
     }
     for (const k of ['notes', 'studentRemarks']) {
       if (!_mgIsObj(oev[k])) continue;
       if (!_mgIsObj(tgt[k])) tgt[k] = {};
-      _mgFill(tgt[k], oev[k], st, sidOk);
+      _mgFill(tgt[k], oev[k], st, sidOk, k === 'notes' ? isAbs : null);
     }
     const kept = st.differ ? `${plural(st.differ, 'case différente')} : la valeur d'ici est gardée` : '';
-    if (!st.filled && !st.added) { if (kept) info.push(`Devoir « ${name} »${cls ? ' (' + cls + ')' : ''} : ${kept}.`); continue; }
+    if (!st.filled && !st.added && !st.rattr) { if (kept) info.push(`Devoir « ${name} »${cls ? ' (' + cls + ')' : ''} : ${kept}.`); continue; }
     const key = 'ev:' + eid;
     const isB = oev.type === 'B';
     items.push({ key, group: 'Devoirs', label: `« ${name} »${cls ? ' · ' + cls : ''}`,
-      detail: [st.filled ? `${plural(st.filled, 'saisie')} à reprendre` : '', st.added ? `${plural(st.added, isB ? 'passation' : 'question')} en plus` : '', kept].filter(Boolean).join(' · ') });
+      detail: [st.rattr ? `${plural(st.rattr, 'note')} de rattrapage à la place d'un « A »` : '', st.filled ? `${plural(st.filled, 'saisie')} à reprendre` : '', st.added ? `${plural(st.added, isB ? 'passation' : 'question')} en plus` : '', kept].filter(Boolean).join(' · ') });
     if (want(key)) dst.evaluations[eid] = tgt;
   }
   // 3. Remarques de bulletin (élève et classe)
