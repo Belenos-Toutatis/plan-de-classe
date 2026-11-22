@@ -26,7 +26,7 @@
       programmés ne se déclenchent pas), captures d'écran en retard d'une étape.
    6. Recommencer 3 à 5 dans l'autre thème.
 
-   Score de référence (v2.146.2, 2026-10-14) : TOUT à zéro, dans les deux thèmes —
+   Score de référence (v2.168.0, 2026-11-22 ; d'abord v2.146.2) : TOUT à zéro, dans les deux thèmes —
    contraste écran, sous-états, fenêtres, impressions, pavés clairs (hors aperçus papier
    voulus : .ipr-page de la fiche de prêt), champs sans nom, erreurs d'exécution.
    Un résultat différent signale une régression (ou un nouvel écran à examiner).
@@ -39,7 +39,7 @@
      __tabsRun()             les 12 onglets (contraste + champs)
      __staticModalsRun()     toutes les .mo forcées ouvertes (contraste + champs)
      __dynRun(only?)         ~95 fenêtres par leur VRAI ouvreur (contraste, ARIA, focus, largeur, champs)
-     __subRun()              ~30 sous-états (appel, contraintes, confidentiel, menus, Config Salle…)
+     __subRun()              ~45 sous-états (appel, contraintes, confidentiel, menus, Config Salle, tableurs avec le curseur…)
      __printRun()            ~23 chemins d'impression, mesurés dans window.print() bouchonné
      __respRun()             débordements à la taille courante (redimensionner la fenêtre avant)
      __metaTest()            vérifie que l'auditeur détecte bien un texte #ccc sur blanc
@@ -91,6 +91,9 @@ window.__aud = function (root, label) {
     const t = walker.currentNode; if (!t.textContent.trim()) continue;
     const el = t.parentElement; if (!el || seen.has(el)) continue; seen.add(el);
     if (el.closest('svg')) continue;
+    // Bouton 🔒 du mode confidentiel : son rouge est une ombre intérieure ANIMÉE (confBlink), que
+    // noTransitions() coupe — mesuré blanc sur papier à 1,08:1 à tort (audit du 2026-11-22).
+    if (el.id === 'btn-conf' && el.classList.contains('conf-active')) continue;
     const s = cs(el); if (s.visibility === 'hidden' || s.display === 'none') continue;
     const r = el.getBoundingClientRect(); if (r.width === 0 || r.height === 0) continue;
     if (el.offsetParent === null && s.position !== 'fixed') continue;
@@ -234,6 +237,10 @@ window.__dynRun = async function (only) {
     ['late', () => promptLateForStudent(sid)], ['confirm', () => _uiConfirm({ title: 'Titre', message: 'Message', onOk() {} })],
     ['prompt', () => _uiPrompt({ title: 'Titre', label: 'Libellé', onOk() {} })], ['mc', () => openMod('mc')], ['ms', () => openMod('ms')],
     ['editClass', () => editClass(cls.id)], ['viol', () => showViolationsModal(cls)],
+    // Fenêtre d'alerte AVEC un message : forcée ouverte, elle est vide et ne mesure rien
+    // (son texte était à 1,27:1 en thème sombre — audit du 2026-11-22).
+    // ⚠️ Accolades : appAlert renvoie une promesse qui ne se résout qu'à la fermeture — la rendre figerait la boucle.
+    ['alertErr', () => { appAlert('Titre', 'Un message d\'erreur, avec <b>du gras</b>.', 'error'); }], ['alertWarn', () => { appAlert('Titre', 'Un avertissement.', 'warn'); }], ['alertInfo', () => { appAlert('Titre', 'Une information.'); }],
     // 🔀 Récupérer ce qui manque (v2.167.0) : une « autre version » = l'état actuel + un appel et une remarque en plus.
     ['merge', () => { const o = JSON.parse(JSON.stringify(S)); const r0 = Object.values(o.attendance?.[cls.id] || {})[0];
       if (r0) o.attendance[cls.id].audit_x = { ...r0, id: 'audit_x', date: '2000-01-03', slotId: null };
@@ -338,6 +345,32 @@ window.__subRun = async function () {
     _reu.view = 'list'; renderReunions(); } catch (e) { out.reuErr = e.message; }
   // Historique (v2.153.0) : formulaire de correction d'une entrée, créneaux du jour compris.
   try { const st = Object.values(S.eleves).find(x => (x.history || []).some(h => h.type !== 'rappel_fait')); if (st) { openHist(st.id, 'vie'); _histEditStart(st.history.findIndex(h => h.type !== 'rappel_fait')); await sleep(150); A('historique-correction'); _histEditCancel(); closeMod2('mhist'); } } catch (e) { out.histErr = e.message; }
+  // Tableurs AVEC le curseur posé (croix de saisie) : pastilles / cases pleines × sobriété, 6 cases
+  // par état. Sans curseur, la croix n'existe pas : trois défauts y étaient passés (audit du 2026-11-22).
+  // On vérifie aussi que la croix EXISTE (fond non transparent) sur la ligne et la colonne.
+  try {
+    const cls = S.classes[cur]; const B = document.body; const lis0 = B.classList.contains('tableur-lisere');
+    const cN = document.getElementById('meval-tableur-sobr-notes'), cC = document.getElementById('meval-tableur-sobr-comps'); const n0 = cN.checked, c0 = cC.checked;
+    for (const t of ['A', 'B', 'C', 'D']) {
+      const e = Object.values(S.evaluations).find(x => x.type === t && _evalIncludesClass(x, cls.id)); if (!e) continue;
+      _evalOpenTableur(e.id); await sleep(300); const mo = document.getElementById('meval-tableur');
+      for (const lis of [true, false]) for (const sob of [false, true]) {
+        B.classList.toggle('tableur-lisere', lis); cN.checked = sob; cC.checked = sob; _evalTableurSobrApply(); await sleep(50);
+        const cells = [...mo.querySelectorAll('#meval-tableur-wrap input[data-ci], #meval-tableur-wrap td[data-ci]')];
+        const label = 'tableur' + t + '-' + (lis ? 'pastilles' : 'pleines') + (sob ? '-sobre' : '');
+        for (const c of [0, 3, Math.floor(cells.length / 3), Math.floor(cells.length / 2), Math.floor(cells.length * 0.8), cells.length - 1].map(i => cells[i]).filter(Boolean)) {
+          try { c.focus && c.focus(); } catch (e2) {}
+          c.dispatchEvent(new FocusEvent('focusin', { bubbles: true })); await sleep(30);
+          const a = __aud(mo, label); if (a.length) out[label] = (out[label] || []).concat(a).slice(0, 5);
+        }
+        const col = mo.querySelector('#meval-tableur-wrap td.meval-active-col:not(.meval-cell-disp)');
+        if (col && /rgba\(0, 0, 0, 0\)|transparent/.test(getComputedStyle(col).backgroundColor)) out[label + '-croix'] = [{ label, el: 'td.meval-active-col', txt: 'croix de saisie invisible', r: 0 }];
+        if (document.documentElement.dataset.theme === 'dark') light.push(...__light(mo, 'sub:' + label).slice(0, 2));
+      }
+      closeAll(); await sleep(100);
+    }
+    B.classList.toggle('tableur-lisere', lis0); cN.checked = n0; cC.checked = c0; _evalTableurSobrApply();
+  } catch (e) { out.tableurErr = e.message; }
   try { switchTab('ipads'); _ipadSetView('list'); await sleep(150); A('tablettes-liste'); _ipadSetView('plan'); } catch (e) { out.ipErr = e.message; }
   try { switchTab('qcmcam'); _qcmSetView('list'); await sleep(150); A('qcmcam-liste'); _qcmSetView('plan'); } catch (e) { out.qcmErr = e.message; }
   closeAll();

@@ -3923,3 +3923,155 @@ test('fusion : une note de rattrapage remplace un « A » (absent), jamais l\'in
   assert.deepEqual(get('S.evaluations.e1.notes.s2.values'), { q1: 4 });
   assert.equal(get('S.evaluations.e4.passations[0].niveaux.s1.k1'), 3);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit du 2026-11-22 — non-régression des défauts corrigés.
+// ─────────────────────────────────────────────────────────────────────────────
+test('audit 2026-11-22 : aucun code vivant après un commentaire // dans les blocs embarqués', () => {
+  // Fichier du collègue : « …; // il est là : déjà vu r.pauses = …; touched(); » — le commentaire
+  // inséré au milieu de la ligne avait rendu mort tout ce qui le suivait.
+  const fs = require('fs'), path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  for (const id of ['rdv-standalone-js', 'mbn-fill-src', 'mbn-bul-src']) {
+    const js = new RegExp('<script type="text/plain" id="' + id + '">([\\s\\S]*?)</script>').exec(html)[1];
+    const bad = js.split('\n').filter(l => /[;}\s]\/\/[^\n]*;\s*[A-Za-z_$][\w$.]*\s*(\(|=[^=])/.test(l));
+    assert.deepEqual(bad.map(l => l.trim().slice(0, 90)), [], id + ' : du code suit un commentaire // sur la même ligne');
+  }
+  const js = /<script type="text\/plain" id="rdv-standalone-js">([\s\S]*?)<\/script>/.exec(html)[1];
+  const wk = /^function wkPick\([\s\S]*?^}/m.exec(js)[0];
+  assert.match(wk.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''), /r\.pauses = [\s\S]*touched\(\);/, 'parent sans rendez-vous : la pause cède et le fichier est marqué à enregistrer');
+});
+
+test('audit 2026-11-22 : type A — une question sans date ne prend pas les « A » d\'une autre séance', () => {
+  const etat = (extra) => setState({
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' }, s2: { id: 's2', nom: 'B', prenom: 'b', classe_id: 'c1' } },
+    evaluations: { e1: Object.assign({ id: 'e1', type: 'A', classId: 'c1', date: '2026-01-17', dates: { c1: '2026-01-17' },
+      miniNotes: [{ id: 'i1', max: 5, dates: { c1: '2026-01-10' } }, { id: 'i2', max: 5, dates: { c1: '2026-01-17' } }, { id: 'i3', max: 5 }],
+      notes: { s2: { values: { i1: 3, i2: 4 } } } }, extra || {}) },
+    attendance: { c1: { r1: { id: 'r1', date: '2026-01-17', absents: ['s1'], retards: {} } } },
+  });
+  etat();
+  assert.equal(get(`_evalAutoFillAbsentsForEvalClass(S.evaluations.e1, 'c1')`), 1);
+  assert.deepEqual(get('S.evaluations.e1.notes.s1.values'), { i2: 'A' }, 'absent le 17 : « A » en I2 seulement, pas en I3 (sans date)');
+  // Devoir d'un seul jour (aucune question datée) : la date du devoir vaut pour toutes.
+  etat({ miniNotes: [{ id: 'i1', max: 5 }, { id: 'i2', max: 5 }] });
+  assert.equal(get(`_evalAutoFillAbsentsForEvalClass(S.evaluations.e1, 'c1')`), 2);
+});
+
+test('audit 2026-11-22 : type B — un 0 tapé (vu, non évalué) ne devient pas « A »', () => {
+  setState({
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'A', prenom: 'a', classe_id: 'c1' } },
+    evaluations: { e1: { id: 'e1', type: 'B', classId: 'c1', passations: [{ id: 'p1', competenceIds: ['k1', 'k2'], dates: { c1: '2026-01-05' }, niveaux: { s1: { k1: 0 } } }] } },
+    attendance: { c1: { r1: { id: 'r1', date: '2026-01-05', absents: ['s1'], retards: {} } } },
+  });
+  assert.equal(get(`_evalAutoFillAbsentsForPass(S.evaluations.e1, S.evaluations.e1.passations[0], 'c1')`), 1);
+  assert.deepEqual(get('S.evaluations.e1.passations[0].niveaux.s1'), { k1: 0, k2: 'A' });
+});
+
+test('audit 2026-11-22 : classeur des notes — copie annulée au minimum aussi en type B', () => {
+  const fs = require('fs'), path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const reads = src.match(/lvl = _computeStudentCompetenceLevel\(ev, stu\.id, [\w.]+\);[^\n]*/g) || [];
+  assert.equal(reads.length, 2, 'les deux feuilles (Synthèse, Compétences) lisent le niveau du type B');
+  for (const l of reads) assert.match(l, /if \(lvl > 0 && _evalCompsVoided\(ev, stu\.id\)\) lvl = _voidedCompLevel\(\);/);
+});
+
+test('audit 2026-11-22 : fusion — deux appels hors créneau du même jour sont distincts', () => {
+  const base = _mgBase();
+  base.attendance.c1 = { a0: { id: 'a0', date: '2026-11-21', slotId: null, label: 'Matin', absents: ['s1'] } };
+  setState(base);
+  const o = _mgOther();
+  o.attendance = { c1: {
+    am: { id: 'am', date: '2026-11-21', slotId: null, label: 'Matin', absents: ['s1'] },        // le même qu'ici (autre id) : gardé ici
+    pm: { id: 'pm', date: '2026-11-21', slotId: null, label: 'Après-midi', absents: ['s2'] },   // un autre : à reprendre
+    p2: { id: 'p2', date: '2026-11-21', slotId: null, label: 'Soir', absents: [] },
+  } };
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(o)}, null)`);
+  assert.deepEqual(plan.items.filter(i => i.key.startsWith('att:')).map(i => i.key).sort(), ['att:c1:p2', 'att:c1:pm']);
+  assert.ok(plan.info.some(t => /le même appel existe déjà ici/.test(t)));
+});
+
+test('audit 2026-11-22 : fusion — devoir étendu à une autre classe, la classe et ses dates suivent', () => {
+  const base = _mgBase();
+  base.classes.c2 = { id: 'c2', nom: '6B', eleves: ['s3'] };
+  base.eleves.s3 = { id: 's3', nom: 'C', prenom: 'c', classe_id: 'c2' };
+  base.evaluations.e1.classIds = ['c1']; base.evaluations.e1.dates = { c1: '2026-11-10' };
+  setState(base);
+  const o = JSON.parse(JSON.stringify(base));
+  o.evaluations.e1.classIds = ['c1', 'c2']; o.evaluations.e1.dates = { c1: '2026-11-10', c2: '2026-11-12' };
+  o.evaluations.e1.miniNotes[0].dates = { c2: '2026-11-12' };
+  o.evaluations.e1.notes.s3 = { values: { q1: 5 } };
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(o)}, null)`);
+  assert.match(plan.items.find(i => i.key === 'ev:e1').detail, /étendu à 6B/);
+  ev(`_mergeRun(S, ${JSON.stringify(o)}, new Set(['ev:e1']))`);
+  assert.deepEqual(get('S.evaluations.e1.classIds'), ['c1', 'c2']);
+  assert.deepEqual(get('S.evaluations.e1.dates'), { c1: '2026-11-10', c2: '2026-11-12' });
+  assert.deepEqual(get('S.evaluations.e1.miniNotes[0].dates'), { c2: '2026-11-12' });
+  assert.equal(get(`_evalIncludesClass(S.evaluations.e1, 'c2')`), true);
+  assert.equal(get('S.evaluations.e1.notes.s3.values.q1'), 5);
+});
+
+test('audit 2026-11-22 : fusion — ce qui diffère hors appels et devoirs est signalé, jamais « tout est déjà ici »', () => {
+  const base = _mgBase();
+  setState(base);
+  const o = JSON.parse(JSON.stringify(base));
+  o.eleves.s1.oublis = 3; o.reunions = { r1: { id: 'r1', titre: 'Sixièmes' } };
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(o)}, null)`);
+  assert.deepEqual(plan.items, []);
+  const line = plan.info.find(t => /diffère aussi sur/.test(t));
+  assert.ok(line, 'une ligne dit ce qui diffère');
+  assert.match(line, /1 fiche d'élève/); assert.match(line, /les réunions/);
+  // Deux versions identiques (ordre des clés différent) : rien à signaler.
+  const same = { seatingSnapshots: {}, evaluations: base.evaluations, attendance: base.attendance, eleves: base.eleves, classes: base.classes };
+  assert.deepEqual(get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(same)}, null)`), { items: [], info: [] });
+});
+
+test('audit 2026-11-22 : fusion — clés héritées, doublon de devoir, barème, expression, élève fantôme', () => {
+  const base = _mgBase();
+  base.evaluations.e1.notes = { s1: { values: { q1: 4 } }, s2: { values: {} } };
+  setState(base);
+  const o = _mgOther();
+  // Classe « toString » : ni existante ici, ni créée dans Object.prototype.
+  o.attendance.toString = { rT: { id: 'rT', date: '2026-01-01', absents: [] } };
+  // Même devoir créé séparément là-bas (autre id, même nom, même type, même classe) : décoché.
+  o.evaluations.eX = { id: 'eX', type: 'A', classId: 'c1', nomCourt: 'ds1 ', miniNotes: [{ id: 'q1', max: 5 }], notes: { s1: { values: { q1: 1 } } } };
+  // Barème réduit ici (q2 sur 5 ici, 9 saisi là-bas) et expression d'une case gardée.
+  o.evaluations.e1.notes = { s1: { values: { q1: 3, q2: 9 }, exprs: { q1: '2+1', q2: '4+5' } } };
+  // Remarque d'un élève qui n'existe que là-bas, dans une classe connue.
+  o.bulletinRemarques = { c1: { d1: { s9: { T1: 'fantôme' }, s1: { T1: 'Bien' } } } };
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(o)}, null)`);
+  assert.equal(ev('Object.prototype.hasOwnProperty.call(Object.prototype.toString, "rT")'), false);
+  assert.ok(!plan.items.some(i => /toString/.test(i.key)));
+  assert.ok(plan.info.some(t => /sa classe n'existe pas ici/.test(t)));
+  const dup = plan.items.find(i => i.key === 'evnew:eX');
+  assert.equal(dup.unchecked, true); assert.match(dup.detail, /même nom existe déjà ici/);
+  assert.match(plan.items.find(i => i.key === 'ev:e1').detail, /1 note au-dessus du barème d'ici/);
+  ev(`_mergeRun(S, ${JSON.stringify(o)}, new Set(['ev:e1', 'rem']))`);
+  assert.deepEqual(get('S.evaluations.e1.notes.s1.values'), { q1: 4, q2: 9 });
+  assert.deepEqual(get('S.evaluations.e1.notes.s1.exprs'), { q2: '4+5' }, "l'expression de la case gardée (q1) ne vient pas de l'autre version");
+  assert.deepEqual(get('S.bulletinRemarques'), { c1: { d1: { s1: { T1: 'Bien' } } } });
+});
+
+test('audit 2026-11-22 : fusion — compétence et discipline créées là-bas suivent le devoir repris', () => {
+  const base = _mgBase();
+  base.competences = { k1: { id: 'k1', code: 'K1', name: '', domainId: '' } }; base.competenceDomains = {}; base.disciplines = { d0: { id: 'd0', nom: 'PC', isPrimary: true } };
+  setState(base);
+  const o = _mgOther();
+  o.competences = { k1: { id: 'k1', code: 'K1' }, k7: { id: 'k7', code: 'K7', name: 'Mesurer', domainId: 'dm' } };
+  o.competenceDomains = { dm: { id: 'dm', code: 'D4', name: 'Domaine 4' } };
+  o.disciplines = { d0: { id: 'd0', nom: 'PC', isPrimary: true }, d5: { id: 'd5', nom: 'EPI', isPrimary: true } };
+  o.evaluations.e2 = { id: 'e2', type: 'D', classId: 'c1', nomCourt: 'TP', disciplineId: 'd5', miniNotes: [{ id: 'q1', competenceIds: ['k1', 'k7'] }], notes: {} };
+  const plan = get(`_mergeRun(JSON.parse(JSON.stringify(S)), ${JSON.stringify(o)}, null)`);
+  assert.match(plan.items.find(i => i.key === 'evnew:e2').detail, /1 compétence créée là-bas et sa discipline/);
+  ev(`_mergeRun(S, ${JSON.stringify(o)}, new Set(['evnew:e2']))`);
+  assert.equal(get('S.competences.k7.code'), 'K7'); assert.equal(get('S.competenceDomains.dm.code'), 'D4');
+  assert.equal(get('S.disciplines.d5.isPrimary'), false, 'une seule discipline principale');
+});
+
+test('audit 2026-11-22 : Export ENT — la copie garde nom et remarque contre les formules', () => {
+  const src = ev('_evalExportToTSV.toString()');
+  assert.match(src, /_csvCellGuard\(r\.name\)/);
+  assert.match(src, /_csvCellGuard\(\(r\.remarque/);
+});

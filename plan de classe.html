@@ -93,6 +93,19 @@ body.tableur-lisere #meval-tableur-wrap td.meval-active-foot { background: var(-
 #meval-tableur-wrap tr.meval-active-row > td.meval-active-name *,
 #meval-tableur-wrap th.meval-active-head *:not(input):not(button):not(select),
 #meval-tableur-wrap td.meval-active-foot *:not([class*="pill"]) { color: #1a252f !important; }
+/* Sobriété : la pastille de moyenne du pied devient transparente et prend l'encre du thème —
+   ambre sur le jaune en nuit (1,63:1). Sur le pied actif, l'encre fixe du surligneur. */
+body.tableur-sobr-notes #meval-tableur-wrap td.meval-active-foot .stat-pill-note,
+body.tableur-sobr-comps #meval-tableur-wrap td.meval-active-foot .stat-pill-comp { color: #1a252f !important; }
+/* Cases pleines + sobriété : la règle de sobriété (fond transparent, plus spécifique) effaçait
+   la croix des cases. Elle y redevient le jaune du mode pastilles. */
+body:not(.tableur-lisere).tableur-sobr-notes #meval-tableur-wrap tr.meval-active-row > td.meval-cell-note,
+body:not(.tableur-lisere).tableur-sobr-notes #meval-tableur-wrap td.meval-active-col.meval-cell-note,
+body:not(.tableur-lisere).tableur-sobr-comps #meval-tableur-wrap tr.meval-active-row > td.meval-cell-comp,
+body:not(.tableur-lisere).tableur-sobr-comps #meval-tableur-wrap td.meval-active-col.meval-cell-comp { background: var(--cross-hl) !important; }
+/* « disp. » sur la croix : --pencil est calibré sur le papier (3,77:1 sur le jaune en nuit). */
+#meval-tableur-wrap tr.meval-active-row > td.meval-cell-disp,
+#meval-tableur-wrap td.meval-cell-disp.meval-active-col { color: var(--cell-meta); }
 @keyframes hdrPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.85}}
 #hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
 
@@ -2086,6 +2099,7 @@ input.reu-ed{width:100%;height:27px;padding:2px 6px !important}
 .reu-soir.parent{grid-template-columns:minmax(0,900px)}
 .reu-soir.parent .reu-soir-list,.reu-soir.parent .reu-priv{display:none}
 .reu-soir-list{background:var(--paper);border:1px solid var(--rule-line);border-radius:var(--radius-md,5px);padding:4px 6px;max-height:calc(100vh - 210px);overflow-y:auto}
+.reu-soir-list.empty{min-height:300px}   /* sans rendez-vous, la liste ne mesure que la saisie : les suggestions du parent sans rendez-vous y étaient rognées */
 .reu-row{display:grid;grid-template-columns:48px 34px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 6px;border-bottom:1px solid var(--rule-line-soft);cursor:pointer;color:var(--ink-deep)}
 .reu-row:hover{background:var(--paper-warm)}
 .reu-row.sel{background:var(--info-bg);box-shadow:inset 3px 0 0 var(--ink-blue)}
@@ -3060,6 +3074,7 @@ tr.bf-hide { display:none; }
 #mhist .hh-add { padding:6px 4px 2px; font-size:.85em; }
 #mhist .hh-edit { padding:8px 6px; margin:2px 0; border:1px solid var(--ink-blue-soft); border-radius:var(--radius-md,5px); background:var(--paper-warm); display:flex; flex-direction:column; gap:6px; font-size:.9em; color:var(--ink-deep); }
 #mhist .hh-edit-f { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+#mhist .hh-edit-f[hidden] { display:none; }
 #mhist .hh-slot { border:1px solid var(--rule-line); background:var(--paper); color:var(--ink-deep); border-radius:999px; padding:1px 9px; cursor:pointer; font:500 .85em var(--font-mono); }
 #mhist .hh-slot.on { background:var(--chip-on-bg); border-color:var(--chip-on-bg); color:#fff; }
 #mhist .hh-clear { background:none; border:none; padding:0; color:var(--pencil); font:.85em var(--font-sans); cursor:pointer; text-decoration:underline; }
@@ -8214,7 +8229,7 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
       <span id="appDialog-icon" style="font-size:1.6em;line-height:1;flex-shrink:0"></span>
       <h2 id="appDialog-title" style="font-size:1.05em;margin:0;flex:1;line-height:1.35"></h2>
     </div>
-    <div id="appDialog-msg" style="font-size:.92em;line-height:1.5;color:#333;white-space:pre-wrap"></div>
+    <div id="appDialog-msg" style="font-size:.92em;line-height:1.5;color:var(--ink-deep);white-space:pre-wrap"></div>
     <div id="appDialog-btns" style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap"></div>
   </div>
 </div>
@@ -8469,9 +8484,10 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
   /* ── Suivi des enregistrements de MBN (requêtes envoyées par la page) ── */
   /* Chaque enregistrement de MBN renvoie le champ NOTATIONS de TOUTE la classe : une requête
      refusée (503 : trop rapprochée) est donc rattrapée par le premier enregistrement réussi
-     qui la suit. srvErr garde l'élève en cours (who) et le rang de la requête (i) ; okPost =
-     rang du dernier POST réussi. */
-  var XS = XMLHttpRequest.prototype.send, XO = XMLHttpRequest.prototype.open, pend = 0, saves = 0, srvErr = [], reqs = 0, okPost = 0, curWho = '';
+     qui la suit. srvErr garde l'élève en cours (who), le rang de la requête (i) et app (refus
+     dit par MBN dans une réponse 200, avec son message) ; okPost = rang du dernier POST
+     réussi, okWho = le même par élève. */
+  var XS = XMLHttpRequest.prototype.send, XO = XMLHttpRequest.prototype.open, pend = 0, saves = 0, srvErr = [], reqs = 0, okPost = 0, curWho = '', okWho = {}, failRun = 0, retryOff = false;
   function hook() {
     if (hooked) return; hooked = true;
     XMLHttpRequest.prototype.open = function (m) { this.__pdcPost = /^post$/i.test(String(m || '')); return XO.apply(this, arguments); };
@@ -8479,16 +8495,16 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
       var x = this, who = curWho, n = ++reqs; pend++;
       x.addEventListener('loadend', function () {
         pend--; saves++;
-        var txt = '', bad = ''; try { txt = x.responseText; } catch (e) {}
+        var txt = '', bad = '', app = false; try { txt = x.responseText; } catch (e) {}
         if (x.status && x.status !== 200) bad = 'réponse ' + x.status;
         else {
           try {
             var j = JSON.parse(txt);
-            if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status)))) bad = String(j.message || j.status);
+            if (j && (j.status === false || /err|ko|fail|echec|échec/i.test(String(j.status)))) { bad = String(j.message || j.status); app = true; }
           } catch (e) {}
         }
-        if (bad) srvErr.push({ who: who, msg: bad, i: n });
-        else if (x.__pdcPost && x.status === 200 && n > okPost) okPost = n;
+        if (bad) srvErr.push({ who: who, msg: bad, i: n, app: app });
+        else if (x.__pdcPost && x.status === 200) { if (n > okPost) okPost = n; if (who && !(okWho[who] > n)) okWho[who] = n; }
       });
       return XS.apply(this, arguments);
     };
@@ -8503,15 +8519,24 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
   /* Refus non rattrapé pour l'élève en cours : on renvoie son panneau (événement « change »
      sur une case déjà remplie, valeur inchangée), jusqu'à trois fois, en patientant de plus en
      plus longtemps. Vrai quand tous les refus sont suivis d'un enregistrement réussi. Ne sert
-     qu'en cas de refus : un remplissage sans refus n'attend rien de plus. */
+     qu'en cas de refus : un remplissage sans refus n'attend rien de plus.
+     Deux bornes (audit du 2026-11-22) :
+     - l'essai a été enregistré (un POST réussi de plus) mais MBN a de nouveau refusé la requête
+       qu'il enchaîne lui-même (motif) : recommencer referait la même chose, on s'arrête là ;
+     - aucun enregistrement ne passe en trois essais, pour deux élèves de suite : MBN refuse
+       tout (session expirée, panne) — on n'attend plus pour les suivants (retryOff), sinon le
+       bilan arrivait après plusieurs minutes. */
   async function resave(el) {
-    if (!el) return false;
+    if (!el || retryOff) return false;
     for (var t = 1; t <= 3; t++) {
+      var ok0 = okPost;
       await sleep(1500 * t);
       fire(el, ['change']);
       await settle(500);
-      if (okPost > lastErr()) return true;
+      if (okPost > lastErr()) { failRun = 0; return true; }
+      if (okPost > ok0) { failRun = 0; return false; }
     }
+    if (++failRun >= 2) retryOff = true;
     return false;
   }
   function lastErr() { return srvErr.length ? srvErr[srvErr.length - 1].i : 0; }
@@ -8608,7 +8633,7 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
 
   /* ── Étape 3 : remplissage ── */
   async function run() {
-    running = true; stopAsked = false; srvErr = []; saves = 0; reqs = 0; okPost = 0; curWho = '';
+    running = true; stopAsked = false; srvErr = []; saves = 0; reqs = 0; okPost = 0; curWho = ''; okWho = {}; failRun = 0; retryOff = false;
     hook();
     var done = 0, changed = 0, probs = [];
     FOOT.innerHTML = '';
@@ -8670,25 +8695,47 @@ Redemander : efface ces choix, la question reviendra à la prochaine impression.
         } catch (e) { probs.push(who + ' : ' + (e && e.message || e)); if (/ne répond plus/.test(String(e && e.message))) break; }
       }
       /* Dernier filet : un refus resté sans enregistrement réussi après lui (sur le dernier
-         élève, par exemple) — on renvoie le panneau ouvert, ce qui renvoie toute la classe. */
+         élève, par exemple) — on renvoie le panneau ouvert, ce qui renvoie toute la classe.
+         Même choix de case que dans la boucle : le motif s'il y en a un, sinon la note. Les
+         requêtes restent comptées pour le dernier élève (c'est son panneau). */
+      try {
+        await settle(700);
+        if (lastErr() > okPost && MBN.aside) {
+          var nnL = $('[id$="eleve__non-notation"]', MBN.aside), ntL = $('[id$="eleve__note"]', MBN.aside);
+          await resave((nnL && nnL.value) ? nnL : (ntL || nnL));
+        }
+      } catch (e) {}
       curWho = '';
-      try { await settle(700); if (lastErr() > okPost && MBN.aside) await resave($('[id$="eleve__non-notation"]', MBN.aside) || $('[id$="eleve__note"]', MBN.aside)); } catch (e) {}
     } finally {
       unhook(); running = false; compact(false);
     }
     var html = '';
     /* Refus rattrapé = suivi d'un enregistrement réussi (qui a renvoyé toute la classe). */
-    var lost = [], fixedWho = [], lostWho = [];
+    /* Trois cas pour un refus :
+       - suivi d'un enregistrement réussi : rattrapé (fixed) ; si MBN l'a dit lui-même dans une
+         réponse normale (app), son message est tout de même montré ;
+       - juste après un enregistrement réussi du MÊME élève, lui-même venu après un premier
+         refus (donc un réessai passé) : c'est la requête que MBN enchaîne tout seul (chained) —
+         la saisie est partie, on demande de vérifier l'élève sans crier à l'échec ;
+       - sinon : perdu (lost). */
+    var lost = [], fixedWho = [], lostWho = [], chainedWho = [], appMsgs = [], nFixed = 0;
+    var errBefore = function (w, r) { for (var y = 0; y < srvErr.length; y++) if (srvErr[y].who === w && srvErr[y].i < r) return true; return false; };
     for (var z = 0; z < srvErr.length; z++) {
-      var se = srvErr[z], lbl = se.who;   /* vide : renvoi final de la classe, pas un élève */
-      if (se.i < okPost) { if (lbl && fixedWho.indexOf(lbl) < 0) fixedWho.push(lbl); }
+      var se = srvErr[z], lbl = se.who;   /* vide : requête partie hors d'un élève */
+      if (se.i < okPost) {
+        if (se.app) { var am = (lbl ? lbl + ' : ' : '') + se.msg; if (appMsgs.indexOf(am) < 0) appMsgs.push(am); }
+        else { nFixed++; if (lbl && fixedWho.indexOf(lbl) < 0) fixedWho.push(lbl); }
+      }
+      else if (lbl && !se.app && okWho[lbl] === se.i - 1 && errBefore(lbl, okWho[lbl])) { if (chainedWho.indexOf(lbl) < 0) chainedWho.push(lbl); }
       else { lost.push(se); if (lbl && lostWho.indexOf(lbl) < 0) lostWho.push(lbl); }
     }
-    var ok = !probs.length && !lost.length && !stopAsked;
+    var ok = !probs.length && !lost.length && !chainedWho.length && !appMsgs.length && !stopAsked;
     html += note((stopAsked ? '⏹ Arrêté à ta demande. ' : '') + '<strong>' + done + ' / ' + PLAN.length + '</strong> élève(s) traité(s), dont ' + changed + ' modifié(s) · ' + saves + ' enregistrement(s) envoyé(s) par MBN.', ok ? 'ok' : 'warn');
-    if (lost.length) html += note('MBN a refusé des enregistrements, même après trois nouveaux essais (' + esc(lost[0].msg) + ') — '
+    if (lost.length) html += note('MBN a refusé des enregistrements' + (retryOff ? ' pour plusieurs élèves de suite, malgré de nouveaux essais (les essais ont alors été arrêtés pour ne pas te faire attendre)' : ', même après de nouveaux essais') + ' (' + esc(lost[0].msg) + ') — '
       + (lostWho.length ? 'vérifie dans MBN : ' + esc(lostWho.join(', ')) + '.' : 'recharge la page de MBN et vérifie quelques élèves.'), 'err');
-    if (srvErr.length > lost.length) html += '<p style="color:#56697f;font-size:12.5px;margin:0 0 10px">ℹ️ MBN a refusé sur le moment ' + (srvErr.length - lost.length) + ' requête(s) trop rapprochée(s)' + (fixedWho.length ? ' (' + esc(fixedWho.join(', ')) + ')' : '') + ' ; un enregistrement réussi a suivi : rien n\'est perdu.</p>';
+    if (chainedWho.length) html += note('Pour ' + esc(chainedWho.join(', ')) + ', MBN a bien reçu l\'enregistrement, puis a refusé la requête qu\'il enchaîne lui-même : vérifie ' + (chainedWho.length > 1 ? 'ces élèves' : 'cet élève') + ' dans MBN.', 'warn');
+    if (appMsgs.length) html += note('MBN a répondu, avant d\'accepter un enregistrement suivant :<br>' + appMsgs.map(esc).join('<br>') + '<br>Vérifie ' + (appMsgs.length > 1 ? 'ces élèves' : 'cet élève') + ' dans MBN.', 'warn');
+    if (nFixed) html += '<p style="color:#56697f;font-size:12.5px;margin:0 0 10px">ℹ️ MBN a refusé sur le moment ' + nFixed + ' requête(s) trop rapprochée(s)' + (fixedWho.length ? ' (' + esc(fixedWho.join(', ')) + ')' : '') + ' ; un enregistrement réussi a suivi : rien n\'est perdu.</p>';
     if (probs.length) html += note('À vérifier :<br>' + probs.map(esc).join('<br>'), 'warn');
     html += '<p>Vérifie quelques élèves dans MBN, puis termine comme d\'habitude.</p>';
     BODY.innerHTML = html;
@@ -9532,7 +9579,8 @@ function wkPick(sid) {
   if (has) { V.cur = has[0]; V.wkQ = ''; render(); return toast(nameTxt(sid) + ' a déjà rendez-vous à ' + has.map(fmt).join(' et ') + ' : ce rendez-vous est affiché.'); }
   var k = walkKey(r, (ti && ti.value) || V.wkT || wkDefaultT(r));
   if (!k) { toast('Indique une heure valide.'); if (ti) ti.focus(); return; }
-  change(); r.slots[k.t] = k.x ? { sid: sid, note: '', st: 'vu', x: true } : { sid: sid, note: '', st: 'vu' }; // il est là : déjà vu r.pauses = (r.pauses || []).filter(function (p) { return p !== k.t; }); touched();
+  change(); r.slots[k.t] = k.x ? { sid: sid, note: '', st: 'vu', x: true } : { sid: sid, note: '', st: 'vu' }; /* il est là : déjà vu */
+  r.pauses = (r.pauses || []).filter(function (p) { return p !== k.t; }); touched();
   V.cur = k.t; V.wkQ = ''; V.wkT = null; V.acIdx = 0; render();
   var n = document.getElementById('note'); if (n) n.focus();
   toast(nameTxt(sid) + ' → ' + fmt(k.t) + (k.x ? ' (intercalé)' : '') + ' — ↩ Annuler pour revenir en arrière');
@@ -10135,11 +10183,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.167.1';
+const APP_VERSION    = '2.168.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-22T21:40:22Z';
+const APP_BUILD_DATE = '2026-11-22T22:48:24Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -13007,6 +13055,7 @@ function undoLast() {
   updateUndoRedoUI();
   save();
   refreshSelector();
+  if (typeof _reu !== 'undefined') _reu.focused = null;   // Réunions « Ce soir » : la classe du bandeau, restaurée avec l'état, se recale sur le rendez-vous affiché
   const at = document.querySelector('.tab.on');
   if (at) renderTab(at.id.replace('tab-',''));
   _refreshOpenEvalModals();
@@ -13017,7 +13066,7 @@ function undoLast() {
 function redoLast() {
   closeCtxMenu();
   if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
-  if (!redoStack.length) return toast('Rien à refaire.');
+  if (!redoStack.length) return toast('Rien à rétablir.');
   undoStack.push(JSON.stringify(S));
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   const _preMy = (S.clock && S.clock[_DEVICE_ID]) || 0;
@@ -13031,11 +13080,12 @@ function redoLast() {
   updateUndoRedoUI();
   save();
   refreshSelector();
+  if (typeof _reu !== 'undefined') _reu.focused = null;   // cf. undoLast
   const at = document.querySelector('.tab.on');
   if (at) renderTab(at.id.replace('tab-',''));
   _refreshOpenEvalModals();
   _refreshOpenConsultModals();
-  toast('↪ Action refaite.');
+  toast('↪ Action rétablie.');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -13782,6 +13832,9 @@ function _confRefresh() {
   if (document.getElementById('moverview')?.classList?.contains('on') && typeof renderOverview === 'function') renderOverview();
   if (document.getElementById('matt')?.classList?.contains('on') && typeof _attRender === 'function') _attRender();
   if (document.getElementById('mattPlan')?.classList?.contains('on') && typeof renderMattPlan === 'function') renderMattPlan();
+  // Tableur ouvert : l'encart et la grande photo de l'élève suivent tout de suite (ils restaient
+  // affichés pour un élève qu'on venait de re-masquer, jusqu'au changement de ligne).
+  if (document.getElementById('meval-tableur')?.classList?.contains('on') && typeof _mnpRender === 'function') _mnpRender();
 }
 // Cellule du plan pour un élève masqué : place et nom — rien d'autre (ni couleur
 // de groupe/tag/genre, ni badge, ni compteur, ni état d'appel, ni alerte de contrainte).
@@ -13822,6 +13875,15 @@ function _ficheGo(what, tab, periode) {
   if (!sid || !S.eleves[sid]) return;
   const target = { edit: 'me', hist: 'mhist', rem: 'mreminders', notes: 'mnotes' }[what];
   if (!target) return;
+  // Fiche détachée (🗗) : ces fenêtres s'ouvrent dans la fenêtre principale. Sans ce renvoi,
+  // _rwParenthesis fermait la fiche (closeMod2('mrw') y vaut window.close()) — vu au clic et à
+  // Entrée sur une pastille de vie de classe.
+  if (_isFicheWin()) {
+    const q = v => v == null ? 'undefined' : `'${_escJsAttr(String(v))}'`;
+    _rwHideTip();
+    _ficheWinForward(`_ficheGo(${q(what)},${q(tab)},${q(periode)})`);
+    return;
+  }
   _rwParenthesis(target, () => {
     if (what === 'edit') {
       openEdit(sid);
@@ -20934,9 +20996,24 @@ function _histEditStart(idx) {
   renderHist();
   setTimeout(() => document.querySelector('#mhist-list .hh-edit select, #mhist-list .hh-edit input')?.focus(), 30);
 }
-function _histEditSet(k, v) { if (!_histDraft) return; _histDraft[k] = v; renderHist(); }
+// ⚠️ Pas de renderHist() ici : il recrée la ligne d'édition, et Chrome émet « change » à chaque
+// segment d'un champ date ou heure — le focus sautait après le premier chiffre tapé (audit du
+// 2026-11-22). Seuls le créneau déduit et les boutons de créneau sont remis à jour, sur place.
+function _histEditSet(k, v) {
+  if (!_histDraft) return;
+  _histDraft[k] = v;
+  const box = document.querySelector('#mhist-list .hh-edit'), s = S.eleves[mhistTargetSid];
+  if (!box || !s) return renderHist();
+  const p = _histEditParts(s);
+  const meta = box.querySelector('.hh-cur'), sl = box.querySelector('.hh-slots'), ti = box.querySelector('input[type="time"]');
+  if (meta) meta.textContent = p.meta;
+  if (sl) { sl.innerHTML = p.slots; sl.hidden = !p.slots; }
+  if (k === 'time' && ti && ti.value !== v) ti.value = v;
+}
 function _histEditCancel() { _histDraft = null; renderHist(); }
 function _histEditKey(e) {
+  // Entrée sur un bouton (Annuler, un créneau) joue CE bouton, pas l'enregistrement.
+  if (e.key === 'Enter' && e.target?.closest?.('button')) return;
   if (e.key === 'Enter') { e.preventDefault(); _histEditSave(); }
   else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _histEditCancel(); }
 }
@@ -20984,21 +21061,27 @@ function _histEditSave() {
   renderTeacherGrid();
   toast(`${d.idx === 'new' ? 'Ajouté' : 'Corrigé'} : ${d.type === 'oubli' ? '📦 matériel oublié' : d.type === 'nt' ? '📝 travail non fait' : '🔔 rappel traité'} le ${_fmtDateFr(d.date)} à ${d.time.replace(':', 'h')} (Ctrl+Z pour annuler)`);
 }
+// Ce qui dépend de la date et de l'heure saisies : le créneau déduit et les boutons du jour.
+function _histEditParts(s) {
+  const d = _histDraft;
+  const slots = d.date ? _histDaySlots(s, d.date) : [];
+  const cur = slots.find(sl => d.time >= sl.start && d.time < sl.end);
+  const btns = slots.map(sl => `<button type="button" class="hh-slot${cur === sl ? ' on' : ''}" onclick="_histEditSet('time','${_escJsAttr(sl.start)}')" title="${_escAttr((sl.label || sl.id) + ' : ' + sl.start + ' – ' + sl.end)}">${_esc(sl.label || sl.id)}</button>`).join('');
+  return { meta: cur ? '→ ' + (cur.label || cur.id) : slots.length ? 'hors créneau' : '', slots: btns ? '<span class="hh-meta">Créneaux du jour :</span>' + btns : '' };
+}
 function _histEditRowHTML(s) {
   const d = _histDraft;
   const isRap = d.type === 'rappel_fait';
   const opt = (v, l) => `<option value="${v}"${d.type === v ? ' selected' : ''}>${l}</option>`;
-  const slots = _histDaySlots(s, d.date);
-  const cur = slots.find(sl => d.time >= sl.start && d.time < sl.end);
-  const slotBtns = slots.map(sl => `<button type="button" class="hh-slot${cur === sl ? ' on' : ''}" onclick="_histEditSet('time','${_escJsAttr(sl.start)}')" title="${_escAttr((sl.label || sl.id) + ' : ' + sl.start + ' – ' + sl.end)}">${_esc(sl.label || sl.id)}</button>`).join('');
+  const parts = _histEditParts(s);
   return `<div class="hh-edit" onkeydown="_histEditKey(event)">
       <div class="hh-edit-f">
         ${isRap ? '<span>🔔 Rappel traité</span>' : `<select aria-label="Type" onchange="_histEditSet('type',this.value)">${opt('oubli', '📦 Matériel oublié')}${opt('nt', '📝 Travail non fait')}</select>`}
         <input type="date" value="${_escAttr(d.date)}" aria-label="Date" onchange="_histEditSet('date',this.value)">
         <input type="time" value="${_escAttr(d.time)}" aria-label="Heure" onchange="_histEditSet('time',this.value)">
-        <span class="hh-meta">${cur ? '→ ' + _esc(cur.label || cur.id) : slots.length ? 'hors créneau' : ''}</span>
+        <span class="hh-meta hh-cur">${_esc(parts.meta)}</span>
       </div>
-      ${slotBtns ? `<div class="hh-edit-f"><span class="hh-meta">Créneaux du jour :</span>${slotBtns}</div>` : ''}
+      <div class="hh-edit-f hh-slots"${parts.slots ? '' : ' hidden'}>${parts.slots}</div>
       <div class="hh-edit-f" style="justify-content:flex-end">
         <button type="button" class="btn btn-g btn-sm" onclick="_histEditCancel()">Annuler</button>
         <button type="button" class="btn btn-p btn-sm" onclick="_histEditSave()">✓ Enregistrer</button>
@@ -30299,10 +30382,22 @@ function _reuNav(d) {
 // parcourue depuis la réunion) : le reste du logiciel se place sur lui — sa classe devient
 // la classe affichée, il devient l'élève affiché du mode confidentiel, et la fiche détachée
 // (🗗) passe sur lui. Sans redessiner l'onglet Réunions (l'appelant l'a fait ou va le faire).
+// Un appel commencé (ou un appel passé en cours de correction) et des contraintes en cours de
+// saisie appartiennent à la classe du bandeau : switchClass les effacerait sans rien demander
+// (audit du 2026-11-22). Tant qu'ils sont ouverts, la classe ne suit pas le rendez-vous — dit
+// une fois par classe.
+function _reuClassBusy() {
+  if (!(_appelMode || _editingAttendanceId || _planCstrMode)) return false;
+  if (_reu.busyWarn !== S.cur) {
+    _reu.busyWarn = S.cur;
+    toast(`⚠️ ${_appelMode || _editingAttendanceId ? 'Appel en cours' : 'Contraintes en cours de saisie'} en ${S.classes[S.cur]?.nom || S.cur} : la classe du bandeau ne change pas. Termine d'abord sur le Plan.`, 'warn');
+  }
+  return true;
+}
 function _reuFocusStudent(r, sid, opts) {
   if (_isReadOnlyWin() || !r || !sid || !S.eleves[sid]) return;
   const cid = _reuClsOf(r, sid);
-  if (cid && cid !== S.cur && S.classes[cid]) switchClass(cid, { noRender: true });
+  if (cid && cid !== S.cur && S.classes[cid] && !_reuClassBusy()) switchClass(cid, { noRender: true });
   if (_conf.on && _conf.sid !== sid) { _conf.sid = sid; _confSave(); _confRefresh(); }
   if (!opts?.noPush) {
     const list = _reuAllTimes(r).map(t => r.slots?.[t]?.sid).filter((x, i, a) => x && S.eleves[x] && a.indexOf(x) === i);
@@ -30421,7 +30516,7 @@ function _reuSoirHTML(r) {
       </span>
     </div>
     <div class="reu-soir${_reu.parent ? ' parent' : ''}">
-      <div class="reu-soir-list">${walk}${booked.length ? rows : '<p class="reu-help" style="padding:4px 6px">Aucun rendez-vous pour l\'instant : prends-les dans <strong>✍ Préparer</strong>, ou inscris ci-dessus un parent qui se présente.</p>'}</div>
+      <div class="reu-soir-list${booked.length ? '' : ' empty'}">${walk}${booked.length ? rows : '<p class="reu-help" style="padding:4px 6px">Aucun rendez-vous pour l\'instant : prends-les dans <strong>✍ Préparer</strong>, ou inscris ci-dessus un parent qui se présente.</p>'}</div>
       <div class="reu-det" id="reu-det">${_reuDetailHTML(r, _reu.cur)}</div>
     </div>`;
 }
@@ -30558,7 +30653,10 @@ function _reuEvDetail(tr) {
 function _reuSeatIn(sid, roomId) {
   const r = _reuGet(_reu.id); if (!r || !S.eleves?.[sid]) return;
   const cid = _reuClsOf(r, sid);
-  if (cid && cid !== S.cur && S.classes[cid]) switchClass(cid, { noRender: true });
+  if (cid && cid !== S.cur && S.classes[cid]) {
+    if (_reuClassBusy()) return;   // la place se choisit dans SA classe
+    switchClass(cid, { noRender: true });
+  }
   const cls = getCls();
   if (cls && roomId && cls.rooms?.[roomId] && cls.activeRoom !== roomId) setActiveRoom(roomId);
   _modalReturnTo['mseatpick'] = () => { if (document.getElementById('tab-reunions')?.classList.contains('on')) renderReunions(); };
@@ -38842,6 +38940,11 @@ const _mgIsObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const _mgEmpty = v => v == null || v === '' || (Array.isArray(v) && !v.length) || (_mgIsObj(v) && !Object.keys(v).length);
 // Copie profonde qui laisse tomber les clés piégées à toute profondeur (défense en plus de _validateImport).
 const _mgClone = v => v == null ? v : JSON.parse(JSON.stringify(v), (k, x) => _MG_BAD_KEY(k) ? undefined : x);
+// Présence d'une clé PROPRE : `obj[k]` seul trouvait « toString » ou « hasOwnProperty » dans la
+// chaîne de prototypes (fichier forgé : une classe nommée ainsi passait pour existante).
+const _mgOwn = (o, k) => _mgIsObj(o) && Object.prototype.hasOwnProperty.call(o, k);
+// Forme canonique (clés triées) pour comparer deux valeurs sans dépendre de l'ordre de saisie.
+const _mgCanon = v => JSON.stringify(v === undefined ? null : v, (k, x) => _mgIsObj(x) ? Object.keys(x).sort().reduce((o, kk) => { o[kk] = x[kk]; return o; }, {}) : x);
 function _mgLeaves(v) {
   if (_mgEmpty(v)) return 0;
   if (Array.isArray(v)) return v.length;
@@ -38854,14 +38957,21 @@ function _mgLeaves(v) {
 // remplace — le code absent « A », que l'app pose d'elle-même d'après l'appel (v2.157.3). Signalé
 // par l'utilisateur (v2.167.1) : copies d'absents corrigées sur une version, « A » sur l'autre → la
 // note de rattrapage ne revenait pas. L'inverse (une note ici, « A » là-bas) garde la note.
-function _mgFill(dst, src, st, keyOk, weak) {
+// `skip` écarte une clé à TOUTE profondeur (élève qui n'existe pas ici, dans une map rangée
+// par classe puis par discipline).
+function _mgFill(dst, src, st, keyOk, weak, skip) {
   if (!_mgIsObj(dst) || !_mgIsObj(src)) return;
   for (const k of Object.keys(src)) {
-    if (_MG_BAD_KEY(k) || (keyOk && !keyOk(k))) continue;
-    const s = src[k], d = dst[k];
+    if (_MG_BAD_KEY(k) || (keyOk && !keyOk(k)) || (skip && skip(k))) continue;
+    const s = src[k], d = _mgOwn(dst, k) ? dst[k] : undefined;
     if (_mgEmpty(s)) continue;
-    if (_mgEmpty(d)) { const c = _mgClone(s); if (_mgEmpty(c)) continue; dst[k] = c; st.filled += _mgLeaves(c); }
-    else if (_mgIsObj(d) && _mgIsObj(s)) _mgFill(d, s, st, null, weak);
+    if (_mgEmpty(d)) {
+      let c = _mgClone(s);
+      if (skip && _mgIsObj(c)) { const t = {}; _mgFill(t, c, { filled: 0, differ: 0 }, null, null, skip); c = t; }
+      if (_mgEmpty(c)) continue;
+      dst[k] = c; st.filled += _mgLeaves(c);
+    }
+    else if (_mgIsObj(d) && _mgIsObj(s)) _mgFill(d, s, st, null, weak, skip);
     else if (weak && weak(d) && !weak(s) && (typeof s === 'number' || typeof s === 'string')) { dst[k] = s; st.rattr = (st.rattr || 0) + 1; }
     else if (JSON.stringify(d) !== JSON.stringify(s)) st.differ++;
   }
@@ -38874,8 +38984,9 @@ function _mgStripSids(ev, sidOk) {
 function _mergeRun(dst, other, keys) {
   const items = [], info = [];
   const want = k => !keys || keys.has(k);
-  const clsName = id => (dst.classes && dst.classes[id] && dst.classes[id].nom) || id;
-  const sidOk = s => !_MG_BAD_KEY(s) && !!(dst.eleves && dst.eleves[s]);
+  const hasCls = id => !_MG_BAD_KEY(id) && _mgOwn(dst.classes, id) && _mgIsObj(dst.classes[id]);
+  const clsName = id => (hasCls(id) && dst.classes[id].nom) || id;
+  const sidOk = s => !_MG_BAD_KEY(s) && _mgOwn(dst.eleves, s) && !!dst.eleves[s];
   const plural = (n, w) => `${n} ${n > 1 ? w.split(' ').map(x => x + 's').join(' ') : w}`;   // « 2 cases différentes »
   // Code absent : « A », ou le code réglé dans les deux versions (une case est « en attente » qu'il soit l'un ou l'autre).
   const absCodes = new Set(['A', (dst.evalPrefs && dst.evalPrefs.codeAbsent) || 'A', (other.evalPrefs && other.evalPrefs.codeAbsent) || 'A']);
@@ -38885,19 +38996,24 @@ function _mergeRun(dst, other, keys) {
     if (_MG_BAD_KEY(cid) || !_mgIsObj(recs)) continue;
     for (const [rid, rec] of Object.entries(recs)) {
       if (_MG_BAD_KEY(rid) || !_mgIsObj(rec)) continue;
-      const mine = (dst.attendance && dst.attendance[cid]) || {};
-      if (mine[rid]) continue;
+      const mine = (_mgOwn(dst.attendance, cid) && _mgIsObj(dst.attendance[cid])) ? dst.attendance[cid] : {};
+      if (_mgOwn(mine, rid)) continue;
       const lbl = `${clsName(cid)} · ${rec.date ? _fmtDateFr(rec.date) : 'sans date'}${rec.label ? ' · ' + rec.label : ''}${rec.groupe ? ' · ' + rec.groupe : ''}`;
-      if (!dst.classes || !dst.classes[cid]) { info.push(`Appel ${lbl} : sa classe n'existe pas ici.`); continue; }
-      const twin = Object.values(mine).find(r => r && r.date === rec.date && (r.slotId || null) === (rec.slotId || null) && (r.groupe || null) === (rec.groupe || null));
-      if (twin) { info.push(`Appel ${lbl} : un appel du même créneau existe déjà ici, il est gardé.`); continue; }
+      if (!hasCls(cid)) { info.push(`Appel ${lbl} : sa classe n'existe pas ici.`); continue; }
+      // Doublon = même jour, même CRÉNEAU, même groupe — la règle de _findExistingAttendance.
+      // ⚠️ Deux appels « Hors créneau » du même jour (matin, après-midi) sont DISTINCTS : sans
+      // créneau, seul un appel au contenu identique est un doublon (le second était écarté à tort).
+      const attSig = r => _mgCanon([Array.isArray(r.absents) ? [...r.absents].sort() : [], _mgIsObj(r.retards) ? r.retards : {}, r.label || '']);
+      const twin = Object.values(mine).find(r => r && r.date === rec.date && (r.groupe || null) === (rec.groupe || null)
+        && (rec.slotId || r.slotId ? r.slotId === rec.slotId : attSig(r) === attSig(rec)));
+      if (twin) { info.push(`Appel ${lbl} : ${rec.slotId ? 'un appel du même créneau' : 'le même appel'} existe déjà ici, il est gardé.`); continue; }
       const key = 'att:' + cid + ':' + rid;
       const nAbs = Array.isArray(rec.absents) ? rec.absents.length : 0;
       const nRet = _mgIsObj(rec.retards) ? Object.keys(rec.retards).length : 0;
       items.push({ key, group: 'Appels', label: lbl, detail: (nAbs ? plural(nAbs, 'absent') : 'aucun absent') + (nRet ? ' · ' + plural(nRet, 'retard') : '') });
       if (!want(key)) continue;
-      if (!dst.attendance) dst.attendance = {};
-      if (!dst.attendance[cid]) dst.attendance[cid] = {};
+      if (!_mgIsObj(dst.attendance)) dst.attendance = {};
+      if (!_mgOwn(dst.attendance, cid) || !_mgIsObj(dst.attendance[cid])) dst.attendance[cid] = {};
       dst.attendance[cid][rid] = _mgClone(rec);
     }
   }
@@ -38905,17 +39021,47 @@ function _mergeRun(dst, other, keys) {
   for (const [eid, oev] of Object.entries(other.evaluations || {})) {
     if (_MG_BAD_KEY(eid) || !_mgIsObj(oev)) continue;
     const name = oev.nomCourt || oev.nomLong || 'Évaluation';
-    const lev = dst.evaluations && dst.evaluations[eid];
+    const lev = _mgOwn(dst.evaluations, eid) ? dst.evaluations[eid] : null;
     const cids = _evalClassIds(oev);
     const cls = cids.map(clsName).join(', ');
+    // Compétences, domaines et discipline créés là-bas et dont ce devoir a besoin : repris avec
+    // lui (ajout seul), sinon ses colonnes resteraient sans nom ni bilan. Renvoie leur nombre.
+    const refsOf = ev => {
+      const c = new Set(Array.isArray(ev.competenceIds) ? ev.competenceIds : []);
+      for (const arr of ['miniNotes', 'passations']) for (const o of (Array.isArray(ev[arr]) ? ev[arr] : [])) for (const x of (Array.isArray(o && o.competenceIds) ? o.competenceIds : [])) c.add(x);
+      return [...c].filter(x => typeof x === 'string' && !_MG_BAD_KEY(x) && !_mgOwn(dst.competences, x) && _mgOwn(other.competences, x) && _mgIsObj(other.competences[x]));
+    };
+    const discOf = ev => (typeof ev.disciplineId === 'string' && !_MG_BAD_KEY(ev.disciplineId) && !_mgOwn(dst.disciplines, ev.disciplineId) && _mgOwn(other.disciplines, ev.disciplineId)) ? ev.disciplineId : null;
+    const bringRefs = ev => {
+      for (const c of refsOf(ev)) {
+        if (!_mgIsObj(dst.competences)) dst.competences = {};
+        dst.competences[c] = _mgClone(other.competences[c]);
+        const d = dst.competences[c].domainId;
+        if (typeof d === 'string' && d && !_MG_BAD_KEY(d) && !_mgOwn(dst.competenceDomains, d) && _mgOwn(other.competenceDomains, d)) {
+          if (!_mgIsObj(dst.competenceDomains)) dst.competenceDomains = {};
+          dst.competenceDomains[d] = _mgClone(other.competenceDomains[d]);
+        }
+      }
+      const d = discOf(ev);
+      if (d) { if (!_mgIsObj(dst.disciplines)) dst.disciplines = {}; dst.disciplines[d] = _mgClone(other.disciplines[d]); if (_mgIsObj(dst.disciplines[d])) dst.disciplines[d].isPrimary = false; }
+    };
+    const refsTxt = ev => { const n = refsOf(ev).length, d = discOf(ev); return [n ? `${plural(n, 'compétence')} créée${n > 1 ? 's' : ''} là-bas` : '', d ? 'sa discipline' : ''].filter(Boolean).join(' et '); };
     if (!lev) {
-      if (!cids.length || cids.some(c => !dst.classes || !dst.classes[c])) { info.push(`Devoir « ${name} » : une de ses classes n'existe pas ici.`); continue; }
+      if (!cids.length || cids.some(c => !hasCls(c))) { info.push(`Devoir « ${name} » : une de ses classes n'existe pas ici.`); continue; }
       const key = 'evnew:' + eid;
       const ev = _mgClone(oev); _mgStripSids(ev, sidOk);
       const n = _mgLeaves(ev.notes) + (Array.isArray(ev.passations) ? ev.passations.reduce((a, p) => a + _mgLeaves(p && p.niveaux), 0) : 0);
-      items.push({ key, group: 'Devoirs', label: `« ${name} »${cls ? ' · ' + cls : ''}`, detail: `absent d'ici : ajouté en entier (${plural(n, 'saisie')})` });
+      // Même devoir créé séparément sur les deux appareils (même nom, même type, mêmes classes) :
+      // proposé, mais décoché — coché d'office, il comptait deux fois dans la moyenne.
+      const nm = x => String((x && (x.nomCourt || x.nomLong)) || '').trim().toLowerCase();
+      const sameCls = x => _mgCanon([..._evalClassIds(x)].sort()) === _mgCanon([...cids].sort());
+      const dup = !!nm(oev) && Object.values(dst.evaluations || {}).some(x => _mgIsObj(x) && x.type === oev.type && nm(x) === nm(oev) && sameCls(x));
+      const rt = refsTxt(ev);
+      items.push({ key, group: 'Devoirs', label: `« ${name} »${cls ? ' · ' + cls : ''}`, unchecked: dup,
+        detail: `absent d'ici : ajouté en entier (${plural(n, 'saisie')})${rt ? ', avec ' + rt : ''}${dup ? ' — ⚠️ un devoir du même nom existe déjà ici pour ' + (cids.length > 1 ? 'ces classes' : 'cette classe') + ' : à cocher seulement si ce n\'est pas le même' : ''}` });
       if (!want(key)) continue;
-      if (!dst.evaluations) dst.evaluations = {};
+      if (!_mgIsObj(dst.evaluations)) dst.evaluations = {};
+      bringRefs(ev);
       dst.evaluations[eid] = ev;
       continue;
     }
@@ -38944,13 +39090,42 @@ function _mergeRun(dst, other, keys) {
       if (!_mgIsObj(tgt[k])) tgt[k] = {};
       _mgFill(tgt[k], oev[k], st, sidOk, k === 'notes' ? isAbs : null);
     }
+    // Après le remplissage des notes, deux contrôles par rapport à ce qu'il y avait ICI (lev) :
+    //  · l'expression de calcul (🧮) d'une case dont la valeur d'ici est gardée ne vient pas de
+    //    l'autre version — elle ne décrirait plus la note affichée ;
+    //  · une note reprise au-dessus du barème d'ici (question passée de /5 à /2) est comptée.
+    let over = 0;
+    const maxOf = {}; for (const m of (Array.isArray(tgt.miniNotes) ? tgt.miniNotes : [])) if (m && m.id && Number.isFinite(+m.max)) maxOf[m.id] = +m.max;
+    for (const [sid, tn] of Object.entries(_mgIsObj(tgt.notes) ? tgt.notes : {})) {
+      if (!_mgIsObj(tn)) continue;
+      const ln = (_mgIsObj(lev.notes) && _mgOwn(lev.notes, sid) && _mgIsObj(lev.notes[sid])) ? lev.notes[sid] : {};
+      const lv = _mgIsObj(ln.values) ? ln.values : {}, lx = _mgIsObj(ln.exprs) ? ln.exprs : {};
+      if (_mgIsObj(tn.exprs)) for (const q of Object.keys(tn.exprs)) {
+        if (_mgEmpty(lx[q]) && !_mgEmpty(lv[q]) && !isAbs(lv[q])) { delete tn.exprs[q]; st.filled = Math.max(0, st.filled - 1); }
+      }
+      if (_mgIsObj(tn.values)) for (const [q, v] of Object.entries(tn.values)) {
+        if (typeof v === 'number' && _mgOwn(maxOf, q) && v > maxOf[q] && (_mgEmpty(lv[q]) || isAbs(lv[q]))) over++;
+      }
+    }
+    // Devoir étendu à une autre classe là-bas : sans la classe (et ses dates), les saisies
+    // reprises restaient dans le devoir sans qu'il apparaisse pour elle.
+    const lIds = _evalClassIds(tgt), addCls = cids.filter((c, i) => hasCls(c) && !lIds.includes(c) && cids.indexOf(c) === i);
+    if (addCls.length) {
+      tgt.classIds = [...lIds, ...addCls];
+      const copyMaps = (t, o, ks) => { for (const k of ks) { if (!_mgIsObj(o[k])) continue; for (const c of addCls) { if (!_mgOwn(o[k], c) || (_mgIsObj(t[k]) && _mgOwn(t[k], c))) continue; if (!_mgIsObj(t[k])) t[k] = {}; t[k][c] = _mgClone(o[k][c]); } } };
+      copyMaps(tgt, oev, ['dates', 'slotIds', 'datesManual', 'seatingHashes', 'seatingRoomIds']);
+      for (const arr of ['miniNotes', 'passations']) for (const o of (Array.isArray(oev[arr]) ? oev[arr] : [])) {
+        const l = _mgIsObj(o) && o.id && (Array.isArray(tgt[arr]) ? tgt[arr] : []).find(x => x && x.id === o.id);
+        if (l) copyMaps(l, o, ['dates', 'slotIds', 'datesByGroup', 'slotIdsByGroup', 'skippedClasses', 'skippedComps']);
+      }
+    }
     const kept = st.differ ? `${plural(st.differ, 'case différente')} : la valeur d'ici est gardée` : '';
-    if (!st.filled && !st.added && !st.rattr) { if (kept) info.push(`Devoir « ${name} »${cls ? ' (' + cls + ')' : ''} : ${kept}.`); continue; }
+    if (!st.filled && !st.added && !st.rattr && !addCls.length) { if (kept) info.push(`Devoir « ${name} »${cls ? ' (' + cls + ')' : ''} : ${kept}.`); continue; }
     const key = 'ev:' + eid;
     const isB = oev.type === 'B';
     items.push({ key, group: 'Devoirs', label: `« ${name} »${cls ? ' · ' + cls : ''}`,
-      detail: [st.rattr ? `${plural(st.rattr, 'note')} de rattrapage à la place d'un « A »` : '', st.filled ? `${plural(st.filled, 'saisie')} à reprendre` : '', st.added ? `${plural(st.added, isB ? 'passation' : 'question')} en plus` : '', kept].filter(Boolean).join(' · ') });
-    if (want(key)) dst.evaluations[eid] = tgt;
+      detail: [addCls.length ? `étendu à ${addCls.map(clsName).join(', ')}` : '', st.rattr ? `${plural(st.rattr, 'note')} de rattrapage à la place d'un « A »` : '', st.filled ? `${plural(st.filled, 'saisie')} à reprendre` : '', st.added ? `${plural(st.added, isB ? 'passation' : 'question')} en plus` : '', st.added && refsTxt(tgt) ? 'avec ' + refsTxt(tgt) : '', over ? `⚠️ ${plural(over, 'note')} au-dessus du barème d'ici, à vérifier` : '', kept].filter(Boolean).join(' · ') });
+    if (want(key)) { bringRefs(tgt); dst.evaluations[eid] = tgt; }
   }
   // 3. Remarques de bulletin (élève et classe)
   {
@@ -38958,7 +39133,8 @@ function _mergeRun(dst, other, keys) {
     for (const k of ['bulletinRemarques', 'bulletinClassRemarques']) {
       if (!_mgIsObj(other[k])) continue;
       const t = _mgIsObj(dst[k]) ? _mgClone(dst[k]) : {};
-      _mgFill(t, other[k], st, c => !_MG_BAD_KEY(c) && !!(dst.classes && dst.classes[c]));
+      // Élève qui n'existe que là-bas : ses remarques ne sont pas copiées (elles restaient ici, orphelines).
+      _mgFill(t, other[k], st, hasCls, null, x => _mgOwn(other.eleves, x) && !_mgOwn(dst.eleves, x));
       parts[k] = t;
     }
     const kept = st.differ ? `${plural(st.differ, 'remarque différente')} : celle d'ici est gardée` : '';
@@ -38978,31 +39154,55 @@ function _mergeRun(dst, other, keys) {
     dst.seatingSnapshots[h] = _mgClone(pool[h]);
   }
   // 5. Ce qui n'est pas fusionné : signalé
-  const onlyThere = k => Object.keys(other[k] || {}).filter(id => !_MG_BAD_KEY(id) && !(dst[k] && dst[k][id])).length;
+  const onlyThere = k => Object.keys(_mgIsObj(other[k]) ? other[k] : {}).filter(id => !_MG_BAD_KEY(id) && !_mgOwn(dst[k], id)).length;
   const ne = onlyThere('eleves'), nc = onlyThere('classes');
   if (ne) info.push(`${plural(ne, 'élève')} n'existe${ne > 1 ? 'nt' : ''} que dans cette version : non repris (à ajouter à la main si besoin).`);
   if (nc) info.push(`${plural(nc, 'classe')} n'existe${nc > 1 ? 'nt' : ''} que dans cette version : non reprise${nc > 1 ? 's' : ''}.`);
+  // Tout le reste (vie de classe, fiches, plans, réunions, conseil…) n'est pas fusionné : s'il
+  // DIFFÈRE, on le dit — « Rien à récupérer : tout est déjà ici » était affiché à tort.
+  {
+    const both = k => Object.keys(_mgIsObj(other[k]) ? other[k] : {}).filter(id => !_MG_BAD_KEY(id) && _mgOwn(dst[k], id) && _mgCanon(other[k][id]) !== _mgCanon(dst[k][id])).length;
+    const ds = both('eleves'), dc = both('classes');
+    const LBL = { salles: 'les salles', snapshots: 'les instantanés', competences: 'les compétences', competenceDomains: 'les compétences', evalPrefs: 'les réglages des évaluations',
+      evalCommentLibrary: 'les commentaires enregistrés', tabletPools: 'les tablettes', userLinks: 'les liens', reunions: 'les réunions', reminderPresets: 'les motifs de rappel',
+      classMsgPresets: 'les messages à la classe', tags: 'les tags', movedHighlights: 'les surlignages', disciplines: 'les disciplines', bulletinWorkedItems: 'les éléments travaillés',
+      conseilClasse: 'le conseil de classe', conseilMentions: 'le conseil de classe', conseilIncompat: 'le conseil de classe', featureFlags: 'les fonctions activées', profile: 'le profil' };
+    const SKIP = new Set(['classes', 'eleves', 'attendance', 'evaluations', 'bulletinRemarques', 'bulletinClassRemarques', 'seatingSnapshots', 'clock', 'cur', 'savedAt', 'memoProgress']);
+    const parts = [];
+    if (ds) parts.push(`${plural(ds, 'fiche')} d'élève (oublis, historique, notes, aménagements…)`);
+    if (dc) parts.push(`${plural(dc, 'classe')} (plan, effectif, réglages)`);
+    for (const k of Object.keys(other)) {
+      if (_MG_BAD_KEY(k) || SKIP.has(k) || _mgCanon(other[k]) === _mgCanon(dst[k])) continue;
+      const l = LBL[k] || 'd\'autres réglages';
+      if (!parts.includes(l)) parts.push(l);
+    }
+    if (parts.length) info.push(`Cette version diffère aussi sur : ${parts.join(', ')}. Cette fenêtre ne reprend que les appels, les devoirs et les remarques de bulletin — le reste est à reporter à la main (ou en ouvrant cette version).`);
+  }
   return { items, info };
 }
 
 let _mgCtx = null;
-function _mergeOpen(data, srcLabel) {
-  if (!data || typeof data !== 'object' || _validateImport(data)) {
+// `opts.archive` : la version reprise est le fichier de synchronisation lui-même — elle sera
+// écrasée à la prochaine écriture, donc archivée avant (cf. _mergeApply).
+function _mergeOpen(data, srcLabel, opts) {
+  if (!data || typeof data !== 'object' || !_mgIsObj(data.classes) || !_mgIsObj(data.eleves) || _validateImport(data)) {
     appAlert('Récupération impossible', 'Ce fichier ne se lit pas comme une sauvegarde valide.', 'error');
     return;
   }
   if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
   const plan = _mergeRun(JSON.parse(JSON.stringify(S)), data, null);
-  _mgCtx = { data };
+  _mgCtx = { data, archive: !!(opts && opts.archive) };
   document.getElementById('mmerge-src').textContent = srcLabel || '';
   const list = document.getElementById('mmerge-list');
   if (!plan.items.length) {
-    list.innerHTML = _emptyStateHTML('✓', 'Rien à récupérer', 'Tout ce que contient cette version est déjà dans la version actuelle.');
+    list.innerHTML = _emptyStateHTML('✓', 'Rien à récupérer', plan.info.length
+      ? 'Aucun appel, devoir ni remarque de bulletin de cette version ne manque ici. Ce qui diffère par ailleurs est listé ci-dessous.'
+      : 'Tout ce que contient cette version est déjà dans la version actuelle.');
   } else {
     let grp = '';
     list.innerHTML = plan.items.map(it => {
       const head = it.group !== grp ? `<div class="mg-grp">${_esc(grp = it.group)}</div>` : '';
-      return head + `<label class="mg-item"><input type="checkbox" checked data-key="${_escAttr(it.key)}" onchange="_mergeCount()"><span>${_esc(it.label)}<small>${_esc(it.detail)}</small></span></label>`;
+      return head + `<label class="mg-item"><input type="checkbox"${it.unchecked ? '' : ' checked'} data-key="${_escAttr(it.key)}" onchange="_mergeCount()"><span>${_esc(it.label)}<small>${_esc(it.detail)}</small></span></label>`;
     }).join('');
   }
   document.getElementById('mmerge-info').innerHTML = plan.info.map(t => `<li>${_esc(t)}</li>`).join('');
@@ -39014,11 +39214,24 @@ function _mergeCount() {
   const b = document.getElementById('mmerge-go');
   if (b) { b.disabled = !n; b.textContent = n ? `✓ Récupérer ${n} élément${n > 1 ? 's' : ''}` : '✓ Récupérer la sélection'; }
 }
-function _mergeApply() {
+function _mergeApply(archived) {
   if (!_mgCtx) return;
   const keys = new Set([...document.querySelectorAll('#mmerge-list input[data-key]:checked')].map(i => i.dataset.key));
   if (!keys.size) { toast('Coche au moins une ligne.', 'warn'); return; }
   const data = _mgCtx.data;
+  // Version reprise = le fichier de synchronisation en attente : après la fusion notre horloge
+  // le DOMINE, et la prochaine écriture l'écrase. Tout ce que la fusion ne reprend pas partait
+  // alors sans copie — on l'archive d'abord, comme le fait la fenêtre de conflit.
+  if (_mgCtx.archive && archived !== true && dirHandle) {
+    const ctx = _mgCtx;
+    _stashVersionToFile(data, 'autre').then(name => {
+      if (_mgCtx !== ctx) return;
+      if (!name) { toast('⚠️ Impossible d\'archiver cette version avant de la fusionner — rien n\'est changé, réessaie.', 'err'); return; }
+      toast(`Version reprise archivée : « ${name} ».`);
+      _mergeApply(true);
+    });
+    return;
+  }
   if (typeof _evalFlushUndo === 'function') _evalFlushUndo();
   pushUndo();
   _mergeRun(S, data, keys);
@@ -39045,7 +39258,7 @@ async function _mergeFromHandle(idx) {
   try { data = JSON.parse(await (await f.handle.getFile()).text()); }
   catch (_) { appAlert('Récupération impossible', 'Ce fichier ne se lit pas.', 'error'); return; }
   const k = _fileKind(f.name);
-  _mergeOpen(data, `${k.icon} ${k.label} · ${f.date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`);
+  _mergeOpen(data, `${k.icon} ${k.label} · ${f.date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`, { archive: f.name === AUTO_SAVE_FILENAME });
 }
 
 // Copies de conflit créées par Nextcloud (≠ nos archives plan-classe-conflit-*).
@@ -40041,7 +40254,7 @@ const _NotesExport = (function () {
         for (const ev of Object.values(S.evaluations || {})) {
           if (!_evalIncludesClass(ev, cls.id)) continue;
           let lvl = null;
-          if (ev.type === 'B') lvl = _computeStudentCompetenceLevel(ev, stu.id, cid);
+          if (ev.type === 'B') { lvl = _computeStudentCompetenceLevel(ev, stu.id, cid); if (lvl > 0 && _evalCompsVoided(ev, stu.id)) lvl = _voidedCompLevel(); }   // copie annulée : au minimum, comme partout
           else if (ev.type === 'D') lvl = _typeDCompLevel(ev, stu.id, cid);
           if (lvl > 0) { sum += lvl; k++; }
         }
@@ -40199,7 +40412,7 @@ const _NotesExport = (function () {
         let s = 0, k = 0;
         for (const ev of evs) {
           let lvl = null;
-          if (ev.type === 'B') lvl = _computeStudentCompetenceLevel(ev, stu.id, c.id);
+          if (ev.type === 'B') { lvl = _computeStudentCompetenceLevel(ev, stu.id, c.id); if (lvl > 0 && _evalCompsVoided(ev, stu.id)) lvl = _voidedCompLevel(); }   // copie annulée : au minimum, comme partout
           else if (ev.type === 'D') lvl = _typeDCompLevel(ev, stu.id, c.id);
           if (lvl > 0) { s += lvl; k++; }
         }
@@ -43528,7 +43741,9 @@ document.addEventListener('keydown', e => {
   // onglet, sur la classe choisie dans le bandeau (v2.163.0, demande de l'utilisateur).
   // Sans effet si une fenêtre est déjà ouverte ou avec une touche de modification
   // (Ctrl+H est l'historique du navigateur, Ctrl+P l'impression).
-  if (!ctrl && !e.altKey && !e.repeat && (k === 'h' || k === 'p') && !document.querySelector('.mo.on')) {
+  // ⚠️ Pas en Vue Élève ni dans la fenêtre de projection : c'est ce que voient les élèves, et
+  // « h » y affichait les absences et les retards (même raison que A, D et T, limités au Plan).
+  if (!ctrl && !e.altKey && !e.repeat && (k === 'h' || k === 'p') && !document.querySelector('.mo.on') && curTab !== 'svue' && !_isReadOnlyWin()) {
     if (k === 'h') {
       if (!_featureEnabled('appel')) return;   // fonction Appel désactivée dans les Réglages
       e.preventDefault(); openAttendanceModal(); return;
@@ -43882,9 +44097,19 @@ document.addEventListener('click', e => {
     if (t && t.hasAttribute('title')) {
       const tt = t.getAttribute('title');
       t.removeAttribute('title');
+      const prev = t.getAttribute('data-tip');
       if (tt) {
         t.setAttribute('data-tip', tt);
-        if (!t.hasAttribute('aria-label') && !t.hasAttribute('aria-labelledby') && t.textContent.trim().length <= 2) t.setAttribute('aria-label', tt);
+        // Nom accessible : posé s'il n'y en a pas, et SUIVI quand c'est nous qui l'avions posé
+        // (bouton-icône dont le title change : 🗖 / 🗗, 🔔 / 🔕).
+        const al = t.getAttribute('aria-label');
+        if ((al == null && !t.hasAttribute('aria-labelledby') && t.textContent.trim().length <= 2) || (al != null && al === prev)) t.setAttribute('aria-label', tt);
+      } else {
+        // title VIDÉ par le code (`el.title = ''` : erreur de saisie corrigée) : l'ancienne
+        // infobulle part avec lui — elle restait affichée (« Valeur invalide » sur une case juste).
+        t.removeAttribute('data-tip');
+        if (t.getAttribute('aria-label') === prev && prev != null) t.removeAttribute('aria-label');
+        if (current === t) { current = null; clearTimeout(timer); hide(); }
       }
     }
     if (!t || t === current || !t.hasAttribute('data-tip')) return;
@@ -43905,10 +44130,15 @@ document.addEventListener('click', e => {
   // et ne revient qu'après un vrai mouvement de souris (pas un frémissement de quelques px).
   document.addEventListener('keydown', e => {
     if (['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'].includes(e.key)) return;
-    kbd = true; current = null; clearTimeout(timer); hide();
+    kbd = true; kbdDist = 0; current = null; clearTimeout(timer); hide();
   }, true);
+  // Le seuil porte sur le CUMUL du déplacement depuis la frappe : compté par événement, une
+  // souris déplacée lentement (1 à 3 px par événement) ne levait jamais le blocage.
+  let kbdDist = 0;
   document.addEventListener('mousemove', e => {
-    if (kbd && Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 3) kbd = false;
+    if (!kbd) return;
+    kbdDist += Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0);
+    if (kbdDist > 12) kbd = false;
   }, true);
   window._gtipHide = () => { clearTimeout(timer); hide(); };
 })();
@@ -44106,6 +44336,8 @@ function _mnpBigClamp(big, x, y) {
 function _mnpBigPlace() {
   const big = document.getElementById('mnp-big');
   if (!big || big.style.display === 'none') return;
+  // Tableur fermé : l'encart mesure 0, la place par défaut tomberait au bord droit de l'écran.
+  if (!document.getElementById('meval-tableur')?.classList.contains('on')) return;
   const g = _mnpBigGeo();
   big.style.width = _mnpBigW(g.w ?? MNPB_W_DEF) + 'px';
   let x = g.x, y = g.y;
@@ -44132,7 +44364,7 @@ async function _mnpBigRender(sid, label) {
     mo.appendChild(big);
   }
   const was = big.style.display !== 'none' && big.dataset.sid;
-  if (was === sid) { const sm = big.querySelector('small'); if (sm) sm.textContent = label || ''; return; }
+  if (was === sid) { const sm = big.querySelector('small'); if (sm) sm.textContent = label || ''; _mnpBigPlace(); return; }
   big.dataset.sid = sid;
   const ini = _esc(((s.prenom || '')[0] || '') + ((s.nom || '')[0] || ''));
   big.innerHTML = `<button type="button" class="mnpb-x" title="Fermer la grande photo" aria-label="Fermer la grande photo">✕</button>`
@@ -44169,6 +44401,11 @@ function _mnpBigDrag(e, big) {
     document.removeEventListener('pointercancel', up);
     big.classList.remove('dragging');
     _mnpBigSaveGeo({ w: parseFloat(big.style.width), x: parseFloat(big.style.left), y: parseFloat(big.style.top) });
+    // Le clic qui suit le relâchement est avalé : relâché hors de la photo (butée du bord, coin
+    // tiré au-delà du maximum), il partait sur le fond de la fenêtre et FERMAIT le tableur.
+    const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+    document.addEventListener('click', swallow, true);
+    setTimeout(() => document.removeEventListener('click', swallow, true), 0);
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointerup', up);
@@ -49539,7 +49776,9 @@ function _crossColor(color, kind) {
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
     let h = 0, sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
     if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
-    const s2 = sat < 0.05 ? sat : Math.min(1, Math.max(sat * 1.5, 0.65)), l2 = l * (dark ? 0.75 : 0.55);
+    // Les gris (« A », « NN » : saturation 0,09 à 0,11) restent gris : avivés, ils devenaient un bleu
+    // presque identique au niveau 4 du jeu pastel.
+    const s2 = sat < 0.2 ? sat : Math.min(1, Math.max(sat * 1.5, 0.65)), l2 = l * (dark ? 0.75 : 0.55);
     const c = (1 - Math.abs(2 * l2 - 1)) * s2, xx = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l2 - c / 2;
     const [r1, g1, b1] = h < 60 ? [c, xx, 0] : h < 120 ? [xx, c, 0] : h < 180 ? [0, c, xx] : h < 240 ? [0, xx, c] : h < 300 ? [xx, 0, c] : [c, 0, xx];
     out = [r1, g1, b1].map(v => Math.round((v + m) * 255));
@@ -49636,10 +49875,10 @@ function _evalTableurSobrApply() {
   document.body.classList.toggle('tableur-sobr-comps', compsOn);
   try { localStorage.setItem('planClasse_tableurSobrNotes', notesOn ? '1' : '0'); } catch (e) {}
   try { localStorage.setItem('planClasse_tableurSobrComps', compsOn ? '1' : '0'); } catch (e) {}
-  // Indique l'état actif via la couleur du bouton
+  // Sobriété active : le bouton passe en bouton principal. (Un fond posé en ligne ne se voyait
+  // jamais : `.btn-g { background … !important }` gagne sur tout style en ligne.)
   const btn = document.getElementById('meval-tableur-sobr-btn');
-  if (btn) btn.style.background = (notesOn || compsOn) ? 'var(--ink-blue)' : '';
-  if (btn) btn.style.color = (notesOn || compsOn) ? '#fff' : '';
+  if (btn) { const on = notesOn || compsOn; btn.classList.toggle('btn-p', on); btn.classList.toggle('btn-g', !on); btn.setAttribute('aria-pressed', String(on)); }
 }
 function _evalTableurSobrToggleMenu(e) {
   e?.stopPropagation();
@@ -55091,8 +55330,15 @@ function _evalAutoFillAbsentsForMn(ev, mn, classId) {
   // ET respecte la sentinelle '' : une date de mini-note explicitement vidée pour
   // cette classe ne retombe PAS sur la date d'éval (pas d'auto-fill dans ce cas).
   const _mnHasKey = mn.dates && Object.prototype.hasOwnProperty.call(mn.dates, classId);
-  const defDate = _mnHasKey ? _mnDateFor(mn, classId)
-                            : (_mnDateFor(mn, classId) || _evalDateFor(ev, classId));
+  let defDate = _mnDateFor(mn, classId);
+  if (!_mnHasKey && !defDate) {
+    // ⚠️ Questions datées une à une (type A au fil des séances) : la date du devoir est alors
+    // celle de la DERNIÈRE question passée (_evalAutoUpdateDate). Une question SANS date ne
+    // l'emprunte pas — sinon une question ajoutée pour une séance à venir recevait les « A »
+    // de l'appel d'une autre séance, à chaque ouverture du tableur (audit du 2026-11-22).
+    if ((ev.miniNotes || []).some(m => m !== mn && !_subSkippedFor(m, classId) && _mnDateFor(m, classId))) return 0;
+    defDate = _evalDateFor(ev, classId);
+  }
   const defSlot = _mnSlotIdFor(mn, classId) || _evalSlotIdFor(ev, classId);
   const pgDates = mn.datesByGroup?.[classId];
   const pgSlots = mn.slotIdsByGroup?.[classId];
@@ -55161,7 +55407,9 @@ function _evalAutoFillAbsentsForPass(ev, pass, classId) {
     pass.niveaux[sid] = pass.niveaux[sid] || {};
     for (const cid of cids) {
       const cur = pass.niveaux[sid][cid];
-      if (cur == null || cur === '' || cur === 0) {
+      // Un 0 TAPÉ (« vu, non évalué ») est une saisie : il reste, comme en type D. Avant, il
+      // était pris pour une case vide et devenait « A » à l'ouverture suivante du tableur.
+      if (cur == null || cur === '') {
         pass.niveaux[sid][cid] = 'A';
         filled++;
       }
@@ -58543,11 +58791,15 @@ function _ficheWinInit() {
 }
 function _ficheWinStart() {
   const o = window.opener;
-  let st = null;
-  try { st = JSON.parse(o._ficheWinInitState()); } catch (e) {}
+  let st = null, blocked = false;
+  // Ouverte en fichier local (file://), chaque fenêtre a sa propre origine : le navigateur
+  // interdit de lire la fenêtre principale, et la fiche n'a donc rien à afficher.
+  try { st = JSON.parse(o._ficheWinInitState()); } catch (e) { blocked = !!o && location.protocol === 'file:'; }
   _ficheWinPhotoSync();
   if (!st || !S.eleves[st.sid]) {
-    document.body.insertAdjacentHTML('beforeend', '<div class="fw-orphan">Cette fenêtre s\'ouvre depuis une fiche élève (bouton 🗗). Tu peux la fermer.</div>');
+    document.body.insertAdjacentHTML('beforeend', blocked
+      ? '<div class="fw-orphan">La fiche détachée ne fonctionne pas quand Plan de classe est ouvert comme un fichier de l\'ordinateur : le navigateur empêche les deux fenêtres de se parler. Elle marche avec la version en ligne ou installée. Tu peux fermer cette fenêtre.</div>'
+      : '<div class="fw-orphan">Cette fenêtre s\'ouvre depuis une fiche élève (bouton 🗗). Tu peux la fermer.</div>');
     return;
   }
   _ficheWinShow(JSON.stringify(st), true);
@@ -58567,7 +58819,9 @@ function _ficheWinStart() {
     const fld = e.target.closest('textarea, input:not([type="checkbox"]):not([type="radio"])');
     const el = e.target.closest('[onclick]');
     const code = el && body.contains(el) ? el.getAttribute('onclick') || '' : '';
-    if (!fld && (!code || _FW_ALLOW.test(code))) return;
+    // CHAQUE instruction doit être de la consultation : « _rwHideTip();_ficheGo(…) » commence
+    // par une action permise mais en enchaîne une qui ne l'est pas.
+    if (!fld && (!code || code.split(';').every(p => !p.trim() || _FW_ALLOW.test(p)))) return;
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     _ficheWinForward(fld ? '' : code, fld ? fld.id : '');
   }, true);
@@ -60912,10 +61166,12 @@ function _evalExportToTSV(ev) {
   if (_evalExportColsState.remarque) headers.push('Remarque');
   const lines = [headers.join('\t')];
   for (const r of rows) {
-    const cells = [r.name];
+    // Textes libres (nom, remarque) : gardés contre l'interprétation en formule au collage dans
+    // un tableur (« + de soin », « =… ») — comme le CSV. Les codes produits par l'app ne le sont pas.
+    const cells = [_csvCellGuard(r.name)];
     if (_evalExportColsState.note)     cells.push(r.noteCell || '');
     if (_evalExportColsState.comps)    for (const c of r.comps) cells.push(c.level == null ? (c.zero ? _zeroCode() : '') : _formatNiveau(Math.round(c.level)));
-    if (_evalExportColsState.remarque) cells.push((r.remarque || '').replace(/\t|\n/g, ' '));
+    if (_evalExportColsState.remarque) cells.push(_csvCellGuard((r.remarque || '').replace(/\t|\n/g, ' ')));
     lines.push(cells.join('\t'));
   }
   return lines.join('\n');
@@ -60961,7 +61217,8 @@ function _evalExportDownloadCsv() {
   a.href = url;
   // ev.classId et ev.date sont des champs legacy supprimés par la migration —
   // utiliser les helpers canoniques pour éviter `undefined-undefined` dans le nom.
-  const _cidName = _evalPrimaryAliveClassId(ev) || 'classe';
+  // Devoir commun : le fichier contient la classe AFFICHÉE — son nom porte donc elle, pas la première.
+  const _cidName = (_renduState.classId && _evalIncludesClass(ev, _renduState.classId) && S.classes?.[_renduState.classId]) ? _renduState.classId : (_evalPrimaryAliveClassId(ev) || 'classe');
   const _dateName = _evalDateFor(ev, _cidName) || todayKey();
   a.download = `${ev.nomCourt || 'eval'}-${_cidName}-${_dateName}.csv`;
   document.body.appendChild(a);

@@ -174,3 +174,10 @@ Au démarrage, un onglet persisté d'une fonction désactivée retombe sur Class
 - **📤 Exporter les notes (`mexport-notes`)** : classes en pastilles groupées par niveau (`_exnSel`, `_exnToggle`, `_exnToggleGroup`), format en `.seg-radio` (radios `exnotes-fmt` gardées), destination en deux boutons, **liste des feuilles et des fichiers qui seront créés** (`_NotesExport.fileName(cls, fmt)`, même nom que l'export réel).
 - **📂 Versions et historique (`mfiles`)** : `listAndShowFiles` ne fait plus que lire le dossier ; rendu par `_vfRender` — filtres Toutes / Repères / Synchro / Sauvegardes / Conflits / Exports (`_vfCat` d'après `_fileKind`, filtres vides masqués, `_vfFilter` gardé pour la session), « 📌 Marquer la version actuelle » en tête, lignes `.vf-row` avec **Comparer** (ex-ℹ️, `_toggleVersionInfo`) et **Ouvrir** (`loadFromHandle`), écarts en `--ok-fg` / `--danger-fg` (étaient des littéraux), « 📁 Changer de dossier » en pied.
 - Audit : 0 écart en clair et en sombre sur les quatre fenêtres ; 360–363 px à 375. Versions vérifiée sur une liste de fichiers fictifs (jamais le vrai dossier de données).
+
+## Corrections de l'audit du 2026-11-22 (v2.168.0)
+
+- **Raccourcis H et P** : coupés en Vue Élève et dans la fenêtre de projection (`curTab !== 'svue' && !_isReadOnlyWin()`) — « h » y ouvrait 📅 Appels passés à l'écran des élèves.
+- **Infobulles `#gtip`** : un `title` VIDÉ par le code (`el.title = ''`) retire aussi `data-tip` — sinon l'ancienne infobulle restait (« Valeur invalide » sur une case corrigée du tableur). L'`aria-label` posé par la bulle suit un `title` qui change (🗖 / 🗗). Après une frappe, le déblocage se fait sur le CUMUL du déplacement de la souris (12 px), plus par événement.
+- **Fenêtre d'alerte (`appAlert`)** : le message était en `#333` figé — 1,27:1 en thème sombre. `var(--ink-deep)`.
+- Toasts de ↪ : « Rien à rétablir », « Action rétablie » (le mot « refaire » y traînait encore).
