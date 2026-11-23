@@ -3825,6 +3825,93 @@ test('dossier mémorisé qui ne répond plus : délai, puis oublié (démarrage 
   assert.deepEqual(JSON.parse(r), { fast: 'granted', slow: true, afterRestore: null, photosDir: null, afterPhotos: null, alerts: 2 });
 });
 
+// Suite, 2026-11-23 : les AUTRES dossiers mémorisés (import QCMcam, export QCMcam, export des
+// notes) n'étaient pas bornés — la fenêtre « Importer QCMcam » restait vide, sans message.
+test('import QCMcam : dossier qui ne répond plus → le dire et offrir de le choisir de nouveau', async () => {
+  const r = await ev(`(async () => {
+    const out = {};
+    const wrap = { innerHTML: '' };
+    const _ge = document.getElementById; document.getElementById = id => id === 'meval-qcmcam-picker' ? wrap : null;
+    const _fw = _fsaWithin; _fsaWithin = (p, ms) => _fw(p, 10);
+    const _sdp = window.showDirectoryPicker; window.showDirectoryPicker = () => {};
+    const never = () => new Promise(() => {});
+    const dead = { name: 'QCM <mort>', kind: 'directory', queryPermission: never, requestPermission: never, values: () => ({ next: never }) };
+    const file = (name, ts) => ({ kind: 'file', name, getFile: async () => ({ name, lastModified: ts }) });
+    const dir = (name, entries) => ({ name, kind: 'directory', queryPermission: async () => 'granted',
+      values: async function* () { for (const e of entries) yield e; } });
+    let loads = 0;
+    const _ld = idbLoadHandleKey; idbLoadHandleKey = async () => { loads++; return dead; };
+    const reset = () => { _qcmcamState.dirHandle = null; _qcmcamState.deadName = null; _qcmcamState.files = []; wrap.innerHTML = ''; };
+    try {
+      // 1. Le dossier relu dans l'IndexedDB ne répond jamais
+      reset();
+      await _evalQcmcamRefreshPicker(); await new Promise(r => setTimeout(r, 30));
+      out.dead = /Chrome ne répond plus/.test(wrap.innerHTML) && /_evalQcmcamPickDir/.test(wrap.innerHTML) && /file-fallback/.test(wrap.innerHTML);
+      out.escaped = wrap.innerHTML.includes('QCM &lt;mort&gt;');
+      out.forgotten = _qcmcamState.dirHandle === null && _qcmcamState.deadName === 'QCM <mort>';
+      // 2. Rouvrir la fenêtre n'attend pas de nouveau : le dossier n'est pas relu dans la session
+      await _evalQcmcamRefreshPicker();
+      out.loads = loads; out.again = /Chrome ne répond plus/.test(wrap.innerHTML);
+      // 3. Choisi de nouveau pendant que l'ancien est encore attendu : l'ancien n'efface pas le nouveau
+      reset(); _qcmcamState.dirHandle = dead;
+      const late = _evalQcmcamRefreshPicker();
+      _qcmcamState.dirHandle = dir('Neuf', [file('Session-1-resultats.csv', 2), file('photo.png', 3), file('b.TSV', 1)]);
+      await _evalQcmcamRefreshPicker(); await late; await new Promise(r => setTimeout(r, 30));
+      out.names = _qcmcamState.files.map(f => f.name);
+      out.kept = _qcmcamState.dirHandle.name;
+      out.listed = wrap.innerHTML.includes('Session-1-resultats.csv');
+      // 4. Le dossier répond mais sa lecture s'arrête en route
+      reset(); _qcmcamState.dirHandle = Object.assign(dir('Coincé', []), { values: () => ({ next: never }) });
+      await _evalQcmcamRefreshPicker(); await new Promise(r => setTimeout(r, 30));
+      out.stuck = /Chrome ne répond plus/.test(wrap.innerHTML);
+      // 5. Une date qui ne vient pas : le fichier reste listé
+      reset(); _qcmcamState.dirHandle = dir('Dates', [{ kind: 'file', name: 'x.csv', getFile: never }, file('y.csv', 5)]);
+      await _evalQcmcamRefreshPicker();
+      out.noDates = _qcmcamState.files.map(f => f.name + ':' + f.lastModified);
+    } finally {
+      document.getElementById = _ge; _fsaWithin = _fw; window.showDirectoryPicker = _sdp; idbLoadHandleKey = _ld; reset();
+    }
+    return JSON.stringify(out);
+  })()`);
+  assert.deepEqual(JSON.parse(r), { dead: true, escaped: true, forgotten: true, loads: 1, again: true,
+    names: ['Session-1-resultats.csv', 'b.TSV'], kept: 'Neuf', listed: true,
+    stuck: true, noDates: ['x.csv:0', 'y.csv:0'] });
+});
+
+// L'écriture automatique ne doit pas garder son verrou : sans cela la synchronisation ne repartait
+// pas, même une fois le dossier choisi de nouveau.
+test('sync auto : un dossier qui ne répond plus ne bloque pas les écritures suivantes', async () => {
+  const r = await ev(`(async () => {
+    const out = {};
+    const _fw = _fsaWithin; _fsaWithin = (p, ms) => _fw(p, 10);
+    const _al = appAlert; let alerts = 0; appAlert = () => { alerts++; };
+    const _en = autoSyncEnabled; autoSyncEnabled = true;
+    try {
+      _dirStalledNoticed = false;
+      dirHandle = { name: 'mort', queryPermission: () => new Promise(() => {}) };
+      await autoSaveDoIt();
+      out.freed = _autoSaveInFlight === false; out.dir = dirHandle; out.alerts = alerts;
+      let asked = 0;
+      dirHandle = { name: 'neuf', queryPermission: async () => { asked++; return 'denied'; }, requestPermission: async () => 'denied' };
+      await autoSaveDoIt();
+      out.asked = asked;
+    } finally {
+      _fsaWithin = _fw; appAlert = _al; autoSyncEnabled = _en; dirHandle = null; _dirStalledNoticed = false;
+    }
+    return JSON.stringify(out);
+  })()`);
+  assert.deepEqual(JSON.parse(r), { freed: true, dir: null, alerts: 1, asked: 1 });
+});
+
+// Aucun dossier mémorisé ne doit être interrogé sans délai : un « await x.queryPermission( » nu
+// attend sans fin quand Chrome ne répond plus.
+test('lint : toute autorisation de dossier passe par _fsaWithin', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const all = html.split('\n').map((l, i) => [i + 1, l.trim()]).filter(([, l]) => /\.queryPermission(\?\.)?\(/.test(l));
+  assert.ok(all.length >= 10, 'le motif ne trouve plus rien : le lint serait vide de sens');
+  assert.deepEqual(all.filter(([, l]) => !/_fsaWithin\(/.test(l)), []);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Récupérer ce qui manque (_mergeRun) — fusion à deux versions : on AJOUTE ce qui manque,
 // on ne remplace jamais une valeur présente, et seules les lignes cochées s'appliquent.

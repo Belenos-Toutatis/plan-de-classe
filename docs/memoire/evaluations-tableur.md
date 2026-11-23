@@ -92,6 +92,8 @@ Le tableur d'éval a un `<thead>` sticky-top et `<tfoot>` sticky-bottom dans le 
 
 Bouton **📂** dans la toolbar du tableur (à côté du 📥 « coller des notes »), visible uniquement pour Type A et C. Ouvre la modale `meval-qcmcam` qui importe le fichier de résultats exporté depuis QCMcam.
 
+**Zone Fichier — jamais vide (v2.168.2)** : `_evalQcmcamRefreshPicker` borne chaque attente (permission 2 s, chaque pas de lecture du dossier 5 s, date d'un fichier 2 s — au premier dépassement de date, le reste est listé sans dates). Passé 250 ms, la zone dit ce qu'elle attend et offre « 📂 Changer de dossier » et « 📄 Un fichier ponctuel ». Dossier « mort » → `_qcmcamMarkDead` (`deadName` : il n'est plus relu dans la session, rouvrir la fenêtre n'attend pas de nouveau) et bouton « 📂 Choisir de nouveau le dossier… ». Un jeton (`pickSeq`) réserve l'écriture au dernier rafraîchissement lancé : sinon le délai de l'ancien dossier effaçait le dossier choisi entre-temps. Cause et autres dossiers : `sauvegarde.md`, *Dossier « mort »*.
+
 **Deux formats acceptés, détectés automatiquement** (le séparateur est déduit du contenu : celui de TAB / `;` qui apparaît le plus) :
 
 | | QCMcam **v2** (`Session-N-resultats.csv`) | QCMcam **v1** (`resultats.csv`) |

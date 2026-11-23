@@ -10183,11 +10183,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.168.1';
+const APP_VERSION    = '2.168.2';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-22T22:53:07Z';
+const APP_BUILD_DATE = '2026-11-23T08:29:13Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -29693,8 +29693,13 @@ async function exportQcmCsv() {
     // Demander le dossier si pas encore mémorisé ou permission perdue
     if (qcmDirHandle) {
       try {
-        const perm = await qcmDirHandle.queryPermission({ mode: 'readwrite' });
-        if (perm !== 'granted') await qcmDirHandle.requestPermission({ mode: 'readwrite' });
+        // Délai court : le sélecteur qui suit exige un clic de moins de 5 s (cf. openFilePicker)
+        const perm = await _fsaWithin(qcmDirHandle.queryPermission({ mode: 'readwrite' }), 1500);
+        if (perm === _FSA_STALL) {
+          toast(`📂 Chrome ne répond plus sur le dossier « ${qcmDirHandle.name} » : choisis-le de nouveau.`, 'warn');
+          qcmDirHandle = null;
+          updateQcmDirInfo();
+        } else if (perm !== 'granted') await qcmDirHandle.requestPermission({ mode: 'readwrite' });
       } catch(e) { qcmDirHandle = null; }
     }
     if (!qcmDirHandle) {
@@ -38044,7 +38049,13 @@ async function autoSaveDoIt(isRetry) {
   _autoSaveInFlight = true;
   try {
   try {
-    let perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+    // Borné : une attente sans fin ici garderait le mutex pour toute la session, et la
+    // synchronisation ne repartirait pas même après un nouveau choix du dossier.
+    const _h = dirHandle;
+    let perm = await _fsaWithin(_h.queryPermission({ mode: 'readwrite' }), 4000);
+    // Dossier rechoisi pendant l'attente : on repart avec lui (cf. finally).
+    if (dirHandle !== _h) { if (dirHandle) _autoSaveRerun = true; return; }
+    if (perm === _FSA_STALL) { _dirMarkStalled(_h); _dirStalledNotice(); return; }
     if (perm !== 'granted') perm = await dirHandle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') return;
     let json = JSON.stringify(S, null, 2);
@@ -38585,7 +38596,10 @@ async function autoReloadCheck() {
   if (!autoSyncEnabled || !dirHandle) return;
   if (_conflictPending) return;  // une résolution de conflit est déjà en cours
   try {
-    let perm = await dirHandle.queryPermission({ mode: 'read' });
+    const _h = dirHandle;
+    let perm = await _fsaWithin(_h.queryPermission({ mode: 'read' }), 4000);
+    if (dirHandle !== _h) return;
+    if (perm === _FSA_STALL) { _dirMarkStalled(_h); _dirStalledNotice(); return; }
     if (perm !== 'granted') return; // pas de prompt silencieux
     const fh = await dirHandle.getFileHandle(AUTO_SAVE_FILENAME);
     const f  = await fh.getFile();
@@ -38701,9 +38715,9 @@ async function tryRestoreQcmDirHandle() {
   // Avant, le dossier était oublié et il fallait le rechoisir à chaque session.
   qcmDirHandle = h;
   try {
-    const perm = await h.queryPermission({ mode: 'readwrite' });
-    if (perm === 'denied') qcmDirHandle = null;
-  } catch(e) { qcmDirHandle = null; }
+    const perm = await _fsaWithin(h.queryPermission({ mode: 'readwrite' }), 4000);
+    if ((perm === 'denied' || perm === _FSA_STALL) && qcmDirHandle === h) qcmDirHandle = null;
+  } catch(e) { if (qcmDirHandle === h) qcmDirHandle = null; }
   updateQcmDirInfo();
 }
 
@@ -38829,7 +38843,14 @@ async function _makeNamedCheckpoint(label) {
   if (!dirHandle) { toast('Choisis un dossier de sync pour créer un point.', 'err'); return; }
   const name = `plan-classe-checkpoint-${_checkpointSafeLabel(label)}-${_conflictStamp()}.json`;
   try {
-    let perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+    const _h = dirHandle;
+    let perm = await _fsaWithin(_h.queryPermission({ mode: 'readwrite' }), 2500);
+    if (perm === _FSA_STALL) {
+      _dirMarkStalled(_h);
+      _dirStalledNoticed = false;   // l'utilisateur vient de demander : la fenêtre se montre même déjà vue
+      _dirStalledNotice();
+      return;
+    }
     if (perm !== 'granted') perm = await dirHandle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') { toast('Autorisation refusée.', 'err'); return; }
     const fh = await dirHandle.getFileHandle(name, { create: true });
@@ -39276,7 +39297,7 @@ let _ncConflictNotified = false;
 async function _passiveNcConflictCheck() {
   if (_ncConflictNotified || !autoSyncEnabled || !dirHandle) return;
   try {
-    const p = await dirHandle.queryPermission({ mode: 'read' });
+    const p = await _fsaWithin(dirHandle.queryPermission({ mode: 'read' }), 4000);
     if (p !== 'granted') return;
     const copies = await _findNextcloudConflictCopies();
     if (copies.length > 0) {
@@ -39564,8 +39585,11 @@ async function exportJSON() {
   // Si un dossier est connu, écrire directement dedans
   if (dirHandle) {
     try {
-      let perm = await dirHandle.queryPermission({ mode: 'readwrite' });
-      if (perm !== 'granted') perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+      // Dossier « mort » : on passe au téléchargement ci-dessous, la sauvegarde ne se perd pas.
+      const _h = dirHandle;
+      let perm = await _fsaWithin(_h.queryPermission({ mode: 'readwrite' }), 2500);
+      if (perm === _FSA_STALL) { _dirMarkStalled(_h); _dirStalledNotice(); }
+      else if (perm !== 'granted') perm = await dirHandle.requestPermission({ mode: 'readwrite' });
       if (perm === 'granted') {
         const fh = await dirHandle.getFileHandle(filename, { create: true });
         const w  = await fh.createWritable();
@@ -39823,10 +39847,16 @@ async function openExportNotes() {
     try {
       const h = await idbLoadHandleKey(EXNOTES_DIR_KEY);
       if (h) {
-        // Vérifie la permission (sans la demander si pas accordée — clic utilisateur requis)
-        const perm = await h.queryPermission?.({ mode: 'readwrite' });
-        if (perm === 'granted') _exnotesDirHandle = h;
-        else _exnotesDirHandle = h; // garde le handle, on demandera la permission au moment du run
+        // Accordée ou non, le dossier est gardé : la permission sera demandée au moment du run
+        // (clic requis). Seul un dossier dont Chrome ne répond plus est laissé de côté — l'export
+        // va alors aux téléchargements.
+        _exnotesDirHandle = h;
+        _exnotesUpdateDirUI();
+        const perm = await _fsaWithin(h.queryPermission?.({ mode: 'readwrite' }), 1500);
+        if (perm === _FSA_STALL && _exnotesDirHandle === h) {
+          _exnotesDirHandle = null;
+          toast(`📂 Chrome ne répond plus sur le dossier « ${h.name} » : choisis-le de nouveau, sinon les fichiers iront dans les téléchargements.`, 'warn');
+        }
       }
     } catch (e) {}
   }
@@ -39922,8 +39952,12 @@ async function _exnotesRun() {
   let dirHandle = _exnotesDirHandle;
   if (dirHandle && dirHandle.queryPermission) {
     try {
-      const perm = await dirHandle.queryPermission({ mode: 'readwrite' });
-      if (perm !== 'granted') {
+      const perm = await _fsaWithin(dirHandle.queryPermission({ mode: 'readwrite' }), 1500);
+      if (perm === _FSA_STALL) {
+        toast(`📂 Chrome ne répond plus sur le dossier « ${dirHandle.name} » : fichiers envoyés dans les téléchargements.`, 'warn');
+        if (_exnotesDirHandle === dirHandle) _exnotesDirHandle = null;
+        dirHandle = null;
+      } else if (perm !== 'granted') {
         const req = await dirHandle.requestPermission({ mode: 'readwrite' });
         if (req !== 'granted') {
           toast('⚠ Permission refusée sur le dossier — fallback téléchargement', 'warn');
@@ -61461,7 +61495,7 @@ function _evalPasteApply() {
 // Dans les deux cas les élèves sont identifiés par leur PRÉNOM (colonne des noms),
 // avec désambiguïsation par les premières lettres du nom de famille si présentes.
 
-const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, detectedSlot: null, dateSrc: null, slotSrc: null, dateAlt: null, slotAlt: null, meta: null, dirHandle: null, files: [], userPicks: {}, filter: '' };
+const _qcmcamState = { rows: [], matches: [], filename: '', maxPoints: null, detectedDate: null, detectedSlot: null, dateSrc: null, slotSrc: null, dateAlt: null, slotAlt: null, meta: null, dirHandle: null, deadName: null, pickSeq: 0, files: [], userPicks: {}, filter: '' };
 const QCMCAM_DIR_KEY = 'qcmcam-import-dir';
 const QCMCAM_SORT_KEY = 'planClasse_qcmcamImportSort'; // 'date' | 'name'
 
@@ -61868,61 +61902,113 @@ async function _evalQcmcamRefreshPicker() {
     wrap.innerHTML = `<button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()" style="align-self:flex-start">📄 Choisir un fichier…</button>`;
     return;
   }
-  // Tente de restaurer le handle de dossier
-  if (!_qcmcamState.dirHandle) {
-    try {
-      const h = await idbLoadHandleKey(QCMCAM_DIR_KEY);
-      if (h) _qcmcamState.dirHandle = h;
-    } catch (e) {}
+  // Jeton : seul le dernier rafraîchissement lancé écrit dans la zone. Sans lui, un dossier
+  // « mort » dont le délai expire effacerait le dossier qu'on vient de choisir à sa place.
+  const seq = ++_qcmcamState.pickSeq;
+  const stale = () => seq !== _qcmcamState.pickSeq;
+  // Tente de restaurer le handle de dossier (sauf si Chrome n'y a pas répondu dans cette session)
+  if (!_qcmcamState.dirHandle && _qcmcamState.deadName == null) {
+    let mem = null;
+    try { mem = await idbLoadHandleKey(QCMCAM_DIR_KEY); } catch (e) {}
+    if (stale()) return;
+    if (mem) _qcmcamState.dirHandle = mem;
   }
   if (!_qcmcamState.dirHandle) {
-    wrap.innerHTML = `
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Choisir le dossier d'import…</button>
-        <span style="color:var(--pencil);font-size:.85em">ou</span>
-        <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()">📄 Un fichier ponctuel</button>
-      </div>
+    wrap.innerHTML = _qcmcamState.deadName != null
+      ? `
+      <div style="color:var(--danger-fg);font-size:.88em">⚠ Chrome ne répond plus sur le dossier mémorisé${_qcmcamState.deadName ? ` « ${_esc(_qcmcamState.deadName)} »` : ''}. Choisis-le de nouveau : il sera mémorisé.</div>
+      ${_qcmcamPickBtns('📂 Choisir de nouveau le dossier…')}`
+      : `
+      ${_qcmcamPickBtns("📂 Choisir le dossier d'import…")}
       <div style="color:var(--pencil);font-size:.82em;font-style:italic">Le dossier sera mémorisé pour les prochains imports.</div>`;
     return;
   }
+  const h = _qcmcamState.dirHandle;
+  // La zone ne reste JAMAIS vide : passé 250 ms (un dossier sain répond en quelques ms), on dit
+  // ce qu'on attend et on laisse les deux portes de sortie.
+  const waiting = txt => { if (!stale()) wrap.innerHTML = `
+      <div style="color:var(--pencil);font-size:.88em">⏳ ${txt}</div>
+      ${_qcmcamPickBtns('📂 Changer de dossier')}`; };
+  const waitT = setTimeout(() => waiting(`Lecture du dossier « ${_esc(h.name || '?')} »…`), 250);
+  const show = html => { clearTimeout(waitT); if (!stale()) wrap.innerHTML = html; };
+  // Dossier « mort » (cf. _fsaWithin) : oublié en mémoire, l'IndexedDB garde l'ancien jusqu'au
+  // nouveau choix.
+  const dead = () => {
+    clearTimeout(waitT);
+    if (stale()) return;
+    _qcmcamMarkDead(h);
+    _evalQcmcamRefreshPicker();
+  };
   // Vérifie la permission
   try {
-    const perm = await _qcmcamState.dirHandle.queryPermission({ mode: 'read' });
+    const perm = await _fsaWithin(h.queryPermission({ mode: 'read' }), 2000);
+    if (stale()) { clearTimeout(waitT); return; }
+    if (perm === _FSA_STALL) { dead(); return; }
     if (perm !== 'granted') {
-      const req = await _qcmcamState.dirHandle.requestPermission({ mode: 'read' });
+      // Non borné : il attend la réponse à la bulle de Chrome. L'écran le dit.
+      clearTimeout(waitT);
+      waiting(`Chrome demande l'accès au dossier « ${_esc(h.name || '?')} » : réponds à sa question en haut de la fenêtre.`);
+      const req = await h.requestPermission({ mode: 'read' });
+      if (stale()) return;
       if (req !== 'granted') {
-        wrap.innerHTML = `
+        show(`
           <div style="color:var(--danger-fg);font-size:.88em">⚠ Permission refusée sur le dossier mémorisé.</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Changer de dossier</button>
-            <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()">📄 Un fichier ponctuel</button>
-          </div>`;
+          ${_qcmcamPickBtns('📂 Changer de dossier')}`);
         return;
       }
     }
   } catch (e) {
-    wrap.innerHTML = `<div style="color:var(--danger-fg);font-size:.88em">⚠ Dossier inaccessible : ${_esc(e.message || e)}</div>
-      <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Choisir un dossier</button>`;
+    show(`<div style="color:var(--danger-fg);font-size:.88em">⚠ Dossier inaccessible : ${_esc(e.message || e)}</div>
+      ${_qcmcamPickBtns('📂 Choisir un dossier')}`);
     return;
   }
-  // Liste les fichiers .csv/.tsv
+  // Liste les fichiers .csv/.tsv — chaque pas est borné, pas le total : un dossier plein reste lisible.
   try {
     const files = [];
-    for await (const entry of _qcmcamState.dirHandle.values()) {
+    const it = h.values();
+    let dates = true;
+    for (;;) {
+      const step = await _fsaWithin(it.next(), 5000);
+      if (stale()) { clearTimeout(waitT); return; }
+      if (step === _FSA_STALL) { dead(); return; }
+      if (step.done) break;
+      const entry = step.value;
       if (entry.kind !== 'file') continue;
       const nm = entry.name || '';
       if (!/\.(csv|tsv)$/i.test(nm)) continue;
       let lm = 0;
-      try { const f = await entry.getFile(); lm = f.lastModified || 0; } catch (e) {}
+      // Une date qui ne vient pas : on liste le reste sans dates plutôt que d'attendre à chaque ligne.
+      if (dates) {
+        try {
+          const f = await _fsaWithin(entry.getFile(), 2000);
+          if (f === _FSA_STALL) dates = false; else lm = f.lastModified || 0;
+        } catch (e) {}
+      }
       files.push({ name: nm, lastModified: lm, handle: entry });
     }
+    if (stale()) { clearTimeout(waitT); return; }
     _qcmcamState.files = files;
   } catch (e) {
-    wrap.innerHTML = `<div style="color:var(--danger-fg);font-size:.88em">⚠ Lecture du dossier impossible : ${_esc(e.message || e)}</div>
-      <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">📂 Changer de dossier</button>`;
+    show(`<div style="color:var(--danger-fg);font-size:.88em">⚠ Lecture du dossier impossible : ${_esc(e.message || e)}</div>
+      ${_qcmcamPickBtns('📂 Changer de dossier')}`);
     return;
   }
+  clearTimeout(waitT);
   _evalQcmcamRenderPicker();
+}
+
+// Les deux portes de sortie de la zone Fichier : choisir un dossier, ou un fichier à la main.
+function _qcmcamPickBtns(label) {
+  return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+        <button class="btn btn-p btn-sm" onclick="_evalQcmcamPickDir()">${label}</button>
+        <button class="btn btn-g btn-sm" onclick="document.getElementById('meval-qcmcam-file-fallback').click()">📄 Un fichier ponctuel</button>
+      </div>`;
+}
+function _qcmcamMarkDead(h) {
+  _qcmcamState.deadName = (h && h.name) || '';
+  if (_qcmcamState.dirHandle === h) _qcmcamState.dirHandle = null;
+  _qcmcamState.files = [];
+  console.warn('[QCMcam] Chrome ne répond plus sur le dossier d\'import « ' + _qcmcamState.deadName + ' » : il faut le choisir de nouveau.');
 }
 
 function _evalQcmcamRenderPicker() {
@@ -62003,6 +62089,7 @@ async function _evalQcmcamPickDir() {
   try {
     const h = await window.showDirectoryPicker({ mode: 'read' });
     _qcmcamState.dirHandle = h;
+    _qcmcamState.deadName = null;
     await idbSaveHandleKey(h, QCMCAM_DIR_KEY);
     await _evalQcmcamRefreshPicker();
   } catch (e) {
@@ -62057,9 +62144,15 @@ async function _evalQcmcamSelectFromDir(name) {
   const f = (_qcmcamState.files || []).find(x => x.name === name);
   if (!f) return;
   try {
-    const file = await f.handle.getFile();
+    const file = await _fsaWithin(f.handle.getFile(), 5000);
+    const text = file === _FSA_STALL ? _FSA_STALL : await _fsaWithin(file.text(), 15000);
+    if (text === _FSA_STALL) {
+      toast('⚠ Chrome ne répond plus sur ce dossier : choisis-le de nouveau, ou prends un fichier ponctuel.', 'warn');
+      _qcmcamMarkDead(_qcmcamState.dirHandle);
+      _evalQcmcamRefreshPicker();
+      return;
+    }
     _qcmcamState.filename = file.name || name;
-    const text = await file.text();
     _qcmcamIngest(text, file.name || name);
     _evalQcmcamRenderPreview();
     _evalQcmcamRenderPicker(); // pour le highlight de la ligne sélectionnée
