@@ -3912,6 +3912,18 @@ test('lint : toute autorisation de dossier passe par _fsaWithin', () => {
   assert.deepEqual(all.filter(([, l]) => !/_fsaWithin\(/.test(l)), []);
 });
 
+// Rappels et motifs de rappel : 120 caractères étaient trop courts (demande du 2026-11-25).
+test('rappels : 500 caractères dans les quatre champs, et une seule ligne', async () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'plan de classe.html'), 'utf8');
+  const max = await ev('REMINDER_MAX');
+  assert.equal(max, 500);
+  for (const id of ['mrem-custom', 'mrempresets-add'])
+    assert.match(html, new RegExp('<textarea id="' + id + '"[^>]*maxlength="' + max + '"'), id);
+  assert.equal((html.match(/rem-txt" rows="1" maxlength="\$\{REMINDER_MAX\}"/g) || []).length, 2, 'modification sur place et liste des motifs');
+  assert.deepEqual(JSON.parse(await ev(`JSON.stringify([_remClean('a \\n\\n  b\\r\\nc'), _remClean(null), _remShort('x'.repeat(90)).length, _remShort('x'.repeat(91)).length, _remShort(null)])`)),
+    ['a b c', '', 90, 90, '']);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Récupérer ce qui manque (_mergeRun) — fusion à deux versions : on AJOUTE ce qui manque,
 // on ne remplace jamais une valeur présente, et seules les lignes cochées s'appliquent.

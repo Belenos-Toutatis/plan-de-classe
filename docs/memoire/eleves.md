@@ -232,6 +232,11 @@ Item **🔔 Rappels / À vérifier…** ajouté dans `#ctx` entre 📋 Informati
 - **Ajouter** : champ juste sous la liste, puis les motifs en **puces** `.rem-chip` de la couleur de leur groupe. Clic = remplit le champ (inchangé, `addReminderPreset`) ; **double-clic = ajouté tout de suite** (`_remAddPresetNow`, la fenêtre se ferme comme avec « Ajouter »).
 - **Traités récemment** : les 3 derniers `rappel_fait` de `stu.history`, en une ligne.
 - Audit : 0 écart en clair et en sombre ; 363 px à 375. Modification au clavier et double-clic vérifiés au vrai pointeur.
+- **500 caractères au lieu de 120 (v2.168.3, 2026-11-25, demande de l'utilisateur)** — pour un rappel comme pour un motif : `REMINDER_MAX`, recopié en dur dans les deux champs statiques (`#mrem-custom`, `#mrempresets-add`). Un test compare les quatre.
+  - Les quatre champs (ajout d'un rappel, modification sur place, motif, nouveau motif) sont des `textarea.rem-txt` d'une ligne qui **grandissent avec le texte** (`field-sizing:content`, plafond 40 % de l'écran) : sur une seule ligne, 500 caractères ne se relisent pas. Entrée valide ; **pas de retour à la ligne** dans un rappel (`_remOneLine` / `_remClean` : un retour collé devient une espace).
+  - Puce d'un motif : deux lignes au plus (`.rem-chip > span`, `-webkit-line-clamp`), texte entier au survol au-delà de 100 caractères. « Traités récemment » : 90 caractères (`_remShort`), le reste au survol.
+  - Fenêtre ⚙ Motifs élargie (660 → 820 px, les motifs par défaut y tiennent sur une ligne) ; sur téléphone, couleurs et corbeille passent sous le champ.
+  - Infobulle `#gtip` : posée au-dessus de sa cible, elle ne sort plus par le haut de l'écran (trois rappels de 490 caractères : 722 px de haut).
 
 ### Ancienne description (avant v2.110.0)
 #### Modale `mreminders`
@@ -251,7 +256,7 @@ Item **🔔 Rappels / À vérifier…** ajouté dans `#ctx` entre 📋 Informati
     '👀 Surveiller (placement, comportement)',
   ];
   ```
-- **Champ texte libre** : Enter ou bouton "Ajouter" → rappel personnalisé (max 120 caractères). Auto-focus sur le champ à l'ouverture.
+- **Champ texte libre** : Enter ou bouton "Ajouter" → rappel personnalisé (max 120 caractères, 500 depuis la v2.168.3). Auto-focus sur le champ à l'ouverture.
 
 ### Fonctions clés
 - `openReminders(sid)` — ouvre la modale, peuple le sid caché, render
