@@ -1943,6 +1943,9 @@ html[data-theme="dark"] .eval-class-row-checked { background: #1c2e4a !important
 .mres-tbl tfoot th.rendu-eleve-col{font-style:italic;color:var(--ink-blue)}
 .mres-tbl .bdot{margin-right:4px}
 .mres-of{color:var(--pencil);font-size:.78em}
+.mres-adj{display:inline-block;margin-left:3px;padding:0 .3em;border:1px solid currentColor;border-radius:.6em;font-size:.72em;font-weight:700;line-height:1.35;vertical-align:.15em;background:var(--paper)}
+.mres-adj-m{color:var(--danger-fg)}
+.mres-adj-p{color:var(--ok-fg)}
 .mres-dash{color:var(--pencil)}
 .mres-click{cursor:pointer}
 .mres-click:hover td{box-shadow:inset 0 -2px 0 var(--ink-blue-soft)}
@@ -10225,11 +10228,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.170.0';
+const APP_VERSION    = '2.170.1';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-27T12:05:35Z';
+const APP_BUILD_DATE = '2026-11-27T15:40:35Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -22233,7 +22236,18 @@ function _renduRender() {
         if (v === 'A') { h = _esc(_codeA()); t = _codeA(); }
         else if (v === 'NN') { h = _esc(_codeNN()); t = _codeNN(); }
         else if (v == null || v === '') h = '<span class="mres-dash">—</span>';
-        else { const n = parseFloat(v); h = `${_fmtNote(n)}<span class="mres-of">/${_fmtNote(c.max)}</span>`; t = _fmtNote(n); if (Number.isFinite(n)) colVals[ci].push(n); }
+        else {
+          // Type A : un commentaire « −1 pt bavardage » change la valeur de la question —
+          // la case montre la valeur COMPTÉE (celle de la note) et une pastille ±N, sinon
+          // l'élève lit 4/4 en projection alors que la note compte 3. Motif au survol, en
+          // Bilan seulement (arbitrage : pas de motif devant la classe).
+          const n = parseFloat(v);
+          const coms = (ev.notes?.[sid]?.comments?.[c.mnId] || []).filter(Boolean);
+          const eff = (ev.type === 'A' && Number.isFinite(n)) ? _applyCommentsToValue(n, coms, c.max) : n;
+          const dlt = Number.isFinite(n) ? Math.round((eff - n) * 100) / 100 : 0;
+          const pill = dlt ? ` <span class="mres-adj ${dlt < 0 ? 'mres-adj-m' : 'mres-adj-p'}"${mode === 'bilan' ? ` title="${_escAttr('Saisi ' + _fmtNote(n) + ' · ' + coms.join(' · '))}"` : ''}>${dlt < 0 ? '−' : '+'}${_fmtNote(Math.abs(dlt))}</span>` : '';
+          h = `${_fmtNote(eff)}<span class="mres-of">/${_fmtNote(c.max)}</span>${pill}`; t = _fmtNote(eff); if (Number.isFinite(eff)) colVals[ci].push(eff);
+        }
       } else if (c.kind === 'd-cell') {
         const v = ev.notes?.[sid]?.levels?.[c.mnId]?.[c.cid];
         h = (v == null || v === '') ? '<span class="mres-dash">—</span>' : sq(v); t = (v == null) ? '' : (typeof v === 'number' ? _formatNiveau(v) : String(v));

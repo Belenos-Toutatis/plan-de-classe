@@ -4416,3 +4416,31 @@ test('décalage : import et chargement de S.vacances', () => {
   ev('postLoadHook()');
   assert.equal(get('S.vacances'), null);
 });
+
+test('Résultats d\'un devoir (type A) : la question montre la valeur comptée, malus ou bonus d\'un commentaire compris', () => {
+  setState({
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ['s1', 's2', 's3'], rooms: {} } },
+    eleves: { s1: { id: 's1', nom: 'Alpha', prenom: 'a', classe_id: 'c1' },
+              s2: { id: 's2', nom: 'Beta', prenom: 'b', classe_id: 'c1' },
+              s3: { id: 's3', nom: 'Gamma', prenom: 'c', classe_id: 'c1' } },
+    salles: {}, competences: {},
+    evalPrefs: { nbLevels: 4, codeAbsent: 'A', codeNonNote: 'NN' },
+    evaluations: { eA: { id: 'eA', type: 'A', nomCourt: 'A', classIds: ['c1'], noteMax: 20,
+      miniNotes: [{ id: 'm1', label: 'Q1', max: 4 }],
+      notes: { s1: { values: { m1: 4 }, comments: { m1: ['-1 pt bavardage'] } },
+               s2: { values: { m1: 4 }, comments: { m1: ['+1 pt soin'] } },   // borné au maximum : rien à signaler
+               s3: { values: { m1: 2 }, comments: { m1: ['+1 pt soin'] } } } } },
+  });
+  for (const mode of ['bilan', 'proj']) {
+    ev(`_renduState = { evalId: 'eA', classId: 'c1', mode: '${mode}', sort: 'nom', names: 'full', groups: { ${mode}: new Set(['q', 'note']) } };
+      { const _g = document.getElementById; document.getElementById = () => document.createElement('div');
+        try { _renduRender(); } finally { document.getElementById = _g; } }`);
+    const tsv = JSON.parse(ev('JSON.stringify(_renduState.lastTsv)'));
+    const iQ = tsv[0].indexOf('Q1');
+    const byName = Object.fromEntries(tsv.slice(1).map(r => [r[0].split(' ')[0], r]));
+    assert.equal(byName.ALPHA[iQ], '3', `${mode} : 4 − 1 pt = 3, comme la note`);
+    assert.equal(byName.BETA[iQ], '4', `${mode} : bonus borné au maximum`);
+    assert.equal(byName.GAMMA[iQ], '3', `${mode} : 2 + 1 pt = 3`);
+    assert.equal(byName.ALPHA[tsv[0].indexOf('Note /20')], '15');
+  }
+});
