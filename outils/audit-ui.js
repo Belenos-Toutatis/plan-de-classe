@@ -218,7 +218,7 @@ window.__dynRun = async function (only) {
     ['fiche', () => openFiche(sid)], ['ficheAnnee', () => openRemarkWriter(sid, '')], ['notes', () => openStuNotes(sid)], ['rem', () => openReminders(sid)], ['cmsg', () => openClassMsg()],
     ['remPresets', () => openReminderPresets()], ['tags', () => openTagsModal()], ['vclass', () => openVirtualClassModal()],
     ['vclassEdit', () => openVirtualClassModal(Object.values(S.classes).find(c => c.virtual)?.id)], ['links', () => openUserLinksModal()],
-    ['shuffle', () => openShuffleDialog()], ['import', () => openImportStudents()], ['edit', () => openEdit(sid)], ['overview', () => openOverviewModal()],
+    ['shuffle', () => openShuffleDialog()], ['rotate', () => openRotateDialog()], ['import', () => openImportStudents()], ['edit', () => openEdit(sid)], ['overview', () => openOverviewModal()],
     ['attStats', () => openAttStats()], ['hist', () => openHist(sid)], ['seat', () => openSeatPicker(ev, sid)],
     ['reset', () => openResetModal('year')], ['resetNuke', () => openResetModal('nuke')], ['resetDemo', () => openResetModal('demo')],
     ['aesh', () => openAeshModal(cls)], ['addSalle', () => openAddSalleToClass()], ['newSalle', () => openNewSalleModal()],
@@ -338,6 +338,19 @@ window.__subRun = async function () {
     cls.seating = seat0; if (ga0) room.genderAlt = ga0; else delete room.genderAlt; if (sga0) salle.genderAlt = sga0;
     salle.collectPatterns = salle.collectPatterns.filter(p => p.id !== '__auditPat'); renderTeacherGrid();
   } catch (e) { out.gaErr = e.message; }
+  // ⤵ Décalage (v2.170.0) : bandeau « Décalage prévu » et fenêtre avec vacances — réglage, ordre et
+  // vacances temporaires, retirés après.
+  try {
+    switchTab('plan'); const cls = getCls(); const salle = S.salles[cls.activeRoom]; const room = cls.rooms[cls.activeRoom];
+    const rot0 = room.rotation, vac0 = S.vacances;
+    salle.collectPatterns.push({ id: '__auditRot', nom: 'Audit', order: Object.keys(cls.seating).sort() });
+    room.rotation = { patternId: '__auditRot', step: 1, mode: 'occupied', every: 1, count: 'cal', since: '2020-01-06' };
+    S.vacances = [{ debut: '2020-02-01', fin: '2020-02-16', nom: 'Hiver' }];
+    renderTeacherGrid(); await sleep(200); A('plan-decalage-bandeau', document.getElementById('rot-banner'));
+    openRotateDialog(); await sleep(250); A('decalage-fenetre', document.getElementById('mrotate')); closeMod2('mrotate');
+    if (rot0) room.rotation = rot0; else delete room.rotation; if (vac0) S.vacances = vac0; else delete S.vacances;
+    salle.collectPatterns = salle.collectPatterns.filter(p => p.id !== '__auditRot'); renderTeacherGrid();
+  } catch (e) { out.rotErr = e.message; }
   switchTab('comp'); for (const v of ['domain', 'code']) { _compBilanSetDisplayMode(v); await sleep(150); A('comp-' + v); }
   switchTab('bilan');
   for (const p of ['S1', 'S2', '']) { const sel = document.getElementById('bilan-period-filter'); if (sel && [...sel.options].some(o => o.value === p)) { sel.value = p; sel.dispatchEvent(new Event('change')); await sleep(200); A('bilan-' + (p || 'toutes')); } }

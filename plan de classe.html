@@ -386,6 +386,12 @@ td.meval-cell-disp{text-align:center;font-family:var(--font-mono);font-size:.78e
    sur un fond qui, lui, reste jaune. Info privée au prof : jamais imprimée. */
 #class-msg-banner{display:none;background:var(--highlighter);border:2px solid #b8860b;border-left:10px solid var(--margin-red);color:#1a252f;border-radius:6px;padding:10px 14px;margin:0 0 10px;gap:8px 14px;align-items:flex-start;flex-wrap:wrap;box-shadow:var(--shadow-card);animation:cmsgPulse 2.4s ease-in-out infinite}
 #class-msg-banner.on{display:flex}
+/* ⤵ Décalage prévu (v2.170.0) : bandeau calme, tokens --info-* déclinés par thème */
+#rot-banner{display:none;background:var(--info-bg);border:1px solid var(--info-bd);border-left:6px solid var(--link-fg);color:var(--ink-deep);border-radius:6px;padding:8px 12px;margin:0 0 10px;gap:8px 12px;align-items:center;flex-wrap:wrap}
+#rot-banner.on{display:flex}
+#rot-banner .rot-txt{flex:1;min-width:220px}
+.rot-vac{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:3px 0}
+.rot-vac input[type=date]{width:auto}
 #class-msg-banner:hover{animation:none}
 @keyframes cmsgPulse{0%,100%{box-shadow:0 0 0 0 rgba(176,61,46,.55)}50%{box-shadow:0 0 0 7px rgba(176,61,46,0)}}
 .cmsg-icon{font-size:1.8em;line-height:1;align-self:center}
@@ -4715,6 +4721,7 @@ body.topbar-free #topbar { position: static !important; }
         <div class="dd-menu">
           <button onclick="closeAllDd();randomPlacement(false)">🔀 Placer les non placés</button>
           <button onclick="closeAllDd();randomPlacement(true)">🔀 Mélanger tout</button>
+          <button onclick="closeAllDd();openRotateDialog()" title="Chaque élève avance d'une ou deux places le long d'un ordre de ramassage — à la main, ou proposé toutes les N semaines de cours">⤵ Décaler le long d'un ordre…</button>
           <div class="dd-sep"></div>
           <button onclick="closeAllDd();clearAllSeating()" style="color:var(--st-upe2a-i-fg)">🗑 Retirer toutes les positions</button>
         </div>
@@ -4780,6 +4787,7 @@ body.topbar-free #topbar { position: static !important; }
     </div>
     <div id="reu-plan-hint" class="reu-plan-hint" role="status" hidden></div>
     <div id="class-msg-banner" role="status" aria-live="polite"></div>
+    <div id="rot-banner" role="status"></div>
     <div class="tp">
       <div class="tp-main">
         <div id="tg-zoom-wrap">
@@ -5951,6 +5959,29 @@ body.topbar-free #topbar { position: static !important; }
       <span class="clf-note" style="flex:1;margin:0">Un instantané du plan actuel est pris avant d'appliquer (🔖 Instantanés).</span>
       <button class="btn btn-g" onclick="closeMod2('mshuffle')">Annuler</button>
       <button class="btn btn-p" onclick="confirmShuffle()">✓ Appliquer ce plan</button>
+    </div>
+  </div>
+</div>
+
+<div id="mrotate" class="mo" onclick="closeMod(this,event)">
+  <!-- ⤵ Décalage le long d'un ordre de ramassage (v2.170.0) : réglages à gauche, aperçu avec prénoms
+       à droite ; rien ne bouge avant « Décaler maintenant ». Réglage : cls.rooms[salle].rotation. -->
+  <div class="mb" style="width:min(1040px,97vw);max-width:1040px">
+    <div class="lst-head"><h2 id="mrotate-title" style="flex:1;margin:0">⤵ Décaler les élèves</h2><span id="mrotate-chips" class="shf-chips"></span></div>
+    <div class="shf-cols">
+      <div id="mrotate-options"></div>
+      <div class="about-section clf-sec shf-prev-box"><h3>Aperçu</h3>
+        <div class="viol-seg ip-seg" id="mrotate-seg"></div>
+        <div class="clf-note" style="margin:4px 0 6px">En bleu : élèves qui changent de place · cadre rouge : contrainte enfreinte après le décalage.</div>
+        <div id="mrotate-preview"></div>
+        <div id="mrotate-res" class="shf-res"></div>
+      </div>
+    </div>
+    <div class="ma" style="flex-wrap:wrap">
+      <span class="clf-note" style="flex:1;margin:0">Un instantané du plan actuel est pris avant de décaler (🔖 Instantanés).</span>
+      <button class="btn btn-g" onclick="closeMod2('mrotate')">Annuler</button>
+      <button class="btn btn-g" id="mrotate-save" onclick="_rotSave(false)" title="Garder ces réglages sans décaler (annulable par Ctrl+Z)">✓ Enregistrer les réglages</button>
+      <button class="btn btn-p" id="mrotate-go" onclick="_rotSave(true)" title="Décaler maintenant, exactement comme l'aperçu (annulable par Ctrl+Z)">⤵ Décaler maintenant</button>
     </div>
   </div>
 </div>
@@ -10194,11 +10225,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.169.0';
+const APP_VERSION    = '2.170.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-27T10:39:22Z';
+const APP_BUILD_DATE = '2026-11-27T12:05:35Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -10911,6 +10942,8 @@ function postLoadHook() {
   if (!S.attendance) S.attendance = {};
   if (!S.tabletPools) S.tabletPools = {};
   if (!Array.isArray(S.userLinks)) S.userLinks = []; // Liens externes utilisateur (ENT, Pronote…)
+  // Vacances (v2.170.0, décalage automatique) : tableau facultatif ; tout autre type est écarté.
+  if (S.vacances !== undefined && !Array.isArray(S.vacances)) delete S.vacances;
   // 🧠 Progression du jeu de mémorisation, par élève : { b: boîte 0..4, ok, ko, t: 'YYYY-MM-DD' }.
   if (!S.memoProgress || typeof S.memoProgress !== 'object' || Array.isArray(S.memoProgress)) S.memoProgress = {};
   for (const [k, v] of Object.entries(S.memoProgress)) {
@@ -12959,6 +12992,252 @@ function _genderAltRemove() {
   if (collectAllViolations(cls).length) showViolationsModal(cls); else closeMod2('mviolations');
 }
 
+// ─── ⤵ Décalage le long d'un ordre de ramassage (v2.170.0, demandé le 2026-11-27) ─────────
+// Chaque élève avance de `step` places (1 ou 2) dans l'ordre ; les derniers repassent en tête.
+// Réglage de la classe dans sa salle : cls.rooms[id].rotation =
+//   { patternId, step: 1|2, mode: 'occupied'|'all', every: N (0 = à la main seulement),
+//     count: 'appel'|'cal', since, last, snooze }   (dates 'AAAA-MM-JJ')
+// Arbitrages de l'utilisateur : tables occupées OU toutes (au choix) ; les élèves à place imposée
+// décalent aussi (la fenêtre des contraintes s'ouvre si besoin) ; semaines de cours comptées au
+// choix (semaines avec un appel de la classe, ou semaines hors vacances — tout le monde ne fait
+// pas l'appel dans l'app) ; à l'échéance, l'app PROPOSE (bandeau), rien ne bouge sans lui.
+// Les tables des AESH sont sautées : elles gardent leur place.
+function _rotDate(k) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function _rotKey(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function _rotAddDays(k, n) { const d = _rotDate(k); d.setDate(d.getDate() + n); return _rotKey(d); }
+function _rotMonday(k) { const d = _rotDate(k); if (!d) return null; d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return _rotKey(d); }
+// Vacances valides (S.vacances, pour tout l'établissement), triées
+function _vacList() {
+  return (Array.isArray(S.vacances) ? S.vacances : [])
+    .filter(v => v && _rotDate(v.debut) && _rotDate(v.fin) && v.debut <= v.fin)
+    .sort((a, b) => a.debut.localeCompare(b.debut));
+}
+// Une semaine (lundi `w`) est-elle entièrement en vacances (du lundi au vendredi) ?
+function _rotWeekAllVac(w, vac) {
+  for (let i = 0; i < 5; i++) { const d = _rotAddDays(w, i); if (!vac.some(v => d >= v.debut && d <= v.fin)) return false; }
+  return true;
+}
+// Semaines de cours avec le placement actuel : celle du dernier décalage (ou de la mise en place
+// du réglage) comprise, celle d'aujourd'hui exclue — le décalage se propose en DÉBUT de semaine.
+//  'appel' : 1 + semaines (strictement entre les deux) où la classe a au moins un appel enregistré ;
+//  'cal'   : semaines qui ne sont pas entièrement en vacances.
+function _rotWeeksSince(cls, rot, today) {
+  const ref = rot?.last || rot?.since; if (!ref || !_rotDate(ref)) return 0;
+  const w0 = _rotMonday(ref), wc = _rotMonday(today || todayKey());
+  if (!w0 || !wc || wc <= w0) return 0;
+  if (rot.count === 'cal') {
+    const vac = _vacList(); let n = 0;
+    for (let w = w0; w < wc; w = _rotAddDays(w, 7)) if (!_rotWeekAllVac(w, vac)) n++;
+    return n;
+  }
+  const weeks = new Set();
+  for (const r of Object.values(S.attendance?.[cls.id] || {})) {
+    if (!r || !_rotDate(r.date)) continue;
+    const w = _rotMonday(r.date);
+    if (w > w0 && w < wc) weeks.add(w);
+  }
+  return 1 + weeks.size;
+}
+function _rotPattern(cls, patternId) { return S.salles?.[cls?.activeRoom]?.collectPatterns?.find(p => p.id === patternId && Array.isArray(p.order) && p.order.length) || null; }
+function _rotSetting(cls) {
+  const rot = cls?.rooms?.[cls.activeRoom]?.rotation;
+  return (rot && typeof rot === 'object' && _rotPattern(cls, rot.patternId)) ? rot : null;
+}
+// Le décalage automatique est-il dû aujourd'hui ?
+function _rotDue(cls, today) {
+  const rot = _rotSetting(cls); if (!rot || !(rot.every > 0)) return null;
+  const t = today || todayKey();
+  if (rot.snooze === t) return null;
+  const n = _rotWeeksSince(cls, rot, t);
+  return n >= rot.every ? { rot, n } : null;
+}
+// Calcule le plan décalé SANS l'appliquer. o = { patternId, step, mode }.
+function _rotCompute(cls, o) {
+  const salle = S.salles?.[cls?.activeRoom], room = cls?.rooms?.[cls?.activeRoom];
+  const seat = { ...(cls?.seating || {}) };
+  const pat = _rotPattern(cls, o?.patternId);
+  if (!pat || !salle) return { seating: seat, moved: 0, n: 0 };
+  const vides = new Set(salle.positions_vides || []);
+  const aesh = new Set(Object.values(room?.aeshSeating || {}));
+  const keys = [], seen = new Set();
+  for (const k of pat.order) {
+    if (seen.has(k) || vides.has(k) || aesh.has(k)) continue;
+    const [r, c] = String(k).split(',').map(Number);
+    if (!(r >= 0 && r < salle.rows && c >= 0 && c < salle.cols)) continue;
+    seen.add(k); keys.push(k);
+  }
+  const K = o.mode === 'all' ? keys : keys.filter(k => seat[k]);
+  const n = K.length, step = (o.step === 2 ? 2 : 1) % Math.max(n, 1);
+  if (n < 2 || !step) return { seating: seat, moved: 0, n };
+  const vals = K.map(k => seat[k] || null);
+  for (const k of K) delete seat[k];
+  let moved = 0;
+  vals.forEach((sid, i) => { if (!sid) return; const to = K[(i + step) % n]; seat[to] = sid; if (to !== K[i]) moved++; });
+  return { seating: seat, moved, n };
+}
+// Applique un décalage (pushUndo, instantané automatique, surlignage remis à zéro comme au mélange).
+function _rotApply(cls, o) {
+  const res = _rotCompute(cls, o);
+  if (!res.moved) return 0;
+  _snapAutoBeforeShuffle(cls, 'décalage');
+  const b = _getHighlightBucket(cls);
+  if (b && b.keys && b.keys.length) { b.keys = []; b.hidden = false; delete b.origin; }
+  cls.seating = res.seating;
+  _violationsAcceptedFor.delete(cls.id);
+  _violationsModalShown.delete(cls.id);
+  return res.moved;
+}
+function _rotFmt(k) { const d = _rotDate(k); return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''; }
+function _rotRenderBanner() {
+  const el = document.getElementById('rot-banner'); if (!el) return;
+  const cls = getCls();
+  const due = (cls && !_viewingSnapshot) ? _rotDue(cls) : null;
+  if (!due) { el.classList.remove('on'); el.innerHTML = ''; return; }
+  const pat = _rotPattern(cls, due.rot.patternId);
+  const since = due.rot.last ? `depuis le dernier décalage (${_rotFmt(due.rot.last)})` : `depuis la mise en place (${_rotFmt(due.rot.since)})`;
+  el.innerHTML = `<span aria-hidden="true">⤵</span><span class="rot-txt"><b>Décalage prévu</b> — ${due.n} semaine${due.n > 1 ? 's' : ''} de cours ${since} : chaque élève avance ${due.rot.step === 2 ? 'de deux places' : "d'une place"} le long de « ${_esc(pat?.nom || '')} ».</span>`
+    + `<button class="btn btn-p btn-sm" onclick="openRotateDialog()" title="Voir l'aperçu, puis décaler">👁 Voir et décaler…</button>`
+    + `<button class="btn btn-g btn-sm" onclick="_rotSnooze()" title="Ne plus le proposer aujourd'hui ; il reviendra au prochain jour de cours">Plus tard</button>`;
+  el.classList.add('on');
+}
+function _rotSnooze() {
+  const rot = _rotSetting(getCls()); if (!rot) return;
+  rot.snooze = todayKey();
+  save(); _rotRenderBanner();
+  toast('⤵ Décalage reporté — il sera de nouveau proposé au prochain jour de cours.');
+}
+
+var _rotOpts = null, _rotShow = 'after';
+function openRotateDialog() {
+  const cls = getCls();
+  if (!cls) return toast('⚠️ Sélectionne une classe.', 'warn');
+  if (!cls.activeRoom) return toast('⚠️ Cette classe n\'a pas de salle active.', 'warn');
+  const salle = activeSalle(cls);
+  const pats = (salle?.collectPatterns || []).filter(p => Array.isArray(p.order) && p.order.length);
+  const rot = _rotSetting(cls) || {};
+  _rotOpts = {
+    patternId: rot.patternId || pats[0]?.id || null,
+    step: rot.step === 2 ? 2 : 1,
+    mode: rot.mode === 'all' ? 'all' : 'occupied',
+    every: rot.every > 0 ? rot.every : 0,
+    everyN: rot.every > 0 ? rot.every : 3,
+    count: rot.count === 'cal' ? 'cal' : 'appel',
+    vac: _vacList().map(v => ({ ...v })),
+  };
+  _rotShow = 'after';
+  _rotRenderOptions();
+  openMod('mrotate');
+  _rotRenderPreview();
+}
+function _rotSet(k, v) { _rotOpts[k] = v; _rotRenderOptions(); _rotRenderPreview(); }
+function _rotRenderOptions() {
+  const wrap = document.getElementById('mrotate-options'); if (!wrap || !_rotOpts) return;
+  const o = _rotOpts, cls = getCls(), salle = activeSalle(cls);
+  document.getElementById('mrotate-title').textContent = `⤵ Décaler les élèves — ${cls.nom} · ${salle?.nom || ''}`;
+  const pats = (salle?.collectPatterns || []).filter(p => Array.isArray(p.order) && p.order.length);
+  const seg = (k, v, l, tip) => `<button type="button" class="${o[k] === v ? 'on' : ''}" onclick="_rotSet('${k}',${typeof v === 'string' ? `'${_escJsAttr(v)}'` : v})"${tip ? ` title="${_escAttr(tip)}"` : ''}>${l}</button>`;
+  let h = `<div class="about-section clf-sec"><h3>Ordre suivi</h3>`;
+  if (!pats.length) h += `<div class="clf-note" style="margin:2px 0">Aucun ordre dans cette salle : crée-en un dans Config Salle → 🗂 Ordres de ramassage (un Serpentin fait le tour de la salle).</div>`;
+  else h += `<div class="ip-seg" style="flex-wrap:wrap">${pats.map(p => seg('patternId', p.id, _esc(p.nom || '(sans nom)'))).join('')}</div>`;
+  h += `<div class="clf-hint" style="margin:8px 0 3px">Chaque élève avance</div><div class="ip-seg">${seg('step', 1, "d'une place")}${seg('step', 2, 'de deux places')}</div>`;
+  h += `<div class="clf-hint" style="margin:8px 0 3px">Sur</div><div class="ip-seg">${seg('mode', 'occupied', 'les tables occupées', "Chacun prend la table occupée suivante : les tables vides restent vides")}${seg('mode', 'all', "toutes les tables de l'ordre", 'Chacun avance d\'une table, vide ou non : une table vide peut se remplir et une autre se libérer')}</div>`;
+  h += `<div class="clf-note" style="margin:6px 0 0">Les derniers de l'ordre repassent en tête ; les AESH gardent leur table${o.step === 2 ? '. Avec deux places, chaque table garde le même sexe : une alternance fille-garçon reste intacte' : ''}.</div></div>`;
+  h += `<div class="about-section clf-sec"><h3>Automatique</h3><div class="ip-seg" style="flex-wrap:wrap">${seg('every', 0, 'à la main seulement')}<button type="button" class="${o.every > 0 ? 'on' : ''}" onclick="_rotSet('every',_rotOpts.everyN)">toutes les…</button></div>`;
+  if (o.every > 0) {
+    h += `<div class="rot-vac" style="margin-top:6px"><input type="number" id="mrotate-every" min="1" max="20" value="${o.every}" style="width:64px" aria-label="Nombre de semaines de cours" onchange="_rotSetEvery(this.value)"> <span>semaines de cours, comptées :</span></div>`;
+    h += `<div class="ip-seg" style="flex-wrap:wrap">${seg('count', 'appel', 'avec un appel de la classe', "Une semaine compte si au moins un appel de la classe y est enregistré : vacances et semaines sans cours ne comptent pas")}${seg('count', 'cal', 'hors vacances', 'Toutes les semaines, sauf celles entièrement en vacances (dates ci-dessous)')}</div>`;
+    if (o.count === 'cal') {
+      h += `<div class="clf-hint" style="margin:8px 0 3px">Vacances <small>(pour toutes les classes)</small></div>`;
+      h += (o.vac.length ? '' : '<div class="clf-note" style="margin:2px 0">Aucune période : toutes les semaines compteront.</div>')
+        + o.vac.map((v, i) => `<div class="rot-vac"><input type="date" value="${_escAttr(v.debut || '')}" aria-label="Début des vacances" onchange="_rotVacSet(${i},'debut',this.value)"> → <input type="date" value="${_escAttr(v.fin || '')}" aria-label="Fin des vacances" onchange="_rotVacSet(${i},'fin',this.value)"> <input type="text" maxlength="30" placeholder="Toussaint" value="${_escAttr(v.nom || '')}" aria-label="Nom des vacances" style="width:120px" onchange="_rotVacSet(${i},'nom',this.value)"> <button type="button" class="btn btn-g btn-sm" onclick="_rotVacDel(${i})" aria-label="Retirer cette période">✕</button></div>`).join('')
+        + `<button type="button" class="btn btn-g btn-sm" style="margin-top:4px" onclick="_rotVacAdd()">＋ Ajouter une période</button>`;
+    }
+    h += `<div class="clf-note" style="margin:6px 0 0">À l'échéance, un bandeau le propose au-dessus du plan ; rien ne bouge sans toi.</div>`;
+  }
+  // État : dernier décalage, semaines écoulées, prochain
+  const rot = _rotSetting(cls);
+  if (rot) {
+    const n = _rotWeeksSince(cls, Object.assign({}, rot, { count: o.count }), todayKey());
+    const ref = rot.last ? `Dernier décalage : ${_rotFmt(rot.last)}` : `Réglage en place depuis le ${_rotFmt(rot.since)}`;
+    h += `<div class="clf-note" style="margin:8px 0 0">${ref}${o.every > 0 ? ` · ${n} semaine${n > 1 ? 's' : ''} de cours depuis · ${n >= o.every ? 'échéance atteinte' : `encore ${o.every - n} semaine${o.every - n > 1 ? 's' : ''} de cours`}` : ''}.</div>`;
+  }
+  h += '</div>';
+  wrap.innerHTML = h;
+  const go = document.getElementById('mrotate-go'), sv = document.getElementById('mrotate-save');
+  if (go) go.disabled = !o.patternId;
+  if (sv) sv.disabled = !o.patternId;
+}
+function _rotSetEvery(v) {
+  const n = Math.max(1, Math.min(20, parseInt(v, 10) || 1));
+  _rotOpts.every = n; _rotOpts.everyN = n; _rotRenderOptions();
+}
+function _rotVacSet(i, k, v) { const x = _rotOpts.vac[i]; if (!x) return; x[k] = String(v || '').trim(); if (k !== 'nom' && x.debut && x.fin && x.debut > x.fin) toast('⚠️ La fin des vacances est avant leur début.', 'warn'); _rotRenderOptions(); }
+function _rotVacAdd() { _rotOpts.vac.push({ debut: '', fin: '', nom: '' }); _rotRenderOptions(); }
+function _rotVacDel(i) { _rotOpts.vac.splice(i, 1); _rotRenderOptions(); }
+function _rotRenderPreview() {
+  const box = document.getElementById('mrotate-preview'); if (!box || !_rotOpts) return;
+  const cls = getCls(), salle = activeSalle(cls), room = activeRoomData(cls); if (!salle) return;
+  const seg = document.getElementById('mrotate-seg');
+  if (seg) seg.innerHTML = `<button type="button" class="${_rotShow === 'after' ? 'on' : ''}" onclick="_rotShow='after';_rotRenderPreview()">Après le décalage</button><button type="button" class="${_rotShow === 'cur' ? 'on' : ''}" onclick="_rotShow='cur';_rotRenderPreview()">Plan actuel</button>`;
+  const cur = cls.seating || {}, res = _rotCompute(cls, _rotOpts), after = res.seating;
+  const seat = _rotShow === 'after' ? after : cur;
+  const saved = cls.seating; cls.seating = { ...seat };
+  const viol = collectAllViolations(cls);
+  cls.seating = saved;
+  const bad = new Set(viol.flatMap(it => [it.sid, it.sid2].filter(Boolean)));
+  const where = m => { const r = {}; for (const [k, v] of Object.entries(m)) r[v] = k; return r; };
+  const wc = where(cur), wa = where(after);
+  const moved = new Set(Object.keys(wa).filter(sid => wc[sid] !== wa[sid]));
+  const aeshAt = {}; for (const [i, k] of Object.entries(room?.aeshSeating || {})) aeshAt[k] = +i;
+  const nA = _aeshList(cls).length, vides = new Set(salle.positions_vides || []);
+  const zones = (cls.groupes && Object.keys(cls.groupes).length) ? getEffectiveGroupes(cls) : {};
+  const gaOn = !!_genderAltSetting(cls);
+  const pat = _rotPattern(cls, _rotOpts.patternId), num = {};
+  (pat?.order || []).forEach((k, i) => { if (!(k in num)) num[k] = i + 1; });
+  let h = `<div class="shf-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
+  for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
+    const key = `${r},${c}`;
+    if (vides.has(key)) { h += '<i class="nt"></i>'; continue; }
+    if (key in aeshAt) { h += `<i class="ae">${_esc(aeshLabel(aeshAt[key], nA, cls))}</i>`; continue; }
+    const sid = seat[key], st = sid && S.eleves[sid];
+    const z = zones[key] ? ' z' + zones[key] : '';
+    if (!st) { h += `<i class="${z.trim()}"${num[key] ? ` title="Table n° ${num[key]} de l'ordre"` : ''}></i>`; continue; }
+    const mv = _rotShow === 'after' && moved.has(sid);
+    h += `<i class="st${z}${mv ? ' mv' : ''}${bad.has(sid) ? ' bad' : ''}" style="cursor:default" title="${_escAttr(st.prenom + ' ' + st.nom)}${num[key] ? ` — table n° ${num[key]} de l'ordre` : ' — table hors de l\'ordre'}${mv ? ' — change de place' : ''}${bad.has(sid) ? ' — contrainte enfreinte' : ''}">${gaOn ? _shufCivMark(sid) : ''}${_esc(st.prenom)}</i>`;
+  }
+  box.innerHTML = h + '</div><div class="shf-board">🖥 tableau</div>';
+  const v = _rotShow === 'after' ? viol.length : null;
+  const out = (cls.eleves || []).filter(sid => S.eleves[sid] && Object.values(cur).includes(sid) && !(pat?.order || []).includes(wc[sid])).length;
+  document.getElementById('mrotate-res').innerHTML = !pat ? 'Choisis un ordre.'
+    : `${res.moved} élève${res.moved > 1 ? 's' : ''} change${res.moved > 1 ? 'nt' : ''} de place`
+      + (out ? ` · ${out} sur une table hors de l'ordre (ne bouge${out > 1 ? 'nt' : ''} pas)` : '')
+      + (v === null ? '' : v ? ` · <span class="bad">⚠ ${v} contrainte${v > 1 ? 's' : ''} non respectée${v > 1 ? 's' : ''} après</span>` : ' · <span class="good">✓ aucune contrainte enfreinte</span>');
+  document.getElementById('mrotate-chips').innerHTML = pat ? `<span>« ${_esc(pat.nom || '')} »</span><span>${_rotOpts.step === 2 ? 'deux places' : 'une place'}</span>` : '';
+}
+// Enregistre les réglages ; avec apply, décale aussi (exactement l'aperçu).
+function _rotSave(apply) {
+  const cls = getCls(), room = activeRoomData(cls), o = _rotOpts;
+  if (!cls || !room || !o) return;
+  if (!_rotPattern(cls, o.patternId)) return toast('⚠️ Choisis un ordre de ramassage.', 'warn');
+  const vac = o.vac.filter(v => _rotDate(v.debut) && _rotDate(v.fin));
+  if (o.every > 0 && o.count === 'cal' && vac.some(v => v.debut > v.fin)) return toast('⚠️ Une période de vacances finit avant de commencer.', 'warn');
+  pushUndo();
+  const prev = (room.rotation && typeof room.rotation === 'object') ? room.rotation : {};
+  const rot = { patternId: o.patternId, step: o.step === 2 ? 2 : 1, mode: o.mode === 'all' ? 'all' : 'occupied', every: o.every > 0 ? o.every : 0, count: o.count === 'cal' ? 'cal' : 'appel' };
+  // Point de départ du compte : gardé tant que l'automatique reste en place
+  rot.since = (prev.since && prev.every > 0 && rot.every > 0) ? prev.since : todayKey();
+  if (prev.last) rot.last = prev.last;
+  if (o.every > 0 && o.count === 'cal') S.vacances = vac.map(v => ({ debut: v.debut, fin: v.fin, ...(v.nom ? { nom: v.nom.slice(0, 30) } : {}) }));
+  let moved = 0;
+  if (apply) { moved = _rotApply(cls, o); rot.last = todayKey(); }
+  room.rotation = rot;
+  save();
+  closeMod2('mrotate');
+  renderTeacherGrid();
+  if (!apply) toast('✓ Réglages du décalage enregistrés' + (rot.every > 0 ? ` — proposé toutes les ${rot.every} semaine${rot.every > 1 ? 's' : ''} de cours.` : '.'));
+  else { toast(`⤵ ${moved} élève${moved > 1 ? 's' : ''} décalé${moved > 1 ? 's' : ''} — Ctrl+Z pour annuler.`); _maybeShowViolationsModal(cls); }
+}
+
 // Collecte la liste complète des violations dans le placement courant
 function collectAllViolations(cls) {
   if (!cls?.seating) return [];
@@ -14521,6 +14800,7 @@ function _navBadgeRender() {
 function _renderClassMsgBanner() {
   _navBadgeRender();
   _reuPlanHint();
+  try { _rotRenderBanner(); } catch (e) { console.warn('Bandeau de décalage :', e); }
   const banner = document.getElementById('class-msg-banner');
   const btn = document.getElementById('btn-class-msg');
   const cls = getCls();
@@ -35100,10 +35380,10 @@ function _snapMake(cls, type, nom, auto) {
 }
 // Instantané automatique avant « Mélanger tout » : on ne garde que les 5 derniers par classe et salle.
 var SNAP_AUTO_KEEP = 5;
-function _snapAutoBeforeShuffle(cls) {
+function _snapAutoBeforeShuffle(cls, what) {
   if (!cls || !cls.activeRoom || !Object.keys(cls.seating || {}).length) return;
   const d = new Date();
-  _snapMake(cls, 'positions', `Avant mélange du ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, true);
+  _snapMake(cls, 'positions', `Avant ${what || 'mélange'} du ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, true);
   const autos = Object.values(S.snapshots).filter(k => k.auto && k.classId === cls.id && k.salleId === cls.activeRoom).sort((a, b) => b.ts - a.ts);
   for (const k of autos.slice(SNAP_AUTO_KEEP)) delete S.snapshots[k.id];
 }
@@ -40037,7 +40317,9 @@ function _validateImport(d) {
                     // hash hexadécimal 8 caractères de _hashString (seatingSnapshots).
                     // ⚠️ Toute nouvelle section de S doit être ajoutée ici — et ses clés
                     // vérifiées compatibles ID_RE, sinon des imports légitimes seraient rejetés.
-                    'evalPrefs', 'userLinks', 'featureFlags', 'reminderPresets', 'classMsgPresets', 'seatingSnapshots', 'profile'];
+                    'evalPrefs', 'userLinks', 'featureFlags', 'reminderPresets', 'classMsgPresets', 'seatingSnapshots', 'profile',
+                    // Vacances (v2.170.0) : tableau de { debut, fin, nom } → clés = indices
+                    'vacances'];
   for (const sec of sections) {
     const err = checkKeys(d[sec], sec);
     if (err) return err;
@@ -63949,14 +64231,16 @@ function _collectEditDelete() {
   const salle = S.salles?.[_collectEditState.salleId];
   const salleId = _collectEditState.salleId;
   const gaUsers = [salle.genderAlt === pat.id ? 'toutes les classes de la salle' : '', ...classesUsingSalle(salleId).filter(c => c.rooms?.[salleId]?.genderAlt === pat.id).map(c => c.nom)].filter(Boolean);
+  const rotUsers = classesUsingSalle(salleId).filter(c => c.rooms?.[salleId]?.rotation?.patternId === pat.id).map(c => c.nom);
   _uiConfirm({
     title: '🗑 Supprimer l\'ordre de ramassage', okLabel: '🗑 Supprimer', okClass: 'btn-d',
-    message: `Supprimer l'ordre de ramassage "${pat.nom || '(sans nom)'}" ?` + (gaUsers.length ? `\n\nIl sert aussi à l'alternance fille-garçon (${gaUsers.join(', ')}) : elle ne sera plus exigée.` : ''),
+    message: `Supprimer l'ordre de ramassage "${pat.nom || '(sans nom)'}" ?` + (gaUsers.length ? `\n\nIl sert aussi à l'alternance fille-garçon (${gaUsers.join(', ')}) : elle ne sera plus exigée.` : '') + (rotUsers.length ? `\n\nIl sert aussi au décalage de ${rotUsers.join(', ')} : il sera retiré.` : ''),
     onOk: () => {
       pushUndo();
       salle.collectPatterns = salle.collectPatterns.filter(p => p.id !== pat.id);
       if (salle.genderAlt === pat.id) delete salle.genderAlt;
       for (const c of classesUsingSalle(salleId)) if (c.rooms?.[salleId]?.genderAlt === pat.id) delete c.rooms[salleId].genderAlt;
+      for (const c of classesUsingSalle(salleId)) if (c.rooms?.[salleId]?.rotation?.patternId === pat.id) delete c.rooms[salleId].rotation;
       save();
       _collectEditState = salle.collectPatterns[0] ? { salleId: _collectEditState.salleId, patternId: salle.collectPatterns[0].id, dragging: false } : null;
       _collectRenderList();

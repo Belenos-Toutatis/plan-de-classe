@@ -4342,3 +4342,77 @@ test('alternance : portée classe ou salle à l’écriture', () => {
   ev(`_genderAltWrite(S.classes.c1, null, false)`);
   assert.equal(get('_genderAltSetting(S.classes.c1)'), null);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⤵ Décalage le long d'un ordre de ramassage (v2.170.0) : chaque élève avance d'une ou deux
+// places, les derniers repassent en tête ; proposé toutes les N semaines de cours.
+// ─────────────────────────────────────────────────────────────────────────────
+function seedRot({ seat, rot, aesh, attendance, vacances } = {}) {
+  const order = ['0,0', '0,1', '0,2', '0,3', '0,4'];   // une rangée de 5 tables ; '1,0' hors de l'ordre
+  const eleves = {};
+  for (const id of ['A', 'B', 'C', 'D', 'X']) eleves[id] = { id, nom: id, prenom: id, classe_id: 'c1', civilite: 'F', tags: [] };
+  setState({
+    eleves,
+    ...(vacances ? { vacances } : {}),
+    attendance: attendance ? { c1: attendance } : {},
+    salles: { r1: { id: 'r1', nom: 'B12', rows: 2, cols: 5, positions_vides: [], ilots: {},
+      collectPatterns: [{ id: 'pS', nom: 'Serpentin', order }] } },
+    classes: { c1: { id: 'c1', nom: '6A', eleves: Object.keys(eleves), activeRoom: 'r1', noNeighbors: [],
+      rooms: { r1: { seating: seat || {}, ipadsByPool: {}, allowedFor: {}, aeshLinks: {}, groupes: {}, posTagId: {},
+        aeshCount: aesh ? 1 : 0, aeshSeating: aesh ? { 0: aesh } : {}, ...(rot ? { rotation: rot } : {}) } } } },
+  });
+}
+
+test('décalage : tables occupées, toutes les tables, deux places, AESH et tables hors de l’ordre', () => {
+  // A B · C D  (+ X hors de l'ordre)
+  const seat = { '0,0': 'A', '0,1': 'B', '0,3': 'C', '0,4': 'D', '1,0': 'X' };
+  seedRot({ seat });
+  const run = o => get(`_rotCompute(S.classes.c1, ${JSON.stringify(o)})`);
+  let r = run({ patternId: 'pS', step: 1, mode: 'occupied' });
+  assert.deepEqual(r.seating, { '0,0': 'D', '0,1': 'A', '0,3': 'B', '0,4': 'C', '1,0': 'X' });
+  assert.equal(r.moved, 4);
+  r = run({ patternId: 'pS', step: 1, mode: 'all' });
+  assert.deepEqual(r.seating, { '0,0': 'D', '0,1': 'A', '0,2': 'B', '0,4': 'C', '1,0': 'X' });
+  r = run({ patternId: 'pS', step: 2, mode: 'occupied' });
+  assert.deepEqual(r.seating, { '0,0': 'C', '0,1': 'D', '0,3': 'A', '0,4': 'B', '1,0': 'X' });
+  assert.deepEqual(get('S.classes.c1.seating'), seat);   // calculé sans être appliqué
+  // La table de l'AESH est sautée : elle garde sa place
+  seedRot({ seat: { '0,0': 'A', '0,1': 'B', '0,3': 'C', '0,4': 'D' }, aesh: '0,2' });
+  r = run({ patternId: 'pS', step: 1, mode: 'all' });
+  assert.deepEqual(r.seating, { '0,0': 'D', '0,1': 'A', '0,3': 'B', '0,4': 'C' });
+  // Ordre inconnu : rien ne bouge
+  assert.equal(run({ patternId: 'zz', step: 1, mode: 'all' }).moved, 0);
+});
+
+test('décalage : semaines de cours comptées par les appels ou hors vacances', () => {
+  // Dernier décalage le mercredi 2026-11-04 (semaine du lundi 02/11)
+  const rot = { patternId: 'pS', step: 1, mode: 'occupied', every: 3, count: 'appel', since: '2026-10-01', last: '2026-11-04' };
+  const att = { a1: { date: '2026-11-10' }, a2: { date: '2026-11-12' }, a3: { date: '2026-11-24' }, a4: { date: '2026-11-30' } };
+  seedRot({ rot, attendance: att });
+  // Lundi 30/11 : semaine du 02/11 + semaines du 09/11 et du 23/11 (appels) = 3 ; celle du 16/11 sans appel ne compte pas
+  assert.equal(ev(`_rotWeeksSince(S.classes.c1, S.classes.c1.rooms.r1.rotation, '2026-11-30')`), 3);
+  assert.ok(get(`_rotDue(S.classes.c1, '2026-11-30')`));
+  assert.equal(get(`_rotDue(S.classes.c1, '2026-11-27')`), null);   // la semaine du 23/11 n'est pas finie
+  // « Plus tard » : plus proposé ce jour-là, de nouveau le lendemain
+  ev(`S.classes.c1.rooms.r1.rotation.snooze = '2026-11-30'`);
+  assert.equal(get(`_rotDue(S.classes.c1, '2026-11-30')`), null);
+  assert.ok(get(`_rotDue(S.classes.c1, '2026-12-01')`));
+  // Hors vacances : 02/11, 09/11, 16/11, 23/11 → 4 semaines ; vacances du 14 au 22/11 (semaine du 16/11 entière) → 3
+  ev(`S.classes.c1.rooms.r1.rotation.count = 'cal'`);
+  assert.equal(ev(`_rotWeeksSince(S.classes.c1, S.classes.c1.rooms.r1.rotation, '2026-11-30')`), 4);
+  ev(`S.vacances = [{ debut: '2026-11-14', fin: '2026-11-22', nom: 'Test' }, { debut: 'n/importe', fin: '2026-01-01' }]`);
+  assert.equal(ev(`_rotWeeksSince(S.classes.c1, S.classes.c1.rooms.r1.rotation, '2026-11-30')`), 3);
+  // Vacances qui ne couvrent qu'une partie de la semaine : elle compte
+  ev(`S.vacances = [{ debut: '2026-11-16', fin: '2026-11-18' }]`);
+  assert.equal(ev(`_rotWeeksSince(S.classes.c1, S.classes.c1.rooms.r1.rotation, '2026-11-30')`), 4);
+  // « À la main seulement » : jamais proposé
+  ev(`S.classes.c1.rooms.r1.rotation.every = 0`);
+  assert.equal(get(`_rotDue(S.classes.c1, '2027-06-30')`), null);
+});
+
+test('décalage : import et chargement de S.vacances', () => {
+  assert.equal(ev(`_validateImport({ classes: {}, eleves: {}, vacances: [{ debut: '2026-10-17', fin: '2026-11-02', nom: 'Toussaint' }] })`), null);
+  setState({ classes: {}, eleves: {}, vacances: { pas: 'un tableau' } });
+  ev('postLoadHook()');
+  assert.equal(get('S.vacances'), null);
+});
