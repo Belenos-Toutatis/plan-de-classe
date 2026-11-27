@@ -2370,6 +2370,9 @@ textarea.rem-txt{field-sizing:content;min-height:34px;max-height:40vh;resize:ver
 .viol-seg{margin-bottom:2px}
 .shf-plan i.st.mv{background:var(--info-bg);border:2px solid var(--link-fg);font-weight:600}
 .shf-plan i.st.bad{box-shadow:inset 0 0 0 2px var(--danger-fg)}
+/* ♀ / ♂ dans les aperçus : pastille à fond papier OPAQUE — sur une place de zone (--g*-light)
+   les accents --civ-* tombaient à 3,9:1 ; sur le papier ils tiennent 5,1 (clair) / 8,3 (sombre). */
+.shf-plan .shf-civ{font-weight:700;margin-right:2px;background:var(--paper);border-radius:3px;padding:0 2px}.shf-plan .shf-civ.f{color:var(--civ-f)}.shf-plan .shf-civ.m{color:var(--civ-m)}
 /* Mélanger tout (v2.124.0) */
 .shf-chips{display:flex;gap:4px;flex-wrap:wrap}
 .shf-chips span{font-size:.78em;padding:1px 8px;border-radius:999px;background:var(--paper-warm);color:var(--pencil);border:1px solid var(--rule-line)}
@@ -5960,7 +5963,8 @@ body.topbar-free #topbar { position: static !important; }
     <div class="shf-cols">
       <div class="about-section clf-sec" style="margin:0"><h3>Ce qui ne va pas</h3>
         <div id="mviolations-list" class="viol-list"></div>
-        <div class="clf-note">Les contraintes se règlent avec ⛓ Contraintes (Plan) ou dans Config Salle.</div>
+        <div id="mviolations-ga" class="clf-note" style="display:none"></div>
+        <div class="clf-note">Les contraintes se règlent avec ⛓ Contraintes (Plan) ou dans Config Salle ; l'alternance fille-garçon, dans 🔀 Mélanger tout.</div>
       </div>
       <div class="about-section clf-sec shf-prev-box"><h3>Solution proposée <small class="clf-hint">(déplacer le moins d'élèves possible)</small></h3>
         <div class="viol-seg ip-seg" id="mviolations-seg"></div>
@@ -10190,11 +10194,11 @@ var _bilanHiddenCols = new Set();
 // Numéro de version affiché à l'utilisateur (semver). À incrémenter à chaque
 // release : PATCH (x.y.Z) pour un correctif, MINOR (x.Y.0) pour une fonctionnalité,
 // MAJOR (X.0.0) pour un changement de fond / rupture.
-const APP_VERSION    = '2.168.3';
+const APP_VERSION    = '2.169.0';
 // Date de build (ISO) — sert UNIQUEMENT à la détection de mise à jour (comparée à la
 // date du dernier commit GitHub). La mettre ≥ à l'instant du push pour que l'app se
 // considère « à jour » une fois en ligne. À bumper à chaque push, comme avant.
-const APP_BUILD_DATE = '2026-11-25T08:35:19Z';
+const APP_BUILD_DATE = '2026-11-27T10:39:22Z';
 // Tolérance de détection : on ne signale une MAJ que si le dernier commit GitHub
 // est plus récent que APP_BUILD_DATE de PLUS de cette marge. Absorbe le délai
 // inévitable entre « je fige APP_BUILD_DATE » et « le commit s'horodate »
@@ -12000,6 +12004,13 @@ function _pairKey(sid1, sid2) {
   if (!sid1 || !sid2 || sid1 === sid2) return null;
   return [sid1, sid2].sort().join('|');
 }
+// Élèves qui appartiennent à au moins une paire à séparer. Seuls eux peuvent enfreindre la
+// règle : inutile de chercher les voisins des autres (_pairAdjacentKeys coûte ~0,15 ms par
+// place — appelé pour chaque place, à chaque essai de la solution minimale, il la faisait
+// durer plusieurs secondes une fois l'alternance fille-garçon ajoutée, v2.169.0).
+function _pairSidSet(cls) {
+  return new Set((Array.isArray(cls?.noNeighbors) ? cls.noNeighbors : []).flatMap(pk => String(pk).split('|')));
+}
 function arePairForbidden(cls, sid1, sid2) {
   const k = _pairKey(sid1, sid2);
   if (!k || !Array.isArray(cls.noNeighbors)) return false;
@@ -12306,19 +12317,58 @@ function _violationsHashStr(cls) {
 // de violations. S'arrête quand plus aucun swap ne diminue le score.
 // Calcule la « solution minimale » (échanges successifs qui réduisent les violations) SANS
 // l'appliquer : le plan de la classe est remis tel quel. `pins` = élèves à ne pas déplacer.
+// Les échanges successifs peuvent s'arrêter sur un minimum local (constaté avec l'alternance
+// fille-garçon : 2 doublons → 1 une fois sur trois, alors qu'un seul échange les retirait
+// tous les deux). On relance jusqu'à 5 fois et on garde la meilleure : le moins de
+// contraintes enfreintes, puis le moins d'échanges.
 function _computeMinimalFix(cls, pins) {
+  const ga = _genderAltSetting(cls);
+  const floor = ga ? _genderAltSeqMin(cls, ga.patternId) : 0;
+  let best = null;
+  for (let i = 0; i < 5; i++) {
+    const r = _computeMinimalFixOnce(cls, pins);
+    if (!best || r.after < best.after || (r.after === best.after && r.swaps.length < best.swaps.length)) best = r;
+    if (best.after <= floor) break;
+  }
+  return best;
+}
+function _computeMinimalFixOnce(cls, pins) {
   const seat0 = { ...(cls.seating || {}) };
   const before = collectAllViolations(cls).length;
   const MAX_ITER = 200; // garde-fou
   let iter = 0, progress = true;
   const swaps = [];
+  // Alternance fille-garçon : la répartition qui laisse le moins de doublons en changeant le
+  // moins d'élèves est calculée d'un coup, puis atteinte par échanges (les échanges successifs
+  // « au premier mieux » restaient bloqués : 3 doublons → 1 dans 9 cas sur 10, mesuré).
+  const ga = _genderAltSetting(cls);
+  if (ga && _genderAltDoublets(cls, ga.patternId).length) {
+    const room = cls.rooms?.[cls.activeRoom];
+    const aeshLinked = new Set(Object.values(room?.aeshLinks || {}).flat());
+    const tryS = _genderAltSwapper(cls);
+    // Les doublons peuvent remonter en cours de route (l'état visé n'est atteint qu'au dernier
+    // échange) : seules les AUTRES contraintes doivent ne jamais empirer.
+    const nOthers = () => collectAllViolations(cls).filter(it => !it.gender).length;
+    const others0 = nOthers();
+    const made = _genderAltApplyTarget(cls, ga.patternId, sid => !(pins && pins.has(sid)) && !aeshLinked.has(sid), (a, b) => {
+      if (!tryS(a, b)) return false;
+      if (nOthers() <= others0) return true;   // rien d'autre n'empire
+      const x = cls.seating[a]; cls.seating[a] = cls.seating[b]; cls.seating[b] = x;
+      return false;
+    });
+    swaps.push(...made);
+  }
   while (progress && iter < MAX_ITER) {
     progress = false; iter++;
     const v = collectAllViolations(cls);
     if (!v.length) break;
-    // Sids en violation, dédupliqués ; ordre mélangé pour varier les solutions
+    // Sids en violation, dédupliqués ; ordre mélangé pour varier les solutions. Un doublon
+    // fille-garçon se défait en déplaçant l'un OU l'autre de ses deux élèves : les deux sont
+    // essayés (avec le seul second, F M M F → F F M F restait bloqué à 1 doublon sur 2).
+    const where = {}; for (const [k, s] of Object.entries(cls.seating)) where[s] = k;
     const seen = new Set();
-    const vs = shuffle(v.filter(it => !seen.has(it.sid) && seen.add(it.sid)));
+    const vs = shuffle(v.flatMap(it => it.gender && it.sid2 && where[it.sid2] ? [it, { sid: it.sid2, key: where[it.sid2] }] : [it])
+      .filter(it => !seen.has(it.sid) && seen.add(it.sid)));
     for (const item of vs) {
       const fixed = _tryFixOneViolation(cls, item.sid, item.key, { simulate: true, pins });
       if (fixed) { progress = true; swaps.push(fixed); break; }
@@ -12354,6 +12404,7 @@ function _violRenderPreview() {
   const aeshAt = {}; for (const [i, k] of Object.entries(room?.aeshSeating || {})) aeshAt[k] = +i;
   const nA = _aeshList(cls).length, vides = new Set(salle.positions_vides || []);
   const zones = (cls.groupes && Object.keys(cls.groupes).length) ? getEffectiveGroupes(cls) : {};
+  const gaOn = !!_genderAltSetting(cls);
   let h = `<div class="shf-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
   for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
     const key = `${r},${c}`;
@@ -12363,7 +12414,7 @@ function _violRenderPreview() {
     const z = zones[key] ? ' z' + zones[key] : '';
     if (!st) { h += `<i class="${z.trim()}"></i>`; continue; }
     const pin = _violPins.has(sid), mv = _violShow === 'sol' && moved.has(sid);
-    h += `<i class="st${z}${pin ? ' pin' : ''}${mv ? ' mv' : ''}${bad.has(sid) ? ' bad' : ''}" onclick="_violTogglePin('${_escJsAttr(sid)}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${mv ? ' — déplacé·e' : ''}${bad.has(sid) ? ' — contrainte enfreinte' : ''}${pin ? ' — épinglé·e : ne sera pas déplacé·e' : ' — clic : ne pas déplacer'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
+    h += `<i class="st${z}${pin ? ' pin' : ''}${mv ? ' mv' : ''}${bad.has(sid) ? ' bad' : ''}" onclick="_violTogglePin('${_escJsAttr(sid)}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${mv ? ' — déplacé·e' : ''}${bad.has(sid) ? ' — contrainte enfreinte' : ''}${pin ? ' — épinglé·e : ne sera pas déplacé·e' : ' — clic : ne pas déplacer'}">${pin ? '📌' : ''}${gaOn ? _shufCivMark(sid) : ''}${_esc(st.prenom)}</i>`;
   }
   box.innerHTML = h + '</div><div class="shf-board">🖥 tableau</div>';
   const p = _violPreview, np = _violPins.size;
@@ -12684,7 +12735,14 @@ function showViolationsModal(cls) {
   const nPairs = (cls.noNeighbors || []).length, room = activeRoomData(cls);
   const nAllow = Object.values(room?.allowedFor || {}).filter(a => Array.isArray(a) && a.length).length;
   const chips = document.getElementById('mviolations-chips');
-  if (chips) chips.innerHTML = [nPairs ? `<span>${nPairs} paire${nPairs > 1 ? 's' : ''} à séparer</span>` : '', nAllow ? `<span>places autorisées : ${nAllow} élève${nAllow > 1 ? 's' : ''}</span>` : ''].join('');
+  const ga = _genderAltSetting(cls), gaPat = ga ? _genderAltPattern(cls, ga.patternId) : null;
+  if (chips) chips.innerHTML = [nPairs ? `<span>${nPairs} paire${nPairs > 1 ? 's' : ''} à séparer</span>` : '', nAllow ? `<span>places autorisées : ${nAllow} élève${nAllow > 1 ? 's' : ''}</span>` : '', ga ? `<span>♀♂ alternance « ${_esc(gaPat?.nom || '')} »${ga.scope === 'salle' ? ' (salle)' : ''}</span>` : ''].join('');
+  const gaBox = document.getElementById('mviolations-ga');
+  if (gaBox) {
+    const nMin = ga ? _genderAltSeqMin(cls, ga.patternId) : 0;
+    gaBox.style.display = (ga && items.some(it => it.gender)) ? '' : 'none';
+    gaBox.innerHTML = ga ? `${nMin ? `Avec les élèves placés, ${nMin} doublon${nMin > 1 ? 's' : ''} ne peu${nMin > 1 ? 'vent' : 't'} pas être évité${nMin > 1 ? 's' : ''}. ` : ''}<button type="button" class="btn btn-g btn-sm" onclick="_genderAltRemove()" title="Retirer la contrainte d'alternance${ga.scope === 'salle' ? ' pour toutes les classes de la salle' : ' pour cette classe dans cette salle'} (Ctrl+Z pour annuler)">♀♂ Ne plus exiger l'alternance</button>` : '';
+  }
   const list = document.getElementById('mviolations-list');
   if (list) list.innerHTML = items.map(it => {
     const st = S.eleves[it.sid];
@@ -12695,6 +12753,212 @@ function showViolationsModal(cls) {
   _violDraw();
 }
 
+// ─── Alternance fille-garçon le long d'un ordre de ramassage (v2.169.0) ────────────────
+// Réglage = id d'un ordre de ramassage de la salle (salle.collectPatterns). Deux portées :
+//   S.salles[id].genderAlt       → toutes les classes qui ont cours dans la salle (l'emporte) ;
+//   cls.rooms[id].genderAlt      → cette classe dans cette salle.
+// Règle : on suit l'ordre table par table, sur les seules tables occupées ; deux élèves qui
+// se suivent doivent être de sexes différents. Ignorés : tables vides, AESH, élèves sans
+// civilité, tables hors de l'ordre. C'est une CONTRAINTE (alerte dès le premier doublon,
+// même inévitable — arbitrage de l'utilisateur, 2026-11-27) : elle entre dans
+// collectAllViolations / _countPlacementViolations / getPlacementViolations.
+function _genderAltPatternOk(salle, id) {
+  return typeof id === 'string' && (salle?.collectPatterns || []).some(p => p.id === id && Array.isArray(p.order) && p.order.length);
+}
+function _genderAltSetting(cls) {
+  const rid = cls?.activeRoom, salle = rid ? S.salles?.[rid] : null;
+  if (!salle) return null;
+  if (_genderAltPatternOk(salle, salle.genderAlt)) return { patternId: salle.genderAlt, scope: 'salle' };
+  const r = cls.rooms?.[rid];
+  if (_genderAltPatternOk(salle, r?.genderAlt)) return { patternId: r.genderAlt, scope: 'classe' };
+  return null;
+}
+function _genderAltPattern(cls, patternId) {
+  return S.salles?.[cls?.activeRoom]?.collectPatterns?.find(p => p.id === patternId) || null;
+}
+function _genderOf(sid) { const c = S.eleves[sid]?.civilite; return (c === 'F' || c === 'M') ? c : null; }
+// Suite des élèves de civilité connue, dans l'ordre, sur un placement donné (défaut : le plan de la classe).
+function _genderAltSeq(cls, patternId, seating) {
+  const pat = _genderAltPattern(cls, patternId);
+  if (!pat) return [];
+  const seat = seating || cls.seating || {};
+  const out = [], seen = new Set();
+  for (const key of pat.order || []) {
+    const sid = seat[key];
+    if (!sid || seen.has(sid) || !S.eleves[sid]) continue;
+    seen.add(sid);
+    const g = _genderOf(sid);
+    if (g) out.push({ key, sid, g });
+  }
+  return out;
+}
+// Doublons : paires [précédent, suivant] de même sexe qui se suivent dans l'ordre.
+function _genderAltDoublets(cls, patternId, seating) {
+  const seq = _genderAltSeq(cls, patternId, seating), out = [];
+  for (let i = 1; i < seq.length; i++) if (seq[i].g === seq[i - 1].g) out.push([seq[i - 1], seq[i]]);
+  return out;
+}
+// Nombre de doublons qu'aucun placement ne peut éviter : 7 filles et 5 garçons → 1.
+function _genderAltMin(nF, nM) { return Math.max(0, Math.abs(nF - nM) - 1); }
+// … pour les élèves actuellement assis sur les tables de l'ordre.
+function _genderAltSeqMin(cls, patternId, seating) {
+  const seq = _genderAltSeq(cls, patternId, seating);
+  const nF = seq.filter(x => x.g === 'F').length;
+  return _genderAltMin(nF, seq.length - nF);
+}
+// Répartition visée : pour la suite `seq` (les élèves à des places fixes gardent leur sexe),
+// le sexe de chaque place qui donne le MOINS de doublons, et à égalité le moins de places
+// dont le sexe change (donc le moins d'élèves à déplacer) — programmation dynamique, coût
+// = doublons × 1000 + changements ; égalités tirées au hasard pour varier les tirages.
+// Renvoie un tableau de 'F' / 'M'.
+function _genderAltTarget(seq, fixedSet) {
+  const n = seq.length; if (!n) return [];
+  const nF = seq.filter(x => x.g === 'F').length;
+  const G = ['F', 'M'], INF = 1e12, W = 1000;
+  // dp[i][f][gi] = coût minimum sur 0..i, f filles utilisées, sexe gi en i
+  const dp = Array.from({ length: n }, () => Array.from({ length: nF + 1 }, () => [INF, INF]));
+  const can = (i, gi) => !fixedSet.has(seq[i].sid) || seq[i].g === G[gi];
+  const chg = (i, gi) => (seq[i].g === G[gi] ? 0 : 1);
+  for (let gi = 0; gi < 2; gi++) if (can(0, gi)) { const f = gi === 0 ? 1 : 0; if (f <= nF) dp[0][f][gi] = chg(0, gi); }
+  for (let i = 1; i < n; i++) for (let f = 0; f <= nF; f++) for (let gi = 0; gi < 2; gi++) {
+    if (!can(i, gi)) continue;
+    const pf = f - (gi === 0 ? 1 : 0); if (pf < 0) continue;
+    let best = INF;
+    for (let pg = 0; pg < 2; pg++) { const v = dp[i - 1][pf][pg] + (pg === gi ? W : 0); if (v < best) best = v; }
+    if (best < INF) dp[i][f][gi] = best + chg(i, gi);
+  }
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const last = dp[n - 1][nF];
+  const m = Math.min(last[0], last[1]);
+  if (m >= INF) return seq.map(x => x.g);
+  const out = new Array(n);
+  let gi = pick([0, 1].filter(g => last[g] === m)), f = nF;
+  for (let i = n - 1; i >= 0; i--) {
+    out[i] = G[gi];
+    if (i === 0) break;
+    const pf = f - (gi === 0 ? 1 : 0);
+    const cur = dp[i][f][gi] - chg(i, gi);
+    gi = pick([0, 1].filter(pg => dp[i - 1][pf][pg] + (pg === gi ? W : 0) === cur));
+    f = pf;
+  }
+  return out;
+}
+// Échange de deux élèves s'il n'enfreint aucune autre contrainte : places autorisées, zone de
+// groupe et place taggée (personne n'est rendu « moins bien placé »), paires à séparer.
+// Renvoie trySwap(a, b) : effectue l'échange et renvoie true, ou ne touche à rien.
+function _genderAltSwapper(cls) {
+  const room = cls.rooms?.[cls.activeRoom], salle = S.salles?.[cls.activeRoom];
+  const fit = _placeFitFn(cls, room);
+  const okAt = (sid, to, from) => isPlaceAllowedForStudent(room, sid, to) && (fit(sid, to) || !fit(sid, from));
+  // Paires : un échange ne touche que les voisins de ses deux places, et seuls les élèves d'une
+  // paire peuvent en créer une — compter là seulement (recompter toute la classe coûtait ~3 ms
+  // par essai, 1,9 s par tirage mesuré).
+  const pairSids = _pairSidSet(cls);
+  const adjMemo = new Map();
+  const adj = k => { let v = adjMemo.get(k); if (!v) { v = _pairAdjacentKeys(cls, salle, k); adjMemo.set(k, v); } return v; };
+  const pairsAt = (...keys) => {
+    let n = 0;
+    for (const k of keys) {
+      const s1 = cls.seating[k]; if (!s1 || !pairSids.has(s1)) continue;
+      for (const k2 of adj(k)) { const s2 = cls.seating[k2]; if (s2 && s2 !== s1 && arePairForbidden(cls, s1, s2)) n++; }
+    }
+    return n;
+  };
+  return (a, b) => {
+    const sa = cls.seating[a], sb = cls.seating[b];
+    if (!sa || !sb || !okAt(sa, b, a) || !okAt(sb, a, b)) return false;
+    const check = pairSids.has(sa) || pairSids.has(sb);
+    const before = check ? pairsAt(a, b) : 0;
+    cls.seating[a] = sb; cls.seating[b] = sa;
+    if (!check || pairsAt(a, b) <= before) return true;
+    cls.seating[a] = sa; cls.seating[b] = sb;
+    return false;
+  };
+}
+// Atteint la répartition visée par échanges fille / garçon entre élèves déplaçables.
+// `canMove(sid)` ; renvoie la liste des échanges faits ([cléA, cléB]).
+function _genderAltApplyTarget(cls, patternId, canMove, trySwap) {
+  const swaps = [];
+  const seq = _genderAltSeq(cls, patternId);
+  if (seq.length < 2) return swaps;
+  const fixed = new Set(seq.filter(x => !canMove(x.sid)).map(x => x.sid));
+  const target = _genderAltTarget(seq, fixed);
+  const wantF = shuffle(seq.filter((x, i) => target[i] === 'F' && x.g === 'M').map(x => x.key));
+  const wantM = shuffle(seq.filter((x, i) => target[i] === 'M' && x.g === 'F').map(x => x.key));
+  for (const a of wantF) {
+    const j = wantM.findIndex(b => trySwap(a, b));
+    if (j >= 0) { swaps.push([a, wantM[j]]); wantM.splice(j, 1); }
+  }
+  return swaps;
+}
+// Après un tirage : échange des filles et des garçons parmi les élèves que ce tirage vient de
+// placer (`movable`), pour atteindre la répartition visée — sans jamais enfreindre une autre
+// contrainte (places autorisées, paires) ni sortir un élève de sa zone ou de sa place taggée.
+function _genderAltRepair(cls, patternId, movable) {
+  const room = cls.rooms?.[cls.activeRoom];
+  if (!room || !movable || !movable.size) return;
+  const trySwap = _genderAltSwapper(cls);
+  // 1) Vers la répartition optimale
+  _genderAltApplyTarget(cls, patternId, sid => movable.has(sid), trySwap);
+  // 2) Ce qui reste (un échange refusé par une autre contrainte) : tout échange fille /
+  //    garçon qui retire un doublon
+  for (let iter = 0; iter < 40; iter++) {
+    const d0 = _genderAltDoublets(cls, patternId).length;
+    if (d0 <= _genderAltSeqMin(cls, patternId)) return;   // déjà au minimum possible
+    const s2 = _genderAltSeq(cls, patternId).filter(x => movable.has(x.sid));
+    let done = false;
+    for (const x of shuffle(s2.slice())) {
+      for (const y of s2) {
+        if (y.g === x.g || !trySwap(x.key, y.key)) continue;
+        if (_genderAltDoublets(cls, patternId).length < d0) { done = true; break; }
+        const sx = cls.seating[x.key]; cls.seating[x.key] = cls.seating[y.key]; cls.seating[y.key] = sx;
+      }
+      if (done) break;
+    }
+    if (!done) return;
+  }
+}
+function _genderAltWord(g, n) { return g === 'F' ? (n > 1 ? 'filles' : 'fille') : (n > 1 ? 'garçons' : 'garçon'); }
+// Compte de la classe (élèves actifs) : { F, M, unknown }
+function _genderAltCounts(cls) {
+  const o = { F: 0, M: 0, unknown: 0 };
+  for (const sid of cls?.eleves || []) {
+    const st = S.eleves[sid];
+    if (!st || (typeof _stuActiveOn === 'function' && !_stuActiveOn(st))) continue;
+    const g = _genderOf(sid);
+    if (g) o[g]++; else o.unknown++;
+  }
+  return o;
+}
+// Écrit le réglage. Portée « salle » : vaut pour toutes les classes de la salle, et efface le
+// réglage propre de chacune (sinon, retirer celui de la salle ferait ressurgir d'anciens choix).
+// Portée « classe » : retire celui de la salle, s'il y en avait un.
+function _genderAltWrite(cls, patternId, wholeSalle) {
+  const rid = cls?.activeRoom, salle = rid ? S.salles?.[rid] : null;
+  if (!salle) return;
+  const id = _genderAltPatternOk(salle, patternId) ? patternId : null;
+  if (wholeSalle) {
+    if (id) salle.genderAlt = id; else delete salle.genderAlt;
+    for (const c of classesUsingSalle(rid)) if (c.rooms?.[rid]) delete c.rooms[rid].genderAlt;
+  } else {
+    delete salle.genderAlt;
+    const r = cls.rooms?.[rid];
+    if (r) { if (id) r.genderAlt = id; else delete r.genderAlt; }
+  }
+}
+// « ♀♂ Ne plus exiger l'alternance » (fenêtre des contraintes non respectées) — annulable.
+function _genderAltRemove() {
+  const cls = getCls(); if (!cls) return;
+  const ga = _genderAltSetting(cls); if (!ga) return;
+  pushUndo();
+  _genderAltWrite(cls, null, ga.scope === 'salle');
+  _violationsModalShown.delete(cls.id);
+  save();
+  renderTeacherGrid();
+  toast(`♀♂ Alternance fille-garçon retirée${ga.scope === 'salle' ? ' pour toutes les classes de la salle' : ` pour ${cls.nom}`} — Ctrl+Z pour annuler.`);
+  if (collectAllViolations(cls).length) showViolationsModal(cls); else closeMod2('mviolations');
+}
+
 // Collecte la liste complète des violations dans le placement courant
 function collectAllViolations(cls) {
   if (!cls?.seating) return [];
@@ -12703,12 +12967,13 @@ function collectAllViolations(cls) {
   if (!room || !salle) return [];
   const items = [];
   const seenPairs = new Set();
+  const pairSids = _pairSidSet(cls);
   for (const [key, sid] of Object.entries(cls.seating)) {
     if (!sid) continue;
     if (!isPlaceAllowedForStudent(room, sid, key)) {
       items.push({ sid, key, icon: '🚫', text: 'est sur une place non autorisée' });
     }
-    if (Array.isArray(cls.noNeighbors) && cls.noNeighbors.length) {
+    if (pairSids.has(sid)) {
       for (const k2 of _pairAdjacentKeys(cls, salle, key)) {
         const sid2 = cls.seating[k2];
         if (!sid2 || sid2 === sid) continue;
@@ -12720,6 +12985,14 @@ function collectAllViolations(cls) {
           items.push({ sid, sid2, key, icon: '🚫', text: `est côte à côte avec <strong>${_escAttr(nm2)}</strong> (paire à séparer)` });
         }
       }
+    }
+  }
+  const ga = _genderAltSetting(cls);
+  if (ga) {
+    const pat = _genderAltPattern(cls, ga.patternId);
+    for (const [a, b] of _genderAltDoublets(cls, ga.patternId)) {
+      const st = S.eleves[a.sid];
+      items.push({ sid: b.sid, sid2: a.sid, key: b.key, icon: '♀♂', gender: true, text: `suit <strong>${_escAttr(st ? st.prenom + ' ' + st.nom : '?')}</strong> dans l'ordre « ${_escAttr(pat?.nom || '')} » : deux ${_genderAltWord(b.g, 2)} à la suite` });
     }
   }
   return items;
@@ -12746,6 +13019,16 @@ function getPlacementViolations(cls, sid, key) {
         const nm = stu2 ? `${stu2.prenom} ${stu2.nom}` : '?';
         out.push(`Voisin interdit : ${nm}`);
       }
+    }
+  }
+  // 3) Alternance fille-garçon : l'élève forme un doublon avec le précédent ou le suivant
+  const ga = _genderAltSetting(cls);
+  if (ga) {
+    const pat = _genderAltPattern(cls, ga.patternId);
+    for (const [a, b] of _genderAltDoublets(cls, ga.patternId)) {
+      if (a.sid !== sid && b.sid !== sid) continue;
+      const o = S.eleves[a.sid === sid ? b.sid : a.sid];
+      out.push(`Deux ${_genderAltWord(a.g, 2)} à la suite avec ${o ? o.prenom + ' ' + o.nom : '?'} (ordre « ${pat?.nom || ''} »)`);
     }
   }
   return out;
@@ -16149,11 +16432,14 @@ function _computeRandomPlacement(cls, opts) {
   // spliceés au 1er essai étaient absents des essais suivants → laissés non placés.
   const initialAesh = room ? JSON.parse(JSON.stringify(room.aeshSeating || {})) : null;
   const baseToPlace = studentsToPlace.slice();
+  // Alternance fille-garçon : des doublons peuvent être inévitables (7 filles, 5 garçons → 1).
+  // Un essai qui n'a que ceux-là est parfait — sinon les 30 essais tourneraient pour rien.
+  const _gaTry = opts.genderAlt === undefined ? (_genderAltSetting(cls)?.patternId || null) : opts.genderAlt;
   for (let i = 0; i < NB_TRIES; i++) {
     cls.seating = JSON.parse(JSON.stringify(initialSeating));
     if (room) room.aeshSeating = JSON.parse(JSON.stringify(initialAesh || {}));
     _doOneRandomPlacement(cls, baseToPlace.slice(), opts); // copie fraîche → liste préservée
-    const violations = _countPlacementViolations(cls);
+    const violations = _countPlacementViolations(cls, opts.genderAlt);
     if (!best || violations < best.violations) {
       best = {
         seating: JSON.parse(JSON.stringify(cls.seating)),
@@ -16161,6 +16447,7 @@ function _computeRandomPlacement(cls, opts) {
         violations,
       };
       if (violations === 0) break; // parfait, pas la peine de continuer
+      if (_gaTry && violations <= _genderAltSeqMin(cls, _gaTry)) break; // seuls les doublons inévitables
     }
   }
   cls.seating = _seat0;
@@ -16317,8 +16604,13 @@ function _defaultShuffleOptions(cls) {
   const validIlotSpacing = (v) => v === 'spread' || v === 'front' || v === 'back' || v === 'center';
   // Phase 3 AESH : nombre d'AESH configurées dans la salle (pour afficher le toggle)
   const aeshCount = (cls.rooms?.[cls.activeRoom]?.aeshCount) || 0;
+  const _ga = _genderAltSetting(cls);
   return {
     reshuffle: true,
+    // Alternance fille-garçon : id d'un ordre de ramassage, ou null. Ce n'est pas un réglage du
+    // mélange (shuffleOpts) mais une contrainte de la classe ou de la salle (cf. _genderAltWrite).
+    genderAlt: _ga ? _ga.patternId : null,
+    genderAltSalle: _ga ? _ga.scope === 'salle' : false,
     frontFirst: typeof saved.frontFirst === 'boolean' ? saved.frontFirst : true,
     spacing,
     placeUlisAbsents: typeof saved.placeUlisAbsents === 'boolean' ? saved.placeUlisAbsents : false,
@@ -16418,6 +16710,24 @@ function _renderShuffleDialog() {
       <div class="clf-hint" style="margin:6px 0 3px">Îlot incomplet</div>
       <div class="ip-seg">${segB('ilotSpacing', 'spread', 'Espacer')}${segB('ilotSpacing', 'front', 'Devant')}${segB('ilotSpacing', 'back', 'Derrière')}${segB('ilotSpacing', 'center', 'Centré')}</div></div>`;
   }
+  {
+    // Alternance fille-garçon le long d'un ordre de ramassage (contrainte, v2.169.0)
+    const pats = (salle?.collectPatterns || []).filter(p => Array.isArray(p.order) && p.order.length);
+    const cnt = _genderAltCounts(cls);
+    h += `<div class="about-section clf-sec"><h3>Alternance fille-garçon <small class="clf-hint">(contrainte)</small></h3>`;
+    if (!pats.length) {
+      h += `<div class="clf-note" style="margin:2px 0">Elle suit un ordre de ramassage de la salle : crée-en un dans Config Salle → 🗂 Ordres de ramassage (un Serpentin donne un damier).</div>`;
+    } else {
+      const segB = (id, l, tip) => `<button type="button" class="${(o.genderAlt || null) === id ? 'on' : ''}" onclick="_shufSet('genderAlt',${id ? `'${_escJsAttr(id)}'` : 'null'})"${tip ? ` title="${_escAttr(tip)}"` : ''}>${l}</button>`;
+      h += `<div class="ip-seg" style="flex-wrap:wrap">${segB(null, 'Aucune')}${pats.map(p => segB(p.id, '♀♂ ' + _esc(p.nom || '(sans nom)'), "Deux élèves qui se suivent dans l'ordre « " + String(p.nom || '') + ' » sont de sexes différents')).join('')}</div>`;
+      h += `<div class="clf-hint" style="margin:5px 0 0">${cnt.F} ${_genderAltWord('F', cnt.F)} · ${cnt.M} ${_genderAltWord('M', cnt.M)}${cnt.unknown ? ` · ${cnt.unknown} sans civilité (ignoré${cnt.unknown > 1 ? 's' : ''})` : ''}</div>`;
+      // Rempli par _shufRenderPreview : le nombre de doublons inévitables dépend des élèves
+      // effectivement placés (hors inclusion laissés de côté, tables hors de l'ordre).
+      h += '<div id="mshuffle-ga-warn" class="clf-note" style="margin:4px 0 0;display:none"></div>';
+      if (o.genderAlt) h += sw(o.genderAltSalle, "_shuffleOptions.genderAltSalle=this.checked;_renderShuffleDialog()", 'Pour toutes les classes de la salle', o.genderAltSalle ? `quelle que soit la classe qui a cours en ${_esc(salle?.nom || '')}` : `décoché : seulement ${_esc(cls.nom)} dans cette salle`);
+    }
+    h += '</div>';
+  }
   const nPairs = (cls.noNeighbors || []).length, nAllow = Object.values(room?.allowedFor || {}).filter(a => Array.isArray(a) && a.length).length;
   const nZones = Object.keys(room?.groupes || {}).length;
   const kept = [nPairs ? `${nPairs} paire${nPairs > 1 ? 's' : ''} à séparer` : '', nAllow ? `places autorisées de ${nAllow} élève${nAllow > 1 ? 's' : ''}` : '', nZones ? 'zones de groupe G1 / G2 / G3' : ''].filter(Boolean);
@@ -16435,6 +16745,11 @@ function _shufTogglePin(sid, key) {
   if (_shufPins[sid]) delete _shufPins[sid]; else _shufPins[sid] = key;
   _shufRenderPreview();
 }
+// ♀ / ♂ devant le prénom dans les aperçus (couleurs --civ-f / --civ-m, déclinées par thème)
+function _shufCivMark(sid) {
+  const g = _genderOf(sid);
+  return g ? `<b class="shf-civ ${g === 'F' ? 'f' : 'm'}" aria-hidden="true">${g === 'F' ? '♀' : '♂'}</b>` : '';
+}
 function _shufRenderPreview() {
   const box = document.getElementById('mshuffle-preview'); if (!box || !_shufPreview) return;
   const cls = getCls(), salle = activeSalle(cls); if (!salle) return;
@@ -16443,6 +16758,8 @@ function _shufRenderPreview() {
   const nA = _aeshList(cls).length;
   const vides = new Set(salle.positions_vides || []);
   const zones = (cls.groupes && Object.keys(cls.groupes).length) ? getEffectiveGroupes(cls) : {};
+  const gaId = _shuffleOptions?.genderAlt || null;
+  const dbl = new Set(gaId ? _genderAltDoublets(cls, gaId, seat).flat().map(x => x.sid) : []);
   let h = `<div class="shf-plan" style="grid-template-columns:repeat(${salle.cols},minmax(0,1fr))">`;
   for (let r = salle.rows - 1; r >= 0; r--) for (let c = salle.cols - 1; c >= 0; c--) {
     const key = `${r},${c}`;
@@ -16452,7 +16769,8 @@ function _shufRenderPreview() {
     const z = zones[key] ? ' z' + zones[key] : '';
     if (!st) { h += `<i class="${z.trim()}"></i>`; continue; }
     const pin = _shufPins[sid] === key;
-    h += `<i class="st${z}${pin ? ' pin' : ''}" onclick="_shufTogglePin('${_escJsAttr(sid)}','${key}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${pin ? ' — épinglé·e : garde cette place' : ' — clic : épingler à cette place'}">${pin ? '📌' : ''}${_esc(st.prenom)}</i>`;
+    const civ = gaId ? _shufCivMark(sid) : '';
+    h += `<i class="st${z}${pin ? ' pin' : ''}${dbl.has(sid) ? ' bad' : ''}" onclick="_shufTogglePin('${_escJsAttr(sid)}','${key}')" title="${_escAttr(st.prenom + ' ' + st.nom)}${dbl.has(sid) ? ' — deux ' + _genderAltWord(_genderOf(sid), 2) + ' à la suite' : ''}${pin ? ' — épinglé·e : garde cette place' : ' — clic : épingler à cette place'}">${pin ? '📌' : ''}${civ}${_esc(st.prenom)}</i>`;
   }
   h += '</div><div class="shf-board">🖥 tableau</div>';
   box.innerHTML = h;
@@ -16461,7 +16779,20 @@ function _shufRenderPreview() {
   const moved = Object.keys(b).filter(sid => a[sid] !== b[sid]).length;
   const left = (_shufPreview.toPlace || []).filter(sid => !b[sid]).length;
   const v = _shufPreview.violations || 0, np = Object.keys(_shufPins).length;
-  document.getElementById('mshuffle-res').innerHTML = (v ? `<span class="bad">⚠ ${v} contrainte${v > 1 ? 's' : ''} non respectée${v > 1 ? 's' : ''}</span>` : '<span class="good">✓ aucune contrainte enfreinte</span>')
+  // Alternance : combien de doublons, dont combien inévitables avec les élèves de cet aperçu
+  let gaTxt = '';
+  const gaWarn = document.getElementById('mshuffle-ga-warn');
+  const nm = gaId ? _genderAltSeqMin(cls, gaId, seat) : 0;
+  if (gaId && dbl.size) {
+    const nd = _genderAltDoublets(cls, gaId, seat).length;
+    gaTxt = ` (♀♂ ${nd} doublon${nd > 1 ? 's' : ''}${nm ? `, ${nm === nd ? (nd > 1 ? 'tous inévitables' : 'inévitable') : `dont ${nm} inévitable${nm > 1 ? 's' : ''}`}` : ''})`;
+  }
+  if (gaWarn) {
+    const seq = gaId ? _genderAltSeq(cls, gaId, seat) : [], nF = seq.filter(x => x.g === 'F').length;
+    gaWarn.style.display = nm ? '' : 'none';
+    gaWarn.textContent = nm ? `⚠ Avec cet écart, au moins ${nm} fois deux ${_genderAltWord(nF > seq.length - nF ? 'F' : 'M', 2)} à la suite : l'alerte restera (« Garder tel quel » la fait taire jusqu'au prochain changement).` : '';
+  }
+  document.getElementById('mshuffle-res').innerHTML = (v ? `<span class="bad">⚠ ${v} contrainte${v > 1 ? 's' : ''} non respectée${v > 1 ? 's' : ''}${gaTxt}</span>` : '<span class="good">✓ aucune contrainte enfreinte</span>')
     + ` · ${moved} élève${moved > 1 ? 's' : ''} change${moved > 1 ? 'nt' : ''} de place${left ? ` · ${left} sans place` : ''}${np ? ` · 📌 ${np} épinglé${np > 1 ? 's' : ''}` : ''}`;
   const ub = document.getElementById('mshuffle-unpin'); if (ub) ub.style.display = np ? '' : 'none';
 }
@@ -16484,6 +16815,8 @@ function confirmShuffle() {
       ilotSpacing:      opts.ilotSpacing      || 'spread',
       keepAeshPlacement: !!opts.keepAeshPlacement,
     };
+    _genderAltWrite(cls, opts.genderAlt || null, !!opts.genderAltSalle);
+    _violationsModalShown.delete(cls.id);
   };
   closeMod2('mshuffle');
   // On applique EXACTEMENT le tirage affiché dans l'aperçu.
@@ -17042,21 +17375,28 @@ function _doOneRandomPlacement(cls, studentsToPlace, opts) {
       targetSet.delete(chosen);
     }
   }
+  // 6. Alternance fille-garçon : échanges entre les élèves que CE tirage a placés (les épinglés,
+  //    les élèves déjà assis et ceux posés près de leur AESH ne bougent pas).
+  const gaId = (opts && opts.genderAlt !== undefined) ? opts.genderAlt : (_genderAltSetting(cls)?.patternId || null);
+  if (gaId && _genderAltPatternOk(salle, gaId)) _genderAltRepair(cls, gaId, new Set(studentsOrdered));
 }
 
 // Compte le nombre de violations distinctes (places non autorisées + paires).
 // Utilisé pour comparer plusieurs essais aléatoires et garder le meilleur.
-function _countPlacementViolations(cls) {
+// `genderAlt` : id de l'ordre d'alternance à compter (aperçu de « Mélanger tout », pas encore
+// enregistré) ; null = ne pas compter ; undefined = le réglage enregistré de la classe.
+function _countPlacementViolations(cls, genderAlt) {
   if (!cls?.seating) return 0;
   let nPlaceForbidden = 0;
   const pairsSeen = new Set(); // évite de compter 2× chaque paire interdite adjacente
   const room = cls.rooms?.[cls.activeRoom];
   const salle = S.salles?.[cls.activeRoom];
   if (!room || !salle) return 0;
+  const pairSids = _pairSidSet(cls);
   for (const [key, sid] of Object.entries(cls.seating)) {
     if (!sid) continue;
     if (!isPlaceAllowedForStudent(room, sid, key)) nPlaceForbidden++;
-    if (Array.isArray(cls.noNeighbors) && cls.noNeighbors.length) {
+    if (pairSids.has(sid)) {
       for (const k2 of _pairAdjacentKeys(cls, salle, key)) {
         const sid2 = cls.seating[k2];
         if (!sid2) continue;
@@ -17065,7 +17405,9 @@ function _countPlacementViolations(cls) {
       }
     }
   }
-  return nPlaceForbidden + pairsSeen.size;
+  const gaId = genderAlt === undefined ? (_genderAltSetting(cls)?.patternId || null) : genderAlt;
+  const nDoublets = gaId ? _genderAltDoublets(cls, gaId).length : 0;
+  return nPlaceForbidden + pairsSeen.size + nDoublets;
 }
 
 // Compte les "violations tag" du placement actuel :
@@ -63510,7 +63852,7 @@ function _collectEditRender() {
       <button type="button" class="slot-pill" style="font-family:var(--font-sans)" onclick="_collectFill('clear')">Effacer</button></div>
     <div id="mcollect-edit-grid-wrap" class="co-grid-wrap"></div>
     <div class="mp-board">🖥 TABLEAU</div>
-    <div class="hm-foot" style="margin-top:6px"><span class="clf-note" style="margin:0">Glisse sur les tables dans l'ordre, ou clique table par table. Un clic sur une table numérotée reprend à partir d'elle.</span>
+    <div class="hm-foot" style="margin-top:6px"><span class="clf-note" style="margin:0">Glisse sur les tables dans l'ordre, ou clique table par table. Un clic sur une table numérotée reprend à partir d'elle. Un ordre sert aussi à l'alternance fille-garçon de 🔀 Mélanger tout.</span>
       <span><span class="clf-note" style="margin:0" id="mcollect-cov"></span><button class="btn btn-d btn-sm" onclick="_collectEditDelete()">🗑 Supprimer cet ordre</button></span></div>`;
   _collectEditRenderGrid();
 }
@@ -63605,12 +63947,16 @@ function _collectEditHandleCellHover(key) {
 function _collectEditDelete() {
   const pat = _collectPat(); if (!pat) return;
   const salle = S.salles?.[_collectEditState.salleId];
+  const salleId = _collectEditState.salleId;
+  const gaUsers = [salle.genderAlt === pat.id ? 'toutes les classes de la salle' : '', ...classesUsingSalle(salleId).filter(c => c.rooms?.[salleId]?.genderAlt === pat.id).map(c => c.nom)].filter(Boolean);
   _uiConfirm({
     title: '🗑 Supprimer l\'ordre de ramassage', okLabel: '🗑 Supprimer', okClass: 'btn-d',
-    message: `Supprimer l'ordre de ramassage "${pat.nom || '(sans nom)'}" ?`,
+    message: `Supprimer l'ordre de ramassage "${pat.nom || '(sans nom)'}" ?` + (gaUsers.length ? `\n\nIl sert aussi à l'alternance fille-garçon (${gaUsers.join(', ')}) : elle ne sera plus exigée.` : ''),
     onOk: () => {
       pushUndo();
       salle.collectPatterns = salle.collectPatterns.filter(p => p.id !== pat.id);
+      if (salle.genderAlt === pat.id) delete salle.genderAlt;
+      for (const c of classesUsingSalle(salleId)) if (c.rooms?.[salleId]?.genderAlt === pat.id) delete c.rooms[salleId].genderAlt;
       save();
       _collectEditState = salle.collectPatterns[0] ? { salleId: _collectEditState.salleId, patternId: salle.collectPatterns[0].id, dragging: false } : null;
       _collectRenderList();

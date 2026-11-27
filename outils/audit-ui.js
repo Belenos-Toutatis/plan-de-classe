@@ -327,6 +327,17 @@ window.__subRun = async function () {
     if (had) room.allowedFor[s2] = had; else delete room.allowedFor[s2];
   } catch (e) { out.cfgListErr = e.message; }
   setCfgMode('tables');
+  // Alternance fille-garçon (v2.169.0) : la section n'a de choix qu'avec un ordre de ramassage, et la
+  // fenêtre des contraintes ne montre ses doublons qu'avec le réglage posé — les deux temporaires.
+  try {
+    switchTab('plan'); const cls = getCls(); const salle = S.salles[cls.activeRoom]; const room = cls.rooms[cls.activeRoom];
+    const seat0 = { ...cls.seating }, ga0 = room.genderAlt, sga0 = salle.genderAlt;
+    salle.collectPatterns.push({ id: '__auditPat', nom: 'Audit', order: Object.keys(cls.seating).sort() });
+    openShuffleDialog(); _shufSet('genderAlt', '__auditPat'); await sleep(250); A('melanger-alternance', document.getElementById('mshuffle')); closeMod2('mshuffle');
+    delete salle.genderAlt; room.genderAlt = '__auditPat'; showViolationsModal(cls); await sleep(300); A('contraintes-alternance', document.getElementById('mviolations')); closeMod2('mviolations');
+    cls.seating = seat0; if (ga0) room.genderAlt = ga0; else delete room.genderAlt; if (sga0) salle.genderAlt = sga0;
+    salle.collectPatterns = salle.collectPatterns.filter(p => p.id !== '__auditPat'); renderTeacherGrid();
+  } catch (e) { out.gaErr = e.message; }
   switchTab('comp'); for (const v of ['domain', 'code']) { _compBilanSetDisplayMode(v); await sleep(150); A('comp-' + v); }
   switchTab('bilan');
   for (const p of ['S1', 'S2', '']) { const sel = document.getElementById('bilan-period-filter'); if (sel && [...sel.options].some(o => o.value === p)) { sel.value = p; sel.dispatchEvent(new Event('change')); await sleep(200); A('bilan-' + (p || 'toutes')); } }

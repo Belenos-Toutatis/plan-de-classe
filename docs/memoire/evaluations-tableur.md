@@ -202,6 +202,8 @@ Trois modes (`ENTER_BEHAVIORS`), gérés dans `_evalTableurKey`. `Tab` et les fl
 
 ### Tri « pattern de ramassage » — quel placement fait foi (2.49.0 → 2.51.0)
 
+💡 Depuis la v2.169.0, un ordre de ramassage sert AUSSI à l'alternance fille-garçon du mélange (`salle.genderAlt` / `cls.rooms[id].genderAlt` = id d'un ordre) : le supprimer retire cette contrainte, et la confirmation le dit. Détail : `docs/memoire/plan-salles.md`.
+
 `salle.collectPatterns = [{ id, nom, order: ['r,c', …] }]` est une suite de **TABLES**, pas d'élèves : c'est l'ordre dans lequel on circule. C'est `_evalPatternSeatingFor(ev, classId)` qui dit **quel placement** convertit ces tables en élèves, et là est tout le sujet.
 
 Un devoir sur copies se ramasse un jour et se corrige un autre : l'ordre de la pile suit le plan **du jour du devoir**, qu'il faut donc reconstituer. **Trois sources, de la meilleure à la moins bonne** :

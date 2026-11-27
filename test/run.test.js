@@ -4208,3 +4208,137 @@ test('types A et C : la règle « Dernier / Meilleur » ne change ni l\'export n
   const src = ev('_evalNewOnTypeChange.toString()');
   assert.match(src, /mr\.style\.display = \(type === 'B'\) \? '' : 'none'/);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alternance fille-garçon le long d'un ordre de ramassage (v2.169.0) — contrainte :
+// deux élèves qui se suivent dans l'ordre sont de sexes différents, alerte dès le 1er doublon.
+// ─────────────────────────────────────────────────────────────────────────────
+function seedGenderAlt({ nF, nM, roomGa, salleGa, seating }) {
+  const eleves = {}, ids = [];
+  for (let i = 0; i < nF + nM; i++) {
+    const id = 'e' + i;
+    eleves[id] = { id, nom: 'N' + i, prenom: 'P' + i, classe_id: 'c1', civilite: i < nF ? 'F' : 'M', tags: [] };
+    ids.push(id);
+  }
+  // Serpentin d'une salle 3 × 4 (rangée 0 = devant), et un ordre « rangée par rangée »
+  const snake = [], rows = [];
+  for (let r = 0; r < 3; r++) {
+    const cs = [3, 2, 1, 0];
+    (r % 2 ? cs.slice().reverse() : cs).forEach(c => snake.push(`${r},${c}`));
+    cs.forEach(c => rows.push(`${r},${c}`));
+  }
+  setState({
+    eleves,
+    salles: { r1: { id: 'r1', nom: 'B12', rows: 3, cols: 4, positions_vides: [], ilots: {},
+      collectPatterns: [{ id: 'pS', nom: 'Serpentin', order: snake }, { id: 'pR', nom: 'Rangées', order: rows }],
+      ...(salleGa ? { genderAlt: salleGa } : {}) } },
+    classes: { c1: { id: 'c1', nom: '6A', eleves: ids, activeRoom: 'r1', noNeighbors: [],
+      rooms: { r1: { seating: seating || {}, ipadsByPool: {}, allowedFor: {}, aeshLinks: {}, groupes: {}, posTagId: {}, aeshCount: 0,
+        ...(roomGa ? { genderAlt: roomGa } : {}) } } } },
+  });
+  return { ids, snake };
+}
+
+test('alternance : doublons comptés dès le premier, réglage de la salle prioritaire', () => {
+  const { snake } = seedGenderAlt({ nF: 2, nM: 2, roomGa: 'pS' });
+  // F F M M le long du serpentin → 2 doublons
+  ev(`S.classes.c1.seating = ${JSON.stringify({ [snake[0]]: 'e0', [snake[1]]: 'e1', [snake[2]]: 'e2', [snake[3]]: 'e3' })}`);
+  const items = get('collectAllViolations(S.classes.c1).filter(it => it.gender).map(it => it.sid)');
+  assert.deepEqual(items.sort(), ['e1', 'e3']);
+  assert.equal(ev('_countPlacementViolations(S.classes.c1)'), 2);
+  assert.equal(ev('_countPlacementViolations(S.classes.c1, null)'), 0);
+  assert.equal(get('getPlacementViolations(S.classes.c1, "e0", ' + JSON.stringify(snake[0]) + ').length'), 1);
+  // Élève sans civilité ignoré : F F (?) M → seul le doublon e0-e1 reste
+  ev(`S.eleves.e2.civilite = null`);
+  assert.equal(get('_genderAltDoublets(S.classes.c1, "pS").length'), 1);
+  // Réglage de la salle : l'emporte sur celui de la classe ; ordre absent ou vide → aucun
+  ev(`S.salles.r1.genderAlt = 'pR'`);
+  assert.deepEqual(get('_genderAltSetting(S.classes.c1)'), { patternId: 'pR', scope: 'salle' });
+  ev(`S.salles.r1.genderAlt = 'inconnu'; S.classes.c1.rooms.r1.genderAlt = 'pS'`);
+  assert.deepEqual(get('_genderAltSetting(S.classes.c1)'), { patternId: 'pS', scope: 'classe' });
+  ev(`S.salles.r1.collectPatterns[0].order = []`);
+  assert.equal(get('_genderAltSetting(S.classes.c1)'), null);
+});
+
+test('alternance : le mélange atteint le minimum de doublons (6/6 → 0, 7/5 → 1, 9/3 → 5)', () => {
+  for (const [nF, nM, min] of [[6, 6, 0], [7, 5, 1], [9, 3, 5]]) {
+    seedGenderAlt({ nF, nM, roomGa: 'pS' });
+    for (let t = 0; t < 15; t++) {
+      const res = get(`(() => { const cls = S.classes.c1; const o = _defaultShuffleOptions(cls);
+        const b = _computeRandomPlacement(cls, Object.assign({}, o, { reshuffle: true, pinned: {} }));
+        return { v: b.violations, d: _genderAltDoublets(cls, 'pS', b.seating).length, n: Object.keys(b.seating).length }; })()`);
+      assert.equal(res.n, nF + nM);
+      assert.equal(res.d, min, `${nF} F / ${nM} M, tirage ${t}`);
+      assert.equal(res.v, min);
+    }
+  }
+  // Serpentin sur des rangées de 4 = damier : aucun voisin de rangée ni de colonne du même sexe
+  seedGenderAlt({ nF: 6, nM: 6, roomGa: 'pS' });
+  const seat = get(`_computeRandomPlacement(S.classes.c1, Object.assign({}, _defaultShuffleOptions(S.classes.c1), { reshuffle: true })).seating`);
+  const civ = get('Object.fromEntries(Object.values(S.eleves).map(e => [e.id, e.civilite]))');
+  const g = k => civ[seat[k]];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
+    if (c < 3) assert.notEqual(g(`${r},${c}`), g(`${r},${c + 1}`));
+    if (r < 2) assert.notEqual(g(`${r},${c}`), g(`${r + 1},${c}`));
+  }
+});
+
+test('alternance : les autres contraintes et les épingles passent avant', () => {
+  const { snake } = seedGenderAlt({ nF: 6, nM: 6, roomGa: 'pS' });
+  // e0 (fille) n'a droit qu'à deux places, e6 (garçon) est épinglé en tête du serpentin
+  ev(`S.classes.c1.rooms.r1.allowedFor = { e0: ['${snake[0]}', '${snake[1]}'] }`);
+  for (let t = 0; t < 10; t++) {
+    const res = get(`(() => { const cls = S.classes.c1;
+      const b = _computeRandomPlacement(cls, Object.assign({}, _defaultShuffleOptions(cls), { reshuffle: true, pinned: { e6: '${snake[0]}' } }));
+      const where = {}; for (const [k, v] of Object.entries(b.seating)) where[v] = k;
+      return { e0: where.e0, e6: where.e6, d: _genderAltDoublets(cls, 'pS', b.seating).length }; })()`);
+    assert.equal(res.e6, snake[0]);
+    assert.equal(res.e0, snake[1]);
+    assert.equal(res.d, 0);
+  }
+  // Sans réglage (« Aucune » dans l'aperçu) : rien n'est imposé ni compté
+  const v = get(`_computeRandomPlacement(S.classes.c1, Object.assign({}, _defaultShuffleOptions(S.classes.c1), { reshuffle: true, genderAlt: null })).violations`);
+  assert.equal(v, 0);
+});
+
+test('alternance : la solution minimale retire les doublons évitables', () => {
+  const { snake } = seedGenderAlt({ nF: 3, nM: 3, roomGa: 'pS' });
+  // F F F M M M → 4 doublons ; 0 possible
+  const seat = {}; ['e0', 'e1', 'e2', 'e3', 'e4', 'e5'].forEach((sid, i) => { seat[snake[i]] = sid; });
+  ev(`S.classes.c1.seating = ${JSON.stringify(seat)}`);
+  assert.equal(get('collectAllViolations(S.classes.c1).length'), 4);
+  const fix = get('_computeMinimalFix(S.classes.c1, new Set())');
+  assert.equal(fix.before, 4);
+  assert.equal(fix.after, 0);
+  assert.deepEqual(get('S.classes.c1.seating'), seat); // calculée sans être appliquée
+  // Cas vu dans l'app : une fille glissée sur la place d'un garçon voisin → M M F F M F,
+  // 2 doublons qu'UN échange retire. Les échanges « au premier mieux » s'arrêtaient à 1 sur 2.
+  const seat2 = {}; ['e3', 'e4', 'e0', 'e1', 'e5', 'e2'].forEach((sid, i) => { seat2[snake[i]] = sid; });
+  ev(`S.classes.c1.seating = ${JSON.stringify(seat2)}`);
+  for (let t = 0; t < 20; t++) {
+    const f = get('_computeMinimalFix(S.classes.c1, new Set())');
+    assert.equal(f.before, 2);
+    assert.equal(f.after, 0, `tirage ${t}`);
+    assert.equal(f.swaps.length, 1, `tirage ${t}`);
+  }
+  // Un élève épinglé n'est pas déplacé (e4, garçon en 2e position) : il faut alors bouger les autres
+  const f = get('_computeMinimalFix(S.classes.c1, new Set(["e4"]))');
+  assert.equal(f.after, 0);
+  assert.equal(f.seating[snake[1]], 'e4');
+});
+
+test('alternance : portée classe ou salle à l’écriture', () => {
+  seedGenderAlt({ nF: 2, nM: 2, roomGa: 'pR' });
+  ev(`S.classes.c2 = { id: 'c2', nom: '6B', eleves: [], activeRoom: 'r1', rooms: { r1: { seating: {}, genderAlt: 'pR' } } }`);
+  ev(`_genderAltWrite(S.classes.c1, 'pS', true)`);
+  assert.equal(get('S.salles.r1.genderAlt'), 'pS');
+  assert.equal(get('S.classes.c1.rooms.r1.genderAlt'), null); // réglages propres effacés
+  assert.equal(get('S.classes.c2.rooms.r1.genderAlt'), null);
+  assert.deepEqual(get('_genderAltSetting(S.classes.c2)'), { patternId: 'pS', scope: 'salle' });
+  ev(`_genderAltWrite(S.classes.c1, 'pR', false)`);
+  assert.equal(get('S.salles.r1.genderAlt'), null);
+  assert.equal(get('S.classes.c1.rooms.r1.genderAlt'), 'pR');
+  assert.equal(get('_genderAltSetting(S.classes.c2)'), null);
+  ev(`_genderAltWrite(S.classes.c1, null, false)`);
+  assert.equal(get('_genderAltSetting(S.classes.c1)'), null);
+});

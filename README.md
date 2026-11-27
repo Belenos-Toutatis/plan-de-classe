@@ -14,7 +14,7 @@
 
 ## ✨ En bref
 
-- 🪑 **Placer ses élèves** en glisser-déposer, dans plusieurs salles par classe, avec des contraintes (places autorisées, élèves à séparer) et un mélange aléatoire qui les respecte.
+- 🪑 **Placer ses élèves** en glisser-déposer, dans plusieurs salles par classe, avec des contraintes (places autorisées, élèves à séparer, alternance fille-garçon) et un mélange aléatoire qui les respecte.
 - 🙋 **Faire l'appel** en un clic par élève, garder l'historique, repérer les absences récurrentes.
 - 📊 **Noter et évaluer** : quatre types d'évaluation, compétences, bilans par période, préparation du conseil de classe, export tableur.
 - 📱 **Gérer les tablettes** : affectation automatique par salle, fiche de prêt à imprimer.
@@ -128,7 +128,7 @@ Les fichiers `plan-classe-*.json` (sauvegardes manuelles, sync auto, backups hor
 
 ### Plan de classe
 - **Placement** en glisser-déposer (souris, doigt, stylet), **plusieurs salles par classe**, zoom, filtres par groupe G1/G2/G3, couleur des places par groupe, tag ou genre.
-- **Contraintes** : places autorisées par élève, paires d'élèves à séparer — éditables en Config Salle ou directement sur le plan pendant le cours.
+- **Contraintes** : places autorisées par élève, paires d'élèves à séparer, alternance fille-garçon le long d'un ordre de ramassage (un serpentin donne un damier ; pour une classe ou pour toute la salle, choisie dans le mélange) — éditables en Config Salle ou directement sur le plan pendant le cours.
 - **Mélange aléatoire** qui remplit d'avant en arrière, espace les élèves dans les groupes de tables et respecte toutes les contraintes.
 - **AESH** : jusqu'à 6 par salle, élèves accompagnés placés à côté d'elles, présence pointable.
 - **Surlignage rose** des derniers déplacements, persistant d'une session à l'autre.
